@@ -13,6 +13,18 @@ import 'features/expert/expert_page.dart';
 class TransitCardAnalyzerApp extends StatelessWidget {
   const TransitCardAnalyzerApp({super.key});
 
+  /// Android 转场统一为 FadeForwards（Android 14+ 系统同款：水平滑入 +
+  /// 交叉淡化，450ms）：显式覆盖新版 Flutter 的默认值
+  /// （PredictiveBackPageTransitionsBuilder），避免"手势返回=缩小圆角、
+  /// 按键返回=水平甩出"两种样式混杂；相比 Zoom 的整页缩放 + 压暗，
+  /// 连续返回时页面统一水平滑出，方向感清晰、观感更稳。
+  /// 备选：CupertinoPageTransitionsBuilder（iOS 式整页视差滑动，500ms）。
+  static const _pageTransitionsTheme = PageTransitionsTheme(
+    builders: {
+      TargetPlatform.android: FadeForwardsPageTransitionsBuilder(),
+    },
+  );
+
   static final _fallbackLight = ColorScheme.fromSeed(
     seedColor: Colors.teal,
     brightness: Brightness.light,
@@ -40,9 +52,11 @@ class TransitCardAnalyzerApp extends StatelessWidget {
           ],
           theme: ThemeData(
             colorScheme: lightDynamic ?? _fallbackLight,
+            pageTransitionsTheme: _pageTransitionsTheme,
           ),
           darkTheme: ThemeData(
             colorScheme: darkDynamic ?? _fallbackDark,
+            pageTransitionsTheme: _pageTransitionsTheme,
           ),
           themeMode: ThemeMode.system,
           home: const AppShell(),
@@ -83,40 +97,54 @@ class _AppShellState extends State<AppShell> {
     // 回显（弹簧动画），底栏隐藏时提供“回到顶部”快捷按钮；
     // 底栏本体参考 google_nav_bar（Telegram 式展开）：
     // 未选中仅显示图标，选中项胶囊高亮 + 文字从图标旁展开/收起。
-    return Scaffold(
-      body: BottomBar(
-        layout: BottomBarLayout.adaptive(
-          maxWidth: 520,
-          offset: UiConstants.floatingNavBarInset,
-          borderRadius:
-              BorderRadius.circular(UiConstants.floatingNavBarRadius),
-        ),
-        scrollBehavior: BottomBarScrollBehavior(
-          hideOnScroll: true,
-          deltaThreshold: 12.0,
-          showAtStart: true,
-          showOnScrollEnd: true,
-          // 专家页为 NestedScrollView：外层（depth 0）负责收起标题栏，正文
-          // 长列表（depth ≥ 1）才是主要滑动来源，两者都要驱动底栏隐藏，
-          // 拦截规则见 _bottomBarScrollPredicate。
-          predicate: _bottomBarScrollPredicate,
-        ),
-        iconTooltip: '回到顶部',
-        iconSemanticLabel: '回到顶部',
-        // 3.0.0 起 child（悬浮栏本体）与 body 同为必填参数
-        child: _FloatingNavBar(
-          index: index,
-          onSelect: (i) {
-            if (i != index) setState(() => index = i);
-          },
-        ),
-        body: IndexedStack(
-          index: index,
-          children: [
-            HomePage(app: app, active: index == 0),
-            TripsPage(app: app),
-            ExpertPage(app: app),
-          ],
+    //
+    // PopScope：适配 Android 预测式返回（Predictive Back）并修正 Tab 返回逻辑。
+    // canPop 必须提前确定（预测式返回在手势开始时就播放预览，无法事后拦截）：
+    // - 首页：canPop = true，返回键/手势交还系统，Android 14+ 上左滑会预览
+    //   “返回主屏幕”的系统动画，松手后退出应用；
+    // - 行程/专家：canPop = false，手势被框架拦截（此时系统不播放预览动画），
+    //   松手后在 onPopInvokedWithResult 中切回首页 Tab，避免直接退出应用。
+    return PopScope(
+      canPop: index == 0,
+      onPopInvokedWithResult: (bool didPop, Object? result) {
+        if (didPop) return;
+        if (index != 0) setState(() => index = 0);
+      },
+      child: Scaffold(
+        body: BottomBar(
+          layout: BottomBarLayout.adaptive(
+            maxWidth: 520,
+            offset: UiConstants.floatingNavBarInset,
+            borderRadius:
+                BorderRadius.circular(UiConstants.floatingNavBarRadius),
+          ),
+          scrollBehavior: BottomBarScrollBehavior(
+            hideOnScroll: true,
+            deltaThreshold: 12.0,
+            showAtStart: true,
+            showOnScrollEnd: true,
+            // 专家页为 NestedScrollView：外层（depth 0）负责收起标题栏，正文
+            // 长列表（depth ≥ 1）才是主要滑动来源，两者都要驱动底栏隐藏，
+            // 拦截规则见 _bottomBarScrollPredicate。
+            predicate: _bottomBarScrollPredicate,
+          ),
+          iconTooltip: '回到顶部',
+          iconSemanticLabel: '回到顶部',
+          // 3.0.0 起 child（悬浮栏本体）与 body 同为必填参数
+          child: _FloatingNavBar(
+            index: index,
+            onSelect: (i) {
+              if (i != index) setState(() => index = i);
+            },
+          ),
+          body: IndexedStack(
+            index: index,
+            children: [
+              HomePage(app: app, active: index == 0),
+              TripsPage(app: app),
+              ExpertPage(app: app),
+            ],
+          ),
         ),
       ),
     );

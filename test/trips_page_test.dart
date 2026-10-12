@@ -89,6 +89,51 @@ void main() {
     expect(find.text('¥53.40'), findsOneWidget);
   });
 
+  testWidgets('复合消费（0x09）配对 0x1E 出站：标题展示出站与站点名称', (tester) async {
+    final channel = _FakeNfcChannel()
+      ..enqueueWalletScript(
+        record: _record(terminal: '123456789012', rawType: 0x09),
+        cycleRecord: _cycleRecord(), // EP 出站 · "0231" → 2号线 · 苏洋
+      );
+    await _scanAndPump(tester, channel);
+
+    expect(find.text('出站 · 苏洋 · 序号 1'), findsOneWidget);
+    expect(find.textContaining('复合消费'), findsNothing);
+    expect(find.text('异地用卡'), findsNothing); // 城市 3910 = 卡片城市
+  });
+
+  testWidgets('复合消费（0x09）未配对 0x1E：标题保持复合消费 · 序号', (tester) async {
+    final channel = _FakeNfcChannel()
+      ..enqueueWalletScript(
+        record: _record(terminal: '123456789012', rawType: 0x09),
+      );
+    await _scanAndPump(tester, channel);
+
+    expect(find.text('复合消费 · 序号 1'), findsOneWidget);
+  });
+
+  testWidgets('异地用卡：0x1E 交易城市与卡片城市不同时展示提示', (tester) async {
+    final channel = _FakeNfcChannel()
+      ..enqueueWalletScript(
+        record: _record(terminal: '123456789012'),
+        cycleRecord: _cycleRecord(cityCode: '1100'), // 交易城市 1100 ≠ 卡片 3910
+      );
+    await _scanAndPump(tester, channel);
+
+    expect(find.text('异地用卡'), findsOneWidget);
+  });
+
+  testWidgets('异地用卡：0x1A 进出站卡片按出闸城市判定', (tester) async {
+    final channel = _FakeNfcChannel()
+      ..enqueueWalletScript(
+        record: _record(terminal: '123456789012'),
+        varRecord: _railRecord(), // 出闸城市 3501 ≠ 卡片城市 3910
+      );
+    await _scanAndPump(tester, channel);
+
+    expect(find.text('异地用卡'), findsOneWidget);
+  });
+
   testWidgets('0 元交易配对 0x1E 进站记录：显示进站时间与站点', (tester) async {
     final channel = _FakeNfcChannel()
       ..enqueueWalletScript(
@@ -344,14 +389,34 @@ void main() {
     expect(find.text('公共汽电车 · 上下车记录'), findsNothing); // 记录 2 起始位置不可定位
     expect(find.text('¥3.00'), findsNothing);
   });
+
+  testWidgets('八达通-全国通卡：行程金额按港币（HK$）展示', (tester) async {
+    final channel = _FakeNfcChannel()
+      ..enqueueWalletScript(
+        record: _record(terminal: '123456789012'),
+        varRecord: _railRecord(),
+        publicFile: _octopusPublicFile(),
+      );
+    await _scanAndPump(tester, channel, assets: _octopusAssets);
+
+    // 0x18 交易金额 4660 分：消费按港币符号展示（负号）
+    expect(find.text('-HK\$46.60'), findsOneWidget);
+    expect(find.text('¥46.60'), findsNothing);
+    // 0x1A 进出站卡片：进站钱包余额 300 分 → HK$3.00
+    expect(find.text('HK\$3.00'), findsOneWidget);
+  });
 }
 
 /// 注入假通道、假资产包与内存设置存储，走一次完整扫描并渲染行程页。
 /// 站点数据使用应用内预制快照（prebuilt_station_data.dart），无需外部注入。
-Future<void> _scanAndPump(WidgetTester tester, _FakeNfcChannel channel) async {
+Future<void> _scanAndPump(
+  WidgetTester tester,
+  _FakeNfcChannel channel, {
+  Map<String, String>? assets,
+}) async {
   final app = AppState(
     channel: channel,
-    bundle: _FakeBundle(_assets),
+    bundle: _FakeBundle(assets ?? _assets),
     settingsStore: MemorySettingsStore(),
   );
   await app.init();
@@ -363,7 +428,7 @@ Future<void> _scanAndPump(WidgetTester tester, _FakeNfcChannel channel) async {
 /// 最小知识库资产：卡前缀库条目（发卡机构代码 01283910 后 4 位即城市
 /// 代码 3910 → 福州市）+ 指纹与终端规则。
 final Map<String, String> _assets = {
-  'assets/data/issuer_fingerprints.json': jsonEncode({
+  'assets/data/tunion_issuer_fingerprints.json': jsonEncode({
     'entries': [
       {
         'issuerId': '1122334455667788',
@@ -374,7 +439,7 @@ final Map<String, String> _assets = {
       }
     ]
   }),
-  'assets/data/terminal_rules.json': jsonEncode({
+  'assets/data/tunion_terminal_rules.json': jsonEncode({
     'rules': [
       {
         'id': 'test-fuzhou',
@@ -387,13 +452,28 @@ final Map<String, String> _assets = {
       }
     ]
   }),
-  'assets/data/card_prefixes.json': jsonEncode({
+  'assets/data/tunion_card_prefixes.json': jsonEncode({
     'entries': [
       {
         'prefix': '31050600',
         'issuer': '01283910',
         'cardName': '福路通·榕城通',
         'city': '福州市',
+      }
+    ]
+  }),
+};
+
+/// 八达通-全国通卡资产：卡号前缀库声明钱包货币 HKD（香港）。
+final Map<String, String> _octopusAssets = {
+  ..._assets,
+  'assets/data/tunion_card_prefixes.json': jsonEncode({
+    'entries': [
+      {
+        'prefix': '31048500',
+        'cardName': '八达通-全国通卡',
+        'city': '香港',
+        'currency': 'HKD',
       }
     ]
   }),
@@ -413,16 +493,18 @@ class _FakeNfcChannel implements NfcChannel {
   /// 传入 [varBlob] 时 0x1A 逐条读取失败、整体读取兜底返回该数据；
   /// 均未传入时 0x1A 逐条与整体兜底都以记录未找到终止。
   /// 传入 [cycleRecord] 时追加 0x1E 循环记录 1（整体读取命中）。
+  /// 传入 [publicFile] 时替换公共应用信息文件（模拟其他卡号段卡片）。
   void enqueueWalletScript({
     required List<int> record,
     List<int>? varRecord,
     List<int>? varBlob,
     List<int>? busRecord,
     List<int>? cycleRecord,
+    List<int>? publicFile,
   }) {
     enqueue(0xA4, const [0x90, 0x00]);
     enqueue(0xA4, _sw9000(const []));
-    enqueue(0xB0, _sw9000(_publicFile()));
+    enqueue(0xB0, _sw9000(publicFile ?? _publicFile()));
     enqueue(0xB0, _sw9000(_holderFile()));
     enqueue(0xB0, _sw9000(_managementFile()));
     enqueue(0x5C, const [0x00, 0x00, 0x27, 0x10, 0x90, 0x00]); // 余额 10000 分
@@ -502,6 +584,17 @@ List<int> _publicFile() {
   b[27] = 0x31; // 20291231
   b[28] = 0xAA;
   b[29] = 0xBB;
+  return b;
+}
+
+/// 八达通-全国通卡公共应用信息文件：应用序列号前 8 位 31048500（IIN）
+/// 命中前缀库八达通条目，其余字段与 [_publicFile] 一致。
+List<int> _octopusPublicFile() {
+  final b = _publicFile();
+  const serial = [0x03, 0x10, 0x48, 0x50, 0x00, 0x00, 0x00, 0x00, 0x12, 0x34];
+  for (var i = 0; i < 10; i++) {
+    b[10 + i] = serial[i];
+  }
   return b;
 }
 
@@ -622,12 +715,13 @@ List<int> _busRecord() => [
 /// 0x1E 循环记录（48 字节）：出站 · 2024-05-01 08:30:00 · 4660 分 ·
 /// 应用分类码 [appTypeCode]（默认 0x01 城市轨道交通）。线路站点字段
 /// "90020031000000" 按福州布局解析（第 3-4 位线路 "02" + 第 7-8 位站点
-/// "31" → 编码 "0231" 查表得 2号线 · 苏洋）；城市代码 3910。
+/// "31" → 编码 "0231" 查表得 2号线 · 苏洋）；城市代码默认 3910。
 List<int> _cycleRecord({
   int typeCode = 0x04,
   int amountFen = 4660,
   int day = 1,
   int appTypeCode = 0x01,
+  String cityCode = '3910',
 }) {
   const balanceFen = 5340;
   return [
@@ -644,7 +738,7 @@ List<int> _cycleRecord({
     (balanceFen >> 8) & 0xFF,
     balanceFen & 0xFF, // [15-18] 交易后余额
     0x20, 0x24, 0x05, day, 0x08, 0x30, 0x00, // [19-1F] 交易时间
-    ..._bcd('3910'), // [20-21] 城市代码
+    ..._bcd(cityCode), // [20-21] 城市代码
     ..._bcd('0000000000000000'), // [22-29] 收单机构
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // [2A-2F] 保留
   ];

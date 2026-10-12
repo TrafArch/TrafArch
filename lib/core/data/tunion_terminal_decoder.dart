@@ -1,4 +1,4 @@
-import 'knowledge_base.dart';
+import 'tunion_knowledge_base.dart';
 
 /// 终端编号二次解码结果。
 class TerminalLocation {

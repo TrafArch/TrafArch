@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../core/analysis/analysis_models.dart';
+import '../../core/analysis/tunion_analysis_models.dart';
 import '../../core/transit/tunion/tunion_models.dart';
 import '../../core/ui_constants.dart';
 import '../../state/app_state.dart';
@@ -109,7 +109,8 @@ class _TripsPageState extends State<TripsPage> {
                     }
                     index -= 1;
                   }
-                  return _TripCard(trip: trips[index]);
+                  return _TripCard(trip: trips[index], app: widget.app);
+
                 },
               ),
             ),
@@ -121,7 +122,8 @@ class _TripsPageState extends State<TripsPage> {
 
 class _TripCard extends StatelessWidget {
   final TransitTrip trip;
-  const _TripCard({required this.trip});
+  final AppState app;
+  const _TripCard({required this.trip, required this.app});
 
   @override
   Widget build(BuildContext context) {
@@ -130,6 +132,15 @@ class _TripCard extends StatelessWidget {
     // 配对命中（trip.isEntry）时按进站展示："时间"改显"进站时间"，
     // 站点/线路取自配对数据（未收录时保持隐藏，不猜测）。
     final isEntry = trip.isEntry && trip.amountFen == 0;
+    // 复合消费（0x09）配对命中时标题按行程状态展示：类型名替换为状态
+    // 短名（出站 / 进站 / 上车 / 下车…）并附站点名称；未配对保持
+    // "复合消费 · 序号 x"（不猜测）。
+    final statusName = trip.rideStatusName;
+    final titleParts = <String>[
+      statusName ?? trip.typeName,
+      if (statusName != null && trip.stationLabel != null) trip.stationLabel!,
+      '序号 ${trip.sequence}',
+    ];
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: Padding(
@@ -141,7 +152,7 @@ class _TripCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    '${trip.typeName} · 序号 ${trip.sequence}',
+                    titleParts.join(' · '),
                     style: theme.textTheme.titleMedium,
                   ),
                 ),
@@ -174,11 +185,13 @@ class _TripCard extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
                   '未匹配终端解码规则（终端 ${trip.terminalId}），'
-                  '线路/站点待 assets/data/terminal_rules.json 补充',
+                  '线路/站点待 assets/data/tunion_terminal_rules.json 补充',
                   style: theme.textTheme.bodySmall
                       ?.copyWith(color: theme.colorScheme.outline),
                 ),
               ),
+            // 异地用卡：交易城市与卡片所属城市不同时提示（本地用卡不展示）。
+            if (app.isRemoteUse(trip.cityCode)) _remoteUseNotice(context),
           ],
         ),
       ),
@@ -197,6 +210,18 @@ Widget _kv(BuildContext context, String k, String v) => Padding(
           ),
           Expanded(child: Text(v)),
         ],
+      ),
+    );
+
+/// 「异地用卡」提示行（行程卡与 0x1A 卡片共用）：仅异地用卡时插入。
+Widget _remoteUseNotice(BuildContext context) => Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Text(
+        '异地用卡',
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.tertiary,
+              fontWeight: FontWeight.w600,
+            ),
       ),
     );
 
@@ -220,6 +245,9 @@ class _RailRecordCard extends StatelessWidget {
         record.exitTime != null && entryBalance != null && exitAmount != null
             ? entryBalance - exitAmount
             : null;
+    // 异地用卡：进闸 / 出闸城市任一与卡片所属城市不同时提示。
+    final remoteUse = app.isRemoteUse(record.entryCityCode) ||
+        app.isRemoteUse(record.exitCityCode);
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: Padding(
@@ -242,9 +270,10 @@ class _RailRecordCard extends StatelessWidget {
             if (record.exitStationId != null)
               _kv(context, '出闸站点', record.exitStationId!),
             if (entryBalance != null)
-              _kv(context, '进站钱包余额', _fenText(entryBalance)),
+              _kv(context, '进站钱包余额', _fenText(entryBalance, app.cardCurrency)),
             if (exitBalance != null)
-              _kv(context, '出站钱包余额', _fenText(exitBalance)),
+              _kv(context, '出站钱包余额', _fenText(exitBalance, app.cardCurrency)),
+            if (remoteUse) _remoteUseNotice(context),
           ],
         ),
       ),
@@ -264,6 +293,9 @@ class _BusRecordCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // 异地用卡：上车 / 下车城市任一与卡片所属城市不同时提示。
+    final remoteUse = app.isRemoteUse(record.entryCityCode) ||
+        app.isRemoteUse(record.exitCityCode);
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: Padding(
@@ -287,9 +319,11 @@ class _BusRecordCard extends StatelessWidget {
               _kv(context, '下车站点', record.exitStationCode!),
             _kv(context, '方向', record.directionName),
             if (record.transactionAmountFen != null)
-              _kv(context, '交易金额', _fenText(record.transactionAmountFen!)),
+              _kv(context, '交易金额',
+                  _fenText(record.transactionAmountFen!, app.cardCurrency)),
             if (record.mileage != null)
               _kv(context, '乘车里程', record.mileage!.toString()),
+            if (remoteUse) _remoteUseNotice(context),
           ],
         ),
       ),
@@ -297,8 +331,9 @@ class _BusRecordCard extends StatelessWidget {
   }
 }
 
-/// 元金额文本（分 ÷100），0x1A 卡片共用。
-String _fenText(int fen) => '¥${(fen / 100).toStringAsFixed(2)}';
+/// 金额文本（分 ÷100 + 货币符号），0x1A 卡片共用。
+String _fenText(int fen, Currency currency) =>
+    '${currency.symbol}${(fen / 100).toStringAsFixed(2)}';
 
 /// 城市代码查询知识库城市名；未收录时回退展示原始代码。
 String _cityText(AppState app, String code) => app.cityNameOf(code) ?? code;

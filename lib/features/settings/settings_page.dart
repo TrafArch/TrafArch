@@ -126,31 +126,33 @@ class _SettingsPageState extends State<SettingsPage> {
                   subtitle: Text(
                     app.loggingEnabled
                         ? '已开启：记录读卡与解析过程，便于排查问题'
-                        : '默认停用：不写入新的运行日志（已记录内容仍可导出）',
+                        : '默认停用：不写入新的运行日志（开启后可导出）',
                   ),
                   value: app.loggingEnabled,
                   onChanged: (value) => app.setLoggingEnabled(value),
                 ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.download_outlined),
-                  title: const Text('导出日志'),
-                  subtitle: Text(
-                    logStatus,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: logStatusColor),
+                if (app.loggingEnabled) ...[
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.download_outlined),
+                    title: const Text('导出日志'),
+                    subtitle: Text(
+                      logStatus,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: logStatusColor),
+                    ),
+                    trailing: app.exportingLog
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.chevron_right),
+                    onTap: app.exportingLog ? null : () => app.exportLog(),
                   ),
-                  trailing: app.exportingLog
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.chevron_right),
-                  onTap: app.exportingLog ? null : () => app.exportLog(),
-                ),
+                ],
               ],
             ),
           ),

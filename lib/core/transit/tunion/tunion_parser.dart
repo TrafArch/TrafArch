@@ -65,8 +65,10 @@ class TUnionParser implements CardParser {
   /// 变长记录文件最多 18 条记录（附录 B.2.4 记录号 1~18）。
   static const _maxVarProcessRecords = 18;
 
-  /// 循环记录文件最多读取 30 条（主流实现写入数量上限）。
-  static const _maxCycleProcessRecords = 30;
+  /// 循环记录（0x1E）逐条读取的记录号物理上限：READ RECORD 的 P1 为
+  /// 单字节记录号（0x01~0xFE），仅作协议边界防止读取失控；
+  /// 0x1E 文件条数由卡片填充决定，不设业务条数上限。
+  static const _maxCycleRecordNumber = 0xFE;
 
   /// 循环记录文件（SFI 0x1E）单条记录长度：48 字节定长。
   static const _cycleRecordSize = 0x30;
@@ -114,6 +116,9 @@ class TUnionParser implements CardParser {
   List<int>? get fciDiscretionaryData => _fciDiscretionary;
 
   @override
+  String get parserId => CardParserIds.tunion;
+
+  @override
   String get parserName => '交通联合电子钱包（JT/T 978.2）';
 
   /// CardParser 统一入口：应用选择 → 标准文件 → 余额 → 交易明细。
@@ -129,6 +134,7 @@ class TUnionParser implements CardParser {
     final transactions = await readTransactions();
     final processRecords = await readTransitProcessRecords();
     return ParsedCard(
+      parserId: parserId,
       parserName: parserName,
       info: merged,
       transactions: transactions,
@@ -242,6 +248,7 @@ class TUnionParser implements CardParser {
 
   Future<List<TUnionProcessRecord>> _readVarProcessRecords() async {
     final out = <TUnionProcessRecord>[];
+    List<int>? firstData;
     for (var i = 1; i <= _maxVarProcessRecords; i++) {
       final resp =
           await _exchange(TUnionApdu.readRecord(_processVarFileSfi, i));
@@ -251,6 +258,10 @@ class TUnionParser implements CardParser {
       // 记录 1 / 2（城市轨道、公共汽电车应用信息记录）即使为初始值（全 0）
       // 也保留，按字段视图展示初始值；其余记录未写入时跳过继续读取。
       if (_isBlankRecord(data) && i > 2) continue;
+      // 部分卡片忽略记录号，每次读取都返回同一条记录：读到与首个非空
+      // 记录一致的内容时停止，避免重复条目与记录号错位的误解析。
+      if (firstData != null && _listEquals(data, firstData)) break;
+      firstData ??= data;
       out.add(_buildVarProcessRecord(i, data));
     }
     if (out.isEmpty) {
@@ -359,7 +370,8 @@ class TUnionParser implements CardParser {
   /// 读至文件末尾（61XX 链式补齐后按 48 字节切分逐条解码），通常
   /// 1~3 次 APDU 即可读完；整体读取不可用（部分卡片不支持批量）或
   /// 布局无法切分（模板包裹 / 非定长实现）时，回退逐条读取
-  /// （P2 = 0xF4），读至记录未找到（6A83）为止。
+  /// （P2 = 0xF4），读至记录未找到（6A83）/ 空数据 / 内容重复为止，
+  /// 不设固定条数上限（0x1E 条数由卡片填充决定）。
   Future<List<TUnionProcessRecord>> _readCycleProcessRecords() async {
     final blob = await _readWholeRecordFile(_processCycleFileSfi);
     if (blob != null) {
@@ -368,13 +380,18 @@ class TUnionParser implements CardParser {
     }
 
     final out = <TUnionProcessRecord>[];
-    for (var i = 1; i <= _maxCycleProcessRecords; i++) {
+    List<int>? firstData;
+    for (var i = 1; i <= _maxCycleRecordNumber; i++) {
       final resp =
           await _exchange(TUnionApdu.readRecord(_processCycleFileSfi, i));
       if (!_isSuccess(resp)) break;
       final data = _stripSw(resp);
       if (data.isEmpty) break;
       if (_isBlankRecord(data)) continue;
+      // 部分卡片忽略记录号，每次读取都返回记录 1：读到与首个非空记录
+      // 完全一致的内容时停止，避免无界重复读取同一条数据。
+      if (firstData != null && _listEquals(data, firstData)) break;
+      firstData ??= data;
       out.add(TUnionProcessRecord(
         sfi: _processCycleFileSfi,
         recordNumber: i,
@@ -687,6 +704,8 @@ class TUnionParser implements CardParser {
   }
 
   /// 收发 APDU：自动处理 6CXX 重发与 61XX 链式响应（支持多段）。
+  /// 链式段数上限 32（约 8KB 数据 ≈ 170 条 48 字节记录）：覆盖 0x1E /
+  /// 0x1A 大容量文件整体读取，同时防止异常卡无界返回 61XX。
   Future<List<int>> _exchange(List<int> apdu) async {
     var resp = await _transceive(apdu);
     if (apdu.isNotEmpty &&
@@ -701,7 +720,7 @@ class TUnionParser implements CardParser {
     while (resp.length >= 2 &&
         resp[resp.length - 2] == 0x61 &&
         resp.last != 0 &&
-        guard++ < 8) {
+        guard++ < 32) {
       final cla = apdu.isNotEmpty ? apdu[0] : 0x00;
       final data = resp.sublist(0, resp.length - 2);
       final chain = await _transceive(TUnionApdu.getResponse(cla, resp.last));
@@ -726,6 +745,15 @@ class TUnionParser implements CardParser {
     if (data.length < chunk.length) return false;
     for (var i = 0; i < chunk.length; i++) {
       if (data[i] != chunk[i]) return false;
+    }
+    return true;
+  }
+
+  /// 判断两段字节内容是否完全相等（循环记录重复读取检测）。
+  static bool _listEquals(List<int> a, List<int> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
     }
     return true;
   }

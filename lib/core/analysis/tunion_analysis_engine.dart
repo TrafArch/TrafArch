@@ -1,10 +1,10 @@
 import '../card/card_parser.dart';
-import '../data/knowledge_base.dart';
+import '../data/tunion_knowledge_base.dart';
 import '../data/station_codes.dart';
-import '../data/terminal_decoder.dart';
+import '../data/tunion_terminal_decoder.dart';
 import '../transit/tunion/tunion_models.dart';
-import 'analysis_models.dart';
-import 'card_identifier.dart';
+import 'tunion_analysis_models.dart';
+import 'tunion_card_identifier.dart';
 
 /// 分析引擎：识别 → 行程聚合 → 符合性检查 → 异常检测。
 class AnalysisEngine {
@@ -19,18 +19,34 @@ class AnalysisEngine {
   CardAnalysisResult analyze(ParsedCard card, {DateTime? now}) {
     final at = now ?? DateTime.now();
     final identity = identifier.identify(card.info);
-    final trips = _buildTrips(card, identity);
+    final currency = _resolveCurrency(card.info);
+    final trips = _buildTrips(card, identity, currency);
     return CardAnalysisResult(
       identity: identity,
-      wallet: WalletSummary.of(card.info, at),
+      wallet: WalletSummary.of(card.info, at, currency: currency),
+      currency: currency,
       trips: trips,
-      compliance: _checkCompliance(card, at),
+      compliance: _checkCompliance(card, at, currency),
       anomalies: _detectAnomalies(card, identity, at),
       generatedAt: at,
     );
   }
 
-  List<TransitTrip> _buildTrips(ParsedCard card, CardIdentity identity) {
+  /// 钱包货币判定：卡号（应用序列号）IIN 前缀命中卡前缀库且条目声明
+  /// currency 时按其取值（如八达通-全国通卡 HKD），未命中再按发卡机构
+  /// 标识反查；均未收录时回退人民币（缺省口径，不猜测外币）。
+  Currency _resolveCurrency(TUnionCardInfo info) =>
+      Currency.fromCode(
+        (knowledge.cardPrefixes.lookup(info.displayCardNumber) ??
+                knowledge.cardPrefixes.lookupByIssuerId(info.issuerId))
+            ?.currency,
+      );
+
+  List<TransitTrip> _buildTrips(
+    ParsedCard card,
+    CardIdentity identity,
+    Currency currency,
+  ) {
     // 0x1E 过程记录增强：按"交易时间（分钟）+ 金额"与交易记录配对。
     // 部分城市（如福州地铁）线路/站点信息不写终端号，只写 0x1E 文件，
     // 终端规则未命中时用注解补齐；配对命中时一并补充 0x1E 独有的
@@ -60,6 +76,11 @@ class AnalysisEngine {
       final fallback = annotation == null ? entryFallbacks[key] : null;
       final stationEntry =
           _lookupStationEntry(loc, identity, card) ?? annotation?.entry;
+      // 复合消费（0x09）配对命中时以行程状态短名（出站 / 进站 / 上车 /
+      // 下车…）替代类型名展示；未配对保持 null（展示层回退交易类型名）。
+      final rideStatusName = txn.isCompositeConsume
+          ? annotation?.record.statusShortName ?? fallback?.statusName
+          : null;
       return TransitTrip(
         time: txn.time,
         amountFen: txn.amountFen,
@@ -70,6 +91,9 @@ class AnalysisEngine {
         terminalId: txn.terminalId,
         location: loc,
         cityName: cityName ?? annotation?.cityName ?? fallback?.cityName,
+        cityCode: _validCityCode(
+          loc?.cityCode ?? annotation?.record.cityCode ?? fallback?.cityCode,
+        ),
         lineLabel: stationEntry?.line ?? loc?.lineCode,
         stationLabel: stationEntry?.station ??
             loc?.stationCode ??
@@ -77,8 +101,9 @@ class AnalysisEngine {
         stationType: stationEntry?.type,
         appTypeName: annotation?.record.appTypeLabel,
         balanceAfterFen: annotation?.record.balanceFen,
+        rideStatusName: rideStatusName,
         isEntry: annotation?.record.isEntry ?? (fallback != null),
-
+        currency: currency,
       );
     }).toList()
       ..sort((a, b) => b.time.compareTo(a.time));
@@ -162,16 +187,19 @@ class AnalysisEngine {
       String? entryCityCode;
       String? entryStationId;
       DateTime? entryTime;
+      final String statusName;
       if (rail != null) {
         // 进站交易金额非 0 与 0 元进站交易的实测特征不符，视为异常不配对。
         if (rail.entryAmountFen != null && rail.entryAmountFen != 0) continue;
         entryCityCode = rail.entryCityCode;
         entryStationId = rail.entryStationId;
         entryTime = rail.entryTime;
+        statusName = '进站';
       } else if (bus != null) {
         entryCityCode = bus.entryCityCode;
         entryStationId = bus.entryStationCode;
         entryTime = bus.entryTime;
+        statusName = '上车';
       } else {
         continue;
       }
@@ -186,7 +214,9 @@ class AnalysisEngine {
           cityName: cityCode == null || cityCode.isEmpty
               ? null
               : knowledge.cities.lookup(cityCode)?.name,
+          cityCode: entryCityCode,
           stationLabel: entryStationId,
+          statusName: statusName,
         );
       }
     }
@@ -199,7 +229,20 @@ class AnalysisEngine {
       '${time.year}-${time.month}-${time.day} '
       '${time.hour}:${time.minute}|$amountFen';
 
-  ComplianceReport _checkCompliance(ParsedCard card, DateTime now) {
+  /// 交易城市代码有效性：空或全 0（未写入）视为未知（返回 null），
+  /// 供异地用卡判定（未知不判定，不猜测）。
+  static String? _validCityCode(String? code) {
+    if (code == null) return null;
+    final trimmed = code.trim();
+    if (trimmed.isEmpty || trimmed.replaceAll('0', '').isEmpty) return null;
+    return trimmed;
+  }
+
+  ComplianceReport _checkCompliance(
+    ParsedCard card,
+    DateTime now,
+    Currency currency,
+  ) {
     final info = card.info;
     final items = <ComplianceItem>[
       ComplianceItem(
@@ -240,7 +283,7 @@ class AnalysisEngine {
             : ComplianceStatus.pass,
         detail: info.balanceFen == null
             ? '未读到余额'
-            : '余额 ${(info.balanceFen! / 100).toStringAsFixed(2)} 元',
+            : '余额 ${(info.balanceFen! / 100).toStringAsFixed(2)} ${currency.unit}',
       ),
       ComplianceItem(
         id: 'transactions',
@@ -442,11 +485,20 @@ class _RideAnnotation {
   const _RideAnnotation({required this.record, this.entry, this.cityName});
 }
 
-/// 0x1A 进站兜底注解（内部用）：进站城市名（编码查得时）与站点原始编码
-/// （记录中的站点 ID，线路库接入前保持原始值；未写入时为 null）。
+/// 0x1A 进站兜底注解（内部用）：进站城市名（编码查得时）、城市代码
+/// （记录原始值，供异地用卡判定；未写入时为 null）、站点原始编码
+/// （记录中的站点 ID，线路库接入前保持原始值；未写入时为 null）与
+/// 行程状态短名（"进站" / "上车"，复合消费标题展示用）。
 class _EntryFallback {
   final String? cityName;
+  final String? cityCode;
   final String? stationLabel;
+  final String statusName;
 
-  const _EntryFallback({this.cityName, this.stationLabel});
+  const _EntryFallback({
+    this.cityName,
+    this.cityCode,
+    this.stationLabel,
+    required this.statusName,
+  });
 }

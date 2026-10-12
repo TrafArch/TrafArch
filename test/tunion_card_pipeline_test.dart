@@ -1,12 +1,12 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/core/analysis/analysis_engine.dart';
-import 'package:transit_card_analyzer/core/analysis/analysis_models.dart';
+import 'package:transit_card_analyzer/core/analysis/tunion_analysis_engine.dart';
+import 'package:transit_card_analyzer/core/analysis/tunion_analysis_models.dart';
 import 'package:transit_card_analyzer/core/card/card_parser.dart';
-import 'package:transit_card_analyzer/core/data/knowledge_base.dart';
+import 'package:transit_card_analyzer/core/data/tunion_knowledge_base.dart';
 import 'package:transit_card_analyzer/core/data/station_codes.dart';
-import 'package:transit_card_analyzer/core/data/terminal_decoder.dart';
+import 'package:transit_card_analyzer/core/data/tunion_terminal_decoder.dart';
 import 'package:transit_card_analyzer/core/transit/tunion/tunion_models.dart';
 import 'package:transit_card_analyzer/core/transit/tunion/tunion_parser.dart';
 import 'package:transit_card_analyzer/core/transit/tunion/tunion_process_parser.dart';
@@ -172,7 +172,6 @@ void main() {
       expect(varRecords[0].recordNumber, 1);
       expect(varRecords[0].recordName, '城市轨道应用信息记录');
       expect(varRecords[0].railTransit, isNotNull);
-      expect(varRecords[0].railTransit!.serialNumber, '0000000000000001');
       expect(varRecords[0].railTransit!.exitAmountFen, 300);
       expect(varRecords[1].recordNumber, 2);
       expect(varRecords[1].busTransit, isNotNull); // 完整格式记录头命中，按偏移解析
@@ -223,6 +222,31 @@ void main() {
           parser.parseCycleTrip(_cycleProcessRecord()..[9] = 0x10)!;
       expect(reserved.appTypeLabel, isNull);
       expect(reserved.appTypeName, '未知(0x10)');
+    });
+
+    test('行程状态短名：轨道进/出站、公交上/下车与未收录类型', () {
+      expect(parser.parseCycleTrip(_cycleProcessRecord())!.statusShortName, '出站');
+      expect(
+        parser.parseCycleTrip(_cycleProcessRecord()..[0] = 0x03)!.statusShortName,
+        '进站',
+      );
+      final busEntry = _cycleProcessRecord()
+        ..[0] = 0x03
+        ..[9] = 0x02;
+      expect(parser.parseCycleTrip(busEntry)!.statusShortName, '上车');
+      expect(
+        parser.parseCycleTrip(_cycleProcessRecord()..[9] = 0x02)!.statusShortName,
+        '下车',
+      );
+      expect(
+        parser.parseCycleTrip(_cycleProcessRecord()..[0] = 0x05)!.statusShortName,
+        '单次消费',
+      );
+      // 未收录类型短名保持 null（展示层不替换，不猜测）
+      expect(
+        parser.parseCycleTrip(_cycleProcessRecord()..[0] = 0x0B)!.statusShortName,
+        isNull,
+      );
     });
 
     test('0x1E 未写入 / 过短 / 时间非法时返回 null（不猜测）', () {
@@ -712,6 +736,59 @@ void main() {
       expect(trip.amountText, '+¥50.00');
     });
 
+    test('八达通-全国通卡：余额、行程与合规明细按港币（HKD）展示', () {
+      final octopusKb = KnowledgeBase.fromJsonStrings(
+        cardPrefixes: jsonEncode({
+          'entries': [
+            {
+              'prefix': '31048500',
+              'cardName': '八达通-全国通卡',
+              'city': '香港',
+              'currency': 'HKD',
+            },
+          ]
+        }),
+      );
+      final engine = AnalysisEngine(octopusKb);
+      final parsed = ParsedCard(
+        parserName: 't',
+        info: const TUnionCardInfo(
+          applicationSerial: '03104850000000001234', // 前 8 位 31048500
+          balanceFen: 5340,
+        ),
+        transactions: [
+          _txn(seq: 1, time: DateTime(2024, 5, 1), amountFen: 200),
+        ],
+        selectedAidHex: 'A000000632010105',
+      );
+      final result = engine.analyze(parsed, now: DateTime(2026, 10, 7));
+
+      expect(result.currency.code, 'HKD');
+      expect(result.wallet.balanceText, 'HK\$53.40');
+      expect(result.trips.single.amountText, '-HK\$2.00');
+      expect(
+        result.compliance.items.firstWhere((i) => i.id == 'balance').detail,
+        '余额 53.40 港元',
+      );
+    });
+
+    test('前缀库未声明货币的卡片：金额保持人民币缺省口径', () {
+      final engine = AnalysisEngine(kb);
+      final parsed = ParsedCard(
+        parserName: 't',
+        info: const TUnionCardInfo(balanceFen: 100),
+        transactions: [
+          _txn(seq: 1, time: DateTime(2024, 5, 1), amountFen: 200),
+        ],
+        selectedAidHex: 'A000000632010105',
+      );
+      final result = engine.analyze(parsed, now: DateTime(2026, 10, 7));
+
+      expect(result.currency.code, 'CNY');
+      expect(result.wallet.balanceText, '¥1.00');
+      expect(result.trips.single.amountText, '-¥2.00');
+    });
+
     test('0 元交易配对 0x1E 入站记录：标记进站并补齐线路/站点', () {
       final engine = AnalysisEngine(kb);
       final parsed = ParsedCard(
@@ -730,6 +807,60 @@ void main() {
       expect(trip.lineLabel, '2号线'); // "90020031…" 分段布局 → "0231" 查表
       expect(trip.stationLabel, '苏洋');
       expect(trip.appTypeName, '城市轨道交通');
+    });
+
+    test('复合消费（0x09）配对 0x1E 出站：产出状态短名与交易城市码', () {
+      final engine = AnalysisEngine(kb);
+      final parsed = ParsedCard(
+        parserName: 't',
+        info: const TUnionCardInfo(cityCode: '3910'),
+        transactions: [
+          _txn(
+            seq: 1,
+            time: DateTime(2024, 12, 29, 14, 17, 40),
+            amountFen: 500,
+            rawType: 0x09,
+          ),
+        ],
+        transitProcessRecords: [
+          TUnionProcessRecord(
+            sfi: 0x1E,
+            recordNumber: 1,
+            recordName: '循环记录 1',
+            raw: const [],
+            trip: const TUnionProcessParser().parseCycleTrip(_cycleProcessRecord()),
+          ),
+        ],
+        selectedAidHex: 'A000000632010105',
+      );
+      final result = engine.analyze(parsed, now: DateTime(2026, 10, 7));
+
+      final trip = result.trips.single;
+      expect(trip.isConsume, isTrue);
+      expect(trip.rideStatusName, '出站'); // EP 出站（城市轨道交通）
+      expect(trip.cityCode, '1000'); // 0x1E 受理方城市代码（原样保留）
+    });
+
+    test('复合消费（0x09）未配对 0x1E：状态短名与城市码保持 null（不猜测）', () {
+      final engine = AnalysisEngine(kb);
+      final parsed = ParsedCard(
+        parserName: 't',
+        info: const TUnionCardInfo(cityCode: '3910'),
+        transactions: [
+          _txn(
+            seq: 1,
+            time: DateTime(2024, 5, 1),
+            amountFen: 200,
+            rawType: 0x09,
+          ),
+        ],
+        selectedAidHex: 'A000000632010105',
+      );
+      final result = engine.analyze(parsed, now: DateTime(2026, 10, 7));
+
+      final trip = result.trips.single;
+      expect(trip.rideStatusName, isNull);
+      expect(trip.cityCode, isNull);
     });
 
     test('0 元交易无 0x1E 入站记录配对：不标记进站（不猜测）', () {

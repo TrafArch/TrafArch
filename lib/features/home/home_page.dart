@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../core/nfc/nfc_models.dart';
 import '../../core/nfc/nfc_scan_mixin.dart';
+import '../../core/transit/tunion/qr/jt_t1179_qr_display.dart';
+import '../../core/transit/tunion/qr/jt_t1179_qr_parser.dart';
 import '../../core/ui_constants.dart';
 import '../../core/app_info.dart';
 import '../../state/app_state.dart';
+import '../qr/qr_acquire.dart';
 import '../settings/settings_action_button.dart';
 import '../settings/settings_page.dart';
 
@@ -121,6 +124,30 @@ class _HomePageState extends State<HomePage> with NfcScanMixin<HomePage> {
                       child: _SummaryCard(app: app),
                     ),
                   ],
+                  const SizedBox(height: 12),
+                  RepaintBoundary(
+                    child: _QrAcquireCard(app: app),
+                  ),
+                  if (app.qrError != null) ...[
+                    const SizedBox(height: 12),
+                    Card(
+                      child: ListTile(
+                        leading: const Icon(Icons.error_outline),
+                        title: const Text('二维码解析失败'),
+                        subtitle: Text(app.qrError!),
+                        trailing: TextButton(
+                          onPressed: app.clearQr,
+                          child: const Text('清除'),
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (app.hasQrData) ...[
+                    const SizedBox(height: 12),
+                    RepaintBoundary(
+                      child: _QrSummaryCard(app: app),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -173,8 +200,9 @@ class _SummaryCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             const Divider(height: 20),
-            // 类型：成功解析部标文件系统（JT/T 978.2）即展示「交通联合」
-            _row('类型', app.tunionDetected ? '交通联合' : '—'),
+            // 类型：交通联合（JT/T 978.2）或城市一卡通（CJ/T 331-2016）
+            // 解析命中时展示对应名称
+            _row('类型', _cardTypeText()),
             _row('发卡地', issuerCity),
             _row('卡种', _cardKindText()),
             _row('卡号', wallet?.cardNumber ?? '—'),
@@ -185,6 +213,13 @@ class _SummaryCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// 卡片类型：按当前解析结果展示交通联合 / 城市一卡通；未命中显示 —。
+  String _cardTypeText() {
+    if (app.tunionDetected) return '交通联合';
+    if (app.cityUnionDetected) return '城市一卡通';
+    return '—';
   }
 
   /// 卡种：管理信息文件（SFI 0x17）卡种类型优先，回退持卡人文件卡类型标识；
@@ -207,6 +242,138 @@ class _SummaryCard extends StatelessWidget {
   static String _fmtDate(DateTime d) => '${d.year}-'
       '${d.month.toString().padLeft(2, '0')}-'
       '${d.day.toString().padLeft(2, '0')}';
+
+  Widget _row(String a, String b) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(width: 100, child: Text(a)),
+            Expanded(child: Text(b)),
+          ],
+        ),
+      );
+}
+
+/// 二维码获取卡片：相机扫描 / 手动输入两个入口。
+class _QrAcquireCard extends StatelessWidget {
+  final AppState app;
+  const _QrAcquireCard({required this.app});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          children: [
+            Icon(Icons.qr_code_scanner,
+                size: 48, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(height: 12),
+            Text('扫码读取乘车码',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Text(
+              '支持 JT/T 1179 交通一卡通乘车码，可相机扫描或手动输入原始数据',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              children: [
+                FilledButton.tonalIcon(
+                  onPressed: () => scanQrAndParse(context, app),
+                  icon: const Icon(Icons.qr_code_scanner),
+                  label: const Text('扫描二维码'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => inputQrAndParse(context, app),
+                  icon: const Icon(Icons.keyboard_alt_outlined),
+                  label: const Text('手动输入'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 二维码摘要卡片：证书发卡机构（知识库前缀匹配）+ 关键字段。
+class _QrSummaryCard extends StatelessWidget {
+  final AppState app;
+  const _QrSummaryCard({required this.app});
+
+  @override
+  Widget build(BuildContext context) {
+    final JtT1179QrData qr = app.qrData!;
+    // 发卡机构：证书 BCD 发卡机构标识（8 位）→ 卡前缀库名称 / 发卡地
+    final issuerId = qr.issuerIdText;
+    final prefix = app.cardPrefixByIssuerId(issuerId);
+    final issuerName = prefix?.cardName ??
+        (issuerId == null ? '未知发卡机构' : '未收录机构（$issuerId）');
+    final validUntil = qr.qrValidUntilUtc.toLocal();
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text('最近扫描二维码',
+                      style: Theme.of(context).textTheme.titleLarge),
+                ),
+                IconButton(
+                  onPressed: app.clearQr,
+                  tooltip: '清除二维码结果',
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              issuerName,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            const Divider(height: 20),
+            _row('类型', '交通联合乘车码（JT/T 1179）'),
+            _row('版本', qr.versionHex),
+            _row('发卡地', prefix?.city ?? '—'),
+            _row('支付账户号',
+                qr.paymentAccountDigits ?? qr.paymentAccountNumberHex),
+            _row(
+              '单次消费上限',
+              '${(qr.singleConsumptionLimitFen / 100).toStringAsFixed(2)} 元',
+            ),
+            _row('生成时间', _fmtDateTime(qr.generationTimeUtc.toLocal())),
+            _row(
+              '有效期至',
+              '${_fmtDateTime(validUntil)}'
+                  '${qr.isQrExpired() ? '（已过期）' : ''}',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _fmtDateTime(DateTime t) {
+    String pad2(int v) => v.toString().padLeft(2, '0');
+    return '${t.year}-${pad2(t.month)}-${pad2(t.day)} '
+        '${pad2(t.hour)}:${pad2(t.minute)}:${pad2(t.second)}';
+  }
 
   Widget _row(String a, String b) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 5),

@@ -38,8 +38,8 @@ android {
         applicationId = "com.kajolno.TrafArch"
         minSdk = 26
         targetSdk = 37
-        versionCode = 2
-        versionName = "1.0.1-beta"
+        versionCode = 3
+        versionName = "1.0.1-beta.2"
     }
 
     buildTypes {
@@ -49,6 +49,10 @@ android {
             } else {
                 signingConfigs.getByName("debug")
             }
+            // 体积优化：R8 代码压缩 + 资源收缩（仅 release 生效）
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
         }
     }
 }

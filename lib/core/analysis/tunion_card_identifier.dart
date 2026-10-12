@@ -1,6 +1,6 @@
-import '../data/knowledge_base.dart';
+import '../data/tunion_knowledge_base.dart';
 import '../transit/tunion/tunion_models.dart';
-import 'analysis_models.dart';
+import 'tunion_analysis_models.dart';
 
 /// 卡片识别器：多证据融合（发卡机构指纹为主证据，城市代码为辅证），
 /// 输出置信度与完整证据链；宁可输出"未知"，不猜测。
@@ -37,7 +37,7 @@ class CardIdentifier {
         evidence.add(Evidence(
           source: 'issuerId',
           weight: 0,
-          detail: '指纹库未收录 $issuerId（可在 assets/data/issuer_fingerprints.json 补充）',
+          detail: '指纹库未收录 $issuerId（可在 assets/data/tunion_issuer_fingerprints.json 补充）',
         ));
       }
     }
@@ -60,7 +60,7 @@ class CardIdentifier {
         evidence.add(Evidence(
           source: 'cityCode',
           weight: 0,
-          detail: '城市代码 $code 未收录（可在 assets/data/card_prefixes.json 补充）',
+          detail: '城市代码 $code 未收录（可在 assets/data/tunion_card_prefixes.json 补充）',
         ));
       }
     }

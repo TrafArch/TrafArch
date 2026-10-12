@@ -1,8 +1,11 @@
 package com.kajolno.TrafArch
 
 import android.Manifest
+import android.content.ActivityNotFoundException
 import android.content.ContentValues
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.nfc.NfcAdapter
 import android.nfc.Tag
 import android.nfc.tech.IsoDep
@@ -29,8 +32,11 @@ class MainActivity : FlutterActivity(), NfcAdapter.ReaderCallback {
     companion object {
         private const val CHANNEL = "transit_card_analyzer/nfc"
         private const val EXPORT_CHANNEL = "transit_card_analyzer/export"
+        private const val QR_IMAGE_CHANNEL = "transit_card_analyzer/qr_image"
         private const val REQUEST_WRITE_STORAGE = 1001
+        private const val REQUEST_PICK_QR_IMAGE = 1002
         private const val TAG = "NFC"
+        private const val QR_TAG = "QRImage"
 
         // 轮询 NFC-A/B/F/V 全部非接触协议，跳过 NDEF 检查
         private val READER_FLAGS = NfcAdapter.FLAG_READER_NFC_A or
@@ -52,6 +58,10 @@ class MainActivity : FlutterActivity(), NfcAdapter.ReaderCallback {
     @Volatile
     private var pendingExportResult: MethodChannel.Result? = null
     private var pendingExportPayload: Pair<String, String>? = null
+
+    // 相册选图等待回传的请求
+    @Volatile
+    private var pendingImageResult: MethodChannel.Result? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -75,6 +85,14 @@ class MainActivity : FlutterActivity(), NfcAdapter.ReaderCallback {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "saveToDownloads" -> exportToDownloads(call, result)
+                    else -> result.notImplemented()
+                }
+            }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, QR_IMAGE_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "pickImage" -> pickQrImage(result)
                     else -> result.notImplemented()
                 }
             }
@@ -305,6 +323,93 @@ class MainActivity : FlutterActivity(), NfcAdapter.ReaderCallback {
         }
         val file = File(dir, fileName)
         file.writeText(content, Charsets.UTF_8)
+        return file.absolutePath
+    }
+
+    /**
+     * 相册选图（二维码导入）：打开系统相册选择一张图片，复制到应用私有缓存
+     * 目录后回传绝对路径；用户取消时回传 null。两条路径均无需存储权限。
+     *
+     * 优先使用系统「照片选择器」（ACTION_PICK_IMAGES，Android 13+ 或经
+     * Google Play 服务回传），不可用时回退到系统文件选择器（ACTION_GET_CONTENT）。
+     */
+    @Suppress("DEPRECATION", "InlinedApi")
+    private fun pickQrImage(result: MethodChannel.Result) {
+        synchronized(this) {
+            if (pendingImageResult != null) {
+                result.error("PICK_IN_PROGRESS", "相册选择已在进行中", null)
+                return
+            }
+            pendingImageResult = result
+        }
+
+        try {
+            startActivityForResult(
+                Intent(MediaStore.ACTION_PICK_IMAGES).apply { type = "image/*" },
+                REQUEST_PICK_QR_IMAGE
+            )
+        } catch (photoPickerMissing: ActivityNotFoundException) {
+            Log.w(QR_TAG, "Photo picker unavailable, fallback to GET_CONTENT: ${photoPickerMissing.message}")
+            try {
+                startActivityForResult(
+                    Intent(Intent.ACTION_GET_CONTENT).apply {
+                        type = "image/*"
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                    },
+                    REQUEST_PICK_QR_IMAGE
+                )
+            } catch (fallbackMissing: ActivityNotFoundException) {
+                synchronized(this) { pendingImageResult = null }
+                result.error("PICKER_UNAVAILABLE", "未找到可用的相册/文件选择器", null)
+            }
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQUEST_PICK_QR_IMAGE) return
+
+        // 取出并清空挂起请求，保证无论成败只回传一次
+        val pending = synchronized(this) {
+            val current = pendingImageResult
+            pendingImageResult = null
+            current
+        } ?: return
+
+        val uri: Uri? = if (resultCode == RESULT_OK) data?.data else null
+        if (uri == null) {
+            // 用户取消选择
+            pending.success(null)
+            return
+        }
+
+        // 大图读取/复制放后台线程，避免阻塞主线程
+        Thread {
+            try {
+                val path = cachePickedImage(uri)
+                runOnUiThread { pending.success(path) }
+            } catch (e: Exception) {
+                Log.w(QR_TAG, "Failed to cache picked image: ${e.message}")
+                runOnUiThread {
+                    pending.error("IMAGE_READ_FAILED", e.message ?: "读取所选图片失败", null)
+                }
+            }
+        }.start()
+    }
+
+    /** 将所选图片复制到应用私有缓存目录（每次选择前清理旧文件），返回绝对路径。 */
+    private fun cachePickedImage(uri: Uri): String {
+        val dir = File(cacheDir, "qr_picked")
+        if (dir.exists()) {
+            dir.listFiles()?.forEach { it.delete() }
+        } else {
+            dir.mkdirs()
+        }
+        val file = File(dir, "picked_${System.currentTimeMillis()}.img")
+        contentResolver.openInputStream(uri)?.use { input ->
+            file.outputStream().use { output -> input.copyTo(output) }
+        } ?: throw IOException("无法打开所选图片")
         return file.absolutePath
     }
 
@@ -547,6 +652,14 @@ class MainActivity : FlutterActivity(), NfcAdapter.ReaderCallback {
             pendingExportPayload = null
         }
         exportResult?.error("EXPORT_CANCELLED", "页面已关闭，导出已取消", null)
+
+        // 相册选择等待中的请求：回传取消，避免 Dart 端 await 永久挂起
+        var imageResult: MethodChannel.Result? = null
+        synchronized(this) {
+            imageResult = pendingImageResult
+            pendingImageResult = null
+        }
+        imageResult?.error("PICK_CANCELLED", "页面已关闭，相册选择已取消", null)
 
         stopScan()
         super.onDestroy()

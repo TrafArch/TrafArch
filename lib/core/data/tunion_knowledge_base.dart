@@ -17,7 +17,7 @@ class CityInfo {
 
 /// 城市码表：城市代码 → 城市信息。
 ///
-/// 数据源为卡号前缀库（assets/data/card_prefixes.json）的 entries 字段：
+/// 数据源为卡号前缀库（assets/data/tunion_card_prefixes.json）的 entries 字段：
 /// 条目发卡机构代码（issuer，8 位）的后 4 位即城市代码（与卡片上报的
 /// 2 字节城市代码同一体系），命中后取条目的 city 字段为城市名（条目的
 /// province 可选字段为省份）。缺 issuer 或 city 的条目不参与匹配；
@@ -225,16 +225,21 @@ class CardPrefixInfo {
   final String cardName;
   final String? city;
 
+  /// 钱包货币（ISO 4217 代码，如 'HKD' 港币）；条目未声明时为 null
+  /// （按人民币缺省口径处理，不猜测外币）。
+  final String? currency;
+
   const CardPrefixInfo({
     required this.prefix,
     required this.cardName,
     this.city,
+    this.currency,
   });
 }
 
 /// 卡号前缀库（卡号前 8 位 IIN 匹配）+ 卡种类型取值对照。
 ///
-/// - entries：prefix → 卡片名称 / 发卡地（数据文件 assets/data/card_prefixes.json，
+/// - entries：prefix → 卡片名称 / 发卡地（数据文件 assets/data/tunion_card_prefixes.json，
 ///   由公开号段资料与实测卡片持续校正）；
 /// - cardKinds：SFI 0x17 管理信息文件「卡种类型」取值 → 名称，
 ///   未收录取值由展示层回退原始 HEX（不猜测）。
@@ -274,6 +279,7 @@ class CardPrefixTable {
             prefix: prefix,
             cardName: name,
             city: e['city']?.toString(),
+            currency: e['currency']?.toString(),
           );
           entries[prefix] = info;
           // 发卡机构代码（issuer）登记为反查键：同一代码多条前缀时保留首条
@@ -338,7 +344,7 @@ class CardPrefixTable {
 
 /// 交通知识库：城市码表 + 发卡机构指纹库 + 终端解码规则库 + 站点代码表。
 ///
-/// 数据源：城市码表由卡号前缀库（assets/data/card_prefixes.json）的
+/// 数据源：城市码表由卡号前缀库（assets/data/tunion_card_prefixes.json）的
 /// 发卡机构代码字段派生（后 4 位为城市代码）；发卡机构指纹与终端解码
 /// 规则为 assets/data/ 下的版本化 JSON；站点代码表默认使用应用内预制
 /// 快照（prebuilt_station_data.dart，读卡识途公开数据、开箱即用）。
@@ -361,9 +367,9 @@ class KnowledgeBase {
     this.stationCodes = StationCodeTable.empty,
   });
 
-  static const issuerAsset = 'assets/data/issuer_fingerprints.json';
-  static const terminalRulesAsset = 'assets/data/terminal_rules.json';
-  static const cardPrefixAsset = 'assets/data/card_prefixes.json';
+  static const issuerAsset = 'assets/data/tunion_issuer_fingerprints.json';
+  static const terminalRulesAsset = 'assets/data/tunion_terminal_rules.json';
+  static const cardPrefixAsset = 'assets/data/tunion_card_prefixes.json';
 
   factory KnowledgeBase.empty() => KnowledgeBase(
         cities: CityTable.fromCardPrefixes(const {}),

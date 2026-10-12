@@ -1,11 +1,13 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-import '../core/analysis/analysis_engine.dart';
-import '../core/analysis/analysis_models.dart';
+import '../core/analysis/tunion_analysis_engine.dart';
+import '../core/analysis/tunion_analysis_models.dart';
 import '../core/app_info.dart';
 import '../core/card/card_parser.dart';
-import '../core/data/knowledge_base.dart';
+import '../core/data/tunion_knowledge_base.dart';
 import '../core/data/online_data_store.dart';
 import '../core/data/settings_store.dart';
 import '../core/data/station_codes.dart';
@@ -14,6 +16,9 @@ import '../core/logging/app_logger.dart';
 import '../core/logging/log_exporter.dart';
 import '../core/nfc/nfc_models.dart';
 import '../core/nfc/nfc_service.dart';
+import '../core/transit/city_union/city_union_models.dart';
+import '../core/transit/city_union/city_union_parser.dart';
+import '../core/transit/tunion/qr/jt_t1179_qr_parser.dart';
 import '../core/transit/tunion/tunion_models.dart';
 import '../core/transit/tunion/tunion_parser.dart';
 import '../core/transit/tunion/tunion_process_parser.dart';
@@ -164,7 +169,41 @@ class AppState extends ChangeNotifier {
     return null;
   }
 
-  bool get tunionDetected => _parsedCard != null;
+  /// 是否已发现交通联合应用（当前解析结果由交通联合解析器产出）。
+  bool get tunionDetected => _parsedCard?.parserId == CardParserIds.tunion;
+
+  /// 是否已发现城市一卡通应用（当前解析结果由城市一卡通解析器产出）。
+  bool get cityUnionDetected =>
+      _parsedCard?.parserId == CardParserIds.cityUnion;
+
+  /// 城市一卡通文件解析视图（CJ/T 331-2016：0x15 / 0x17 / 0x10 / 0x1A），
+  /// 供专家模式按统一视图渲染；非城市一卡通卡时为空。
+  List<CityUnionFileView> get cityUnionFiles =>
+      _parsedCard?.cityUnionFiles ?? const [];
+
+  /// 当前卡片的钱包货币（按卡号前缀库判定，如八达通-全国通卡为港币）；
+  /// 未读取分析结果或未收录时回退人民币。
+  Currency get cardCurrency => _analysis?.currency ?? Currency.cny;
+
+  /// 卡片所属城市代码（发卡地）：识别城市优先，回退卡片管理信息城市
+  /// 代码；均不可得时为 null。
+  String? get cardCityCode =>
+      _analysis?.identity.cityCode ?? _parsedCard?.info.cityCode;
+
+  /// [code] 是否与卡片所属城市不同（异地用卡判定）；卡片城市或 [code]
+  /// 不可判定、取值为未写入（空 / 全 0）时返回 false（不猜测）。
+  bool isRemoteUse(String? code) {
+    final local = cardCityCode;
+    if (local == null || code == null) return false;
+    final a = local.trim().toUpperCase();
+    final b = code.trim().toUpperCase();
+    if (_isUnsetCityCode(a) || _isUnsetCityCode(b)) return false;
+    return a != b;
+  }
+
+  /// 城市代码为空或全 0（未写入）时视为未知。
+  static bool _isUnsetCityCode(String code) =>
+      code.isEmpty || code.replaceAll('0', '').isEmpty;
 
   CardAnalysisResult? _analysis;
   CardAnalysisResult? get analysis => _analysis;
@@ -222,6 +261,95 @@ class AppState extends ChangeNotifier {
   /// 卡种类型取值（SFI 0x17 卡种类型，HEX 字符串）→ 名称；
   /// 未收录或知识库未加载时返回 null（展示层回退原始 HEX）。
   String? cardKindName(String? hex) => _kb?.cardPrefixes.cardKindName(hex);
+
+  // ---- JT/T 1179 乘车码二维码 ----
+
+  JtT1179QrData? _qrData;
+
+  /// 最近一次解析成功的 JT/T 1179 二维码数据；解析失败或清除后为 null。
+  JtT1179QrData? get qrData => _qrData;
+
+  List<int>? _qrRaw;
+
+  /// 最近一次获取到的二维码原始字节（成功 / 失败均保留，供原始数据查看）。
+  List<int>? get qrRaw => _qrRaw;
+
+  String? _qrError;
+
+  /// 最近一次二维码解析失败原因；再次解析或清除时重置。
+  String? get qrError => _qrError;
+
+  /// 是否已有二维码解析结果。
+  bool get hasQrData => _qrData != null;
+
+  /// 解析二维码原始字节（相机扫描得到的二进制数据）。
+  /// 成功时保存解析结果并清除错误；失败时保留原始字节并记录错误。
+  bool parseQrBytes(List<int> bytes) {
+    _qrRaw = List<int>.unmodifiable(bytes);
+    try {
+      _qrData = JtT1179QrParser.parse(bytes);
+      _qrError = null;
+      _logEvent('二维码解析成功：${bytes.length} 字节');
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _qrData = null;
+      _qrError = '$e';
+      _logEvent('二维码解析失败：$e');
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// 解析文本形式的二维码数据（自动识别 HEX / Base64）；
+  /// 无法解码为字节或解析失败时返回 false 并记录错误。
+  bool parseQrText(String input) {
+    final bytes = decodeQrText(input);
+    if (bytes == null) {
+      _qrRaw = null;
+      _qrData = null;
+      _qrError = '无法识别输入内容：请输入十六进制或 Base64 编码的二维码数据';
+      _logEvent('二维码解析失败：输入内容无法识别为 HEX / Base64');
+      notifyListeners();
+      return false;
+    }
+    return parseQrBytes(bytes);
+  }
+
+  /// 文本 → 字节：十六进制字符串（允许空白 / `:` / `-` 分隔与 `0x` 前缀）
+  /// 优先按 HEX 解码，否则回退 Base64；均无法解码时返回 null。
+  static List<int>? decodeQrText(String input) {
+    var text = input.trim();
+    if (text.isEmpty) return null;
+    if (text.startsWith('0x') || text.startsWith('0X')) {
+      text = text.substring(2);
+    }
+    final compact = text.replaceAll(RegExp(r'[\s:\-]'), '');
+    if (compact.isNotEmpty &&
+        compact.length.isEven &&
+        RegExp(r'^[0-9A-Fa-f]+$').hasMatch(compact)) {
+      return [
+        for (var i = 0; i < compact.length; i += 2)
+          int.parse(compact.substring(i, i + 2), radix: 16),
+      ];
+    }
+    try {
+      final normalized = input.trim().replaceAll(RegExp(r'\s'), '');
+      final bytes = base64.decode(base64.normalize(normalized));
+      return bytes.isEmpty ? null : bytes;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 清除二维码状态（解析结果、原始字节与错误）。
+  void clearQr() {
+    if (_qrData == null && _qrRaw == null && _qrError == null) return;
+    _qrData = null;
+    _qrRaw = null;
+    _qrError = null;
+    notifyListeners();
+  }
 
   final List<String> _apduLog = [];
   List<String> get apduLog => List.unmodifiable(_apduLog);
@@ -503,19 +631,34 @@ class AppState extends ChangeNotifier {
 
     try {
       await init();
-      _log('== 开始交通联合卡解析（JT/T 978.2）==');
-      // v0.1 仅注册交通联合解析器；未来多卡型时改为按序探测（CardParser.probe）
-      final parser = TUnionParser(_transceive);
-      final parsed = await parser.parse();
+      // 按序探测已注册解析器：交通联合（JT/T 978.2）优先，未命中时
+      // 尝试城市一卡通（CJ/T 331-2016）；双标准卡以交通联合载荷为主。
+      final cardParsers = <CardParser>[
+        TUnionParser(_transceive),
+        CityUnionParser(_transceive),
+      ];
+      ParsedCard? parsed;
+      for (final parser in cardParsers) {
+        _log('== 尝试解析：${parser.parserName} ==');
+        parsed = await parser.parse();
+        if (parsed != null) break;
+      }
       if (parsed == null) {
-        _log('== 未发现交通联合应用 ==');
+        _log('== 未发现受支持的交通应用（交通联合 / 城市一卡通）==');
         return;
       }
       _parsedCard = parsed;
-      _analysis = _engine?.analyze(parsed);
-      _log('== 解析完成：${parsed.transactions.length} 条交易记录 / '
-          '${parsed.transitProcessRecords.length} 条过程记录 ==');
-
+      if (parsed.parserId == CardParserIds.tunion) {
+        _analysis = _engine?.analyze(parsed);
+        _log('== 解析完成：${parsed.transactions.length} 条交易记录 / '
+            '${parsed.transitProcessRecords.length} 条过程记录 ==');
+      } else {
+        // 分析引擎（识别 / 行程 / 符合性）为交通联合专属：
+        // 其他卡型只提供文件级解析视图，不进入分析链路。
+        _analysis = null;
+        _log('== 解析完成：${parsed.parserName} '
+            '${parsed.cityUnionFiles.length} 个文件视图 ==');
+      }
     } catch (e) {
       _log('!! 解析异常：$e');
     } finally {

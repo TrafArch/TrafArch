@@ -98,7 +98,7 @@ class TUnionTransaction {
   final String terminalId; // 交易终端编号（BCD 字符串）
   final DateTime time; // 交易时间
   // 线路/站点等位置信息不在原始记录中直接给出，
-  // 由分析层通过终端编号(TAC)规则库二次解码（见 analysis/analysis_engine.dart）。
+  // 由分析层通过终端编号(TAC)规则库二次解码（见 analysis/tunion_analysis_engine.dart）。
 
   const TUnionTransaction({
     required this.sequence,
@@ -115,6 +115,9 @@ class TUnionTransaction {
   /// 是否为充值交易（0x02）。取值来自社区读卡实现实测（T-Union 系列：
   /// 0x02 充值 / 0x06 消费 / 0x09 复合消费）；其余取值保持"其他"未知（不猜测）。
   bool get isRecharge => rawType == 0x02;
+
+  /// 是否为复合消费交易（0x09，如轨道交通进出站行程的一次性结算）。
+  bool get isCompositeConsume => rawType == 0x09;
 
   /// 兼容旧语义：0 消费，1 其他（充值等）。
   int get type => isConsume ? 0 : 1;
@@ -243,6 +246,18 @@ class TUnionTripRecord {
   /// 是否入站/上车/进场类记录（EC 0x01 / EP 0x03）：不承载扣费金额，
   /// 不参与与交易明细（0x18）的行程配对。
   bool get isEntry => typeCode == 0x01 || typeCode == 0x03;
+
+  /// 行程状态短名（行程卡标题展示用）：进/出站类按应用分类码区分
+  /// 轨道交通"进站/出站"与公共汽电车"上车/下车"；单次消费 / 补票 /
+  /// 充值取短名；类型未收录时返回 null（展示层不替换，不猜测）。
+  String? get statusShortName => switch (typeCode) {
+        0x01 || 0x03 => isBus ? '上车' : '进站',
+        0x02 || 0x04 => isBus ? '下车' : '出站',
+        0x05 || 0x06 => '单次消费',
+        0x07 || 0x08 => '补票',
+        0x09 || 0x0A => '充值',
+        _ => null,
+      };
 
   /// [0x0A-0x0B] 线路代码（BCD，4 位）。
   String? get lineCode =>

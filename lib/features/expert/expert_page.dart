@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
-import '../../core/analysis/analysis_models.dart';
+import '../../core/analysis/tunion_analysis_models.dart';
+import '../../core/card/card_parser.dart';
 import '../../core/nfc/nfc_models.dart';
+import '../../core/transit/city_union/city_union_models.dart';
+import '../../core/transit/tunion/qr/jt_t1179_qr_display.dart';
+import '../../core/transit/tunion/qr/jt_t1179_qr_parser.dart';
 import '../../core/transit/tunion/tunion_models.dart';
 import '../../core/transit/tunion/tunion_process_parser.dart';
 import '../../core/ui_constants.dart';
 import '../../state/app_state.dart';
+import '../qr/qr_acquire.dart';
 import '../settings/settings_action_button.dart';
 
 class ExpertPage extends StatefulWidget {
@@ -61,104 +66,44 @@ class _ExpertPageState extends State<ExpertPage> {
     final info = app.cardInfo;
     final analysis = app.analysis;
     final identity = analysis?.identity;
-    final wallet = analysis?.wallet;
-    final trips = analysis?.trips ?? const <TransitTrip>[];
-    final firstTrip = trips.isEmpty ? null : trips.first;
     final processRecords = app.transitProcessRecords;
-    final varRecords = processRecords.where((r) => r.sfi == 0x1A).toList();
-    final cycleRecords = processRecords.where((r) => r.sfi == 0x1E).toList();
-    // 过程记录仅保留三类：0x1A 记录 1（城市轨道应用信息记录）、记录 2（公共
-    // 汽电车应用信息记录）与全部 0x1E 过程循环记录，其余变长记录不在界面展示。
-    TUnionProcessRecord? railRecord;
-    TUnionProcessRecord? busRecord;
-    TUnionProcessRecord? wholeVarBlob;
-    for (final r in varRecords) {
-      if (r.recordNumber == 1) {
-        railRecord = r;
-      } else if (r.recordNumber == 2) {
-        busRecord = r;
-      } else if (r.recordNumber == 0) {
-        wholeVarBlob = r;
-      }
-    }
-    // 逐条读取不可用、仅有整体数据时（整体读取自记录 1 读至末尾），
-    // 将整体数据前缀按记录 1 解析展示城市轨道应用信息记录，避免有原始
-    // 数据却显示“未写入”；记录 2 起始位置无法定位，不猜测。
-    if (railRecord == null && wholeVarBlob != null) {
-      final raw = wholeVarBlob.raw;
-      railRecord = TUnionProcessRecord(
-        sfi: 0x1A,
-        recordNumber: 1,
-        recordName: '城市轨道应用信息记录',
-        raw: raw,
-        railTransit: const TUnionProcessParser().parseRailTransit(1, raw),
-      );
-    }
+    // 解析器分派：交通联合专属字段与页签随解析器选择展示；未命中交通联合
+    // 解析器时不展示（未来接入住建部一卡通解析器时按 parserId 扩展分支）。
+    final isTUnion = parsed?.parserId == CardParserIds.tunion;
+    final isCityUnion = parsed?.parserId == CardParserIds.cityUnion;
+
+    // 页签随解析器动态构建：JT/T 978 符合性仅在交通联合解析器命中时存在。
+    final tabs = <Tab>[
+      const Tab(text: '卡片识别'),
+      const Tab(text: '交通数据解析'),
+      if (isTUnion) const Tab(text: 'JT/T 978 符合性'),
+      const Tab(text: '异常检测'),
+      const Tab(text: 'APDU / Raw Data'),
+      const Tab(text: '二维码（JT/T 1179）'),
+    ];
 
     return SafeArea(
       top: false,
       child: DefaultTabController(
-        length: 6,
+        // 页签数量随解析器选择变化，以数量作 key：变化时重建控制器，
+        // 避免页签数与控制器长度不一致导致索引越界。
+        key: ValueKey<String>('expert-tabs-${tabs.length}'),
+        length: tabs.length,
         child: NestedScrollView(
           headerSliverBuilder: (context, _) => [
             SliverAppBar(
               title: const Text('专家分析'),
               pinned: true,
               actions: [SettingsActionButton(app: app)],
-              bottom: const TabBar(
+              bottom: TabBar(
                 isScrollable: true,
                 tabAlignment: TabAlignment.start,
-                tabs: [
-                  Tab(text: 'NFC / ISO-DEP'),
-                  Tab(text: '卡片识别'),
-                  Tab(text: '交通数据解析'),
-                  Tab(text: 'JT/T 978 符合性'),
-                  Tab(text: '异常检测'),
-                  Tab(text: 'APDU / Raw Data'),
-                ],
+                tabs: tabs,
               ),
             ),
           ],
           body: TabBarView(
             children: [
-              _tabBody('expert-nfc', [
-                _kv('UID', result?.uid ?? '—'),
-                _kv('Technology', result?.technologies.join(' / ') ?? '—'),
-                _kv('Card Type', result?.cardType ?? '—'),
-                _kv('ATQA', result?.atqa ?? '—'),
-                _kv('SAK', result?.sak ?? '—'),
-                _kv('历史字节解读', result?.atsDescription ?? '—'),
-                _kv('Historical Bytes', result?.historicalBytes ?? '—'),
-                _kv('Hi-layer Response', result?.hiLayerResponse ?? '—'),
-                _kv('NFC-B App Data', result?.nfcBApplicationData ?? '—'),
-                _kv('NFC-B Protocol Info', result?.nfcBProtocolInfo ?? '—'),
-                _kv('NFC-F System Code', result?.nfcFSystemCode ?? '—'),
-                _kv('NFC-F Manufacturer', result?.nfcFManufacturer ?? '—'),
-                _kv('NFC-V DSFID', result?.nfcVDsfId ?? '—'),
-                _kv('NFC-V Response Flags', result?.nfcVResponseFlags ?? '—'),
-                _kv('MIFARE Type', result?.mifareType ?? '—'),
-                _kv('MIFARE Size', result?.mifareSize?.toString() ?? '—'),
-                _kv('MIFARE Sectors',
-                    result?.mifareSectorCount?.toString() ?? '—'),
-                _kv('MIFARE Blocks',
-                    result?.mifareBlockCount?.toString() ?? '—'),
-                _kv('MIFARE Block 0',
-                    result?.mifareManufacturerBlock ?? '—'),
-                _kv(
-                    'MIFARE BCC',
-                    switch (result?.mifareBccValid) {
-                      null => '—',
-                      true => '校验通过',
-                      false => '校验失败',
-                    }),
-                _kv('Max Transceive Length',
-                    result?.maxTransceiveLength?.toString() ?? '—'),
-                _kv(
-                    'ISO-DEP Connected',
-                    result == null
-                        ? '—'
-                        : (result!.isoDepConnected ? 'YES' : 'NO')),
-              ]),
               _tabBody('expert-identify', [
                 _kv('解析器', parsed?.parserName ?? '—'),
                 _kv(
@@ -166,7 +111,10 @@ class _ExpertPageState extends State<ExpertPage> {
                     (parsed == null || parsed.selectedAidHex.isEmpty)
                         ? '—'
                         : parsed.selectedAidHex),
-                _kv('交通联合应用', app.tunionDetected ? '已发现' : '未发现'),
+                // 交通联合应用：交通联合解析器专属字段，仅在命中时展示
+                if (isTUnion) _kv('交通联合应用', '已发现'),
+                // 城市一卡通应用：城市一卡通解析器专属字段，仅在命中时展示
+                if (isCityUnion) _kv('城市一卡通应用', '已发现'),
                 _kv('识别城市', identity?.cityName ?? '未知'),
                 _kv('卡种', identity?.cardFamily ?? '未知'),
                 _kv('卡片名称', app.cardPrefixByIssuerId(info?.issuerId)?.cardName ?? '未知'),
@@ -177,62 +125,17 @@ class _ExpertPageState extends State<ExpertPage> {
                     '${e.detail}${e.weight > 0 ? '（权重 ${e.weight}）' : ''}',
                   ),
               ]),
-              _tabBody('expert-parsed', [
-                _kv('逻辑卡号', _val(info?.displayCardNumber)),
-                _kv('发卡机构标识', _val(info?.issuerId)),
-                _kv('应用类型标识', _val(info?.appTypeId)),
-                _kv('应用版本', _val(info?.appVersion)),
-                _kv('生效日期', _fmtDate(info?.effectiveDate)),
-                _kv('失效日期', _fmtDate(info?.expireDate)),
-                _kv('发卡机构 FCI', _val(info?.issuerFci)),
-                _kv('国际代码', _val(info?.countryCode)),
-                _kv('省级代码', _val(info?.provinceCode)),
-                _kv('城市代码', _val(info?.cityCode)),
-                _kv('互通卡种', _val(info?.interopCardType)),
-                _kv('卡种类型', _val(info?.cardKind)),
-                _kv('余额', wallet?.balanceText ?? '未知'),
-                _kv('剩余有效天数', _daysRemainingText(wallet?.daysRemaining)),
-                _kv('交易记录', '${trips.length} 条'),
-                _kv('最近交易', _fmtTime(firstTrip?.time)),
-                _kv('交易金额', firstTrip?.amountText ?? '未知'),
-                _kv('交易类型', firstTrip?.typeName ?? '未知'),
-                _kv('交易序号', firstTrip?.sequence.toString() ?? '未知'),
-                _kv('终端编号', firstTrip?.terminalId ?? '未知'),
-                _kv('终端解码', _terminalDecodeText(firstTrip)),
-                _kv(
-                    '过程记录',
-                    processRecords.isEmpty
-                        ? '无'
-                        : '${processRecords.length} 条'
-                            '（0x1A ${varRecords.length} · 0x1E ${cycleRecords.length}）'),
-                const Divider(height: 28),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    '过程记录 · 0x1A / 0x1E',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleSmall
-                        ?.copyWith(color: Theme.of(context).colorScheme.primary),
-                  ),
-                ),
-                if (processRecords.isEmpty)
-                  _hintLine('未读取到过程记录（卡片未实现该文件、记录为空或读取条件不满足）')
-                else ...[
-                  _railProcessTile(railRecord),
-                  _busProcessTile(busRecord),
-                  _cycleProcessTile(cycleRecords),
-                ],
-              ]),
-              _tabBody('expert-compliance', [
-                _kv('综合覆盖度',
-                    analysis == null
-                        ? '—'
-                        : '${analysis.compliance.scorePercent}%'),
-                for (final item
-                    in analysis?.compliance.items ?? const <ComplianceItem>[])
-                  _complianceRow(context, item),
-              ]),
+              _tabBody('expert-parsed', _transitDataFields(parsed)),
+              if (isTUnion)
+                _tabBody('expert-compliance', [
+                  _kv('综合覆盖度',
+                      analysis == null
+                          ? '—'
+                          : '${analysis.compliance.scorePercent}%'),
+                  for (final item
+                      in analysis?.compliance.items ?? const <ComplianceItem>[])
+                    _complianceRow(context, item),
+                ]),
               _tabBody('expert-anomaly', [
                 if (analysis == null)
                   _kv('状态', '—')
@@ -294,11 +197,288 @@ class _ExpertPageState extends State<ExpertPage> {
                     ),
                 ],
               ]),
+              _qrTabBody(app),
             ],
           ),
         ),
       ),
     );
+  }
+
+  /// 交通数据解析页签字段：按当前解析器分派。
+  /// 未命中解析器（未读取或未发现受支持应用）时不产出字段；
+  /// 新增卡型解析器时在此登记对应字段分支（如城市一卡通）。
+  List<Widget> _transitDataFields(ParsedCard? parsed) {
+    if (parsed == null) {
+      return [
+        _hintLine(result == null
+            ? '尚未读取卡片，读取成功后将展示交通数据字段'
+            : '未发现受支持的交通应用，暂无交通数据字段'),
+      ];
+    }
+    return switch (parsed.parserId) {
+      CardParserIds.tunion => _tunionTransitFields(parsed),
+      CardParserIds.cityUnion => _cityUnionTransitFields(parsed),
+      _ => [_hintLine('当前解析器暂未提供交通数据字段视图')],
+    };
+  }
+
+  /// 城市一卡通（CJ/T 331-2016）交通数据字段：按标准文件分组展示
+  /// 公共应用基本信息（0x15）、复合交易记录（0x17）、电子钱包异地消费
+  /// 交易明细（0x10）与充值交易明细（0x1A）的字段视图。
+  List<Widget> _cityUnionTransitFields(ParsedCard parsed) {
+    final files = widget.app.cityUnionFiles;
+    if (files.isEmpty) {
+      return [
+        _hintLine('已命中城市一卡通应用，但未读取到标准文件数据'
+            '（0x15 / 0x17 / 0x10 / 0x1A）'),
+      ];
+    }
+    final public = files.where((f) => f.sfi == 0x15).toList();
+    final composite = files.where((f) => f.sfi == 0x17).toList();
+    final offline = files.where((f) => f.sfi == 0x10).toList();
+    final recharge = files.where((f) => f.sfi == 0x1A).toList();
+
+    return [
+      _kv('已读取文件视图', '${files.length} 项'),
+      const Divider(height: 28),
+      _cjPublicInfoTile(public),
+      _cjRecordGroupTile(
+        title: '复合交易记录文件（0x17）',
+        storageKey: 'cj-composite',
+        records: composite,
+        emptyHint: '未读取到复合交易记录（文件不存在或记录未写入）',
+      ),
+      _cjRecordGroupTile(
+        title: '电子钱包异地消费交易明细（0x10）',
+        storageKey: 'cj-offline',
+        records: offline,
+        emptyHint: '未读取到异地消费交易明细（文件不存在或记录未写入）',
+      ),
+      _cjRecordGroupTile(
+        title: '电子钱包充值交易明细（0x1A）',
+        storageKey: 'cj-recharge',
+        records: recharge,
+        emptyHint: '未读取到充值交易明细（文件不存在或记录未写入）',
+      ),
+    ];
+  }
+
+  /// 公共应用基本信息文件（0x15）子菜单：展开后按字段视图展示
+  /// （原始值 / 解码值 / 说明 / 异常）与原始数据；未读取到时给出提示。
+  Widget _cjPublicInfoTile(List<CityUnionFileView> views) {
+    final scheme = Theme.of(context).colorScheme;
+    final view = views.isEmpty ? null : views.first;
+    return ExpansionTile(
+      key: const PageStorageKey<String>('cj-public'),
+      tilePadding: EdgeInsets.zero,
+      childrenPadding: const EdgeInsets.only(bottom: 8),
+      shape: _borderlessShape,
+      collapsedShape: _borderlessShape,
+      title: const Text('公共应用基本信息文件（0x15）'),
+      subtitle: Text(
+        view == null
+            ? '未读取到'
+            : view.fields.isEmpty
+                ? '未按标准解析（保留原始数据）'
+                : '已解析 · ${view.fields.length} 字段',
+        style: Theme.of(context)
+            .textTheme
+            .bodySmall
+            ?.copyWith(color: scheme.outline),
+      ),
+      children: view == null
+          ? [_hintLine('未读取到公共应用基本信息文件（文件不存在或读取被拒）')]
+          : [
+              if (view.fields.isEmpty)
+                for (final e in view.errors) _hintLine(e)
+              else
+                for (final f in view.fields) _kv(f.name, _cjFieldValue(f)),
+              const SizedBox(height: 6),
+              _hexSelectable(view.rawHex),
+            ],
+    );
+  }
+
+  /// 记录文件子菜单（0x17 / 0x10 / 0x1A）：展开后逐条展示记录字段视图。
+  Widget _cjRecordGroupTile({
+    required String title,
+    required String storageKey,
+    required List<CityUnionFileView> records,
+    required String emptyHint,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    return ExpansionTile(
+      key: PageStorageKey<String>(storageKey),
+      tilePadding: EdgeInsets.zero,
+      childrenPadding: const EdgeInsets.only(bottom: 8),
+      shape: _borderlessShape,
+      collapsedShape: _borderlessShape,
+      title: Text(title),
+      subtitle: Text(
+        records.isEmpty ? '未读取到' : '${records.length} 条',
+        style: Theme.of(context)
+            .textTheme
+            .bodySmall
+            ?.copyWith(color: scheme.outline),
+      ),
+      children: records.isEmpty
+          ? [_hintLine(emptyHint)]
+          : [
+              for (var i = 0; i < records.length; i++)
+                _cjRecordView(i, records[i], last: i == records.length - 1),
+            ],
+    );
+  }
+
+  /// 单条 City Union 记录视图：字段列表 + 原始数据；布局不符的记录
+  /// 展示解析器给出的原因并保留原始字节（不猜测字段值）。
+  Widget _cjRecordView(int index, CityUnionFileView record,
+      {required bool last}) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text('记录 ${index + 1}',
+                style: Theme.of(context).textTheme.labelLarge),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                _cjRecordSubtitle(record),
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: scheme.outline),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        if (record.fields.isEmpty)
+          for (final e in record.errors) _hintLine(e)
+        else
+          for (final f in record.fields) _kv(f.name, _cjFieldValue(f)),
+        const SizedBox(height: 6),
+        _hexSelectable(record.rawHex),
+        if (!last) const Divider(height: 24),
+      ],
+    );
+  }
+
+  /// 记录摘要小字：交易类记录给出日期时间与类型，复合交易给出锁定状态；
+  /// 未按标准解析的记录给出字节数与原始数据提示。
+  String _cjRecordSubtitle(CityUnionFileView record) => switch (record) {
+        CjT331WalletOfflineTransaction r =>
+          '${r.transactionDate ?? '未知日期'} ${r.transactionTime ?? ''} · '
+              '${r.transactionTypeName}',
+        CjT331WalletRecharge r =>
+          '${r.transactionDate ?? '未知日期'} ${r.transactionTime ?? ''} · '
+              '${r.transactionTypeName}',
+        CjT331CompositeTransaction r => '复合消费锁定：${r.lockStatus}',
+        _ => '${record.rawHex.split(' ').length} 字节 · 未按标准解析',
+      };
+
+  /// City Union 字段展示值：标准解码值优先（缺失回退原始 HEX），
+  /// 附标准说明与字段级异常；原始字节始终保留在原始数据区。
+  String _cjFieldValue(CjField f) {
+    final base = f.decoded ?? f.rawHex;
+    final notes = <String>[
+      if (f.note != null) f.note!,
+      if (f.error != null) f.error!,
+    ];
+    return notes.isEmpty ? base : '$base（${notes.join('；')}）';
+  }
+
+  /// 交通联合（JT/T 978.2）交通数据字段：钱包标准文件字段、最近交易摘要
+  /// 与过程记录（0x1A / 0x1E）子菜单。仅在交通联合解析器命中时产出。
+  List<Widget> _tunionTransitFields(ParsedCard parsed) {
+    final app = widget.app;
+    final info = parsed.info;
+    final analysis = app.analysis;
+    final wallet = analysis?.wallet;
+    final trips = analysis?.trips ?? const <TransitTrip>[];
+    final firstTrip = trips.isEmpty ? null : trips.first;
+    final processRecords = app.transitProcessRecords;
+    final varRecords = processRecords.where((r) => r.sfi == 0x1A).toList();
+    final cycleRecords = processRecords.where((r) => r.sfi == 0x1E).toList();
+    // 过程记录仅保留三类：0x1A 记录 1（城市轨道应用信息记录）、记录 2（公共
+    // 汽电车应用信息记录）与全部 0x1E 过程循环记录，其余变长记录不在界面展示。
+    TUnionProcessRecord? railRecord;
+    TUnionProcessRecord? busRecord;
+    TUnionProcessRecord? wholeVarBlob;
+    for (final r in varRecords) {
+      if (r.recordNumber == 1) {
+        railRecord = r;
+      } else if (r.recordNumber == 2) {
+        busRecord = r;
+      } else if (r.recordNumber == 0) {
+        wholeVarBlob = r;
+      }
+    }
+    // 逐条读取不可用、仅有整体数据时（整体读取自记录 1 读至末尾），
+    // 将整体数据前缀按记录 1 解析展示城市轨道应用信息记录，避免有原始
+    // 数据却显示“未写入”；记录 2 起始位置无法定位，不猜测。
+    if (railRecord == null && wholeVarBlob != null) {
+      final raw = wholeVarBlob.raw;
+      railRecord = TUnionProcessRecord(
+        sfi: 0x1A,
+        recordNumber: 1,
+        recordName: '城市轨道应用信息记录',
+        raw: raw,
+        railTransit: const TUnionProcessParser().parseRailTransit(1, raw),
+      );
+    }
+
+    return [
+      _kv('逻辑卡号', _val(info.displayCardNumber)),
+      _kv('发卡机构标识', _val(info.issuerId)),
+      _kv('应用类型标识', _val(info.appTypeId)),
+      _kv('应用版本', _val(info.appVersion)),
+      _kv('生效日期', _fmtDate(info.effectiveDate)),
+      _kv('失效日期', _fmtDate(info.expireDate)),
+      _kv('发卡机构 FCI', _val(info.issuerFci)),
+      _kv('国际代码', _val(info.countryCode)),
+      _kv('省级代码', _val(info.provinceCode)),
+      _kv('城市代码', _val(info.cityCode)),
+      _kv('互通卡种', _val(info.interopCardType)),
+      _kv('卡种类型', _val(info.cardKind)),
+      _kv('余额', wallet?.balanceText ?? '未知'),
+      _kv('剩余有效天数', _daysRemainingText(wallet?.daysRemaining)),
+      _kv('交易记录', '${trips.length} 条'),
+      _kv('最近交易', _fmtTime(firstTrip?.time)),
+      _kv('交易金额', firstTrip?.amountText ?? '未知'),
+      _kv('交易类型', firstTrip?.typeName ?? '未知'),
+      _kv('交易序号', firstTrip?.sequence.toString() ?? '未知'),
+      _kv('终端编号', firstTrip?.terminalId ?? '未知'),
+      _kv('终端解码', _terminalDecodeText(firstTrip)),
+      _kv(
+          '过程记录',
+          processRecords.isEmpty
+              ? '无'
+              : '${processRecords.length} 条'
+                  '（0x1A ${varRecords.length} · 0x1E ${cycleRecords.length}）'),
+      const Divider(height: 28),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          '过程记录 · 0x1A / 0x1E',
+          style: Theme.of(context)
+              .textTheme
+              .titleSmall
+              ?.copyWith(color: Theme.of(context).colorScheme.primary),
+        ),
+      ),
+      if (processRecords.isEmpty)
+        _hintLine('未读取到过程记录（卡片未实现该文件、记录为空或读取条件不满足）')
+      else ...[
+        _railProcessTile(railRecord),
+        _busProcessTile(busRecord),
+        _cycleProcessTile(cycleRecords),
+      ],
+    ];
   }
 
   /// 城市轨道应用信息记录（0x1A 记录 1）子菜单。
@@ -314,13 +494,7 @@ class _ExpertPageState extends State<ExpertPage> {
       collapsedShape: _borderlessShape,
       title: const Text('城市轨道应用信息记录'),
       subtitle: Text(
-        record == null
-            ? '未写入'
-            : record.isBlank
-                ? '未写入（初始值）'
-                : transit != null
-                    ? '已解析 · 进出站配对'
-                    : '${record.raw.length} 字节 · 未解析',
+        record == null ? '未写入' : _railRecordSubtitle(record),
         style: Theme.of(context)
             .textTheme
             .bodySmall
@@ -334,36 +508,40 @@ class _ExpertPageState extends State<ExpertPage> {
     );
   }
 
-  /// 公共汽电车应用信息记录（0x1A 记录 2）子菜单。
-  Widget _busProcessTile(TUnionProcessRecord? record) {
-    final scheme = Theme.of(context).colorScheme;
-    final bus = record?.busTransit;
-    return ExpansionTile(
-      key: const PageStorageKey<String>('process-var-2'),
-      tilePadding: EdgeInsets.zero,
-      childrenPadding: const EdgeInsets.only(bottom: 8),
-      shape: _borderlessShape,
-      collapsedShape: _borderlessShape,
-      title: const Text('公共汽电车应用信息记录'),
-      subtitle: Text(
-        record == null
-            ? '未写入'
-            : record.isBlank
-                ? '未写入（初始值）'
-                : bus != null
-                    ? '已解析 · 上下车配对'
-                    : '${record.raw.length} 字节 · 未解析',
-        style: Theme.of(context)
-            .textTheme
-            .bodySmall
-            ?.copyWith(color: scheme.outline),
-      ),
-      children: record == null
-          ? [_hintLine('卡片未写入该记录（0x1A 记录 2）')]
-          : bus != null
-              ? _busTransitFields(bus)
-              : _rawFallback(record),
-    );
+  /// 城市轨道应用信息记录解析状态小字：按实际解析结果展示
+  /// （未解析 / 部分解析 n/m 字段 / 已解析全文），随展开后的字段视图一致。
+  String _railRecordSubtitle(TUnionProcessRecord record) {
+    if (record.isBlank) return '未写入（初始值）';
+    final transit = record.railTransit;
+    if (transit == null) return '${record.raw.length} 字节 · 未解析';
+    final (parsed, total) = _railFieldProgress(transit);
+    if (parsed == 0) return '${record.raw.length} 字节 · 未解析';
+    if (parsed == total) return '已解析 · 进出站配对';
+    return '部分解析 · $parsed/$total 字段';
+  }
+
+  /// 城市轨道记录已解析字段进度（非空字段数 / 字段总数）；
+  /// 口径与 [_railTransitFields] 展示字段一致（不含交易状态与发卡机构自定义）。
+  static (int, int) _railFieldProgress(TransitRecord rec) {
+    final values = <Object?>[
+      rec.entryCityCode,
+      rec.exitCityCode,
+      rec.entryAgencyId,
+      rec.exitAgencyId,
+      rec.entryStationId,
+      rec.exitStationId,
+      rec.entryTerminalId,
+      rec.exitTerminalId,
+      rec.entryTime ?? rec.entryTimeBcd,
+      rec.exitTime ?? rec.exitTimeBcd,
+      rec.annotateAmountFen,
+      rec.entryLineCode,
+      rec.exitLineCode,
+      rec.entryAmountFen,
+      rec.entryBalanceFen,
+      rec.exitAmountFen,
+    ];
+    return (values.where((v) => v != null).length, values.length);
   }
 
   /// 解析失败兜底：展示原始记录字节（不猜测字段值）。
@@ -402,6 +580,71 @@ class _ExpertPageState extends State<ExpertPage> {
       if (rec.issuerCustom != null)
         _kv('发卡机构自定义', _hexLower(rec.issuerCustom)),
     ];
+  }
+
+  /// 公共汽电车应用信息记录（0x1A 记录 2）子菜单。
+  Widget _busProcessTile(TUnionProcessRecord? record) {
+    final scheme = Theme.of(context).colorScheme;
+    final bus = record?.busTransit;
+    return ExpansionTile(
+      key: const PageStorageKey<String>('process-var-2'),
+      tilePadding: EdgeInsets.zero,
+      childrenPadding: const EdgeInsets.only(bottom: 8),
+      shape: _borderlessShape,
+      collapsedShape: _borderlessShape,
+      title: const Text('公共汽电车应用信息记录'),
+      subtitle: Text(
+        record == null ? '未写入' : _busRecordSubtitle(record),
+        style: Theme.of(context)
+            .textTheme
+            .bodySmall
+            ?.copyWith(color: scheme.outline),
+      ),
+      children: record == null
+          ? [_hintLine('卡片未写入该记录（0x1A 记录 2）')]
+          : bus != null
+              ? _busTransitFields(bus)
+              : _rawFallback(record),
+    );
+  }
+
+  /// 公共汽电车应用信息记录解析状态小字：按实际解析结果展示。
+  String _busRecordSubtitle(TUnionProcessRecord record) {
+    if (record.isBlank) return '未写入（初始值）';
+    final bus = record.busTransit;
+    if (bus == null) return '${record.raw.length} 字节 · 未解析';
+    final (parsed, total) = _busFieldProgress(bus);
+    if (parsed == 0) return '${record.raw.length} 字节 · 未解析';
+    if (parsed == total) return '已解析 · 上下车配对';
+    return '部分解析 · $parsed/$total 字段';
+  }
+
+  /// 公共汽电车记录已解析字段进度（非空字段数 / 字段总数）；
+  /// 口径与 [_busTransitFields] 展示字段一致（不含交易状态与发卡机构自定义）。
+  static (int, int) _busFieldProgress(BusTransitRecord rec) {
+    final values = <Object?>[
+      rec.entryCityCode,
+      rec.entryAgencyId,
+      rec.entryOperatorCode,
+      rec.entryLineCode,
+      rec.entryStationCode,
+      rec.entryVehicleId,
+      rec.entryTerminalId,
+      rec.entryTime ?? rec.entryTimeBcd,
+      rec.annotateAmountFen,
+      rec.directionCode,
+      rec.exitCityCode,
+      rec.exitAgencyId,
+      rec.exitOperatorCode,
+      rec.exitLineCode,
+      rec.exitStationCode,
+      rec.exitVehicleId,
+      rec.exitTerminalId,
+      rec.exitTime ?? rec.exitTimeBcd,
+      rec.transactionAmountFen,
+      rec.mileage,
+    ];
+    return (values.where((v) => v != null).length, values.length);
   }
 
   /// 公共汽电车应用信息记录字段视图（目标输出格式）。
@@ -456,11 +699,11 @@ class _ExpertPageState extends State<ExpertPage> {
   /// 1 字节值（两位小写 HEX）；缺省为"未知"。
   String _hexByteCell(int? v) => v == null ? '未知' : _hex2(v);
 
-  /// 金额单元格：括号内原始 4 字节 HEX（小写）+ 金额（元）。
+  /// 金额单元格：括号内原始 4 字节 HEX（小写）+ 金额（货币单位按当前卡片）。
   String _amountCell(int? fen) {
     if (fen == null) return '未知';
     final hex = fen.toRadixString(16).padLeft(8, '0').toLowerCase();
-    return '($hex)${(fen / 100).toString()}元';
+    return '($hex)${(fen / 100).toString()}${widget.app.cardCurrency.unit}';
   }
 
   /// 括号内原始 N 字节 HEX（小写）+ 十进制值。
@@ -574,7 +817,9 @@ class _ExpertPageState extends State<ExpertPage> {
   String _processRecordSubtitle(TUnionProcessRecord r) {
     final trip = r.trip;
     if (trip != null) {
-      return '${_dateTimeDigits(trip.time)} · ${trip.amountText}';
+      return '${_dateTimeDigits(trip.time)} · '
+          '${(trip.amountFen / 100).toStringAsFixed(2)} '
+          '${widget.app.cardCurrency.unit}';
     }
     return '${r.raw.length} 字节 · 未解码为字段';
   }
@@ -688,7 +933,10 @@ class _ExpertPageState extends State<ExpertPage> {
     );
   }
 
-  Widget _tabBody(String storageKey, List<Widget> children) {
+  /// [showReadHint] 为 false 时不展示"NFC 尚未读取"提示卡片
+  /// （供与 NFC 状态无关的页签使用，如二维码页签）。
+  Widget _tabBody(String storageKey, List<Widget> children,
+      {bool showReadHint = true}) {
     return ListView(
       key: PageStorageKey<String>(storageKey),
       cacheExtent: 200,
@@ -699,7 +947,7 @@ class _ExpertPageState extends State<ExpertPage> {
         UiConstants.floatingNavBarClearance,
       ),
       children: [
-        if (result == null)
+        if (showReadHint && result == null)
           Card(
             margin: const EdgeInsets.only(bottom: 12),
             child: Padding(
@@ -729,4 +977,204 @@ class _ExpertPageState extends State<ExpertPage> {
       ],
     );
   }
+
+  /// 二维码（JT/T 1179）页签：获取入口 / 解析失败 / 解析详情三态。
+  /// 独立于 NFC 卡片读取状态，不展示"NFC 未读取"提示横幅。
+  Widget _qrTabBody(AppState app) {
+    final qr = app.qrData;
+    final error = app.qrError;
+    return _tabBody(
+      'expert-qr',
+      [
+        if (qr == null && error == null) ...[
+          _hintLine('尚未获取二维码，可扫描 JT/T 1179 乘车码或手动输入二维码数据'),
+          const SizedBox(height: 12),
+          _qrAcquireButtons(app),
+        ] else if (qr == null) ...[
+          _kv('状态', '解析失败'),
+          _kv('原因', _val(error)),
+          _kv('原始数据', '${app.qrRaw?.length ?? 0} 字节'),
+          const SizedBox(height: 6),
+          if (app.qrRaw != null) _hexSelectable(_hexBytes(app.qrRaw!)),
+          const SizedBox(height: 12),
+          _qrAcquireButtons(app, includeClear: true),
+        ] else ...[
+          ..._qrDetailFields(app, qr),
+          const Divider(height: 28),
+          _qrCertificateTile(qr),
+          _qrRawTile(qr),
+          const SizedBox(height: 12),
+          _qrAcquireButtons(app, includeClear: true),
+        ],
+      ],
+      showReadHint: false,
+    );
+  }
+
+  /// 二维码获取操作行（扫描 / 手动输入 / 清除）。
+  Widget _qrAcquireButtons(AppState app, {bool includeClear = false}) {
+    return Wrap(
+      spacing: 12,
+      runSpacing: 8,
+      children: [
+        FilledButton.tonalIcon(
+          onPressed: () => scanQrAndParse(context, app),
+          icon: const Icon(Icons.qr_code_scanner),
+          label: const Text('扫描二维码'),
+        ),
+        OutlinedButton.icon(
+          onPressed: () => inputQrAndParse(context, app),
+          icon: const Icon(Icons.keyboard_alt_outlined),
+          label: const Text('手动输入'),
+        ),
+        if (includeClear)
+          TextButton.icon(
+            onPressed: app.clearQr,
+            icon: const Icon(Icons.clear),
+            label: const Text('清除'),
+          ),
+      ],
+    );
+  }
+
+  /// 二维码解析字段视图（表 2 全字段）。
+  List<Widget> _qrDetailFields(AppState app, JtT1179QrData qr) {
+    final cert = qr.issuerCertificate;
+    final issuerId = qr.issuerIdText;
+    final issuerName = app.cardPrefixByIssuerId(issuerId)?.cardName ?? '未知';
+    return [
+      _kv('版本', qr.versionHex),
+      _kv('声明长度', '${qr.declaredLength} 字节（数据体，自证书起）'),
+      _kv('数据总长', '${qr.raw.length} 字节'),
+      _kv('发卡机构名称', issuerName),
+      _kv('发卡机构标识', issuerId ?? _hexBytes(cert.issuerIdBytes)),
+      _kv('支付账户号', qr.paymentAccountDigits ?? qr.paymentAccountNumberHex),
+      _kv(
+        '用户账户号',
+        qr.userAccountNumberText ??
+            qr.userAccountDigits ??
+            qr.userAccountNumberHex,
+      ),
+      _kv('发卡机构代码', qr.issuerCodeText ?? qr.issuerCodeHex),
+      _kv('发码平台代码', qr.platformCodeText ?? qr.platformCodeHex),
+      _kv('用户账户类型', '0x${_hex2(qr.userAccountType)}'),
+      _kv(
+        '单次消费金额上限',
+        '${(qr.singleConsumptionLimitFen / 100).toStringAsFixed(2)} 元',
+      ),
+      _kv('支付账户用户公钥', qr.userPublicKeyHex),
+      _kv(
+        '授权过期时间',
+        '${_fmtTime(qr.authorizationExpiryUtc.toLocal())}'
+            '${qr.isAuthorizationExpired() ? '（已过期）' : ''}',
+      ),
+      _kv('二维码有效时间', '${qr.qrValiditySeconds} 秒'),
+      _kv('二维码生成时间', _fmtTime(qr.generationTimeUtc.toLocal())),
+      _kv(
+        '二维码状态',
+        qr.isQrExpired() ? '已超出生成时间 + 有效时间窗口' : '有效期内',
+      ),
+      _kv(
+        '发卡机构自定义域',
+        qr.issuerDefinedLength == 0
+            ? '无（长度 0）'
+            : '${qr.issuerDefinedLength} 字节',
+      ),
+      if (qr.issuerDefinedLength > 0) ...[
+        const SizedBox(height: 6),
+        _hexSelectable(qr.issuerDefinedDataHex),
+      ],
+    ];
+  }
+
+  /// 发卡机构公钥证书（117 字节）子菜单。
+  Widget _qrCertificateTile(JtT1179QrData qr) {
+    final scheme = Theme.of(context).colorScheme;
+    final cert = qr.issuerCertificate;
+    return ExpansionTile(
+      key: const PageStorageKey<String>('qr-certificate'),
+      tilePadding: EdgeInsets.zero,
+      childrenPadding: const EdgeInsets.only(bottom: 8),
+      shape: _borderlessShape,
+      collapsedShape: _borderlessShape,
+      title: const Text('发卡机构公钥证书（117 字节）'),
+      subtitle: Text(
+        '发卡机构 ${qr.issuerIdText ?? '未知'} · '
+        '失效 ${_fmtDate(cert.expiryDateUtc.toLocal())}'
+        '${cert.isExpired() ? '（已过期）' : ''}',
+        style: Theme.of(context)
+            .textTheme
+            .bodySmall
+            ?.copyWith(color: scheme.outline),
+      ),
+      children: [
+        _kv('记录头', '0x${_hex2(cert.recordHeader)}'),
+        _kv(
+          '服务标识',
+          '${cert.serviceIdHex}'
+              '${cert.isTransportEcashService ? '（交通电子现金应用）' : ''}',
+        ),
+        _kv('中心 CA 公钥索引', '${cert.caPublicKeyIndex}'),
+        _kv('证书格式', '0x${_hex2(cert.certificateFormat)}'),
+        _kv('发卡机构标识', qr.issuerIdText ?? _hexBytes(cert.issuerIdBytes)),
+        _kv('证书失效日期', _fmtDate(cert.expiryDateUtc.toLocal())),
+        _kv('证书序列号', cert.serialNumberHex),
+        _kv(
+          '公钥签名算法',
+          '0x${_hex2(cert.signatureAlgorithm)}'
+              '${cert.usesSm2Signature ? '（SM2）' : ''}',
+        ),
+        _kv('公钥加密算法（保留）', '0x${_hex2(cert.encryptionAlgorithm)}'),
+        _kv('公钥参数标识', '0x${_hex2(cert.publicKeyParameter)}'),
+        _kv('公钥长度', '0x${_hex2(cert.publicKeyLength)}（33 字节）'),
+        _kv('发卡机构公钥', cert.issuerPublicKeyHex),
+        const SizedBox(height: 6),
+        _titledHexBlock(
+          title: '证书原始数据（117 字节）',
+          hex: _hexBytes(cert.raw),
+        ),
+      ],
+    );
+  }
+
+  /// 二维码原始数据子菜单。
+  Widget _qrRawTile(JtT1179QrData qr) {
+    final scheme = Theme.of(context).colorScheme;
+    return ExpansionTile(
+      key: const PageStorageKey<String>('qr-raw'),
+      tilePadding: EdgeInsets.zero,
+      childrenPadding: const EdgeInsets.only(bottom: 8),
+      shape: _borderlessShape,
+      collapsedShape: _borderlessShape,
+      title: const Text('二维码原始数据'),
+      subtitle: Text(
+        '${qr.raw.length} 字节（声明长度 ${qr.declaredLength} 字节）',
+        style: Theme.of(context)
+            .textTheme
+            .bodySmall
+            ?.copyWith(color: scheme.outline),
+      ),
+      children: [_hexSelectable(_hexBytes(qr.raw))],
+    );
+  }
+
+  /// 标题 + HEX 数据块（长数据展示用）。
+  Widget _titledHexBlock({required String title, required String hex}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(title, style: Theme.of(context).textTheme.labelLarge),
+        ),
+        const SizedBox(height: 4),
+        _hexSelectable(hex),
+      ],
+    );
+  }
+
+  /// 字节数组 → 大写 HEX（空格分隔）。
+  String _hexBytes(List<int> bytes) => bytes
+      .map((b) => b.toRadixString(16).padLeft(2, '0').toUpperCase())
+      .join(' ');
 }

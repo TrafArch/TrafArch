@@ -133,7 +133,7 @@
     { "prefix": "31048412", "issuer": "04146350", "cardName": "桂民卡·来宾通", "city": "来宾" },
     { "prefix": "3104841295", "cardName": "桂民卡·合山通", "city": "来宾合山" },
     { "prefix": "31048413", "issuer": "04156360", "cardName": "桂民卡·崇左通", "city": "崇左" },
-    { "prefix": "31048500", "cardName": "八达通-全国通卡", "city": "香港" },
+    { "prefix": "31048500", "cardName": "八达通-全国通卡", "city": "香港", "currency": "HKD" },
     { "prefix": "31048702", "issuer": "01616020", "cardName": "东莞通", "city": "东莞" },
     { "prefix": "31048703", "issuer": "02205810", "cardName": "羊城通", "city": "广州" },
     { "prefix": "31048704", "issuer": "02215840", "cardName": "深圳通", "city": "深圳" },
