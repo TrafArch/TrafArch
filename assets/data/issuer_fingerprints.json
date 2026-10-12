@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "updatedAt": "2026-10-07",
+  "_note": "发卡机构指纹库：issuerId 为 SFI 0x15 发卡机构标识（8 字节 HEX，无分隔符）。需由实测卡片逐条采集录入；未收录时识别引擎自动降级为城市代码证据。",
+  "_entrySchema": {
+    "issuerId": "8 字节 HEX（必需，主键）",
+    "cityCode": "对应城市代码（可选，与卡前缀库发卡机构代码后 4 位一致）",
+    "cityName": "城市名（可选）",
+    "operator": "运营/发行机构名（可选）",
+    "cardFamily": "卡种名称（可选）"
+  },
+  "_example": {
+    "issuerId": "AABBCCDDEEFF0011",
+    "cityCode": "3910",
+    "cityName": "示例市",
+    "operator": "示例运营方",
+    "cardFamily": "示例卡"
+  },
+  "entries": []
+}

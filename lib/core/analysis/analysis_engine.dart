@@ -1,0 +1,452 @@
+import '../card/card_parser.dart';
+import '../data/knowledge_base.dart';
+import '../data/station_codes.dart';
+import '../data/terminal_decoder.dart';
+import '../transit/tunion/tunion_models.dart';
+import 'analysis_models.dart';
+import 'card_identifier.dart';
+
+/// 分析引擎：识别 → 行程聚合 → 符合性检查 → 异常检测。
+class AnalysisEngine {
+  final KnowledgeBase knowledge;
+  final CardIdentifier identifier;
+  final TerminalDecoder terminalDecoder;
+
+  AnalysisEngine(this.knowledge)
+      : identifier = CardIdentifier(knowledge),
+        terminalDecoder = TerminalDecoder(knowledge.terminalRules);
+
+  CardAnalysisResult analyze(ParsedCard card, {DateTime? now}) {
+    final at = now ?? DateTime.now();
+    final identity = identifier.identify(card.info);
+    final trips = _buildTrips(card, identity);
+    return CardAnalysisResult(
+      identity: identity,
+      wallet: WalletSummary.of(card.info, at),
+      trips: trips,
+      compliance: _checkCompliance(card, at),
+      anomalies: _detectAnomalies(card, identity, at),
+      generatedAt: at,
+    );
+  }
+
+  List<TransitTrip> _buildTrips(ParsedCard card, CardIdentity identity) {
+    // 0x1E 过程记录增强：按"交易时间（分钟）+ 金额"与交易记录配对。
+    // 部分城市（如福州地铁）线路/站点信息不写终端号，只写 0x1E 文件，
+    // 终端规则未命中时用注解补齐；配对命中时一并补充 0x1E 独有的
+    // 应用分类与交易后余额（配对不唯一时不注解，保持未知）。
+    final rideAnnotations = _buildRideAnnotations(card, identity);
+    // 0x1A 记录进站兜底：记录 1（城市轨道）/ 记录 2（公共汽电车）的
+    // 进站信息与 0 元交易按时间配对，在 0x1E 注解未命中时标记进站。
+    final entryFallbacks = _buildEntryFallbacks(card, identity);
+    final trips = card.transactions.map((txn) {
+      final location = terminalDecoder.decode(
+        txn.terminalId,
+        cityCode: identity.cityCode ?? card.info.cityCode,
+        issuerId: card.info.issuerId,
+      );
+      final loc = location;
+      String? cityName;
+      if (loc != null && loc.cityCode != null) {
+        cityName = knowledge.cities.lookup(loc.cityCode!)?.name;
+      }
+
+      // 终端解码切出的线路/站点编码 → 站点代码表（读卡识途数据）查名称；
+      // 终端查表未命中时尝试 0x1E 注解；仍未收录则回退原始编码（不猜测）。
+      final key = _pairKey(txn.time, txn.amountFen);
+      final annotation = rideAnnotations[key];
+      // 0x1E 注解优先；无 0x1E 注解时用 0x1A 记录进站兜底（兜底配对键
+      // 金额恒为 0，仅可能命中进站刷卡的 0 元交易）。
+      final fallback = annotation == null ? entryFallbacks[key] : null;
+      final stationEntry =
+          _lookupStationEntry(loc, identity, card) ?? annotation?.entry;
+      return TransitTrip(
+        time: txn.time,
+        amountFen: txn.amountFen,
+        overdraftLimitFen: txn.overdraftLimitFen,
+        isConsume: txn.isConsume,
+        typeName: txn.typeName,
+        sequence: txn.sequence,
+        terminalId: txn.terminalId,
+        location: loc,
+        cityName: cityName ?? annotation?.cityName ?? fallback?.cityName,
+        lineLabel: stationEntry?.line ?? loc?.lineCode,
+        stationLabel: stationEntry?.station ??
+            loc?.stationCode ??
+            fallback?.stationLabel,
+        stationType: stationEntry?.type,
+        appTypeName: annotation?.record.appTypeLabel,
+        balanceAfterFen: annotation?.record.balanceFen,
+        isEntry: annotation?.record.isEntry ?? (fallback != null),
+
+      );
+    }).toList()
+      ..sort((a, b) => b.time.compareTo(a.time));
+    return trips;
+  }
+
+  /// 站点代码表查询：城市取终端解码城市，缺省依次回退识别城市与卡片城市；
+  /// 候选编码按"最具体优先"尝试（线路+站点拼接 → 站点 → 线路）。
+  StationCodeEntry? _lookupStationEntry(
+    TerminalLocation? loc,
+    CardIdentity identity,
+    ParsedCard card,
+  ) {
+    if (loc == null) return null;
+    final cityCode = loc.cityCode ?? identity.cityCode ?? card.info.cityCode;
+    if (cityCode == null || cityCode.isEmpty) return null;
+    return knowledge.stationCodes.lookupLineStation(
+      lineCode: loc.lineCode,
+      stationCode: loc.stationCode,
+      cityCode: cityCode,
+    );
+  }
+
+  /// 构建 0x1E 行程注解：可选补齐线路/站点名称（站点代码表命中时）与
+  /// 0x1E 独有的应用分类、交易后余额（未命中站点代码表时仍保留后两者）；
+  /// 按"交易时间（分钟）+ 金额"与交易配对，同键多条视为不可判定不注解。
+  /// 入站类记录（EC 0x01 / EP 0x03）不承载扣费金额（金额字段为 0），仅与
+  /// 进站刷卡写入的 0 元交易配对，命中时行程标记为进站；金额字段非 0 的
+  /// 入站记录视为异常数据，不参与配对（不猜测）。
+  Map<String, _RideAnnotation> _buildRideAnnotations(
+    ParsedCard card,
+    CardIdentity identity,
+  ) {
+    final byKey = <String, _RideAnnotation>{};
+    final ambiguous = <String>{};
+    for (final record in card.transitProcessRecords) {
+      final trip = record.trip;
+      if (trip == null) continue;
+      // 入站类记录金额字段为 0 时才有配对意义（与 0 元交易同键）；
+      // 非 0 视为异常数据，不参与配对（不猜测）。
+      if (trip.isEntry && trip.amountFen != 0) continue;
+      final cityCode = trip.cityCode ?? identity.cityCode ?? card.info.cityCode;
+      final entry = knowledge.stationCodes.lookupLineStationField(
+        field: trip.lineStationCode,
+        cityCode: cityCode,
+      );
+      final key = _pairKey(trip.time, trip.amountFen);
+      if (byKey.containsKey(key)) {
+        ambiguous.add(key);
+      } else {
+        byKey[key] = _RideAnnotation(
+          record: trip,
+          entry: entry,
+          cityName: cityCode == null || cityCode.isEmpty
+              ? null
+              : knowledge.cities.lookup(cityCode)?.name,
+        );
+      }
+    }
+    byKey.removeWhere((key, _) => ambiguous.contains(key));
+    return byKey;
+  }
+
+  /// 构建 0x1A 记录进站兜底注解：记录 1（城市轨道应用信息记录）与记录 2
+  /// （公共汽电车应用信息记录）解码成功时，其进站信息（进闸时间 / 上车
+  /// 时间）按"进站时间（分钟）+ 金额 0"与进站刷卡的 0 元交易配对；命中时
+  /// 行程标记为进站并补齐进站城市名与站点原始编码（站点名称待线路库接入
+  /// 后补全）。记录 1 进站交易金额字段非 0 视为异常数据、进站时间缺失
+  /// （未写入 / 截断）时不参与配对；同键多条视为不可判定不注解。
+  /// 0x1E 过程记录对同一交易存在注解时以 0x1E 为准（调用方优先消费）。
+  Map<String, _EntryFallback> _buildEntryFallbacks(
+    ParsedCard card,
+    CardIdentity identity,
+  ) {
+    final byKey = <String, _EntryFallback>{};
+    final ambiguous = <String>{};
+    for (final record in card.transitProcessRecords) {
+      if (record.sfi != 0x1A) continue;
+      final rail = record.railTransit;
+      final bus = record.busTransit;
+      String? entryCityCode;
+      String? entryStationId;
+      DateTime? entryTime;
+      if (rail != null) {
+        // 进站交易金额非 0 与 0 元进站交易的实测特征不符，视为异常不配对。
+        if (rail.entryAmountFen != null && rail.entryAmountFen != 0) continue;
+        entryCityCode = rail.entryCityCode;
+        entryStationId = rail.entryStationId;
+        entryTime = rail.entryTime;
+      } else if (bus != null) {
+        entryCityCode = bus.entryCityCode;
+        entryStationId = bus.entryStationCode;
+        entryTime = bus.entryTime;
+      } else {
+        continue;
+      }
+      if (entryTime == null) continue;
+      final cityCode =
+          entryCityCode ?? identity.cityCode ?? card.info.cityCode;
+      final key = _pairKey(entryTime, 0);
+      if (byKey.containsKey(key)) {
+        ambiguous.add(key);
+      } else {
+        byKey[key] = _EntryFallback(
+          cityName: cityCode == null || cityCode.isEmpty
+              ? null
+              : knowledge.cities.lookup(cityCode)?.name,
+          stationLabel: entryStationId,
+        );
+      }
+    }
+    byKey.removeWhere((key, _) => ambiguous.contains(key));
+    return byKey;
+  }
+
+  /// 交易/0x1E 记录的配对键：交易时间（分钟精度）+ 金额（分）。
+  static String _pairKey(DateTime time, int amountFen) =>
+      '${time.year}-${time.month}-${time.day} '
+      '${time.hour}:${time.minute}|$amountFen';
+
+  ComplianceReport _checkCompliance(ParsedCard card, DateTime now) {
+    final info = card.info;
+    final items = <ComplianceItem>[
+      ComplianceItem(
+        id: 'app-selected',
+        title: '应用选择',
+        status: ComplianceStatus.pass,
+        detail: card.selectedAidHex.isEmpty
+            ? '已选中应用（AID 未知）'
+            : '已选中应用 ${card.selectedAidHex}',
+      ),
+      ComplianceItem(
+        id: 'file-public',
+        title: '公共应用信息文件 (SFI 0x15)',
+        status:
+            info.issuerId == null ? ComplianceStatus.warn : ComplianceStatus.pass,
+        detail: info.issuerId == null ? '未读到发卡机构标识等字段' : '发卡机构标识 ${info.issuerId}',
+      ),
+      ComplianceItem(
+        id: 'file-management',
+        title: '管理信息文件 (SFI 0x17)',
+        status:
+            info.cityCode == null ? ComplianceStatus.warn : ComplianceStatus.pass,
+        detail: info.cityCode == null ? '未读到城市代码' : '城市代码 ${info.cityCode}',
+      ),
+      ComplianceItem(
+        id: 'file-holder',
+        title: '持卡人基本信息文件 (SFI 0x16)',
+        status: info.cardTypeId == null
+            ? ComplianceStatus.info
+            : ComplianceStatus.pass,
+        detail: info.cardTypeId == null ? '未读到（部分卡种无此文件）' : '卡类型标识 ${info.cardTypeId}',
+      ),
+      ComplianceItem(
+        id: 'balance',
+        title: '余额读取 (GET BALANCE)',
+        status: info.balanceFen == null
+            ? ComplianceStatus.warn
+            : ComplianceStatus.pass,
+        detail: info.balanceFen == null
+            ? '未读到余额'
+            : '余额 ${(info.balanceFen! / 100).toStringAsFixed(2)} 元',
+      ),
+      ComplianceItem(
+        id: 'transactions',
+        title: '交易明细文件 (SFI 0x18)',
+        status: card.transactions.isEmpty
+            ? ComplianceStatus.info
+            : ComplianceStatus.pass,
+        detail: card.transactions.isEmpty
+            ? '无交易记录或未读到'
+            : '共 ${card.transactions.length} 条记录',
+      ),
+    ];
+
+    final eff = info.effectiveDate;
+    final exp = info.expireDate;
+    if (eff == null || exp == null) {
+      items.add(const ComplianceItem(
+        id: 'date-consistency',
+        title: '日期一致性',
+        status: ComplianceStatus.warn,
+        detail: '生效/失效日期字段不全',
+      ));
+    } else if (eff.isAfter(exp)) {
+      items.add(ComplianceItem(
+        id: 'date-consistency',
+        title: '日期一致性',
+        status: ComplianceStatus.fail,
+        detail: '生效日期 ${_fmtDate(eff)} 晚于失效日期 ${_fmtDate(exp)}',
+      ));
+    } else {
+      items.add(ComplianceItem(
+        id: 'date-consistency',
+        title: '日期一致性',
+        status: ComplianceStatus.pass,
+        detail: '${_fmtDate(eff)} ~ ${_fmtDate(exp)}',
+      ));
+    }
+
+    if (exp == null) {
+      items.add(const ComplianceItem(
+        id: 'not-expired',
+        title: '卡片有效性',
+        status: ComplianceStatus.info,
+        detail: '无失效日期，无法判断',
+      ));
+    } else if (exp.isBefore(now)) {
+      items.add(ComplianceItem(
+        id: 'not-expired',
+        title: '卡片有效性',
+        status: ComplianceStatus.fail,
+        detail: '已过期（失效日期 ${_fmtDate(exp)}）',
+      ));
+    } else {
+      items.add(const ComplianceItem(
+        id: 'not-expired',
+        title: '卡片有效性',
+        status: ComplianceStatus.pass,
+        detail: '有效期内',
+      ));
+    }
+
+    final future = card.transactions.where((t) => t.time.isAfter(now)).length;
+    if (card.transactions.isEmpty) {
+      items.add(const ComplianceItem(
+        id: 'txn-time',
+        title: '交易时间合理性',
+        status: ComplianceStatus.info,
+        detail: '无交易记录',
+      ));
+    } else if (future > 0) {
+      items.add(ComplianceItem(
+        id: 'txn-time',
+        title: '交易时间合理性',
+        status: ComplianceStatus.warn,
+        detail: '$future 条交易时间晚于当前时间',
+      ));
+    } else {
+      items.add(const ComplianceItem(
+        id: 'txn-time',
+        title: '交易时间合理性',
+        status: ComplianceStatus.pass,
+        detail: '交易时间均正常',
+      ));
+    }
+
+    final scored =
+        items.where((i) => i.status != ComplianceStatus.info).toList();
+    final score = scored.isEmpty
+        ? 100
+        : (scored.fold<double>(0, (acc, i) => acc + i.weight) /
+                scored.length *
+                100)
+            .round();
+    return ComplianceReport(items: items, scorePercent: score);
+  }
+
+  List<Anomaly> _detectAnomalies(
+    ParsedCard card,
+    CardIdentity identity,
+    DateTime now,
+  ) {
+    final info = card.info;
+    final out = <Anomaly>[];
+
+    if (info.expireDate != null && info.expireDate!.isBefore(now)) {
+      out.add(Anomaly(
+        code: 'card-expired',
+        severity: AnomalySeverity.critical,
+        message: '卡片已过期（失效日期 ${_fmtDate(info.expireDate!)}）',
+      ));
+    }
+    if (info.effectiveDate != null && info.effectiveDate!.isAfter(now)) {
+      out.add(const Anomaly(
+        code: 'effective-in-future',
+        severity: AnomalySeverity.warn,
+        message: '生效日期晚于当前日期，数据可疑',
+      ));
+    }
+    if (identity.cityCode != null &&
+        info.cityCode != null &&
+        identity.cityCode != info.cityCode) {
+      out.add(Anomaly(
+        code: 'identity-conflict',
+        severity: AnomalySeverity.warn,
+        message: '识别证据冲突：指纹库城市(${identity.cityCode}) '
+            '与卡片城市代码(${info.cityCode}) 不一致',
+      ));
+    }
+    if (info.balanceFen != null && info.balanceFen! < 0) {
+      out.add(const Anomaly(
+        code: 'negative-balance',
+        severity: AnomalySeverity.warn,
+        message: '余额为负值，数据可疑',
+      ));
+    }
+    final negative = card.transactions.where((t) => t.amountFen < 0).length;
+    if (negative > 0) {
+      out.add(Anomaly(
+        code: 'negative-amount',
+        severity: AnomalySeverity.warn,
+        message: '发现 $negative 条金额为负的交易记录',
+      ));
+    }
+    final zeroConsume = card.transactions
+        .where((t) => t.isConsume && t.amountFen == 0)
+        .length;
+    if (zeroConsume > 0) {
+      out.add(Anomaly(
+        code: 'zero-consume',
+        severity: AnomalySeverity.info,
+        message: '存在 $zeroConsume 条金额为 0 的消费记录',
+      ));
+    }
+    final seen = <int>{};
+    final duplicated = <int>{};
+    for (final t in card.transactions) {
+      if (!seen.add(t.sequence)) duplicated.add(t.sequence);
+    }
+    if (duplicated.isNotEmpty) {
+      out.add(Anomaly(
+        code: 'duplicate-sequence',
+        severity: AnomalySeverity.info,
+        message: '交易序号重复: ${duplicated.join(', ')}',
+      ));
+    }
+    final eff = info.effectiveDate;
+    if (eff != null) {
+      final before = card.transactions.where((t) => t.time.isBefore(eff)).length;
+      if (before > 0) {
+        out.add(Anomaly(
+          code: 'txn-before-effective',
+          severity: AnomalySeverity.info,
+          message: '$before 条交易记录早于卡片生效日期',
+        ));
+      }
+    }
+    final future = card.transactions.where((t) => t.time.isAfter(now)).length;
+    if (future > 0) {
+      out.add(Anomaly(
+        code: 'txn-in-future',
+        severity: AnomalySeverity.warn,
+        message: '发现 $future 条交易时间晚于当前时间',
+      ));
+    }
+    return out;
+  }
+
+  static String _fmtDate(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+}
+
+/// 0x1E 行程注解（内部用）：配对的 0x1E 记录、站点代码表查得的
+/// 线路/站点条目（未命中时为 null）与城市名。
+class _RideAnnotation {
+  final TUnionTripRecord record;
+  final StationCodeEntry? entry;
+  final String? cityName;
+
+  const _RideAnnotation({required this.record, this.entry, this.cityName});
+}
+
+/// 0x1A 进站兜底注解（内部用）：进站城市名（编码查得时）与站点原始编码
+/// （记录中的站点 ID，线路库接入前保持原始值；未写入时为 null）。
+class _EntryFallback {
+  final String? cityName;
+  final String? stationLabel;
+
+  const _EntryFallback({this.cityName, this.stationLabel});
+}
