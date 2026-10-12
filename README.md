@@ -1,55 +1,35 @@
-# TrafArch v1.0.1-beta
+# TrafArch
 
-Flutter + Android Kotlin NFC 的第一版工程骨架。
+基于 Flutter + Android Kotlin NFC 的交通联合（T-Union）交通卡读取与分析工具，遵循 JT/T 978.2《城市公共交通IC卡技术规范》。
 
-## 当前版本实现
+## 项目功能
 
-- Flutter Material 3 UI
-- 首页 / 行程 / 交易 / 专家 四个入口
-- Android 原生 NFC Reader Mode
-- 读取 NFC Tag 基础信息
-- NFC-A：UID / ATQA / SAK
-- ISO-DEP：连接测试、ATS、历史字节、最大收发长度
-- 原始 NFC 信息在专家模式中展示
-- 基础交通交易模型与动态 TransitResolver 骨架
-- 内置一组示例数据，方便先跑 UI
+### 读卡与解析
 
-> v1.0.1-beta 不会向卡片发送任意 APDU，也不会尝试绕过访问控制、读取受保护区域或修改卡片数据。
-> 后续可以在合法、已知协议和卡片允许访问的前提下增加具体卡型解析器。
+- Android 原生 Reader Mode 读卡（轮询 NFC-A/B/F/V），ISO-DEP APDU 通信
+- 交通联合电子钱包 / 电子现金应用选择与余额读取
+- 标准文件解析：公共应用信息（SFI 0x15）、持卡人信息（SFI 0x16）、管理信息（SFI 0x17，城市代码 / 卡种 / 有效期）、交易明细（SFI 0x18）
+- 乘车过程记录解析：SFI 0x1A 变长记录（18 类应用信息）与 SFI 0x1E 循环记录，含 70 记录模板剥离、128 字节完整格式识别等真机兼容处理
 
-## 使用方法（Windows）
+### 分析与展示
 
-1. 安装 Flutter SDK，并确保 `flutter` 在 PATH。
-2. 解压本项目。
-3. 在本目录运行：
+- 卡片识别：发卡机构指纹 + 城市代码 + 卡号前缀，输出识别置信度与证据链
+- 行程重建：过程记录与交易按时间 / 金额配对，终端编号解码，站点代码表查询线路与站点名称
+- JT/T 978 符合性检查与异常数据检测
+- 首页：一键读卡与卡片摘要（卡种 / 发卡地 / 卡号 / 余额 / 有效期 / 全国互联互通）
+- 行程页：交易行程列表、城市轨道进出站与公共汽电车上下车记录卡片
+- 专家页：原始 NFC 信息（UID / ATQA / SAK / ATS / 历史字节）、过程记录原始数据、APDU 日志
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\tool\bootstrap.ps1
-```
+### 数据与设置
 
-脚本会在 `_flutter_project/` 中创建一个干净的 Flutter Android 工程，再自动复制本项目源码。
+- 内置知识库：卡号前缀库、发卡机构指纹库、终端解码规则库、预制站点数据
+- 在线更新：可选拉取读卡识途公开数据（GitHub 归档），本地快照持久化，重启后继续生效
+- 运行日志：可开关记录，一键导出到手机下载目录
+- Material 3 动态取色、深色模式、中英文本地化
 
-然后：
+## 版本要求
 
-```powershell
-cd _flutter_project
-flutter run
-```
-
-也可以手动创建：
-
-```powershell
-flutter create --platforms=android --org com.example --project-name transit_card_analyzer _flutter_project
-```
-
-再把本项目的 `lib/`、`pubspec.yaml`、`android/app/src/main/AndroidManifest.xml` 和 Kotlin NFC 文件复制进去。
-
-## NFC 测试
-
-- 使用真实 Android 手机。
-- 打开系统 NFC。
-- App 运行后进入“专家”页面。
-- 将支持 NFC 的交通卡贴近手机背面。
-- App 会进入 Reader Mode 并显示 Tag 基础信息。
-
-当前版本主要验证“Flutter UI ↔ Android NFC 原生层”的链路。
+| 项目 | 要求 |
+| --- | --- |
+| Android 系统 | 8.0（API 26）及以上 <br/>推荐17.0的Android手机|
+| 设备硬件 | 支持 NFC 的 Android 手机 |
