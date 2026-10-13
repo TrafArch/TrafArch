@@ -16,6 +16,8 @@ import '../core/logging/app_logger.dart';
 import '../core/logging/log_exporter.dart';
 import '../core/nfc/nfc_models.dart';
 import '../core/nfc/nfc_service.dart';
+import '../core/qr/gms_qr_scanner.dart';
+import '../core/qr/hms_qr_scanner.dart';
 import '../core/transit/city_union/city_union_models.dart';
 import '../core/transit/city_union/city_union_parser.dart';
 import '../core/transit/tunion/qr/jt_t1179_qr_parser.dart';
@@ -233,6 +235,30 @@ class AppState extends ChangeNotifier {
   /// 最近一次日志导出是否失败（UI 用于区分结果颜色）。
   bool get logExportFailed => _logExportFailed;
 
+  /// 「使用系统扫码」开关（默认关闭，持久化到设置文件）。
+  /// 开启后原有应用内相机扫码组件被整体屏蔽（就当不存在）：扫码统一由
+  /// 系统扫码完成——优先 Google Play 服务；无 GMS 的华为/鸿蒙设备
+  /// （鸿蒙 4.2 等）改走华为 Scan Kit；设备两者都不可用时也不回退相机
+  /// （失败仅提示）；关闭开关使用应用内相机扫码。
+  bool _gmsScanEnabled = false;
+  bool get gmsScanEnabled => _gmsScanEnabled;
+
+  /// 设备是否具备 Google Play 服务扫码能力（启动时探测一次）；
+  /// 仅用于设置页提示与扫码预热，不参与屏蔽决策。
+  bool _gmsAvailable = false;
+  bool get gmsAvailable => _gmsAvailable;
+
+  /// 设备是否具备华为 HMS Core（Scan Kit）扫码能力（启动时探测一次，
+  /// 仅无 GMS 的设备探测）；鸿蒙 4.2 等无 GMS 华为设备走此通道。
+  bool _hmsScanAvailable = false;
+  bool get hmsScanAvailable => _hmsScanAvailable;
+
+  /// 是否使用系统扫码（原有应用内相机扫码组件被整体屏蔽）：
+  /// 仅由「使用系统扫码」开关决定——开启即屏蔽，扫码走系统扫码路径
+  /// （优先 Google Play 服务，无 GMS 设备走华为 Scan Kit），不再进入
+  /// 应用内相机；关闭开关时恢复相机扫码。
+  bool get useGmsScanner => _gmsScanEnabled;
+
   /// 城市代码 → 城市名（按卡片实时上报的代码匹配卡前缀库 issuer 后 4 位）；
   /// 未收录或知识库未加载时返回 null。
   String? cityNameOf(String? code) {
@@ -370,11 +396,12 @@ class AppState extends ChangeNotifier {
 
   Future<void> _initialize() async {
     await _loadSettings();
+    await _detectScanChannels();
     await _loadOnlineStationData();
     await _loadKnowledge();
   }
 
-  /// 读取持久化设置（缺失/不可用时保持默认：在线拉取与运行日志均停用）。
+  /// 读取持久化设置（缺失/不可用时保持默认：在线拉取、运行日志与系统扫码均停用）。
   Future<void> _loadSettings() async {
     try {
       // 在线拉取默认关闭，仅显式开启（'true'）时启用
@@ -385,8 +412,26 @@ class AppState extends ChangeNotifier {
       final logging = await _settingsStore.read(SettingsKeys.loggingEnabled);
       _loggingEnabled = logging == 'true';
       _logger.enabled = _loggingEnabled;
+      // 「使用系统扫码」默认关闭，仅显式开启（'true'）时启用
+      final gmsScan = await _settingsStore.read(SettingsKeys.gmsScanEnabled);
+      _gmsScanEnabled = gmsScan == 'true';
     } catch (_) {
       // 设置存储不可用（如平台插件缺失）时按默认值降级
+    }
+  }
+
+  /// 探测设备具备的系统扫码通道（启动时一次；非 Android / 探测失败按
+  /// 不具备降级，仅影响设置页提示、扫码分流与预热，不影响屏蔽决策）。
+  /// 优先探测 Google Play 服务；无 GMS 时再探测华为 HMS Core（Scan Kit，
+  /// 鸿蒙 4.2 等华为设备）。具备 GMS 且开关开启时，后台预热扫码器
+  /// （缓存原生实例 + 预装扫码模块），加快首次扫码速度。
+  Future<void> _detectScanChannels() async {
+    _gmsAvailable = await isGmsQrScanAvailable();
+    _hmsScanAvailable = !_gmsAvailable && await isHmsQrScanAvailable();
+    notifyListeners();
+    if (_gmsAvailable && _gmsScanEnabled) {
+      // fire-and-forget：预热不阻塞启动流程，失败静默
+      warmUpGmsQrScanner();
     }
   }
 
@@ -721,5 +766,19 @@ class AppState extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     super.dispose();
+  }
+
+  /// 设置「使用系统扫码」开关（持久化到设置文件，默认关闭：开关开启即
+  /// 整体屏蔽应用内相机扫码（就当不存在），转用系统扫码（优先 Play 服务
+  /// 扫码界面，无 GMS 设备走华为 Scan Kit）；关闭后恢复应用内相机扫码）。
+  Future<void> setGmsScanEnabled(bool enabled) async {
+    if (_gmsScanEnabled == enabled) return;
+    _gmsScanEnabled = enabled;
+    notifyListeners();
+    try {
+      await _settingsStore.write(SettingsKeys.gmsScanEnabled, '$enabled');
+    } catch (_) {
+      // 设置写入失败不影响本次会话内的开关状态
+    }
   }
 }

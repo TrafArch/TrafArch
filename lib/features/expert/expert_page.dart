@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../core/analysis/tunion_analysis_models.dart';
 import '../../core/card/card_parser.dart';
 import '../../core/nfc/nfc_models.dart';
@@ -9,7 +10,6 @@ import '../../core/transit/tunion/tunion_models.dart';
 import '../../core/transit/tunion/tunion_process_parser.dart';
 import '../../core/ui_constants.dart';
 import '../../state/app_state.dart';
-import '../qr/qr_acquire.dart';
 import '../settings/settings_action_button.dart';
 
 class ExpertPage extends StatefulWidget {
@@ -75,11 +75,11 @@ class _ExpertPageState extends State<ExpertPage> {
     // 页签随解析器动态构建：JT/T 978 符合性仅在交通联合解析器命中时存在。
     final tabs = <Tab>[
       const Tab(text: '卡片识别'),
+      const Tab(text: '二维码'),
       const Tab(text: '交通数据解析'),
       if (isTUnion) const Tab(text: 'JT/T 978 符合性'),
       const Tab(text: '异常检测'),
       const Tab(text: 'APDU / Raw Data'),
-      const Tab(text: '二维码（JT/T 1179）'),
     ];
 
     return SafeArea(
@@ -125,6 +125,7 @@ class _ExpertPageState extends State<ExpertPage> {
                     '${e.detail}${e.weight > 0 ? '（权重 ${e.weight}）' : ''}',
                   ),
               ]),
+              _qrTabBody(app),
               _tabBody('expert-parsed', _transitDataFields(parsed)),
               if (isTUnion)
                 _tabBody('expert-compliance', [
@@ -154,11 +155,7 @@ class _ExpertPageState extends State<ExpertPage> {
                       : app.apduLog)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: SelectableText(
-                        entry,
-                        style: const TextStyle(
-                            fontFamily: 'monospace', fontSize: 12),
-                      ),
+                      child: _hexSelectable(entry),
                     ),
                 if (processRecords.isNotEmpty) ...[
                   const Divider(height: 32),
@@ -187,17 +184,12 @@ class _ExpertPageState extends State<ExpertPage> {
                                         Theme.of(context).colorScheme.outline),
                           ),
                           const SizedBox(height: 4),
-                          SelectableText(
-                            r.rawHex,
-                            style: const TextStyle(
-                                fontFamily: 'monospace', fontSize: 12),
-                          ),
+                          _hexSelectable(r.rawHex),
                         ],
                       ),
                     ),
                 ],
               ]),
-              _qrTabBody(app),
             ],
           ),
         ),
@@ -242,7 +234,7 @@ class _ExpertPageState extends State<ExpertPage> {
     return [
       _kv('已读取文件视图', '${files.length} 项'),
       const Divider(height: 28),
-      _cjPublicInfoTile(public),
+      _cjPublicInfoSection(public),
       _cjRecordGroupTile(
         title: '复合交易记录文件（0x17）',
         storageKey: 'cj-composite',
@@ -264,39 +256,50 @@ class _ExpertPageState extends State<ExpertPage> {
     ];
   }
 
-  /// 公共应用基本信息文件（0x15）子菜单：展开后按字段视图展示
+  /// 公共应用基本信息文件（0x15）：直接按字段视图展示
   /// （原始值 / 解码值 / 说明 / 异常）与原始数据；未读取到时给出提示。
-  Widget _cjPublicInfoTile(List<CityUnionFileView> views) {
+  Widget _cjPublicInfoSection(List<CityUnionFileView> views) {
     final scheme = Theme.of(context).colorScheme;
     final view = views.isEmpty ? null : views.first;
-    return ExpansionTile(
-      key: const PageStorageKey<String>('cj-public'),
-      tilePadding: EdgeInsets.zero,
-      childrenPadding: const EdgeInsets.only(bottom: 8),
-      shape: _borderlessShape,
-      collapsedShape: _borderlessShape,
-      title: const Text('公共应用基本信息文件（0x15）'),
-      subtitle: Text(
-        view == null
-            ? '未读取到'
-            : view.fields.isEmpty
-                ? '未按标准解析（保留原始数据）'
-                : '已解析 · ${view.fields.length} 字段',
-        style: Theme.of(context)
-            .textTheme
-            .bodySmall
-            ?.copyWith(color: scheme.outline),
-      ),
-      children: view == null
-          ? [_hintLine('未读取到公共应用基本信息文件（文件不存在或读取被拒）')]
-          : [
-              if (view.fields.isEmpty)
-                for (final e in view.errors) _hintLine(e)
-              else
-                for (final f in view.fields) _kv(f.name, _cjFieldValue(f)),
-              const SizedBox(height: 6),
-              _hexSelectable(view.rawHex),
-            ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            '公共应用基本信息文件（0x15）',
+            style: Theme.of(context)
+                .textTheme
+                .titleSmall
+                ?.copyWith(color: scheme.primary),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            view == null
+                ? '未读取到'
+                : view.fields.isEmpty
+                    ? '未按标准解析（保留原始数据）'
+                    : '已解析 · ${view.fields.length} 字段',
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(color: scheme.outline),
+          ),
+        ),
+        if (view == null)
+          _hintLine('未读取到公共应用基本信息文件（文件不存在或读取被拒）')
+        else ...[
+          if (view.fields.isEmpty)
+            for (final e in view.errors) _hintLine(e)
+          else
+            for (final f in view.fields) _kv(f.name, _cjFieldValue(f)),
+          const SizedBox(height: 6),
+          _hexSelectable(view.rawHex),
+        ],
+      ],
     );
   }
 
@@ -841,9 +844,22 @@ class _ExpertPageState extends State<ExpertPage> {
   }
 
   Widget _hexSelectable(String hex) {
-    return SelectableText(
-      hex,
-      style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onLongPress: () async {
+        await Clipboard.setData(ClipboardData(text: hex));
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('原始数据已复制到剪贴板'),
+            duration: Duration(seconds: 1),
+          ),
+        );
+      },
+      child: Text(
+        hex,
+        style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+      ),
     );
   }
 
@@ -978,8 +994,9 @@ class _ExpertPageState extends State<ExpertPage> {
     );
   }
 
-  /// 二维码（JT/T 1179）页签：获取入口 / 解析失败 / 解析详情三态。
-  /// 独立于 NFC 卡片读取状态，不展示"NFC 未读取"提示横幅。
+  /// 二维码页签：空态引导 / 解析失败 / 解析详情三态。
+  /// 独立于 NFC 卡片读取状态，不展示"NFC 未读取"提示横幅；
+  /// 数据获取入口统一收敛到首页，本页不再提供扫描 / 手动输入操作。
   Widget _qrTabBody(AppState app) {
     final qr = app.qrData;
     final error = app.qrError;
@@ -987,9 +1004,7 @@ class _ExpertPageState extends State<ExpertPage> {
       'expert-qr',
       [
         if (qr == null && error == null) ...[
-          _hintLine('尚未获取二维码，可扫描 JT/T 1179 乘车码或手动输入二维码数据'),
-          const SizedBox(height: 12),
-          _qrAcquireButtons(app),
+          _qrHomeHint('尚未获取乘车码，请先在首页扫描二维码或从相册导入'),
         ] else if (qr == null) ...[
           _kv('状态', '解析失败'),
           _kv('原因', _val(error)),
@@ -997,43 +1012,53 @@ class _ExpertPageState extends State<ExpertPage> {
           const SizedBox(height: 6),
           if (app.qrRaw != null) _hexSelectable(_hexBytes(app.qrRaw!)),
           const SizedBox(height: 12),
-          _qrAcquireButtons(app, includeClear: true),
+          _qrHomeHint('可返回首页重新扫描或从相册导入乘车码'),
+          const SizedBox(height: 12),
+          _qrClearButton(app),
         ] else ...[
           ..._qrDetailFields(app, qr),
           const Divider(height: 28),
           _qrCertificateTile(qr),
           _qrRawTile(qr),
           const SizedBox(height: 12),
-          _qrAcquireButtons(app, includeClear: true),
+          _qrClearButton(app),
         ],
       ],
       showReadHint: false,
     );
   }
 
-  /// 二维码获取操作行（扫描 / 手动输入 / 清除）。
-  Widget _qrAcquireButtons(AppState app, {bool includeClear = false}) {
-    return Wrap(
-      spacing: 12,
-      runSpacing: 8,
-      children: [
-        FilledButton.tonalIcon(
-          onPressed: () => scanQrAndParse(context, app),
-          icon: const Icon(Icons.qr_code_scanner),
-          label: const Text('扫描二维码'),
-        ),
-        OutlinedButton.icon(
-          onPressed: () => inputQrAndParse(context, app),
-          icon: const Icon(Icons.keyboard_alt_outlined),
-          label: const Text('手动输入'),
-        ),
-        if (includeClear)
-          TextButton.icon(
-            onPressed: app.clearQr,
-            icon: const Icon(Icons.clear),
-            label: const Text('清除'),
+  /// 首页获取引导行：二维码数据统一在首页扫描 / 相册导入获取。
+  Widget _qrHomeHint(String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Icon(
+            Icons.home_outlined,
+            color: Theme.of(context).colorScheme.primary,
           ),
-      ],
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              text,
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 清除当前二维码解析结果（重新获取请前往首页）。
+  Widget _qrClearButton(AppState app) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: TextButton.icon(
+        onPressed: app.clearQr,
+        icon: const Icon(Icons.clear),
+        label: const Text('清除'),
+      ),
     );
   }
 

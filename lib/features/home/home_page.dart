@@ -8,7 +8,6 @@ import '../../core/app_info.dart';
 import '../../state/app_state.dart';
 import '../qr/qr_acquire.dart';
 import '../settings/settings_action_button.dart';
-import '../settings/settings_page.dart';
 
 class HomePage extends StatefulWidget {
   final AppState app;
@@ -20,6 +19,9 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> with NfcScanMixin<HomePage> {
+  /// 相册导入进行中（选图 / 图片识别），用于禁用按钮并展示进度。
+  bool _qrImporting = false;
+
   @override
   AppState get app => widget.app;
 
@@ -55,6 +57,18 @@ class _HomePageState extends State<HomePage> with NfcScanMixin<HomePage> {
     }
   }
 
+  /// 从相册导入二维码：原生相册选图 → MLKit 识别 → 内置纯 Dart 解码兜底，
+  /// 成功后解析并写入 [app]。
+  Future<void> _importQrFromGallery() async {
+    if (_qrImporting) return;
+    setState(() => _qrImporting = true);
+    try {
+      await importQrFromGalleryAndParse(context, app);
+    } finally {
+      if (mounted) setState(() => _qrImporting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -77,6 +91,7 @@ class _HomePageState extends State<HomePage> with NfcScanMixin<HomePage> {
               ),
               child: Column(
                 children: [
+                  // 贴卡读取与乘车码获取合并为同一模块展示
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(28),
@@ -104,6 +119,56 @@ class _HomePageState extends State<HomePage> with NfcScanMixin<HomePage> {
                               label: Text(_buttonLabel),
                             ),
                           ],
+                          const SizedBox(height: 24),
+                          const Divider(height: 1),
+                          const SizedBox(height: 24),
+                          Text(
+                            '扫码读取乘车码',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            app.useGmsScanner
+                                ? '支持 JT/T 1179 交通一卡通乘车码，可系统扫码或从相册导入'
+                                : '支持 JT/T 1179 交通一卡通乘车码，可相机扫描或从相册导入',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(
+                                  color:
+                                      Theme.of(context).colorScheme.outline,
+                                ),
+                          ),
+                          const SizedBox(height: 16),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 8,
+                            alignment: WrapAlignment.center,
+                            children: [
+                              FilledButton.tonalIcon(
+                                onPressed: () => scanQrAndParse(context, app),
+                                icon: const Icon(Icons.qr_code_scanner),
+                                label: const Text('扫描二维码'),
+                              ),
+                              OutlinedButton.icon(
+                                onPressed: _qrImporting
+                                    ? null
+                                    : _importQrFromGallery,
+                                icon: _qrImporting
+                                    ? const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2),
+                                      )
+                                    : const Icon(
+                                        Icons.photo_library_outlined),
+                                label: Text(
+                                    _qrImporting ? '正在识别…' : '从相册导入'),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
                     ),
@@ -118,16 +183,6 @@ class _HomePageState extends State<HomePage> with NfcScanMixin<HomePage> {
                       ),
                     ),
                   ],
-                  if (result != null) ...[
-                    const SizedBox(height: 12),
-                    RepaintBoundary(
-                      child: _SummaryCard(app: app),
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  RepaintBoundary(
-                    child: _QrAcquireCard(app: app),
-                  ),
                   if (app.qrError != null) ...[
                     const SizedBox(height: 12),
                     Card(
@@ -142,12 +197,11 @@ class _HomePageState extends State<HomePage> with NfcScanMixin<HomePage> {
                       ),
                     ),
                   ],
-                  if (app.hasQrData) ...[
-                    const SizedBox(height: 12),
-                    RepaintBoundary(
-                      child: _QrSummaryCard(app: app),
-                    ),
-                  ],
+                  const SizedBox(height: 12),
+                  // 最近扫描：卡片 / 二维码共用展示，支持切换类型
+                  RepaintBoundary(
+                    child: _RecentScanSection(app: app),
+                  ),
                 ],
               ),
             ),
@@ -158,12 +212,128 @@ class _HomePageState extends State<HomePage> with NfcScanMixin<HomePage> {
   }
 }
 
-class _SummaryCard extends StatelessWidget {
+/// 最近扫描模块：展示最近一次获取的数据，支持在多种类型间切换。
+///
+/// 读取 NFC 卡片（交通联合 / 城市一卡通）后自动展示卡片信息，
+/// 扫码或从相册导入二维码后自动展示二维码相关信息；
+/// 两类数据并存时可通过顶部分段按钮手动切换查看。
+class _RecentScanSection extends StatefulWidget {
   final AppState app;
-  const _SummaryCard({required this.app});
+  const _RecentScanSection({required this.app});
+
+  @override
+  State<_RecentScanSection> createState() => _RecentScanSectionState();
+}
+
+/// 最近扫描数据类型：NFC 卡片 / 乘车码二维码。
+enum _RecentScanKind { card, qr }
+
+class _RecentScanSectionState extends State<_RecentScanSection> {
+  _RecentScanKind _selected = _RecentScanKind.card;
+
+  // 上一次已见到的最新数据对象，用于跟随新的读取 / 扫描结果自动切换类型
+  NfcScanResult? _seenResult;
+  JtT1179QrData? _seenQr;
+
+  @override
+  void initState() {
+    super.initState();
+    _seenResult = widget.app.lastResult;
+    _seenQr = widget.app.qrData;
+    if (_seenResult == null) _selected = _RecentScanKind.qr;
+  }
+
+  @override
+  void didUpdateWidget(covariant _RecentScanSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final app = widget.app;
+    if (!identical(app.lastResult, _seenResult)) {
+      _seenResult = app.lastResult;
+      // 新读到卡片：自动切换到卡片信息
+      if (app.lastResult != null) _selected = _RecentScanKind.card;
+    }
+    if (!identical(app.qrData, _seenQr)) {
+      _seenQr = app.qrData;
+      // 新获取到二维码：自动切换到二维码信息
+      if (app.qrData != null) _selected = _RecentScanKind.qr;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final app = widget.app;
+    final hasCard = app.lastResult != null;
+    final hasQr = app.hasQrData;
+    if (!hasCard && !hasQr) return const SizedBox.shrink();
+
+    // 所选类型数据已被清除时回退到另一类型
+    if (_selected == _RecentScanKind.card && !hasCard) {
+      _selected = _RecentScanKind.qr;
+    } else if (_selected == _RecentScanKind.qr && !hasQr) {
+      _selected = _RecentScanKind.card;
+    }
+    final kind = _selected;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text('最近扫描',
+                      style: Theme.of(context).textTheme.titleLarge),
+                ),
+                if (kind == _RecentScanKind.qr)
+                  IconButton(
+                    onPressed: app.clearQr,
+                    tooltip: '清除二维码结果',
+                    icon: const Icon(Icons.close),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            // 两类数据并存时才提供手动切换
+            if (hasCard && hasQr) ...[
+              SegmentedButton<_RecentScanKind>(
+                segments: [
+                  ButtonSegment(
+                    value: _RecentScanKind.card,
+                    label: Text(_cardSegmentLabel(app)),
+                  ),
+                  const ButtonSegment(
+                    value: _RecentScanKind.qr,
+                    label: Text('乘车码二维码'),
+                  ),
+                ],
+                selected: {kind},
+                showSelectedIcon: false,
+                onSelectionChanged: (selection) {
+                  setState(() => _selected = selection.first);
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+            ...(kind == _RecentScanKind.card
+                ? _cardInfo(context, app)
+                : _qrInfo(context, app)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 卡片分段标签：按当前解析结果展示具体卡型。
+  String _cardSegmentLabel(AppState app) {
+    if (app.tunionDetected) return '交通联合卡片';
+    if (app.cityUnionDetected) return '城市一卡通卡片';
+    return 'NFC 卡片';
+  }
+
+  /// 卡片信息（交通联合 JT/T 978.2 / 城市一卡通 CJ/T 331-2016）。
+  List<Widget> _cardInfo(BuildContext context, AppState app) {
     final analysis = app.analysis;
     final identity = analysis?.identity;
     final wallet = analysis?.wallet;
@@ -175,142 +345,41 @@ class _SummaryCard extends StatelessWidget {
         identity?.operatorName ??
         '—';
     // 发卡地：前缀库城市优先，回退管理信息文件城市代码 → 识别城市
-    final issuerCity =
-        prefix?.city ?? app.cityNameOf(app.cardInfo?.cityCode) ?? identity?.cityName ?? '—';
+    final issuerCity = prefix?.city ??
+        app.cityNameOf(app.cardInfo?.cityCode) ??
+        identity?.cityName ??
+        '—';
 
     final expireAt = wallet?.expireDate;
     final expireText = expireAt == null
         ? '—'
-        : '${_fmtDate(expireAt)}${(wallet?.expired ?? false) ? '（已过期）' : ''}';
+        : '${_fmtDate(expireAt)}'
+            '${(wallet?.expired ?? false) ? '（已过期）' : ''}';
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('最近读取', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 6),
-            Text(
-              cardName,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
+    return [
+      Text(
+        cardName,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.w600,
             ),
-            const SizedBox(height: 8),
-            const Divider(height: 20),
-            // 类型：交通联合（JT/T 978.2）或城市一卡通（CJ/T 331-2016）
-            // 解析命中时展示对应名称
-            _row('类型', _cardTypeText()),
-            _row('发卡地', issuerCity),
-            _row('卡种', _cardKindText()),
-            _row('卡号', wallet?.cardNumber ?? '—'),
-            _row('余额', wallet?.balanceText ?? '—'),
-            _row('有效期至', expireText),
-            _row('全国互联互通', _interopText()),
-          ],
-        ),
       ),
-    );
+      const SizedBox(height: 8),
+      const Divider(height: 20),
+      // 类型：交通联合（JT/T 978.2）或城市一卡通（CJ/T 331-2016）
+      // 解析命中时展示对应名称
+      _row('类型', _cardTypeText(app)),
+      _row('发卡地', issuerCity),
+      _row('卡种', _cardKindText(app)),
+      _row('卡号', wallet?.cardNumber ?? '—'),
+      _row('余额', wallet?.balanceText ?? '—'),
+      _row('有效期至', expireText),
+      _row('全国互联互通', _interopText(app)),
+    ];
   }
 
-  /// 卡片类型：按当前解析结果展示交通联合 / 城市一卡通；未命中显示 —。
-  String _cardTypeText() {
-    if (app.tunionDetected) return '交通联合';
-    if (app.cityUnionDetected) return '城市一卡通';
-    return '—';
-  }
-
-  /// 卡种：管理信息文件（SFI 0x17）卡种类型优先，回退持卡人文件卡类型标识；
-  /// 已知取值（JT/T 978.2-2023 表 A.1）映射为名称，其余展示原始 HEX。
-  String _cardKindText() {
-    final info = app.cardInfo;
-    final hex = info?.cardKind ?? info?.cardTypeId;
-    if (hex == null || hex.isEmpty) return '—';
-    return app.cardKindName(hex) ?? '0x$hex';
-  }
-
-  /// 全国互联互通启用状态：互通卡种（SFI 0x17）0000 表示发卡机构自定义
-  /// 卡种（不参与互通），其余标准取值视为已启用；未读到显示 —。
-  String _interopText() {
-    final interop = app.cardInfo?.interopCardType;
-    if (interop == null || interop.isEmpty) return '—';
-    return interop == '0000' ? '未启用' : '已启用';
-  }
-
-  static String _fmtDate(DateTime d) => '${d.year}-'
-      '${d.month.toString().padLeft(2, '0')}-'
-      '${d.day.toString().padLeft(2, '0')}';
-
-  Widget _row(String a, String b) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 5),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(width: 100, child: Text(a)),
-            Expanded(child: Text(b)),
-          ],
-        ),
-      );
-}
-
-/// 二维码获取卡片：相机扫描 / 手动输入两个入口。
-class _QrAcquireCard extends StatelessWidget {
-  final AppState app;
-  const _QrAcquireCard({required this.app});
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          children: [
-            Icon(Icons.qr_code_scanner,
-                size: 48, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(height: 12),
-            Text('扫码读取乘车码',
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Text(
-              '支持 JT/T 1179 交通一卡通乘车码，可相机扫描或手动输入原始数据',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.outline,
-                  ),
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 12,
-              runSpacing: 8,
-              children: [
-                FilledButton.tonalIcon(
-                  onPressed: () => scanQrAndParse(context, app),
-                  icon: const Icon(Icons.qr_code_scanner),
-                  label: const Text('扫描二维码'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: () => inputQrAndParse(context, app),
-                  icon: const Icon(Icons.keyboard_alt_outlined),
-                  label: const Text('手动输入'),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// 二维码摘要卡片：证书发卡机构（知识库前缀匹配）+ 关键字段。
-class _QrSummaryCard extends StatelessWidget {
-  final AppState app;
-  const _QrSummaryCard({required this.app});
-
-  @override
-  Widget build(BuildContext context) {
+  /// 二维码信息（JT/T 1179 乘车码）。
+  List<Widget> _qrInfo(BuildContext context, AppState app) {
     final JtT1179QrData qr = app.qrData!;
     // 发卡机构：证书 BCD 发卡机构标识（8 位）→ 卡前缀库名称 / 发卡地
     final issuerId = qr.issuerIdText;
@@ -319,55 +388,60 @@ class _QrSummaryCard extends StatelessWidget {
         (issuerId == null ? '未知发卡机构' : '未收录机构（$issuerId）');
     final validUntil = qr.qrValidUntilUtc.toLocal();
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text('最近扫描二维码',
-                      style: Theme.of(context).textTheme.titleLarge),
-                ),
-                IconButton(
-                  onPressed: app.clearQr,
-                  tooltip: '清除二维码结果',
-                  icon: const Icon(Icons.close),
-                ),
-              ],
+    return [
+      Text(
+        issuerName,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.w600,
             ),
-            const SizedBox(height: 6),
-            Text(
-              issuerName,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            const Divider(height: 20),
-            _row('类型', '交通联合乘车码（JT/T 1179）'),
-            _row('版本', qr.versionHex),
-            _row('发卡地', prefix?.city ?? '—'),
-            _row('支付账户号',
-                qr.paymentAccountDigits ?? qr.paymentAccountNumberHex),
-            _row(
-              '单次消费上限',
-              '${(qr.singleConsumptionLimitFen / 100).toStringAsFixed(2)} 元',
-            ),
-            _row('生成时间', _fmtDateTime(qr.generationTimeUtc.toLocal())),
-            _row(
-              '有效期至',
-              '${_fmtDateTime(validUntil)}'
-                  '${qr.isQrExpired() ? '（已过期）' : ''}',
-            ),
-          ],
-        ),
       ),
-    );
+      const SizedBox(height: 8),
+      const Divider(height: 20),
+      _row('类型', '交通联合乘车码（JT/T 1179）'),
+      _row('版本', qr.versionHex),
+      _row('发卡地', prefix?.city ?? '—'),
+      _row('支付账户号', qr.paymentAccountDigits ?? qr.paymentAccountNumberHex),
+      _row(
+        '单次消费上限',
+        '${(qr.singleConsumptionLimitFen / 100).toStringAsFixed(2)} 元',
+      ),
+      _row('生成时间', _fmtDateTime(qr.generationTimeUtc.toLocal())),
+      _row(
+        '有效期至',
+        '${_fmtDateTime(validUntil)}'
+            '${qr.isQrExpired() ? '（已过期）' : ''}',
+      ),
+    ];
   }
+
+  /// 卡片类型：按当前解析结果展示交通联合 / 城市一卡通；未命中显示 —。
+  String _cardTypeText(AppState app) {
+    if (app.tunionDetected) return '交通联合';
+    if (app.cityUnionDetected) return '城市一卡通';
+    return '—';
+  }
+
+  /// 卡种：管理信息文件（SFI 0x17）卡种类型优先，回退持卡人文件卡类型标识；
+  /// 已知取值（JT/T 978.2-2023 表 A.1）映射为名称，其余展示原始 HEX。
+  String _cardKindText(AppState app) {
+    final info = app.cardInfo;
+    final hex = info?.cardKind ?? info?.cardTypeId;
+    if (hex == null || hex.isEmpty) return '—';
+    return app.cardKindName(hex) ?? '0x$hex';
+  }
+
+  /// 全国互联互通启用状态：互通卡种（SFI 0x17）0000 表示发卡机构自定义
+  /// 卡种（不参与互通），其余标准取值视为已启用；未读到显示 —。
+  String _interopText(AppState app) {
+    final interop = app.cardInfo?.interopCardType;
+    if (interop == null || interop.isEmpty) return '—';
+    return interop == '0000' ? '未启用' : '已启用';
+  }
+
+  static String _fmtDate(DateTime d) => '${d.year}-'
+      '${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
 
   static String _fmtDateTime(DateTime t) {
     String pad2(int v) => v.toString().padLeft(2, '0');

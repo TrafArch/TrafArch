@@ -118,6 +118,24 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
           Card(
+            child: SwitchListTile(
+              secondary: const Icon(Icons.qr_code_scanner),
+              title: const Text('使用系统扫码'),
+              subtitle: Text(
+                app.gmsScanEnabled
+                    ? app.gmsAvailable
+                        ? '已开启：应用内相机扫码已屏蔽，改由 Google Play 服务扫码（无需相机权限）'
+                        : app.hmsScanAvailable
+                            ? '已开启：应用内相机扫码已屏蔽，改由华为统一扫码（Scan Kit，无需应用相机权限）'
+                            : '已开启：应用内相机扫码已屏蔽；未检测到 Google Play 服务或'
+                                '华为 HMS Core，扫码将不可用（可关闭开关恢复相机扫码）'
+                    : '默认停用：使用应用内相机扫码（需要相机权限）',
+              ),
+              value: app.gmsScanEnabled,
+              onChanged: (value) => app.setGmsScanEnabled(value),
+            ),
+          ),
+          Card(
             child: Column(
               children: [
                 SwitchListTile(

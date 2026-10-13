@@ -11,6 +11,7 @@ import 'package:transit_card_analyzer/core/transit/tunion/qr/jt_t1179_qr_display
 import 'package:transit_card_analyzer/core/transit/tunion/qr/jt_t1179_qr_parser.dart';
 import 'package:transit_card_analyzer/features/expert/expert_page.dart';
 import 'package:transit_card_analyzer/features/home/home_page.dart';
+import 'package:transit_card_analyzer/features/qr/qr_image_picker.dart';
 import 'package:transit_card_analyzer/state/app_state.dart';
 
 void main() {
@@ -108,8 +109,12 @@ void main() {
     });
   });
 
-  group('首页二维码', () {
-    testWidgets('常驻获取入口：手动输入解析后展示二维码摘要', (tester) async {
+  group('首页获取入口与最近扫描', () {
+    testWidgets('贴卡 / 扫码 / 相册导入合并展示，无数据时不展示最近扫描', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
       final app = _newApp();
       await app.init();
       await tester.pumpWidget(
@@ -117,26 +122,87 @@ void main() {
       );
       await tester.pump();
 
+      expect(find.text('请将卡片贴近手机背面'), findsOneWidget);
+      expect(find.text('扫码读取乘车码'), findsOneWidget);
       expect(find.text('扫描二维码'), findsOneWidget);
-      expect(find.text('手动输入'), findsOneWidget);
-      expect(find.text('最近扫描二维码'), findsNothing);
+      expect(find.text('从相册导入'), findsOneWidget);
+      expect(find.text('手动输入'), findsNothing);
+      expect(find.text('最近扫描'), findsNothing);
+    });
 
-      await tester.ensureVisible(find.text('手动输入'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('手动输入'));
-      await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField), _hexOf(_sampleQr()));
-      await tester.tap(find.text('解析'));
-      await tester.pumpAndSettle();
+    testWidgets('最近扫描：读取卡片展示卡片信息，导入二维码自动切换并可手动切回', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
 
-      expect(find.text('最近扫描二维码'), findsOneWidget);
+      final app = _newApp(channel: _CardNfcChannel());
+      await app.init();
+      await app.scanOnce();
+      await tester.pumpWidget(
+        MaterialApp(home: Scaffold(body: HomePage(app: app, active: false))),
+      );
+      await tester.pump();
+
+      // 读到卡片：展示卡片信息，仅一类数据时不展示切换按钮
+      expect(find.text('最近扫描'), findsOneWidget);
+      expect(find.text('卡号'), findsOneWidget);
+      expect(find.text('NFC 卡片'), findsNothing);
+      expect(find.text('乘车码二维码'), findsNothing);
+
+      // 获取二维码：自动切换到二维码信息
+      app.parseQrBytes(_sampleQr());
+      await tester.pump();
       expect(find.text('福路通·榕城通'), findsOneWidget);
       expect(find.text('6225880123456789'), findsOneWidget);
       expect(find.text('交通联合乘车码（JT/T 1179）'), findsOneWidget);
-      expect(find.text('二维码解析失败'), findsNothing);
+      expect(find.text('卡号'), findsNothing);
+
+      // 两类数据并存：可手动切回卡片信息，再切回二维码
+      expect(find.text('NFC 卡片'), findsOneWidget);
+      await tester.tap(find.text('NFC 卡片'));
+      await tester.pumpAndSettle();
+      expect(find.text('卡号'), findsOneWidget);
+      expect(find.text('6225880123456789'), findsNothing);
+
+      await tester.tap(find.text('乘车码二维码'));
+      await tester.pumpAndSettle();
+      expect(find.text('6225880123456789'), findsOneWidget);
+    });
+
+    testWidgets('从相册导入：用户取消选图后无副作用', (tester) async {
+      final messenger = TestDefaultBinaryMessengerBinding
+          .instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(qrImagePickerChannel, (call) async {
+        expect(call.method, 'pickImage');
+        return null;
+      });
+      addTearDown(() =>
+          messenger.setMockMethodCallHandler(qrImagePickerChannel, null));
+
+      tester.view.physicalSize = const Size(1200, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final app = _newApp();
+      await app.init();
+      await tester.pumpWidget(
+        MaterialApp(home: Scaffold(body: HomePage(app: app, active: false))),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('从相册导入'));
+      await tester.pumpAndSettle();
+
+      expect(app.hasQrData, isFalse);
+      expect(app.qrError, isNull);
+      expect(find.text('最近扫描'), findsNothing);
     });
 
     testWidgets('解析失败：展示失败卡片，可清除', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
       final app = _newApp();
       await app.init();
       app.parseQrBytes(const [0x80, 0x00, 0x01]);
@@ -146,7 +212,7 @@ void main() {
       await tester.pump();
 
       expect(find.text('二维码解析失败'), findsOneWidget);
-      expect(find.text('最近扫描二维码'), findsNothing);
+      expect(find.text('最近扫描'), findsNothing);
 
       await tester.ensureVisible(find.text('清除'));
       await tester.pumpAndSettle();
@@ -157,7 +223,7 @@ void main() {
   });
 
   group('专家页二维码页签', () {
-    testWidgets('页签常驻：空态获取入口 → 解析后展示字段与证书', (tester) async {
+    testWidgets('页签常驻：空态引导去首页 → 解析后展示字段与证书', (tester) async {
       tester.view.physicalSize = const Size(1200, 2000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
@@ -169,16 +235,16 @@ void main() {
       );
       await tester.pump();
 
-      final qrTab = find.text('二维码（JT/T 1179）');
+      final qrTab = find.text('二维码');
       expect(qrTab, findsOneWidget);
       await tester.tap(qrTab);
       await tester.pumpAndSettle();
 
-      // 空态：获取入口可见，且不展示 NFC 未读取提示横幅
-      expect(find.textContaining('尚未获取二维码'), findsOneWidget);
+      // 空态：引导去首页获取，不展示 NFC 未读取提示横幅与获取按钮
+      expect(find.text('尚未获取乘车码，请先在首页扫描二维码或从相册导入'), findsOneWidget);
       expect(find.text('尚未读取，请先在首页放置票卡完成读取'), findsNothing);
-      expect(find.text('扫描二维码'), findsOneWidget);
-      expect(find.text('手动输入'), findsOneWidget);
+      expect(find.text('扫描二维码'), findsNothing);
+      expect(find.text('手动输入'), findsNothing);
 
       app.parseQrBytes(_sampleQr());
       await tester.pumpAndSettle();
@@ -194,8 +260,8 @@ void main() {
   });
 }
 
-AppState _newApp() => AppState(
-      channel: _NoopNfcChannel(),
+AppState _newApp({NfcChannel? channel}) => AppState(
+      channel: channel ?? _NoopNfcChannel(),
       bundle: _FakeBundle(_assets),
       settingsStore: MemorySettingsStore(),
     );
@@ -295,4 +361,16 @@ class _NoopNfcChannel implements NfcChannel {
 
   @override
   Future<List<int>> transceive(List<int> apdu) async => const [0x6A, 0x82];
+}
+
+/// 假 NFC 通道：返回一张未连接 ISO-DEP 的卡（触发摘要展示，不触发解析）。
+class _CardNfcChannel extends _NoopNfcChannel {
+  @override
+  Future<NfcScanResult?> scanOnce() async => NfcScanResult(
+        uid: '04A1B2C3D4',
+        technologies: const ['IsoDep'],
+        cardType: 'Mifare Classic',
+        isoDepConnected: false,
+        timestamp: DateTime(2026, 1, 1),
+      );
 }

@@ -1,10 +1,19 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.NFC" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 华为 Scan Kit 默认扫码界面 / 位图识码需要相机权限（动态申请） -->
+    <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
     <uses-feature android:name="android.hardware.nfc" android:required="false" />
+
+    <!-- Android 11+（targetSdk 30+）包可见性：允许查询 HMS Core（APK）是否安装，
+         供华为扫码可用性检测（MainActivity.isHmsScanAvailable）使用 -->
+    <queries>
+        <package android:name="com.huawei.hms" />
+        <package android:name="com.huawei.hwid" />
+    </queries>
 
     <application
         android:label="TrafArch"
@@ -32,5 +41,10 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Google Play 服务在从应用商店安装时预下载扫码器模块（barcode_ui），
+             使 GMS 扫码首次使用即可用、无需等待模块下载 -->
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="barcode_ui" />
     </application>
 </manifest>

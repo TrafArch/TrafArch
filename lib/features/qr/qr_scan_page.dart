@@ -1,13 +1,13 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
-import 'qr_dart_decoder.dart';
-import 'qr_image_picker.dart';
+import 'qr_barcode_payload.dart';
 
 /// 二维码扫描页：读取二维码内的原始二进制数据（8 bit byte 模式），
 /// 通过 [Navigator.pop] 返回 `List<int>`；返回（取消）时结果为 null。
+/// 相册导入入口位于首页获取卡片（本页仅相机扫描）。
+/// 「使用系统扫码」开关开启时本页被整体屏蔽（就当不存在），扫码统一
+/// 由 GMS 扫码界面完成（见 qr_acquire.dart）；本页仅在开关关闭时使用。
 class QrScanPage extends StatefulWidget {
   const QrScanPage({super.key});
 
@@ -25,9 +25,6 @@ class _QrScanPageState extends State<QrScanPage> {
   /// 防止 onDetect 连续多帧回调重复触发返回。
   bool _handled = false;
 
-  /// 相册导入进行中（选图 / 图片识别），用于禁用按钮并展示进度。
-  bool _busy = false;
-
   @override
   void dispose() {
     _controller.dispose();
@@ -35,93 +32,17 @@ class _QrScanPageState extends State<QrScanPage> {
   }
 
   void _onDetect(BarcodeCapture capture) {
-    _handleBarcodes(capture.barcodes);
-  }
-
-  /// 统一处理识别结果（相机流 / 相册图片共用）：
-  /// 优先取原始二进制（JT/T 1179 为 8 bit byte 模式，文本值会损坏数据），
-  /// 兜底按 ISO-8859-1 还原文本字节。
-  void _handleBarcodes(List<Barcode> barcodes) {
-    if (_handled || !mounted) return;
-    for (final barcode in barcodes) {
-      final raw = barcode.rawDecodedBytes;
-      if (raw is DecodedBarcodeBytes && raw.bytes.isNotEmpty) {
-        _finishWithPayload(raw.bytes.toList());
-        return;
-      }
-      final text = barcode.rawValue;
-      if (text != null && text.isNotEmpty) {
-        try {
-          _finishWithPayload(latin1.encode(text));
-          return;
-        } catch (_) {
-          // 文本含非 ISO-8859-1 字符：忽略本次结果，继续扫描
-        }
-      }
+    final payload = qrPayloadOfBarcodes(capture.barcodes);
+    if (payload != null && payload.isNotEmpty) {
+      _finishWithPayload(payload);
     }
   }
 
-  /// 统一返回解码字节（相机 / MLKit / 内置解码共用），仅生效一次。
+  /// 统一返回解码字节，仅生效一次。
   void _finishWithPayload(List<int> payload) {
     if (_handled || !mounted || payload.isEmpty) return;
     _handled = true;
     Navigator.of(context).pop<List<int>>(payload);
-  }
-
-  /// 从相册导入：原生相册选图 → MLKit 识别；
-  /// MLKit 不可用（无 Google Play 服务 / 无法联网 / 模型未下载）或未识别时，
-  /// 降级为内置纯 Dart 解码。
-  Future<void> _pickFromGallery() async {
-    if (_handled || _busy) return;
-    setState(() => _busy = true);
-    try {
-      final path = await pickQrImageFromGallery();
-      if (!mounted) return;
-      if (path == null) return; // 用户取消
-
-      var mlkitUnavailable = false;
-      BarcodeCapture? capture;
-      try {
-        capture = await _controller.analyzeImage(
-          path,
-          formats: const [BarcodeFormat.qrCode],
-        );
-      } catch (_) {
-        mlkitUnavailable = true;
-      }
-      if (!mounted) return;
-      final barcodes = capture?.barcodes ?? const <Barcode>[];
-      if (barcodes.isNotEmpty) {
-        _handleBarcodes(barcodes);
-        return;
-      }
-
-      final payload = await decodeQrFromImageFile(path);
-      if (!mounted) return;
-      if (payload != null && payload.isNotEmpty) {
-        _finishWithPayload(payload);
-        return;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            mlkitUnavailable
-                ? 'MLKit 不可用（Google Play 服务缺失或无法联网），内置解码也未识别到二维码'
-                : '未在该图片中识别到二维码',
-          ),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('从相册导入失败：$e')),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _busy = false);
-      }
-    }
   }
 
   @override
@@ -149,31 +70,14 @@ class _QrScanPageState extends State<QrScanPage> {
             errorBuilder: (context, error) => _ScanErrorView(error: error),
             overlayBuilder: (context, constraints) => const _ScanOverlay(),
           ),
-          Positioned(
+          const Positioned(
             left: 24,
             right: 24,
             bottom: 48,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  '将乘车码二维码对准取景框，或从相册导入二维码图片',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white70, fontSize: 12),
-                ),
-                const SizedBox(height: 16),
-                FilledButton.icon(
-                  onPressed: _busy ? null : _pickFromGallery,
-                  icon: _busy
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.photo_library_outlined),
-                  label: Text(_busy ? '正在识别…' : '从相册导入'),
-                ),
-              ],
+            child: Text(
+              '将乘车码二维码对准取景框',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white70, fontSize: 12),
             ),
           ),
         ],
@@ -208,7 +112,7 @@ class _ScanOverlay extends StatelessWidget {
   }
 }
 
-/// 相机 / 权限错误占位：提示改用「手动输入」兜底。
+/// 相机 / 权限错误占位：提示从相册导入兜底。
 class _ScanErrorView extends StatelessWidget {
   const _ScanErrorView({required this.error});
 
@@ -232,8 +136,8 @@ class _ScanErrorView extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             const Text(
-              '请检查相机权限后重试。若因 Google Play 服务不可用或无法联网导致识别失效，'
-              '可用系统相机拍下二维码后点击下方「从相册导入」，返回后也可手动输入',
+              '请检查相机权限后重试。也可用系统相机拍下二维码后，'
+              '回到首页点击「从相册导入」进行识别',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.white54, fontSize: 12),
             ),

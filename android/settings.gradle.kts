@@ -17,6 +17,8 @@ pluginManagement {
         google()
         mavenCentral()
         gradlePluginPortal()
+        // 华为仓：AGC 插件（agcp）等 Gradle 插件解析（官方建议多仓时放最后）
+        maven { url = uri("https://developer.huawei.com/repo/") }
     }
 }
 

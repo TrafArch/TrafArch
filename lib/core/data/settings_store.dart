@@ -9,6 +9,11 @@ abstract final class SettingsKeys {
 
   /// 「启用运行日志」开关（'true' / 'false'；缺省视为关闭）。
   static const loggingEnabled = 'logging_enabled';
+
+  /// 「使用系统扫码（Google Play 服务）」开关（'true' / 'false'；
+  /// 缺省视为开启：原有应用内相机扫码组件被整体屏蔽；
+  /// 仅显式关闭时恢复应用内相机扫码）。
+  static const gmsScanEnabled = 'gms_scan_enabled';
 }
 
 /// 应用设置持久化抽象：文本键值对（每行 key=value），不使用 JSON。
