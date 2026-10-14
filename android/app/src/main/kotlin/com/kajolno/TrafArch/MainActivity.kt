@@ -5,7 +5,6 @@ import android.content.ActivityNotFoundException
 import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
 import android.net.Uri
 import android.nfc.NfcAdapter
 import android.nfc.Tag
@@ -31,15 +30,11 @@ import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanner
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
-import com.huawei.hms.hmsscankit.ScanUtil
-import com.huawei.hms.ml.scan.HmsScan
-import com.huawei.hms.ml.scan.HmsScanAnalyzerOptions
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
-import java.io.FileOutputStream
 import java.io.IOException
 import java.util.Locale
 
@@ -49,10 +44,8 @@ class MainActivity : FlutterActivity(), NfcAdapter.ReaderCallback {
         private const val EXPORT_CHANNEL = "transit_card_analyzer/export"
         private const val QR_IMAGE_CHANNEL = "transit_card_analyzer/qr_image"
         private const val GMS_SCAN_CHANNEL = "transit_card_analyzer/gms_scan"
-        private const val HMS_SCAN_CHANNEL = "transit_card_analyzer/hms_scan"
         private const val REQUEST_WRITE_STORAGE = 1001
         private const val REQUEST_PICK_QR_IMAGE = 1002
-        private const val REQUEST_HMS_SCAN = 1003
         private const val TAG = "NFC"
         private const val QR_TAG = "QRImage"
 
@@ -63,9 +56,6 @@ class MainActivity : FlutterActivity(), NfcAdapter.ReaderCallback {
                 NfcAdapter.FLAG_READER_NFC_V or
                 NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK
 
-        // HMS Core（APK）包名：4.0+ 为 com.huawei.hms，更早版本为 com.huawei.hwid
-        // （与 Manifest <queries> 中的声明成对维护，targetSdk 30+ 包可见性要求）
-        private val HMS_CORE_PACKAGES = listOf("com.huawei.hms", "com.huawei.hwid")
     }
 
     private var nfcAdapter: NfcAdapter? = null
@@ -88,10 +78,6 @@ class MainActivity : FlutterActivity(), NfcAdapter.ReaderCallback {
     // GMS 扫码（Google Code Scanner）等待回传的请求
     @Volatile
     private var pendingGmsScanResult: MethodChannel.Result? = null
-
-    // 华为扫码（Scan Kit）等待回传的请求
-    @Volatile
-    private var pendingHmsScanResult: MethodChannel.Result? = null
 
     // 缓存的 GMS 扫码器（仅 QR + 自动变焦，配置固定）：
     // 复用避免每次扫码重复创建 client；预热时提前初始化，扫描直接使用。
@@ -141,15 +127,6 @@ class MainActivity : FlutterActivity(), NfcAdapter.ReaderCallback {
                         result.success(null)
                     }
                     "scan" -> startGmsScan(result)
-                    else -> result.notImplemented()
-                }
-            }
-
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, HMS_SCAN_CHANNEL)
-            .setMethodCallHandler { call, result ->
-                when (call.method) {
-                    "isAvailable" -> result.success(isHmsScanAvailable())
-                    "scan" -> startHmsScan(result)
                     else -> result.notImplemented()
                 }
             }
@@ -279,19 +256,6 @@ class MainActivity : FlutterActivity(), NfcAdapter.ReaderCallback {
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-
-        // 华为扫码的相机权限请求：授权后续接扫码，否则回传错误
-        if (requestCode == REQUEST_HMS_SCAN) {
-            if (grantResults.isNotEmpty() &&
-                grantResults[0] == PackageManager.PERMISSION_GRANTED
-            ) {
-                launchHmsScan()
-            } else {
-                takePendingHmsScanResult()
-                    ?.error("PERMISSION_DENIED", "未授予相机权限，无法扫码", null)
-            }
-            return
-        }
 
         if (requestCode != REQUEST_WRITE_STORAGE) return
 
@@ -439,11 +403,6 @@ class MainActivity : FlutterActivity(), NfcAdapter.ReaderCallback {
     @Suppress("DEPRECATION")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-
-        if (requestCode == REQUEST_HMS_SCAN) {
-            completeHmsScan(resultCode, data)
-            return
-        }
 
         if (requestCode != REQUEST_PICK_QR_IMAGE) return
 
@@ -617,139 +576,6 @@ class MainActivity : FlutterActivity(), NfcAdapter.ReaderCallback {
                 Log.w(QR_TAG, "GMS scan warm-up failed: ${e.message}")
             }
         }.start()
-    }
-
-    /**
-     * 设备是否具备华为 HMS Core（Scan Kit）扫码能力。
-     * Scan Kit 为纯端侧能力，无需 AGC 配置即可用；鸿蒙 4.2 等无 GMS 的
-     * 华为设备走此通道（扫码界面与识别算法由 HMS Core 提供）。
-     * 实现说明：官方 HuaweiApiAvailability 位于 HMS Base SDK
-     * （com.huawei.hms:base），scanplus 未传递引入，且 base 连带
-     * ui/stats/device 等七个子包、又被 keep 规则阻止收缩，为一个可用性
-     * 判断引入体积代价过高；故改为探测 HMS Core（APK）是否安装。
-     * 探测失败（未安装）属正常结果，不视为错误，故静默返回 false。
-     */
-    @Suppress("DEPRECATION")
-    private fun isHmsScanAvailable(): Boolean {
-        return HMS_CORE_PACKAGES.any { pkg ->
-            try {
-                packageManager.getPackageInfo(pkg, 0)
-                true
-            } catch (e: Exception) {
-                false
-            }
-        }
-    }
-
-    /**
-     * 调起华为 Scan Kit 默认扫码界面（自带相册导入入口）扫描二维码。
-     * - 识别成功：回传 map {bytes, bitmapPath}。bytes 为扫码文本按
-     *   ISO-8859-1 还原的载荷字节；bitmapPath 为识别码图的 PNG 缓存路径，
-     *   供 Dart 侧纯解码器做字节级无损还原（JT/T 1179 为 8 bit byte 模式，
-     *   文本经编码转换可能损坏高字节）。bitmapPath 可能为 null（SDK 未提供码图）。
-     * - 用户取消 / 未识别：回传 null；
-     * - 服务不可用 / 缺少相机权限：回传错误，由 Dart 端处理。
-     */
-    private fun startHmsScan(result: MethodChannel.Result) {
-        if (!isHmsScanAvailable()) {
-            result.error("HMS_UNAVAILABLE", "当前设备未安装或未启用华为 HMS Core", null)
-            return
-        }
-        synchronized(this) {
-            if (pendingHmsScanResult != null) {
-                result.error("SCAN_IN_PROGRESS", "华为扫码已在进行中", null)
-                return
-            }
-            pendingHmsScanResult = result
-        }
-        // Scan Kit 默认扫码界面需要相机权限；未授权时先动态申请再续接
-        if (checkSelfPermission(Manifest.permission.CAMERA) !=
-            PackageManager.PERMISSION_GRANTED
-        ) {
-            requestPermissions(arrayOf(Manifest.permission.CAMERA), REQUEST_HMS_SCAN)
-            return
-        }
-        launchHmsScan()
-    }
-
-    /** 启动默认扫码界面（相机权限已就绪；启动失败时回传错误）。 */
-    private fun launchHmsScan() {
-        val options = HmsScanAnalyzerOptions.Creator()
-            .setHmsScanTypes(HmsScan.QRCODE_SCAN_TYPE)
-            .setPhotoMode(false)
-            .create()
-        val errorCode = try {
-            ScanUtil.startScan(this, REQUEST_HMS_SCAN, options)
-        } catch (e: Exception) {
-            Log.w(QR_TAG, "Failed to start HMS scan: ${e.message}")
-            takePendingHmsScanResult()
-                ?.error("SCAN_FAILED", e.message ?: "华为扫码启动失败", null)
-            return
-        }
-        if (errorCode != 0) {
-            takePendingHmsScanResult()
-                ?.error("SCAN_FAILED", "华为扫码启动失败（错误码 $errorCode）", null)
-        }
-    }
-
-    /** 处理华为扫码界面返回结果（成功时后台整理字节与码图，避免阻塞主线程）。 */
-    @Suppress("DEPRECATION")
-    private fun completeHmsScan(resultCode: Int, data: Intent?) {
-        val pending = takePendingHmsScanResult() ?: return
-        if (resultCode != RESULT_OK || data == null) {
-            // 用户取消扫码
-            pending.success(null)
-            return
-        }
-        val scan: HmsScan? = data.getParcelableExtra(ScanUtil.RESULT)
-        if (scan == null) {
-            pending.success(null)
-            return
-        }
-        Thread {
-            try {
-                val bytes = scan.originalValue?.toByteArray(Charsets.ISO_8859_1)
-                val payload = hashMapOf<String, Any?>(
-                    "bytes" to bytes,
-                    "bitmapPath" to saveHmsScanBitmap(scan)
-                )
-                runOnUiThread { pending.success(payload) }
-            } catch (e: Exception) {
-                Log.w(QR_TAG, "Failed to process HMS scan result: ${e.message}")
-                runOnUiThread {
-                    pending.error("SCAN_FAILED", e.message ?: "读取扫码结果失败", null)
-                }
-            }
-        }.start()
-    }
-
-    /**
-     * 将华为扫码结果的识别码图（originalBitmap）存为 PNG 到应用私有缓存
-     * （每次覆盖旧文件），供 Dart 侧纯解码器做字节级无损还原；
-     * SDK 未提供码图时返回 null。
-     */
-    private fun saveHmsScanBitmap(scan: HmsScan): String? {
-        val bitmap = scan.originalBitmap ?: return null
-        val dir = File(cacheDir, "hms_scan")
-        if (dir.exists()) {
-            dir.listFiles()?.forEach { it.delete() }
-        } else {
-            dir.mkdirs()
-        }
-        val file = File(dir, "hms_${System.currentTimeMillis()}.png")
-        FileOutputStream(file).use { output ->
-            if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)) {
-                return null
-            }
-        }
-        return file.absolutePath
-    }
-
-    /** 取出并清空华为扫码挂起请求，保证无论成败只回传一次。 */
-    private fun takePendingHmsScanResult(): MethodChannel.Result? = synchronized(this) {
-        val current = pendingHmsScanResult
-        pendingHmsScanResult = null
-        current
     }
 
     override fun onTagDiscovered(tag: Tag) {
@@ -1007,14 +833,6 @@ class MainActivity : FlutterActivity(), NfcAdapter.ReaderCallback {
             pendingGmsScanResult = null
         }
         gmsScanResult?.error("SCAN_CANCELLED", "页面已关闭，扫码已取消", null)
-
-        // 华为扫码等待中的请求：回传取消，避免 Dart 端 await 永久挂起
-        var hmsScanResult: MethodChannel.Result? = null
-        synchronized(this) {
-            hmsScanResult = pendingHmsScanResult
-            pendingHmsScanResult = null
-        }
-        hmsScanResult?.error("SCAN_CANCELLED", "页面已关闭，华为扫码已取消", null)
 
         stopScan()
         super.onDestroy()

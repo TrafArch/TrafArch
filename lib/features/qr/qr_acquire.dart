@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../core/qr/gms_qr_scanner.dart';
-import '../../core/qr/hms_qr_scanner.dart';
 import '../../state/app_state.dart';
 import 'qr_barcode_payload.dart';
 import 'qr_dart_decoder.dart';
@@ -25,10 +24,9 @@ Future<void> scanQrAndParse(BuildContext context, AppState app) async {
 /// 获取扫码字节。
 ///
 /// [AppState.useGmsScanner]（开关开启）时，原有应用内相机扫码模块被
-/// 整体屏蔽：优先调起 Play 服务扫码界面；无 GMS 的华为/鸿蒙设备
-/// （鸿蒙 4.2 等）改走华为 Scan Kit 扫码界面——均属"系统扫码"，应用侧
-/// 不申请相机权限（华为通道由 SDK 界面自行持有相机权限）。两者都
-/// 不可用时失败仅提示，不回退相机页。开关关闭时进入应用内相机扫码页。
+/// 整体屏蔽：调用 Play 服务扫码界面（Google Code Scanner，应用侧不
+/// 申请相机权限）。GMS 不可用或调用失败时仅提示，不回退相机页。
+/// 开关关闭时进入应用内相机扫码页。
 Future<List<int>?> _acquireQrBytesFromScanner(
   BuildContext context,
   AppState app,
@@ -37,29 +35,6 @@ Future<List<int>?> _acquireQrBytesFromScanner(
     if (app.gmsAvailable) {
       try {
         return await scanQrWithGms();
-      } on PlatformException catch (e) {
-        // GMS 调用失败（探测结果可能过时）且华为扫码可用：改走华为通道
-        if (!app.hmsScanAvailable) {
-          _notifySystemScanFailed(context, e.message ?? e.code);
-          return null;
-        }
-      } catch (e) {
-        _notifySystemScanFailed(context, '$e');
-        return null;
-      }
-    }
-    if (app.hmsScanAvailable) {
-      try {
-        final capture = await scanQrWithHms();
-        if (capture == null) return null; // 用户取消
-        // 优先用识别码图做字节级无损还原（JT/T 1179 为 8 bit byte 模式，
-        // 扫码文本经 SDK 编码转换可能损坏高字节）；失败时回退文本还原字节
-        final path = capture.bitmapPath;
-        if (path != null) {
-          final payload = await decodeQrFromImageFile(path);
-          if (payload != null && payload.isNotEmpty) return payload;
-        }
-        return capture.bytes;
       } on PlatformException catch (e) {
         _notifySystemScanFailed(context, e.message ?? e.code);
         return null;
@@ -70,7 +45,7 @@ Future<List<int>?> _acquireQrBytesFromScanner(
     }
     _notifySystemScanFailed(
       context,
-      '未检测到 Google Play 服务或华为 HMS Core 扫码能力',
+      '未检测到 Google Play 服务扫码能力',
     );
     return null;
   }

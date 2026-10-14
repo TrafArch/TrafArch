@@ -17,13 +17,17 @@ import '../core/logging/log_exporter.dart';
 import '../core/nfc/nfc_models.dart';
 import '../core/nfc/nfc_service.dart';
 import '../core/qr/gms_qr_scanner.dart';
-import '../core/qr/hms_qr_scanner.dart';
 import '../core/transit/city_union/city_union_models.dart';
 import '../core/transit/city_union/city_union_parser.dart';
 import '../core/transit/tunion/qr/jt_t1179_qr_parser.dart';
 import '../core/transit/tunion/tunion_models.dart';
 import '../core/transit/tunion/tunion_parser.dart';
 import '../core/transit/tunion/tunion_process_parser.dart';
+import '../database/app_database.dart';
+import '../features/card_archive/models/card_session_snapshot.dart';
+import '../features/card_archive/models/pending_card_save.dart';
+import '../features/card_archive/repositories/card_repository.dart';
+import '../features/card_archive/services/card_identification_service.dart';
 
 /// 应用级状态与会话编排：NFC 通道 → 解析器 → 分析引擎。
 ///
@@ -31,6 +35,8 @@ import '../core/transit/tunion/tunion_process_parser.dart';
 /// - 知识库加载（JSON 资产 + 站点数据：预制快照 / 在线拉取）；
 /// - 扫描会话管理（世代号防止旧请求误杀新扫描）；
 /// - 读卡流程编排：scanOnce → TUnionParser.parse → AnalysisEngine.analyze；
+/// - 卡片档案：解析成功后识别卡型 / 正式卡名，待用户确认后归档
+///   （不覆盖用户自定义名称）；
 /// - APDU 日志（专家页会话展示）与运行日志（持久化，可导出）；
 /// - 一切对外状态。
 class AppState extends ChangeNotifier {
@@ -42,13 +48,15 @@ class AppState extends ChangeNotifier {
     TripreaderSyncService? syncService,
     AppLogger? logger,
     LogExporter? logExporter,
+    AppDatabase? database,
   })  : _channel = channel ?? const MethodChannelNfcChannel(),
         _bundle = bundle,
         _settingsStore = settingsStore ?? FileSettingsStore(),
         _onlineDataStore = onlineDataStore ?? FileOnlineDataStore(),
         _syncService = syncService ?? TripreaderSyncService(),
         _logger = logger ?? AppLogger(),
-        _logExporter = logExporter ?? const MethodChannelLogExporter();
+        _logExporter = logExporter ?? const MethodChannelLogExporter(),
+        cardRepository = CardRepository(database ?? AppDatabase());
 
   final NfcChannel _channel;
   final AssetBundle? _bundle;
@@ -69,8 +77,26 @@ class AppState extends ChangeNotifier {
   /// 日志导出通道（保存到手机下载目录；测试注入假实现）。
   final LogExporter _logExporter;
 
+  /// 卡片档案仓库（识别结果与用户自定义名称分离持久化；
+  /// 重复读取更新识别结果但绝不覆盖自定义名称）。
+  final CardRepository cardRepository;
+
   KnowledgeBase? _kb;
   AnalysisEngine? _engine;
+
+  /// 卡片识别引擎（随知识库加载）：解析结果 → 卡型 / 正式卡名 /
+  /// 城市 / 发行方，供卡片档案归档使用。
+  CardIdentificationService? _identification;
+
+  /// 待用户确认保存的卡片档案（首页「是否保存」确认对话框）；
+  /// 确认 / 放弃后清空，仅在最近一次读取解析成功后存在。
+  PendingCardSave? _pendingSave;
+  PendingCardSave? get pendingCardSave => _pendingSave;
+
+  String? _lastFingerprint;
+  /// 最近一次读取卡片的稳定指纹（用于卡片详情页匹配当前会话行程数据）；
+  /// 新会话开始时清空、读取识别成功后更新，应用重启后不保留（不持久化）。
+  String? get lastCardFingerprint => _lastFingerprint;
 
   NfcScanResult? _lastResult;
   NfcScanResult? get lastResult => _lastResult;
@@ -237,26 +263,31 @@ class AppState extends ChangeNotifier {
 
   /// 「使用系统扫码」开关（默认关闭，持久化到设置文件）。
   /// 开启后原有应用内相机扫码组件被整体屏蔽（就当不存在）：扫码统一由
-  /// 系统扫码完成——优先 Google Play 服务；无 GMS 的华为/鸿蒙设备
-  /// （鸿蒙 4.2 等）改走华为 Scan Kit；设备两者都不可用时也不回退相机
-  /// （失败仅提示）；关闭开关使用应用内相机扫码。
+  /// 系统扫码完成——Google Play 服务扫码界面（应用无需相机权限）；
+  /// 设备不具备 GMS 时也不回退相机（失败仅提示）；关闭开关使用应用内
+  /// 相机扫码。
   bool _gmsScanEnabled = false;
   bool get gmsScanEnabled => _gmsScanEnabled;
+
+  /// 「读取后自动保存」开关（默认关闭，持久化到设置文件）。
+  /// 开启后每次读卡解析成功即由 AppState 直接写入卡片档案，无需首页
+  /// 弹出「是否保存」确认框；关闭时保持手动确认流程。
+  bool _autoSaveEnabled = false;
+  bool get autoSaveEnabled => _autoSaveEnabled;
+
+  /// 自动保存结果提示（成功 / 失败文案），供首页 SnackBar 展示；
+  /// 展示后由 [clearAutoSaveNotice] 清空，新一轮读取开始时也会重置。
+  String? _autoSaveNotice;
+  String? get autoSaveNotice => _autoSaveNotice;
 
   /// 设备是否具备 Google Play 服务扫码能力（启动时探测一次）；
   /// 仅用于设置页提示与扫码预热，不参与屏蔽决策。
   bool _gmsAvailable = false;
   bool get gmsAvailable => _gmsAvailable;
 
-  /// 设备是否具备华为 HMS Core（Scan Kit）扫码能力（启动时探测一次，
-  /// 仅无 GMS 的设备探测）；鸿蒙 4.2 等无 GMS 华为设备走此通道。
-  bool _hmsScanAvailable = false;
-  bool get hmsScanAvailable => _hmsScanAvailable;
-
   /// 是否使用系统扫码（原有应用内相机扫码组件被整体屏蔽）：
-  /// 仅由「使用系统扫码」开关决定——开启即屏蔽，扫码走系统扫码路径
-  /// （优先 Google Play 服务，无 GMS 设备走华为 Scan Kit），不再进入
-  /// 应用内相机；关闭开关时恢复相机扫码。
+  /// 仅由「使用系统扫码」开关决定——开启即屏蔽，扫码走 Google Play
+  /// 服务扫码界面，不再进入应用内相机；关闭开关时恢复相机扫码。
   bool get useGmsScanner => _gmsScanEnabled;
 
   /// 城市代码 → 城市名（按卡片实时上报的代码匹配卡前缀库 issuer 后 4 位）；
@@ -415,6 +446,9 @@ class AppState extends ChangeNotifier {
       // 「使用系统扫码」默认关闭，仅显式开启（'true'）时启用
       final gmsScan = await _settingsStore.read(SettingsKeys.gmsScanEnabled);
       _gmsScanEnabled = gmsScan == 'true';
+      // 「读取后自动保存」默认关闭，仅显式开启（'true'）时启用
+      final autoSave = await _settingsStore.read(SettingsKeys.autoSaveEnabled);
+      _autoSaveEnabled = autoSave == 'true';
     } catch (_) {
       // 设置存储不可用（如平台插件缺失）时按默认值降级
     }
@@ -422,12 +456,10 @@ class AppState extends ChangeNotifier {
 
   /// 探测设备具备的系统扫码通道（启动时一次；非 Android / 探测失败按
   /// 不具备降级，仅影响设置页提示、扫码分流与预热，不影响屏蔽决策）。
-  /// 优先探测 Google Play 服务；无 GMS 时再探测华为 HMS Core（Scan Kit，
-  /// 鸿蒙 4.2 等华为设备）。具备 GMS 且开关开启时，后台预热扫码器
-  /// （缓存原生实例 + 预装扫码模块），加快首次扫码速度。
+  /// 具备 GMS 且开关开启时，后台预热扫码器（缓存原生实例 + 预装扫码
+  /// 模块），加快首次扫码速度。
   Future<void> _detectScanChannels() async {
     _gmsAvailable = await isGmsQrScanAvailable();
-    _hmsScanAvailable = !_gmsAvailable && await isHmsQrScanAvailable();
     notifyListeners();
     if (_gmsAvailable && _gmsScanEnabled) {
       // fire-and-forget：预热不阻塞启动流程，失败静默
@@ -463,6 +495,7 @@ class AppState extends ChangeNotifier {
     }
     _kb = kb;
     _engine = AnalysisEngine(kb);
+    _identification = CardIdentificationService(kb);
     _logEvent('知识库加载：$knowledgeSummary');
     notifyListeners();
   }
@@ -704,12 +737,122 @@ class AppState extends ChangeNotifier {
         _log('== 解析完成：${parsed.parserName} '
             '${parsed.cityUnionFiles.length} 个文件视图 ==');
       }
+      _stageCardArchive(parsed);
+      // 开启「读取后自动保存」时，解析成功即直接落库（无需首页确认框），
+      // 保证读卡结果一定被保存，不受当前所在页面 / 对话框时序影响。
+      if (_autoSaveEnabled) {
+        await _autoSavePending();
+      }
     } catch (e) {
       _log('!! 解析异常：$e');
     } finally {
       _parsing = false;
       notifyListeners();
     }
+  }
+
+  /// 识别本次读取结果并暂存为「待确认保存」：由首页弹出是否保存对话框，
+  /// 用户确认后经 [acceptPendingSave] 写入档案（重复读取更新快照但不覆盖
+  /// 自定义名称）；无法生成稳定指纹（关键标识未读到）时跳过（不猜测），
+  /// 识别失败仅记录日志，不影响解析与展示链路。
+  void _stageCardArchive(ParsedCard parsed) {
+    final identification = _identification;
+    if (identification == null) return;
+    try {
+      final identified = identification.identify(
+        parsed,
+        analysisIdentity: _analysis?.identity,
+      );
+      if (identified == null) {
+        _logEvent('卡片档案跳过：无法生成稳定指纹（关键标识未读到）');
+        return;
+      }
+      _pendingSave = PendingCardSave(
+        fingerprint: identified.fingerprint,
+        identity: identified.identity,
+        cardNumber: identified.cardNumber,
+        balanceFen: parsed.info.balanceFen,
+        currencyCode: _analysis?.currency.code,
+        transactionCount: parsed.transactions.length,
+        sessionDataJson: _encodeSessionSnapshot(),
+      );
+      _lastFingerprint = identified.fingerprint;
+      _logEvent('卡片档案待确认保存：${identified.displayName}');
+    } catch (e) {
+      _logEvent('卡片识别失败：$e');
+    }
+  }
+
+  /// 编码本次读取的行程记录快照（交易行程 / 0x1A 进出站与上下车记录 +
+  /// 读取时卡片城市代码），随档案保存；卡片详情页在读取其他卡片后改用
+  /// 该快照展示记录，保证老卡片的行程数据不随新卡读取消失。
+  /// 无任何行程记录时返回 null（不写入 / 不覆盖既有快照）。
+  String? _encodeSessionSnapshot() {
+    final snapshot = CardSessionSnapshot(
+      cardCityCode: cardCityCode,
+      trips: _analysis?.trips ?? const [],
+      railRecord: railTransitRecord,
+      busRecord: busTransitRecord,
+    );
+    return snapshot.isEmpty ? null : snapshot.encode();
+  }
+
+  /// 确认保存待归档卡片（首页确认对话框「保存」）：写入 / 更新档案并记录
+  /// 读取快照（余额 / 货币 / 交易条数）与最近读取时间；返回是否保存成功
+  /// （失败仅记录日志，由调用方提示，不中断流程）。
+  Future<bool> acceptPendingSave() async {
+    final pending = _pendingSave;
+    if (pending == null) return false;
+    _pendingSave = null;
+    notifyListeners();
+    try {
+      await cardRepository.saveIdentity(
+        fingerprint: pending.fingerprint,
+        identity: pending.identity,
+        cardNumber: pending.cardNumber,
+        balanceFen: pending.balanceFen,
+        currencyCode: pending.currencyCode,
+        transactionCount: pending.transactionCount,
+        sessionDataJson: pending.sessionDataJson,
+        readAt: DateTime.now(),
+      );
+      _logEvent(
+        '卡片档案已保存：'
+        '${pending.identity.officialName ?? pending.identity.cardType}'
+        '（${pending.identity.identificationSource}）',
+      );
+      return true;
+    } catch (e) {
+      _logEvent('卡片档案保存失败：$e');
+      return false;
+    }
+  }
+
+  /// 放弃保存待归档卡片（首页确认对话框「不保存」）。
+  void declinePendingSave() {
+    if (_pendingSave == null) return;
+    _pendingSave = null;
+    _logEvent('卡片档案未保存（用户选择不保存）');
+    notifyListeners();
+  }
+
+  /// 「读取后自动保存」开启时调用：直接把待归档卡片写入档案（复用
+  /// [acceptPendingSave] 的落库逻辑），并把结果写入 [autoSaveNotice]
+  /// 供首页提示；无待保存结果时静默跳过。
+  Future<void> _autoSavePending() async {
+    final pending = _pendingSave;
+    if (pending == null) return;
+    final name = pending.displayName;
+    final ok = await acceptPendingSave();
+    _autoSaveNotice = ok ? '已自动保存：$name' : '自动保存失败：$name';
+    notifyListeners();
+  }
+
+  /// 清除自动保存提示（首页展示 SnackBar 后调用）。
+  void clearAutoSaveNotice() {
+    if (_autoSaveNotice == null) return;
+    _autoSaveNotice = null;
+    notifyListeners();
   }
 
   /// 带日志的 APDU 收发包装（解析器注入用）。
@@ -730,6 +873,12 @@ class AppState extends ChangeNotifier {
   void _resetCard() {
     _parsedCard = null;
     _analysis = null;
+    // 新会话开始时清除会话指纹：本次识别失败 / 未读到卡片时，卡片详情页
+    // 不再误与旧会话数据关联（各自展示已保存的记录快照）。
+    _lastFingerprint = null;
+    // 新的读取会话开始时丢弃上一次未应答的待保存结果，避免误存旧卡。
+    _pendingSave = null;
+    _autoSaveNotice = null;
     _apduLog.clear();
   }
 
@@ -777,6 +926,19 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     try {
       await _settingsStore.write(SettingsKeys.gmsScanEnabled, '$enabled');
+    } catch (_) {
+      // 设置写入失败不影响本次会话内的开关状态
+    }
+  }
+
+  /// 设置「读取后自动保存」开关（持久化到设置文件，默认关闭：开启后读卡
+  /// 解析成功即自动写入卡片档案，无需首页确认；关闭后恢复手动确认）。
+  Future<void> setAutoSaveEnabled(bool enabled) async {
+    if (_autoSaveEnabled == enabled) return;
+    _autoSaveEnabled = enabled;
+    notifyListeners();
+    try {
+      await _settingsStore.write(SettingsKeys.autoSaveEnabled, '$enabled');
     } catch (_) {
       // 设置写入失败不影响本次会话内的开关状态
     }

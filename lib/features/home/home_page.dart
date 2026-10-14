@@ -6,6 +6,7 @@ import '../../core/transit/tunion/qr/jt_t1179_qr_parser.dart';
 import '../../core/ui_constants.dart';
 import '../../core/app_info.dart';
 import '../../state/app_state.dart';
+import '../card_archive/models/pending_card_save.dart';
 import '../qr/qr_acquire.dart';
 import '../settings/settings_action_button.dart';
 
@@ -21,6 +22,27 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> with NfcScanMixin<HomePage> {
   /// 相册导入进行中（选图 / 图片识别），用于禁用按钮并展示进度。
   bool _qrImporting = false;
+
+  /// 已弹出（或正在弹出）保存确认框的待保存结果：同一份读取结果只弹一次。
+  PendingCardSave? _saveDialogFor;
+
+  /// 已调度（或正在展示）自动保存提示：同一份提示只弹一次。
+  bool _noticeScheduled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.app.addListener(_maybeShowSaveDialog);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _maybeShowSaveDialog();
+    });
+  }
+
+  @override
+  void dispose() {
+    widget.app.removeListener(_maybeShowSaveDialog);
+    super.dispose();
+  }
 
   @override
   AppState get app => widget.app;
@@ -50,12 +72,118 @@ class _HomePageState extends State<HomePage> with NfcScanMixin<HomePage> {
       stopScan();
     } else if (!oldWidget.active && widget.active) {
       // 切回首页：尚未成功读取过则自动恢复读取模式；
-      // 成功读取过则保持空闲，需点击下方按钮再次读取
+      // 成功读取过则保持空闲，需点击下方按钮再次读取；
+      // 若存在未应答的待保存结果（离开首页期间产生的），此时补弹确认框
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) enterAutoScanIfNeeded();
+        if (mounted) {
+          enterAutoScanIfNeeded();
+          _maybeShowSaveDialog();
+        }
       });
     }
   }
+
+  /// 读取解析完成后弹出「是否保存」确认对话框：同一份待保存结果只弹一次；
+  /// 页面不在前台时暂不弹出（切回首页时由 didUpdateWidget 补弹）。
+  /// 开启「读取后自动保存」时不再弹确认框（已由 AppState 直接落库），
+  /// 仅用 SnackBar 提示保存结果。
+  void _maybeShowSaveDialog() {
+    if (!mounted || !widget.active) return;
+    if (app.autoSaveEnabled) {
+      _saveDialogFor = null;
+      final notice = app.autoSaveNotice;
+      if (notice != null && !_noticeScheduled) {
+        _noticeScheduled = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _noticeScheduled = false;
+          if (!mounted) return;
+          app.clearAutoSaveNotice();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(notice)),
+          );
+        });
+      }
+      return;
+    }
+    final pending = app.pendingCardSave;
+    if (pending == null) {
+      _saveDialogFor = null;
+      return;
+    }
+    if (identical(pending, _saveDialogFor)) return;
+    _saveDialogFor = pending;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _showSaveDialog(pending);
+    });
+  }
+
+  /// 「是否保存卡片」确认框：展示卡片名称与卡号（点击遮罩不关闭）；
+  /// 「保存」写入卡片列表（失败提示不中断），「不保存」/系统返回仅丢弃。
+  Future<void> _showSaveDialog(PendingCardSave pending) async {
+    final save = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('保存卡片'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('是否将本次读取的卡片保存到卡片列表？'),
+              const SizedBox(height: 12),
+              _pendingRow('卡片名称', pending.displayName),
+              _pendingRow('卡号', pending.cardNumberText),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('不保存'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('保存'),
+            ),
+          ],
+        );
+      },
+    );
+    if (!mounted) return;
+    if (save == true) {
+      final ok = await app.acceptPendingSave();
+      if (!ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('卡片保存失败')),
+        );
+      }
+    } else {
+      // 「不保存」与系统返回（null）均视为放弃本次保存
+      app.declinePendingSave();
+    }
+  }
+
+  Widget _pendingRow(String label, String value) => Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 72,
+              child: Text(label,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.outline,
+                      )),
+            ),
+            Expanded(
+              child: Text(
+                value,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+      );
 
   /// 从相册导入二维码：原生相册选图 → MLKit 识别 → 内置纯 Dart 解码兜底，
   /// 成功后解析并写入 [app]。

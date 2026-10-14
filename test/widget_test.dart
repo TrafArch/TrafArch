@@ -17,5 +17,10 @@ void main() {
 
     expect(find.text('TrafArch'), findsOneWidget);
     expect(find.text('首页'), findsOneWidget);
+
+    // 卸载组件树并清空挂起定时器：卡片档案数据流（Drift）取消订阅时
+    // 会留出一次事件循环的收尾定时器，避免测试结束报 Timer 未清理。
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
   });
 }

@@ -16,4 +16,9 @@ class UiConstants {
   /// （底栏高度 + 底边距 + 16 呼吸留白）。
   static const double floatingNavBarClearance =
       floatingNavBarHeight + floatingNavBarInset + 16;
+
+  /// SnackBar 浮动提示距屏幕底部的间距：悬浮在底栏上方，不遮挡底栏
+  /// （底栏高度 + 底边距 + 与底栏之间 12 呼吸留白）。
+  static const double snackBarBottomInset =
+      floatingNavBarHeight + floatingNavBarInset + 12;
 }

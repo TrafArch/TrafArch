@@ -12,6 +12,9 @@ import '../../core/ui_constants.dart';
 import '../../state/app_state.dart';
 import '../settings/settings_action_button.dart';
 
+/// 信息获取页签的展示类型：NFC 卡片识别 / 乘车码二维码。
+enum _InfoGetKind { card, qr }
+
 class ExpertPage extends StatefulWidget {
   final AppState app;
   const ExpertPage({super.key, required this.app});
@@ -24,9 +27,23 @@ class _ExpertPageState extends State<ExpertPage> {
   /// 空边框形状：去掉 ExpansionTile 展开时默认在内容上下绘制的两条分隔线。
   static const Border _borderlessShape = Border();
 
+  /// 信息获取页签当前展示类型；随首页获取的数据自动切换
+  /// （读到卡片 → 卡片识别，获取到二维码 → 二维码），
+  /// 两类数据并存时由顶部分段按钮手动切换。
+  _InfoGetKind _infoGetKind = _InfoGetKind.card;
+
+  /// 上一次已见到的最新数据对象，用于自动切换展示类型。
+  NfcScanResult? _seenCard;
+  JtT1179QrData? _seenQr;
+
   @override
   void initState() {
     super.initState();
+    _seenCard = widget.app.lastResult;
+    _seenQr = widget.app.qrData;
+    if (_seenCard == null && _seenQr != null) {
+      _infoGetKind = _InfoGetKind.qr;
+    }
     widget.app.addListener(_onNfcChanged);
   }
 
@@ -37,7 +54,19 @@ class _ExpertPageState extends State<ExpertPage> {
   }
 
   void _onNfcChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    final app = widget.app;
+    if (!identical(app.lastResult, _seenCard)) {
+      _seenCard = app.lastResult;
+      // 新读到卡片：自动切换到卡片识别
+      if (app.lastResult != null) _infoGetKind = _InfoGetKind.card;
+    }
+    if (!identical(app.qrData, _seenQr)) {
+      _seenQr = app.qrData;
+      // 新获取到二维码：自动切换到二维码
+      if (app.qrData != null) _infoGetKind = _InfoGetKind.qr;
+    }
+    setState(() {});
   }
 
   NfcScanResult? get result => widget.app.lastResult;
@@ -63,22 +92,17 @@ class _ExpertPageState extends State<ExpertPage> {
   Widget build(BuildContext context) {
     final app = widget.app;
     final parsed = app.parsedCard;
-    final info = app.cardInfo;
     final analysis = app.analysis;
-    final identity = analysis?.identity;
     final processRecords = app.transitProcessRecords;
     // 解析器分派：交通联合专属字段与页签随解析器选择展示；未命中交通联合
     // 解析器时不展示（未来接入住建部一卡通解析器时按 parserId 扩展分支）。
     final isTUnion = parsed?.parserId == CardParserIds.tunion;
-    final isCityUnion = parsed?.parserId == CardParserIds.cityUnion;
 
     // 页签随解析器动态构建：JT/T 978 符合性仅在交通联合解析器命中时存在。
     final tabs = <Tab>[
-      const Tab(text: '卡片识别'),
-      const Tab(text: '二维码'),
+      const Tab(text: '信息获取'),
       const Tab(text: '交通数据解析'),
       if (isTUnion) const Tab(text: 'JT/T 978 符合性'),
-      const Tab(text: '异常检测'),
       const Tab(text: 'APDU / Raw Data'),
     ];
 
@@ -104,28 +128,7 @@ class _ExpertPageState extends State<ExpertPage> {
           ],
           body: TabBarView(
             children: [
-              _tabBody('expert-identify', [
-                _kv('解析器', parsed?.parserName ?? '—'),
-                _kv(
-                    '选中 AID',
-                    (parsed == null || parsed.selectedAidHex.isEmpty)
-                        ? '—'
-                        : parsed.selectedAidHex),
-                // 交通联合应用：交通联合解析器专属字段，仅在命中时展示
-                if (isTUnion) _kv('交通联合应用', '已发现'),
-                // 城市一卡通应用：城市一卡通解析器专属字段，仅在命中时展示
-                if (isCityUnion) _kv('城市一卡通应用', '已发现'),
-                _kv('识别城市', identity?.cityName ?? '未知'),
-                _kv('卡种', identity?.cardFamily ?? '未知'),
-                _kv('卡片名称', app.cardPrefixByIssuerId(info?.issuerId)?.cardName ?? '未知'),
-                _kv('知识库', app.knowledgeSummary),
-                for (final e in identity?.evidence ?? const <Evidence>[])
-                  _kv(
-                    e.source,
-                    '${e.detail}${e.weight > 0 ? '（权重 ${e.weight}）' : ''}',
-                  ),
-              ]),
-              _qrTabBody(app),
+              _infoGetTabBody(app),
               _tabBody('expert-parsed', _transitDataFields(parsed)),
               if (isTUnion)
                 _tabBody('expert-compliance', [
@@ -137,15 +140,6 @@ class _ExpertPageState extends State<ExpertPage> {
                       in analysis?.compliance.items ?? const <ComplianceItem>[])
                     _complianceRow(context, item),
                 ]),
-              _tabBody('expert-anomaly', [
-                if (analysis == null)
-                  _kv('状态', '—')
-                else if (analysis.anomalies.isEmpty)
-                  _kv('状态', '未发现异常数据')
-                else
-                  for (final a in analysis.anomalies)
-                    _anomalyRow(context, a),
-              ]),
               _tabBody('expert-apdu', [
                 if (app.apduLog.isEmpty)
                   _kv('APDU', '暂无 APDU 记录')
@@ -195,6 +189,86 @@ class _ExpertPageState extends State<ExpertPage> {
         ),
       ),
     );
+  }
+
+  /// 信息获取页签：卡片识别与二维码合并展示，内容随首页获取的数据自动
+  /// 切换——读到卡片展示卡片识别字段，扫码 / 相册导入后展示二维码解析
+  /// 详情；两类数据并存时由顶部分段按钮切换。数据获取入口统一收敛到
+  /// 首页，本页不再提供读取 / 扫描 / 手动输入操作。
+  Widget _infoGetTabBody(AppState app) {
+    final hasCard = result != null;
+    final hasQrView = app.hasQrData || app.qrError != null;
+    if (!hasCard && !hasQrView) {
+      return _tabBody(
+        'expert-info-get',
+        [
+          _qrHomeHint('尚未读取卡片，请先在首页贴卡读取'),
+          _qrHomeHint('尚未获取乘车码，请先在首页扫描二维码或从相册导入'),
+        ],
+        showReadHint: false,
+      );
+    }
+    // 只有一侧有内容时固定展示该侧；两侧都有时按用户选择
+    // （默认跟随最近一次获取的数据）
+    final kind = !hasCard
+        ? _InfoGetKind.qr
+        : !hasQrView
+            ? _InfoGetKind.card
+            : _infoGetKind;
+    return _tabBody(
+      'expert-info-get',
+      [
+        if (hasCard && hasQrView) ...[
+          SegmentedButton<_InfoGetKind>(
+            segments: const [
+              ButtonSegment(
+                value: _InfoGetKind.card,
+                label: Text('卡片识别'),
+              ),
+              ButtonSegment(value: _InfoGetKind.qr, label: Text('二维码')),
+            ],
+            selected: {kind},
+            showSelectedIcon: false,
+            onSelectionChanged: (selection) {
+              setState(() => _infoGetKind = selection.first);
+            },
+          ),
+          const SizedBox(height: 8),
+        ],
+        ...(kind == _InfoGetKind.card ? _identifyFields(app) : _qrSection(app)),
+      ],
+      showReadHint: false,
+    );
+  }
+
+  /// 卡片识别字段（交通联合 JT/T 978.2 / 城市一卡通 CJ/T 331-2016）。
+  List<Widget> _identifyFields(AppState app) {
+    final parsed = app.parsedCard;
+    final info = app.cardInfo;
+    final identity = app.analysis?.identity;
+    final isTUnion = parsed?.parserId == CardParserIds.tunion;
+    final isCityUnion = parsed?.parserId == CardParserIds.cityUnion;
+    return [
+      _kv('解析器', parsed?.parserName ?? '—'),
+      _kv(
+          '选中 AID',
+          (parsed == null || parsed.selectedAidHex.isEmpty)
+              ? '—'
+              : parsed.selectedAidHex),
+      // 交通联合应用：交通联合解析器专属字段，仅在命中时展示
+      if (isTUnion) _kv('交通联合应用', '已发现'),
+      // 城市一卡通应用：城市一卡通解析器专属字段，仅在命中时展示
+      if (isCityUnion) _kv('城市一卡通应用', '已发现'),
+      _kv('识别城市', identity?.cityName ?? '未知'),
+      _kv('卡种', identity?.cardFamily ?? '未知'),
+      _kv('卡片名称',
+          app.cardPrefixByIssuerId(info?.issuerId)?.cardName ?? '未知'),
+      for (final e in identity?.evidence ?? const <Evidence>[])
+        _kv(
+          e.source,
+          '${e.detail}${e.weight > 0 ? '（权重 ${e.weight}）' : ''}',
+        ),
+    ];
   }
 
   /// 交通数据解析页签字段：按当前解析器分派。
@@ -914,28 +988,6 @@ class _ExpertPageState extends State<ExpertPage> {
     );
   }
 
-  Widget _anomalyRow(BuildContext context, Anomaly anomaly) {
-    final scheme = Theme.of(context).colorScheme;
-    final (IconData icon, Color color) = switch (anomaly.severity) {
-      AnomalySeverity.critical => (Icons.error_outline, scheme.error),
-      AnomalySeverity.warn => (Icons.warning_amber_outlined, Colors.orange),
-      AnomalySeverity.info => (Icons.info_outline, scheme.outline),
-    };
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text('${anomaly.message}（${anomaly.code}）'),
-          ),
-        ],
-      ),
-    );
-  }
-
   static Widget _kv(String k, String v) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
@@ -950,7 +1002,7 @@ class _ExpertPageState extends State<ExpertPage> {
   }
 
   /// [showReadHint] 为 false 时不展示"NFC 尚未读取"提示卡片
-  /// （供与 NFC 状态无关的页签使用，如二维码页签）。
+  /// （供与 NFC 状态无关的页签使用，如信息获取页签）。
   Widget _tabBody(String storageKey, List<Widget> children,
       {bool showReadHint = true}) {
     return ListView(
@@ -994,41 +1046,36 @@ class _ExpertPageState extends State<ExpertPage> {
     );
   }
 
-  /// 二维码页签：空态引导 / 解析失败 / 解析详情三态。
-  /// 独立于 NFC 卡片读取状态，不展示"NFC 未读取"提示横幅；
+  /// 二维码视图（信息获取页签内）：解析失败详情 / 解析详情
+  /// （字段 + 证书 + 原始数据）两态。独立于 NFC 卡片读取状态；
   /// 数据获取入口统一收敛到首页，本页不再提供扫描 / 手动输入操作。
-  Widget _qrTabBody(AppState app) {
+  List<Widget> _qrSection(AppState app) {
     final qr = app.qrData;
-    final error = app.qrError;
-    return _tabBody(
-      'expert-qr',
-      [
-        if (qr == null && error == null) ...[
-          _qrHomeHint('尚未获取乘车码，请先在首页扫描二维码或从相册导入'),
-        ] else if (qr == null) ...[
-          _kv('状态', '解析失败'),
-          _kv('原因', _val(error)),
-          _kv('原始数据', '${app.qrRaw?.length ?? 0} 字节'),
-          const SizedBox(height: 6),
-          if (app.qrRaw != null) _hexSelectable(_hexBytes(app.qrRaw!)),
-          const SizedBox(height: 12),
-          _qrHomeHint('可返回首页重新扫描或从相册导入乘车码'),
-          const SizedBox(height: 12),
-          _qrClearButton(app),
-        ] else ...[
-          ..._qrDetailFields(app, qr),
-          const Divider(height: 28),
-          _qrCertificateTile(qr),
-          _qrRawTile(qr),
-          const SizedBox(height: 12),
-          _qrClearButton(app),
-        ],
-      ],
-      showReadHint: false,
-    );
+    if (qr == null) {
+      // 外层（_infoGetTabBody）已排除空态：qr 为 null 时必有解析失败原因
+      return [
+        _kv('状态', '解析失败'),
+        _kv('原因', _val(app.qrError)),
+        _kv('原始数据', '${app.qrRaw?.length ?? 0} 字节'),
+        const SizedBox(height: 6),
+        if (app.qrRaw != null) _hexSelectable(_hexBytes(app.qrRaw!)),
+        const SizedBox(height: 12),
+        _qrHomeHint('可返回首页重新扫描或从相册导入乘车码'),
+        const SizedBox(height: 12),
+        _qrClearButton(app),
+      ];
+    }
+    return [
+      ..._qrDetailFields(app, qr),
+      const Divider(height: 28),
+      _qrCertificateTile(qr),
+      _qrRawTile(qr),
+      const SizedBox(height: 12),
+      _qrClearButton(app),
+    ];
   }
 
-  /// 首页获取引导行：二维码数据统一在首页扫描 / 相册导入获取。
+  /// 首页获取引导行：卡片与二维码数据统一在首页获取（贴卡读取 / 扫描 / 相册导入）。
   Widget _qrHomeHint(String text) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),

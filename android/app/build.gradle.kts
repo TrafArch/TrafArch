@@ -7,8 +7,65 @@ plugins {
     id("com.google.gms.google-services")
 }
 
-// [AGC] AppGallery Connect 插件（agcp 由根工程 buildscript classpath 提供）。
-// 与上面 classpath 行成对启用/停用；启用后 agconnect-services.json 必须存在。
+// ===================== 版本号自动递增 =====================
+// pubspec.yaml 的 "version: x.y.z+N" 为版本唯一来源（N = 构建版本号，如 2003）：
+// - release 构建（assembleRelease / bundleRelease）时，本次产物直接使用当前 N；
+// - 构建成功后把 N 预分配为下一个号并写回 pubspec.yaml；构建失败不消耗号；
+// - 构建开始前同步 lib/core/app_info.dart，保证产物内 UI 显示的即本次号；
+// - debug 构建（flutter run 等）不递增、不修改任何文件。
+val pubspecFile = rootProject.file("../pubspec.yaml")
+val appInfoFile = rootProject.file("../lib/core/app_info.dart")
+val versionRegex = Regex("""(?m)^version:\s*([^\s+]+)\+(\d+)""")
+
+val pubspecText = pubspecFile.readText()
+val versionMatch = versionRegex.find(pubspecText)
+    ?: error("pubspec.yaml 中未找到 'version: x.y.z+N' 格式的版本号")
+val appVersionName = versionMatch.groupValues[1]
+val appVersionCode = versionMatch.groupValues[2].toInt()
+
+val isReleaseBuild = gradle.startParameter.taskNames.any {
+    val taskName = it.substringAfterLast(':')
+    taskName == "assembleRelease" || taskName == "bundleRelease"
+}
+if (isReleaseBuild) {
+    // 同步 app_info（发生在 Dart 编译之前，本次产物内显示的就是本次号）
+    if (appInfoFile.exists()) {
+        val original = appInfoFile.readText()
+        val updated = original
+            .replace(Regex("static const String version = '[^']*'")) {
+                "static const String version = '$appVersionName'"
+            }
+            .replace(Regex("static const String buildNumber = '[^']*'")) {
+                "static const String buildNumber = '$appVersionCode'"
+            }
+        if (updated != original) {
+            appInfoFile.writeText(updated)
+        }
+    }
+    // 构建成功后预分配下一个号；失败则保留当前值，下次构建继续使用。
+    // Gradle 9 起 gradle.buildFinished(Closure) 已废弃（配置缓存不兼容，Gradle 10 移除），
+    // 且 Kotlin lambda 无法再隐式转换为 Groovy Closure；改为挂在发布产物任务的 doLast：
+    // 任一依赖任务失败时 assembleRelease/bundleRelease 被跳过、不会执行到 doLast，
+    // 与“构建成功才递增”语义一致。buildNumberBumped 防止同一次调用两个任务重复递增。
+    var buildNumberBumped = false
+    tasks.matching { it.name == "assembleRelease" || it.name == "bundleRelease" }.configureEach {
+        doLast {
+            if (!buildNumberBumped) {
+                buildNumberBumped = true
+                pubspecFile.writeText(
+                    pubspecFile.readText().replaceFirst(
+                        versionRegex,
+                        "version: $appVersionName+${appVersionCode + 1}"
+                    )
+                )
+                logger.lifecycle(
+                    "Build number consumed: ${appVersionCode}; next release build will use ${appVersionCode + 1}"
+                )
+            }
+        }
+    }
+}
+// ==========================================================
 
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
@@ -22,8 +79,8 @@ android {
     ndkVersion = "30.0.16248370"
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     signingConfigs {
@@ -41,8 +98,8 @@ android {
         applicationId = "com.kajolno.TrafArch"
         minSdk = 26
         targetSdk = 37
-        versionCode = 3
-        versionName = "1.0.1-beta.2"
+        versionCode = appVersionCode
+        versionName = appVersionName
     }
 
     buildTypes {
@@ -65,7 +122,7 @@ android {
 
 kotlin {
     compilerOptions {
-        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
 }
 
@@ -88,10 +145,4 @@ dependencies {
     // 应用无需申请相机权限；无 GMS 设备由 Dart 端回退应用内相机扫码
     implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
 
-    // 华为统一扫码（Scan Kit）：默认扫码界面（自带相册导入入口）与位图识码
-    // 均为纯端侧能力，无需 AGC 配置；鸿蒙 4.2 等无 GMS 的华为设备走此通道。
-    // scanplus（约 3.3MB）内含增强识别模型；体积极敏感可换基础包 com.huawei.hms:scan
-    // 注意：版本号必须存在于华为仓。2.12.0.302 实际不存在（解析 404），
-    // 旧版可选 2.12.0.301，当前最新为 2.15.0.301（2026-04 发布）。
-    implementation("com.huawei.hms:scanplus:2.15.0.301")
 }

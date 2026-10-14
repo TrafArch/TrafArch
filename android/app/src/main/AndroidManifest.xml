@@ -1,18 +1,21 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.NFC" />
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- 华为 Scan Kit 默认扫码界面 / 位图识码需要相机权限（动态申请） -->
+    <!-- 应用内相机扫码（mobile_scanner）需要相机权限（动态申请）；
+         系统扫码（Google Play 服务）无需相机权限 -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
     <uses-feature android:name="android.hardware.nfc" android:required="false" />
 
-    <!-- Android 11+（targetSdk 30+）包可见性：允许查询 HMS Core（APK）是否安装，
-         供华为扫码可用性检测（MainActivity.isHmsScanAvailable）使用 -->
+    <!-- Android 11+（targetSdk 30+）包可见性 -->
     <queries>
-        <package android:name="com.huawei.hms" />
-        <package android:name="com.huawei.hwid" />
+        <!-- url_launcher：允许查询并唤起可处理 https 链接的浏览器（反馈问卷） -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
     </queries>
 
     <application

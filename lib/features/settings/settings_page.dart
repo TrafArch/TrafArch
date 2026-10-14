@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/app_info.dart';
 import '../../state/app_state.dart';
 import 'about_page.dart';
+import 'feedback_page.dart';
 
 class SettingsPage extends StatefulWidget {
   final AppState app;
@@ -74,6 +75,19 @@ class _SettingsPageState extends State<SettingsPage> {
         children: [
           Card(
             child: SwitchListTile(
+              secondary: const Icon(Icons.save_outlined),
+              title: const Text('读取后自动保存'),
+              subtitle: Text(
+                app.autoSaveEnabled
+                    ? '已开启：每次读卡解析成功后自动保存到卡片列表（无需手动确认）'
+                    : '默认停用：读卡后弹出确认框，由你选择是否保存',
+              ),
+              value: app.autoSaveEnabled,
+              onChanged: (value) => app.setAutoSaveEnabled(value),
+            ),
+          ),
+          Card(
+            child: SwitchListTile(
               secondary: const Icon(Icons.cloud_download_outlined),
               title: const Text('开启在线拉取数据'),
               subtitle: Text(
@@ -125,10 +139,8 @@ class _SettingsPageState extends State<SettingsPage> {
                 app.gmsScanEnabled
                     ? app.gmsAvailable
                         ? '已开启：应用内相机扫码已屏蔽，改由 Google Play 服务扫码（无需相机权限）'
-                        : app.hmsScanAvailable
-                            ? '已开启：应用内相机扫码已屏蔽，改由华为统一扫码（Scan Kit，无需应用相机权限）'
-                            : '已开启：应用内相机扫码已屏蔽；未检测到 Google Play 服务或'
-                                '华为 HMS Core，扫码将不可用（可关闭开关恢复相机扫码）'
+                        : '已开启：应用内相机扫码已屏蔽；未检测到 Google Play 服务，'
+                            '扫码将不可用（可关闭开关恢复相机扫码）'
                     : '默认停用：使用应用内相机扫码（需要相机权限）',
               ),
               value: app.gmsScanEnabled,
@@ -172,6 +184,24 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ],
               ],
+            ),
+          ),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.menu_book_outlined),
+              title: const Text('知识库'),
+              subtitle: Text(app.knowledgeSummary),
+            ),
+          ),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.feedback_outlined),
+              title: const Text('反馈'),
+              subtitle: const Text('QQ 群与问卷反馈渠道'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const FeedbackPage()),
+              ),
             ),
           ),
           Card(

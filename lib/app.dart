@@ -7,6 +7,7 @@ import 'core/ui_constants.dart';
 import 'core/app_info.dart';
 import 'state/app_state.dart';
 import 'features/home/home_page.dart';
+import 'features/cards/cards_page.dart';
 import 'features/trips/trips_page.dart';
 import 'features/expert/expert_page.dart';
 
@@ -23,6 +24,22 @@ class TransitCardAnalyzerApp extends StatelessWidget {
     builders: {
       TargetPlatform.android: FadeForwardsPageTransitionsBuilder(),
     },
+  );
+
+  /// SnackBar 统一样式：默认的 fixed 贴底黑条会压住悬浮底栏，改为浮动式
+  /// 钉在底栏上方（底栏高 + 底边距 + 12 间隙），左右与底栏对齐、圆角
+  /// 与整体卡片风格统一，保证任何页面弹出的提示都不遮挡底栏。
+  static const _snackBarTheme = SnackBarThemeData(
+    behavior: SnackBarBehavior.floating,
+    insetPadding: EdgeInsets.fromLTRB(
+      UiConstants.floatingNavBarInset,
+      0,
+      UiConstants.floatingNavBarInset,
+      UiConstants.snackBarBottomInset,
+    ),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.all(Radius.circular(12)),
+    ),
   );
 
   static final _fallbackLight = ColorScheme.fromSeed(
@@ -53,10 +70,12 @@ class TransitCardAnalyzerApp extends StatelessWidget {
           theme: ThemeData(
             colorScheme: lightDynamic ?? _fallbackLight,
             pageTransitionsTheme: _pageTransitionsTheme,
+            snackBarTheme: _snackBarTheme,
           ),
           darkTheme: ThemeData(
             colorScheme: darkDynamic ?? _fallbackDark,
             pageTransitionsTheme: _pageTransitionsTheme,
+            snackBarTheme: _snackBarTheme,
           ),
           themeMode: ThemeMode.system,
           home: const AppShell(),
@@ -142,6 +161,7 @@ class _AppShellState extends State<AppShell> {
             children: [
               HomePage(app: app, active: index == 0),
               TripsPage(app: app),
+              CardsPage(app: app),
               ExpertPage(app: app),
             ],
           ),
@@ -243,6 +263,11 @@ class _FloatingNavBar extends StatelessWidget {
               icon: Icons.directions_transit_outlined,
               text: '行程',
               semanticLabel: '行程',
+            ),
+            GButton(
+              icon: Icons.credit_card_outlined,
+              text: '卡片',
+              semanticLabel: '卡片',
             ),
             GButton(
               icon: Icons.science_outlined,

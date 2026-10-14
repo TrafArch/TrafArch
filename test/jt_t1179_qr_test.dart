@@ -222,6 +222,45 @@ void main() {
     });
   });
 
+  group('专家页信息获取页签', () {
+    testWidgets('页签常驻：空态引导去首页 → 解析后展示字段与证书', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final app = _newApp();
+      await app.init();
+      await tester.pumpWidget(
+        MaterialApp(home: Scaffold(body: ExpertPage(app: app))),
+      );
+      await tester.pump();
+
+      // 信息获取为默认选中页签：卡片识别与二维码合并展示
+      final infoTab = find.text('信息获取');
+      expect(infoTab, findsOneWidget);
+      await tester.tap(infoTab);
+      await tester.pumpAndSettle();
+
+      // 空态：引导去首页获取，不展示获取按钮
+      expect(find.text('尚未读取卡片，请先在首页贴卡读取'), findsOneWidget);
+      expect(find.text('尚未获取乘车码，请先在首页扫描二维码或从相册导入'), findsOneWidget);
+      expect(find.text('扫描二维码'), findsNothing);
+      expect(find.text('手动输入'), findsNothing);
+
+      app.parseQrBytes(_sampleQr());
+      await tester.pumpAndSettle();
+
+      // 仅有二维码数据：自动展示二维码字段与证书（无需手动切换）
+      expect(find.text('6225880123456789'), findsOneWidget); // 支付账户号
+      expect(find.text('1380013800'), findsOneWidget); // 用户账户号（ASCII）
+      expect(find.text('福路通·榕城通'), findsOneWidget); // 前缀库发卡机构
+      expect(find.text('0x80'), findsOneWidget); // 版本
+      expect(find.text('发卡机构公钥证书（117 字节）'), findsOneWidget);
+      expect(find.text('二维码原始数据'), findsOneWidget);
+      expect(find.textContaining('已超出生成时间'), findsOneWidget); // 状态
+    });
+  });
+
   group('专家页二维码页签', () {
     testWidgets('页签常驻：空态引导去首页 → 解析后展示字段与证书', (tester) async {
       tester.view.physicalSize = const Size(1200, 2000);
