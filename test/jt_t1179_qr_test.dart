@@ -130,7 +130,8 @@ void main() {
       expect(find.text('最近扫描'), findsNothing);
     });
 
-    testWidgets('最近扫描：读取卡片展示卡片信息，导入二维码自动切换并可手动切回', (tester) async {
+    testWidgets('最近扫描：读取卡片展示卡片信息，乘车码内嵌展示并支持手动切换',
+        (tester) async {
       tester.view.physicalSize = const Size(1200, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
@@ -143,30 +144,31 @@ void main() {
       );
       await tester.pump();
 
-      // 读到卡片：展示卡片信息，仅一类数据时不展示切换按钮
+      // 读到卡片（未解析）：展示卡片信息；仅一类数据时无分段按钮
       expect(find.text('最近扫描'), findsOneWidget);
+      expect(find.text('未识别卡片'), findsOneWidget);
       expect(find.text('卡号'), findsOneWidget);
       expect(find.text('NFC 卡片'), findsNothing);
       expect(find.text('乘车码二维码'), findsNothing);
 
-      // 获取二维码：自动切换到二维码信息
+      // 获取二维码：自动切换到内嵌二维码面板（不跳转子页面）
       app.parseQrBytes(_sampleQr());
       await tester.pump();
+      expect(find.text('最近扫描'), findsOneWidget);
+      expect(find.text('交通联合乘车码（JT/T 1179）'), findsOneWidget);
       expect(find.text('福路通·榕城通'), findsOneWidget);
       expect(find.text('6225880123456789'), findsOneWidget);
-      expect(find.text('交通联合乘车码（JT/T 1179）'), findsOneWidget);
       expect(find.text('卡号'), findsNothing);
 
-      // 两类数据并存：可手动切回卡片信息，再切回二维码
+      // 两类数据并存：分段按钮手动切回卡片面板
       expect(find.text('NFC 卡片'), findsOneWidget);
+      expect(find.text('乘车码二维码'), findsOneWidget);
+      await tester.ensureVisible(find.text('NFC 卡片'));
+      await tester.pump();
       await tester.tap(find.text('NFC 卡片'));
       await tester.pumpAndSettle();
       expect(find.text('卡号'), findsOneWidget);
-      expect(find.text('6225880123456789'), findsNothing);
-
-      await tester.tap(find.text('乘车码二维码'));
-      await tester.pumpAndSettle();
-      expect(find.text('6225880123456789'), findsOneWidget);
+      expect(find.text('交通联合乘车码（JT/T 1179）'), findsNothing);
     });
 
     testWidgets('从相册导入：用户取消选图后无副作用', (tester) async {

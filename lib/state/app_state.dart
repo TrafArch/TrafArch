@@ -25,6 +25,11 @@ import '../core/transit/tunion/tunion_models.dart';
 import '../core/transit/tunion/tunion_parser.dart';
 import '../core/transit/tunion/tunion_process_parser.dart';
 import '../database/app_database.dart';
+import '../features/bank_card/data/transport/nfc_card_transport.dart';
+import '../features/bank_card/domain/models/bank_card_result.dart';
+import '../features/bank_card/parsers/bank_card_analyzer.dart';
+import '../features/bank_card/parsers/emv/emv_parser.dart';
+import '../features/bank_card/parsers/pboc/pboc_parser.dart';
 import '../features/card_archive/card_records_export.dart';
 import '../features/card_archive/models/card_session_snapshot.dart';
 import '../features/card_archive/models/pending_card_save.dart';
@@ -100,6 +105,13 @@ class AppState extends ChangeNotifier {
   /// 新会话开始时清空、读取识别成功后更新，应用重启后不保留（不持久化）。
   String? get lastCardFingerprint => _lastFingerprint;
 
+  IdentifiedCard? _lastIdentified;
+
+  /// 最近一次读取卡片的识别结果（卡型 / 正式卡名 / 发卡地 / 发行方）；
+  /// 供首页「最近扫描」等展示层直接消费（识别规则集中在识别引擎）；
+  /// 新会话开始时清空，识别失败（无法生成稳定指纹）时保持 null。
+  IdentifiedCard? get lastIdentified => _lastIdentified;
+
   NfcScanResult? _lastResult;
   NfcScanResult? get lastResult => _lastResult;
 
@@ -142,6 +154,23 @@ class AppState extends ChangeNotifier {
 
   ParsedCard? _parsedCard;
   ParsedCard? get parsedCard => _parsedCard;
+
+  BankCardResult? _lastBankCardResult;
+  /// 最近一次银行卡只读分析结果（交通应用未命中时自动分析，会话内展示用，
+  /// 不写入普通日志）。
+  BankCardResult? get lastBankCardResult => _lastBankCardResult;
+
+  /// 加载银行卡解析器（字典随资产加载，失败自动降级为空字典）。
+  Future<BankCardAnalyzer> _buildBankCardAnalyzer() async {
+    final pboc = await PbocParser.load(
+      (p) => (_bundle ?? rootBundle).loadString(p),
+    );
+    final emv = await EmvParser.load(
+      (p) => (_bundle ?? rootBundle).loadString(p),
+    );
+    // PBOC 优先（更具体的规则先判定），EMV 兜底。
+    return BankCardAnalyzer([pboc, emv]);
+  }
 
   TUnionCardInfo? get cardInfo => _parsedCard?.info;
 
@@ -775,7 +804,10 @@ class AppState extends ChangeNotifier {
         if (parsed != null) break;
       }
       if (parsed == null) {
-        _log('== 未发现受支持的交通应用（交通联合 / 城市一卡通）==');
+        // 交通应用均未命中：自动转入银行卡（EMV / PBOC）只读分析，
+        // 无需用户切换模式；结果供首页「最近扫描」与专家页统一展示。
+        _log('== 未发现受支持的交通应用，转入银行卡只读分析 ==');
+        await _analyzeBankCard();
         return;
       }
       _parsedCard = parsed;
@@ -804,6 +836,23 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// 银行卡只读分析：枚举应用 → 选择 EMV/PBOC 解析器 → 汇总结果。
+  /// 由 [_parseAndAnalyze] 在交通应用未命中时自动调用；全程复用
+  /// [_transceive]（含 APDU 日志），异常仅记录不影响其它应用。
+  Future<void> _analyzeBankCard() async {
+    _log('== 银行卡只读分析（EMV / PBOC）==');
+    try {
+      final analyzer = await _buildBankCardAnalyzer();
+      final transport = NfcCardTransport(_transceive);
+      final result = await analyzer.analyze(transport);
+      _lastBankCardResult = result;
+      _log('== 银行卡分析完成：${result.applications.length} 个应用 / '
+          '${result.issues.length} 项异常 ==');
+    } catch (e) {
+      _log('!! 银行卡分析异常：$e');
+    }
+  }
+
   /// 识别本次读取结果并暂存为「待确认保存」：由首页弹出是否保存对话框，
   /// 用户确认后经 [acceptPendingSave] 写入档案（重复读取更新快照但不覆盖
   /// 自定义名称）；无法生成稳定指纹（关键标识未读到）时跳过（不猜测），
@@ -820,6 +869,7 @@ class AppState extends ChangeNotifier {
         _logEvent('卡片档案跳过：无法生成稳定指纹（关键标识未读到）');
         return;
       }
+      _lastIdentified = identified;
       _pendingSave = PendingCardSave(
         fingerprint: identified.fingerprint,
         identity: identified.identity,
@@ -926,9 +976,12 @@ class AppState extends ChangeNotifier {
   void _resetCard() {
     _parsedCard = null;
     _analysis = null;
+    _lastBankCardResult = null;
     // 新会话开始时清除会话指纹：本次识别失败 / 未读到卡片时，卡片详情页
     // 不再误与旧会话数据关联（各自展示已保存的记录快照）。
     _lastFingerprint = null;
+    // 会话识别结果随指纹一同清空（仅内存态，不持久化）。
+    _lastIdentified = null;
     // 新的读取会话开始时丢弃上一次未应答的待保存结果，避免误存旧卡。
     _pendingSave = null;
     _autoSaveNotice = null;

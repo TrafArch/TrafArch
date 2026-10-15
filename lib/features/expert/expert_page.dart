@@ -10,10 +10,12 @@ import '../../core/transit/tunion/tunion_models.dart';
 import '../../core/transit/tunion/tunion_process_parser.dart';
 import '../../core/ui_constants.dart';
 import '../../state/app_state.dart';
+import '../bank_card/domain/models/bank_card_result.dart';
+import '../bank_card/presentation/bank_card_result_view.dart';
 import '../settings/settings_action_button.dart';
 
-/// 信息获取页签的展示类型：NFC 卡片识别 / 乘车码二维码。
-enum _InfoGetKind { card, qr }
+/// 信息获取页签的展示类型：NFC 卡片识别 / 乘车码二维码 / 银行卡只读分析。
+enum _InfoGetKind { card, qr, bank }
 
 class ExpertPage extends StatefulWidget {
   final AppState app;
@@ -35,13 +37,17 @@ class _ExpertPageState extends State<ExpertPage> {
   /// 上一次已见到的最新数据对象，用于自动切换展示类型。
   NfcScanResult? _seenCard;
   JtT1179QrData? _seenQr;
+  BankCardResult? _seenBank;
 
   @override
   void initState() {
     super.initState();
     _seenCard = widget.app.lastResult;
     _seenQr = widget.app.qrData;
-    if (_seenCard == null && _seenQr != null) {
+    _seenBank = widget.app.lastBankCardResult;
+    if (_seenCard == null && _seenQr == null && _seenBank != null) {
+      _infoGetKind = _InfoGetKind.bank;
+    } else if (_seenCard == null && _seenQr != null) {
       _infoGetKind = _InfoGetKind.qr;
     }
     widget.app.addListener(_onNfcChanged);
@@ -65,6 +71,11 @@ class _ExpertPageState extends State<ExpertPage> {
       _seenQr = app.qrData;
       // 新获取到二维码：自动切换到二维码
       if (app.qrData != null) _infoGetKind = _InfoGetKind.qr;
+    }
+    if (!identical(app.lastBankCardResult, _seenBank)) {
+      _seenBank = app.lastBankCardResult;
+      // 新完成银行卡分析：自动切换到银行卡视图
+      if (app.lastBankCardResult != null) _infoGetKind = _InfoGetKind.bank;
     }
     setState(() {});
   }
@@ -191,41 +202,61 @@ class _ExpertPageState extends State<ExpertPage> {
     );
   }
 
-  /// 信息获取页签：卡片识别与二维码合并展示，内容随首页获取的数据自动
-  /// 切换——读到卡片展示卡片识别字段，扫码 / 相册导入后展示二维码解析
-  /// 详情；两类数据并存时由顶部分段按钮切换。数据获取入口统一收敛到
+  /// 信息获取页签：卡片识别 / 二维码 / 银行卡只读分析合并展示，内容随
+  /// 首页获取的数据自动切换——读到卡片展示卡片识别字段，扫码 / 相册
+  /// 导入后展示二维码解析详情，银行卡（交通应用未命中）展示只读分析
+  /// 结果；多类数据并存时由顶部分段按钮切换。数据获取入口统一收敛到
   /// 首页，本页不再提供读取 / 扫描 / 手动输入操作。
   Widget _infoGetTabBody(AppState app) {
-    final hasCard = result != null;
+    final bankResult = app.lastBankCardResult;
+    // 交通卡片视图仅在有效交通解析结果存在时展示：银行卡分析结果存在
+    // （交通应用未命中）时不再展示空交通识别字段。
+    final hasCard = app.parsedCard != null ||
+        (result != null && bankResult == null);
     final hasQrView = app.hasQrData || app.qrError != null;
-    if (!hasCard && !hasQrView) {
+    final hasBank = bankResult != null;
+    if (!hasCard && !hasQrView && !hasBank) {
       return _tabBody(
         'expert-info-get',
         [
           _qrHomeHint('尚未读取卡片，请先在首页贴卡读取'),
           _qrHomeHint('尚未获取乘车码，请先在首页扫描二维码或从相册导入'),
+          _qrHomeHint('尚未读取银行卡：在首页贴卡读取后自动分析'
+              '（交通应用未命中时按 EMV / PBOC 只读解析）'),
         ],
         showReadHint: false,
       );
     }
-    // 只有一侧有内容时固定展示该侧；两侧都有时按用户选择
-    // （默认跟随最近一次获取的数据）
-    final kind = !hasCard
-        ? _InfoGetKind.qr
-        : !hasQrView
-            ? _InfoGetKind.card
-            : _infoGetKind;
+    // 可用展示类型：只有一侧有内容时固定展示该侧；多侧并存时按用户选择
+    // （默认跟随最近一次获取的数据，并由 _onNfcChanged 自动切换）。
+    final available = <_InfoGetKind>[
+      if (hasCard) _InfoGetKind.card,
+      if (hasQrView) _InfoGetKind.qr,
+      if (hasBank) _InfoGetKind.bank,
+    ];
+    final kind =
+        available.contains(_infoGetKind) ? _infoGetKind : available.first;
     return _tabBody(
       'expert-info-get',
       [
-        if (hasCard && hasQrView) ...[
+        if (available.length > 1) ...[
           SegmentedButton<_InfoGetKind>(
-            segments: const [
-              ButtonSegment(
-                value: _InfoGetKind.card,
-                label: Text('卡片识别'),
-              ),
-              ButtonSegment(value: _InfoGetKind.qr, label: Text('二维码')),
+            segments: [
+              if (hasCard)
+                const ButtonSegment(
+                  value: _InfoGetKind.card,
+                  label: Text('卡片识别'),
+                ),
+              if (hasQrView)
+                const ButtonSegment(
+                  value: _InfoGetKind.qr,
+                  label: Text('二维码'),
+                ),
+              if (hasBank)
+                const ButtonSegment(
+                  value: _InfoGetKind.bank,
+                  label: Text('银行卡'),
+                ),
             ],
             selected: {kind},
             showSelectedIcon: false,
@@ -235,7 +266,11 @@ class _ExpertPageState extends State<ExpertPage> {
           ),
           const SizedBox(height: 8),
         ],
-        ...(kind == _InfoGetKind.card ? _identifyFields(app) : _qrSection(app)),
+        ...switch (kind) {
+          _InfoGetKind.card => _identifyFields(app),
+          _InfoGetKind.qr => _qrSection(app),
+          _InfoGetKind.bank => [BankCardResultView(result: bankResult!)],
+        },
       ],
       showReadHint: false,
     );

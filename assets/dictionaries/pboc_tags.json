@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "dictionaryId": "pboc",
+  "entries": [
+    {"tag": "4F", "name": "Application Identifier", "nameZh": "应用标识符 (AID)", "format": "bs", "decoder": "hex", "sensitivity": "low", "displayPolicy": "normal", "source": "JR/T 0025.x"},
+    {"tag": "50", "name": "Application Label", "nameZh": "应用标签", "format": "ans", "decoder": "text", "sensitivity": "low", "displayPolicy": "normal", "source": "JR/T 0025.x"},
+    {"tag": "5A", "name": "Application Primary Account Number", "nameZh": "应用主账号 (卡号)", "format": "n", "decoder": "numeric_bcd", "sensitivity": "high", "displayPolicy": "mask", "source": "JR/T 0025.5"},
+    {"tag": "5F24", "name": "Application Expiration Date", "nameZh": "卡片有效期", "format": "n", "decoder": "date_yymmdd", "sensitivity": "medium", "displayPolicy": "normal", "source": "JR/T 0025.5"},
+    {"tag": "9F08", "name": "Application Version Number", "nameZh": "应用版本号", "format": "n", "decoder": "numeric", "sensitivity": "low", "displayPolicy": "normal", "source": "JR/T 0025"},
+    {"tag": "9F09", "name": "Application Version Number (PBOC)", "nameZh": "应用版本号", "format": "n", "decoder": "numeric", "sensitivity": "low", "displayPolicy": "normal", "source": "JR/T 0025"},
+    {"tag": "9F1F", "name": "Track 2 Discretionary Data", "nameZh": "二磁道自用数据", "format": "ans", "decoder": "hex", "sensitivity": "high", "displayPolicy": "mask", "source": "JR/T 0025.5"},
+    {"tag": "9F26", "name": "Application Cryptogram", "nameZh": "应用密文", "format": "b", "decoder": "hex", "sensitivity": "high", "displayPolicy": "mask", "source": "JR/T 0025"},
+    {"tag": "9F36", "name": "Application Transaction Counter", "nameZh": "应用交易计数器 (ATC)", "format": "n", "decoder": "numeric", "sensitivity": "medium", "displayPolicy": "normal", "source": "JR/T 0025"}
+  ]
+}

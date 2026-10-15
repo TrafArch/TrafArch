@@ -417,10 +417,23 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // 对话框包含卡片名称与卡号
+      // 对话框包含卡片名称与卡号（首页「最近扫描」面板同样展示卡片
+      // 名称与完整卡号，故两处断言均限定在对话框范围内）
       expect(find.text('保存卡片'), findsOneWidget);
-      expect(find.text('福路通·榕城通'), findsOneWidget);
-      expect(find.text('3105060012345678900'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.text('福路通·榕城通'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.text('3105060012345678900'),
+        ),
+        findsOneWidget,
+      );
 
       // 不保存：不落库
       await tester.tap(find.text('不保存'));

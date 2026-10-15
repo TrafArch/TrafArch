@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "dictionaryId": "emv-common",
+  "entries": [
+    {"tag": "4F", "name": "Application Identifier", "nameZh": "应用标识符 (AID)", "format": "bs", "decoder": "hex", "sensitivity": "low", "displayPolicy": "normal", "source": "EMV Book 3"},
+    {"tag": "50", "name": "Application Label", "nameZh": "应用标签", "format": "ans", "decoder": "text", "sensitivity": "low", "displayPolicy": "normal", "source": "EMV Book 3"},
+    {"tag": "5A", "name": "Application Primary Account Number", "nameZh": "应用主账号 (PAN)", "format": "n", "decoder": "numeric_bcd", "sensitivity": "high", "displayPolicy": "mask", "source": "EMV Book 3"},
+    {"tag": "57", "name": "Track 2 Equivalent Data", "nameZh": "二磁道等效数据", "format": "ns", "decoder": "hex", "sensitivity": "high", "displayPolicy": "mask", "source": "EMV Book 3"},
+    {"tag": "5F20", "name": "Cardholder Name", "nameZh": "持卡人姓名", "format": "ans", "decoder": "text", "sensitivity": "high", "displayPolicy": "mask", "source": "EMV Book 3"},
+    {"tag": "5F24", "name": "Application Expiration Date", "nameZh": "应用有效期", "format": "n", "decoder": "date_yymmdd", "sensitivity": "medium", "displayPolicy": "normal", "source": "EMV Book 3"},
+    {"tag": "5F25", "name": "Application Effective Date", "nameZh": "应用生效日期", "format": "n", "decoder": "date_yymmdd", "sensitivity": "low", "displayPolicy": "normal", "source": "EMV Book 3"},
+    {"tag": "42", "name": "Currency Code", "nameZh": "货币代码", "format": "n", "decoder": "numeric", "sensitivity": "low", "displayPolicy": "normal", "source": "EMV Book 3"},
+    {"tag": "82", "name": "Application Interchange Profile", "nameZh": "应用交互配置 (AIP)", "format": "b", "decoder": "hex", "sensitivity": "low", "displayPolicy": "normal", "source": "EMV Book 3"},
+    {"tag": "94", "name": "Application File Locator", "nameZh": "应用文件定位符 (AFL)", "format": "b", "decoder": "hex", "sensitivity": "low", "displayPolicy": "normal", "source": "EMV Book 3"},
+    {"tag": "9F08", "name": "Application Version Number", "nameZh": "应用版本号", "format": "n", "decoder": "numeric", "sensitivity": "low", "displayPolicy": "normal", "source": "EMV Book 3"},
+    {"tag": "9F1D", "name": "Interface Language", "nameZh": "界面语言", "format": "ans", "decoder": "text", "sensitivity": "low", "displayPolicy": "normal", "source": "EMV Book 3"},
+    {"tag": "9F35", "name": "Terminal Type", "nameZh": "终端类型", "format": "b", "decoder": "hex", "sensitivity": "low", "displayPolicy": "normal", "source": "EMV Book 3"},
+    {"tag": "9F38", "name": "Processing Options Data Object List (PDOL)", "nameZh": "处理选项数据对象列表", "format": "b", "decoder": "hex", "sensitivity": "low", "displayPolicy": "normal", "source": "EMV Book 3"}
+  ]
+}
