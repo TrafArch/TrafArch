@@ -11,9 +11,15 @@ import 'features/cards/cards_page.dart';
 import 'features/trips/trips_page.dart';
 import 'features/expert/expert_page.dart';
 
-class TransitCardAnalyzerApp extends StatelessWidget {
+class TransitCardAnalyzerApp extends StatefulWidget {
   const TransitCardAnalyzerApp({super.key});
 
+  @override
+  State<TransitCardAnalyzerApp> createState() =>
+      _TransitCardAnalyzerAppState();
+}
+
+class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp> {
   /// Android 转场统一为 FadeForwards（Android 14+ 系统同款：水平滑入 +
   /// 交叉淡化，450ms）：显式覆盖新版 Flutter 的默认值
   /// （PredictiveBackPageTransitionsBuilder），避免"手势返回=缩小圆角、
@@ -51,34 +57,78 @@ class TransitCardAnalyzerApp extends StatelessWidget {
     brightness: Brightness.dark,
   );
 
+  /// 应用级状态在根部创建，向下传递给 [AppShell] 与各功能页；
+  /// 由本 Widget 负责 init/dispose。
+  late final AppState _app;
+
+  /// 仅镜像 [_AppState.monetEnabled] 的独立通知器：
+  /// AppState 的 notifyListeners 会在读卡/扫码/日志等高频场景触发，
+  /// 若直接监听会让 MaterialApp 反复重建；此处只在莫奈开关翻转时
+  /// 才通知上层重建主题。
+  final ValueNotifier<bool> _monetEnabled = ValueNotifier<bool>(false);
+
+  @override
+  void initState() {
+    super.initState();
+    _app = AppState();
+    _monetEnabled.value = _app.monetEnabled;
+    _app.addListener(_syncMonetFromAppState);
+    // 启动即加载知识库（assets/data/*.json）与设置，失败自动降级
+    _app.init();
+  }
+
+  @override
+  void dispose() {
+    _app.removeListener(_syncMonetFromAppState);
+    _app.dispose();
+    _monetEnabled.dispose();
+    super.dispose();
+  }
+
+  void _syncMonetFromAppState() {
+    if (_monetEnabled.value != _app.monetEnabled) {
+      _monetEnabled.value = _app.monetEnabled;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return DynamicColorBuilder(
       builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
-        return MaterialApp(
-          title: AppInfo.appName,
-          debugShowCheckedModeBanner: false,
-          localizationsDelegates: const [
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          supportedLocales: const [
-            Locale('zh'),
-            Locale('en'),
-          ],
-          theme: ThemeData(
-            colorScheme: lightDynamic ?? _fallbackLight,
-            pageTransitionsTheme: _pageTransitionsTheme,
-            snackBarTheme: _snackBarTheme,
-          ),
-          darkTheme: ThemeData(
-            colorScheme: darkDynamic ?? _fallbackDark,
-            pageTransitionsTheme: _pageTransitionsTheme,
-            snackBarTheme: _snackBarTheme,
-          ),
-          themeMode: ThemeMode.system,
-          home: const AppShell(),
+        return ValueListenableBuilder<bool>(
+          valueListenable: _monetEnabled,
+          // AppShell 作为 child 传入，避免莫奈开关翻转时重建整棵子树
+          child: AppShell(app: _app),
+          builder: (context, monet, child) {
+            return MaterialApp(
+              title: AppInfo.appName,
+              debugShowCheckedModeBanner: false,
+              localizationsDelegates: const [
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
+              supportedLocales: const [
+                Locale('zh'),
+                Locale('en'),
+              ],
+              // 莫奈取色开关关闭时忽略 dynamic_color 提供的系统色，
+              // 回落到内置青绿色 seed；开关开启但系统不支持（Android 12
+              // 以下 / 非 Android 平台）时，dynamic 为 null 同样回落。
+              theme: ThemeData(
+                colorScheme: (monet ? lightDynamic : null) ?? _fallbackLight,
+                pageTransitionsTheme: _pageTransitionsTheme,
+                snackBarTheme: _snackBarTheme,
+              ),
+              darkTheme: ThemeData(
+                colorScheme: (monet ? darkDynamic : null) ?? _fallbackDark,
+                pageTransitionsTheme: _pageTransitionsTheme,
+                snackBarTheme: _snackBarTheme,
+              ),
+              themeMode: ThemeMode.system,
+              home: child,
+            );
+          },
         );
       },
     );
@@ -86,7 +136,9 @@ class TransitCardAnalyzerApp extends StatelessWidget {
 }
 
 class AppShell extends StatefulWidget {
-  const AppShell({super.key});
+  const AppShell({super.key, required this.app});
+
+  final AppState app;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -94,21 +146,7 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int index = 0;
-  late final AppState app;
-
-  @override
-  void initState() {
-    super.initState();
-    app = AppState();
-    // 启动即加载知识库（assets/data/*.json），失败自动降级为空库
-    app.init();
-  }
-
-  @override
-  void dispose() {
-    app.dispose();
-    super.dispose();
-  }
+  late final AppState app = widget.app;
 
   @override
   Widget build(BuildContext context) {

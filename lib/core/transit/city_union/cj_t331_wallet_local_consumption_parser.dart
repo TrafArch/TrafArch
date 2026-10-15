@@ -3,9 +3,8 @@ import 'dart:convert';
 import 'city_union_codec.dart';
 import 'city_union_models.dart';
 
-/// CJ/T 331-2016 表 8：电子钱包异地消费交易明细记录文件解析器
-/// （SFI 0x10，循环记录文件，单条记录长度 0x17=23 字节，
-/// 标准要求至少容纳 10 条记录）。
+/// CJ/T 331-2016 表 7：电子钱包本地消费交易明细记录文件解析器
+/// （SFI 0x18，循环记录文件，单条记录长度 0x17=23 字节）。
 ///
 /// 单条记录结构（字节编号按标准表格 1 起计数）：
 /// - 01-02 电子钱包消费交易序号（HEX 大端）；03-05 预留（HEX 原样保留）；
@@ -18,31 +17,33 @@ import 'city_union_models.dart';
 ///   0x17 为单条记录长度而非文件长度，不按 23 字节对整文件切片；
 ///   循环记录的选取（最新记录 / 覆盖顺序）由读取层按 COS/NFC 接口与
 ///   完整标准规则确认后逐条传入，不假定记录 1 是最新交易；
-/// - 金额字段是 HEX 而非 BCD，且表 8 未定义金额单位与小数位，
+/// - 金额字段是 HEX 而非 BCD，且表 7 未定义金额单位与小数位，
 ///   本解析器只保留原始十六进制与十进制大端值，不擅自换算为元；
 /// - 终端编号是 BCD，保留 12 位数字前导零（不转整数）；
 /// - 记录长度、字节值范围等结构性错误抛 [FormatException]；
 ///   单字段 BCD / 日期 / 时间异常只标记该字段（[CjField]），
-///   其他字段照常解析，不丢弃整条记录。
-class CjT331WalletOfflineTransactionParser {
-  CjT331WalletOfflineTransactionParser._();
+///   其他字段照常解析，不丢弃整条记录；
+/// - 交易类型未知（非 0x06 / 0x09）不抛异常，按"未知类型"解析并保留
+///   原始记录，便于排查与按标准扩展。
+class CjT331WalletLocalConsumptionParser {
+  CjT331WalletLocalConsumptionParser._();
 
-  /// 文件 SFI（0x10）。
-  static const int sfi = CityUnionFileIds.walletOfflineTransaction;
+  /// 文件 SFI（0x18）。
+  static const int sfi = CityUnionFileIds.walletLocalConsumption;
 
   /// 单条记录长度 0x17（十进制 23 字节；该文件为循环记录文件，
-  /// 标准要求至少容纳 10 条记录，读取层按记录边界逐条传入）。
+  /// 读取层按记录边界逐条传入）。
   static const int recordLength = 0x17;
 
-  /// 解析一条完整的 23 字节异地消费交易记录。
+  /// 解析一条完整的 23 字节本地消费交易记录。
   ///
   /// [input] 为单条记录内容（23 字节，0 起 Dart 数组下标）。
   /// 长度不符或字节值越界（读取层错误）时抛 [FormatException]；
   /// 字段级编码 / 日期 / 时间异常不抛异常，记录在对应 [CjField] 上。
-  static CjT331WalletOfflineTransaction parseRecord(List<int> input) {
+  static CjT331WalletLocalConsumption parseRecord(List<int> input) {
     if (input.length != recordLength) {
       throw FormatException(
-        '异地消费交易记录长度错误：期望单条记录 $recordLength 字节，'
+        '本地消费交易记录长度错误：期望单条记录 $recordLength 字节，'
         '实际 ${input.length} 字节。'
         'SFI ${CityUnionCodec.sfiLabel(sfi)} 为循环记录文件，'
         '单条记录长度 0x17（$recordLength 字节）而非文件长度；'
@@ -53,14 +54,14 @@ class CjT331WalletOfflineTransactionParser {
     }
     final data = _validate(input);
 
-    // 01-02：电子钱包消费交易序号（HEX 大端；计数规则表 8 未说明）。
+    // 01-02：电子钱包消费交易序号（HEX 大端；计数规则表 7 未说明）。
     final sequenceHex = CityUnionCodec.hex(data.sublist(0, 2));
     final sequence = (data[0] << 8) | data[1];
 
     // 03-05：预留（HEX 原样保留）。
     final reservedHex = CityUnionCodec.hex(data.sublist(2, 5));
 
-    // 06-09：交易金额（HEX 大端；单位表 8 未定义，不擅自换算）。
+    // 06-09：交易金额（HEX 大端；单位表 7 未定义，不擅自换算）。
     final amountHex = CityUnionCodec.hex(data.sublist(5, 9));
     final amountRaw =
         (data[5] << 24) | (data[6] << 16) | (data[7] << 8) | data[8];
@@ -68,7 +69,7 @@ class CjT331WalletOfflineTransactionParser {
     // 10：交易类型（06 消费 / 09 复合消费）。
     final transactionType = data[9];
     final typeName =
-        CjT331WalletOfflineTransaction.transactionTypeLabel(transactionType);
+        CjT331WalletLocalConsumption.transactionTypeLabel(transactionType);
 
     // 11-16：交易终端编号（BCD 12 位数字，保留前导零）。
     final terminal = _bcdField(data, 10, 6, 'terminalNumber', '交易终端编号');
@@ -95,7 +96,7 @@ class CjT331WalletOfflineTransactionParser {
         4,
         'amount',
         '交易金额',
-        note: '十进制值 $amountRaw（金额单位表 8 未定义，不换算）',
+        note: '十进制值 $amountRaw（金额单位表 7 未定义，不换算）',
       ),
       _hexField(data, 9, 1, 'transactionType', '交易类型', note: typeName),
       terminal,
@@ -103,7 +104,7 @@ class CjT331WalletOfflineTransactionParser {
       time,
     ];
 
-    return CjT331WalletOfflineTransaction(
+    return CjT331WalletLocalConsumption(
       sequence: sequence,
       sequenceHex: sequenceHex,
       reservedHex: reservedHex,
@@ -119,7 +120,7 @@ class CjT331WalletOfflineTransactionParser {
   }
 
   /// 调试输出：解析结果格式化 JSON（含字段明细与原始值）。
-  static String toPrettyJson(CjT331WalletOfflineTransaction record) =>
+  static String toPrettyJson(CjT331WalletLocalConsumption record) =>
       const JsonEncoder.withIndent('  ').convert(record.toJson());
 
   /// 校验字节值范围（0~255），防止调用方传入越界整数。

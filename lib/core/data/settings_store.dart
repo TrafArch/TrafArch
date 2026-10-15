@@ -17,6 +17,11 @@ abstract final class SettingsKeys {
 
   /// 「读取后自动保存」开关（'true' / 'false'；缺省视为关闭）。
   static const autoSaveEnabled = 'auto_save_enabled';
+
+  /// 「莫奈取色（动态取色）」开关（'true' / 'false'；缺省视为关闭）。
+  /// 开启后主题色跟随系统壁纸取色（Android 12+ Dynamic Color）；
+  /// 关闭时使用应用内置固定主题色。
+  static const monetEnabled = 'monet_enabled';
 }
 
 /// 应用设置持久化抽象：文本键值对（每行 key=value），不使用 JSON。

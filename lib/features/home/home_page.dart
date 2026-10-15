@@ -466,14 +466,17 @@ class _RecentScanSectionState extends State<_RecentScanSection> {
     final identity = analysis?.identity;
     final wallet = analysis?.wallet;
 
-    // 卡片名称：卡号前 8 位（IIN）前缀库优先，回退指纹库识别结果
+    // 卡片名称：卡号前 8 位（IIN）前缀库优先，回退 CU 识别库 / 指纹库识别结果
     final prefix = app.cardPrefixOf(wallet?.cardNumber);
+    final cuCard = app.cityUnionCard;
     final cardName = prefix?.cardName ??
+        cuCard?.cardName ??
         identity?.cardFamily ??
         identity?.operatorName ??
         '—';
-    // 发卡地：前缀库城市优先，回退管理信息文件城市代码 → 识别城市
+    // 发卡地：前缀库城市优先，回退 CU 识别库城市 / 管理信息城市代码 → 识别城市
     final issuerCity = prefix?.city ??
+        cuCard?.city ??
         app.cityNameOf(app.cardInfo?.cityCode) ??
         identity?.cityName ??
         '—';
@@ -502,7 +505,9 @@ class _RecentScanSectionState extends State<_RecentScanSection> {
       _row('卡号', wallet?.cardNumber ?? '—'),
       _row('余额', wallet?.balanceText ?? '—'),
       _row('有效期至', expireText),
-      _row('全国互联互通', _interopText(app)),
+      // “全国互联互通”是交通联合（JT/T 978.2）体系概念，
+      // CU（住建部城市一卡通 CJ/T 331）属另一套网络，不展示此行。
+      if (!app.cityUnionDetected) _row('全国互联互通', _interopText(app)),
     ];
   }
 

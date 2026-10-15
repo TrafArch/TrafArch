@@ -23,7 +23,10 @@ class CardsPage extends StatelessWidget {
           SliverAppBar(
             pinned: true,
             title: const Text('卡片列表'),
-            actions: [SettingsActionButton(app: app)],
+            actions: [
+              _ExportCardsButton(app: app),
+              SettingsActionButton(app: app),
+            ],
           ),
           SliverToBoxAdapter(
             child: Padding(
@@ -163,6 +166,45 @@ class _SavedCardTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// 「导出卡片记录」按钮：将全部已保存卡片（含行程快照）导出为文本文件
+/// 到手机下载目录；导出进行中禁用按钮并展示进度，完成后以 SnackBar
+/// 反馈保存路径 / 失败原因 / 无卡片提示。
+class _ExportCardsButton extends StatefulWidget {
+  final AppState app;
+  const _ExportCardsButton({required this.app});
+
+  @override
+  State<_ExportCardsButton> createState() => _ExportCardsButtonState();
+}
+
+class _ExportCardsButtonState extends State<_ExportCardsButton> {
+  bool _busy = false;
+
+  Future<void> _export() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final message = await widget.app.exportCards();
+    messenger.showSnackBar(SnackBar(content: Text(message)));
+    if (mounted) setState(() => _busy = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: '导出卡片记录',
+      onPressed: _busy ? null : _export,
+      icon: _busy
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.download_outlined),
     );
   }
 }

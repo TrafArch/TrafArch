@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/services.dart';
 
+import 'city_union_knowledge_base.dart';
 import 'station_codes.dart';
 import 'prebuilt_station_data.dart';
 
@@ -359,17 +360,23 @@ class KnowledgeBase {
   final CardPrefixTable cardPrefixes;
   final StationCodeTable stationCodes;
 
+  /// 城市一卡通（City Union / CJ/T 331-2016）卡片识别库：城市代码
+  /// （邮编前四位 / CU 城市项目代码）→ 城市名 / 省份 / 本地卡名称参考。
+  final CityUnionCardTable cityUnionCards;
+
   const KnowledgeBase({
     required this.cities,
     required this.issuers,
     required this.terminalRules,
     this.cardPrefixes = CardPrefixTable.empty,
     this.stationCodes = StationCodeTable.empty,
+    this.cityUnionCards = CityUnionCardTable.empty,
   });
 
   static const issuerAsset = 'assets/data/tunion_issuer_fingerprints.json';
   static const terminalRulesAsset = 'assets/data/tunion_terminal_rules.json';
   static const cardPrefixAsset = 'assets/data/tunion_card_prefixes.json';
+  static const cityUnionCardAsset = 'assets/data/cu_card_catalog.json';
 
   factory KnowledgeBase.empty() => KnowledgeBase(
         cities: CityTable.fromCardPrefixes(const {}),
@@ -381,6 +388,7 @@ class KnowledgeBase {
     String? issuerFingerprints,
     String? terminalRules,
     String? cardPrefixes,
+    String? cityUnionCatalog,
     StationCodeTable? stationCodes,
   }) {
     Object? decode(String? source, Object? fallback) {
@@ -400,13 +408,15 @@ class KnowledgeBase {
       issuers: IssuerTable.fromJson(decode(issuerFingerprints, const {})),
       terminalRules: TerminalRuleSet.fromJson(decode(terminalRules, const {})),
       cardPrefixes: CardPrefixTable.fromJson(prefixJson),
+      cityUnionCards:
+          CityUnionCardTable.fromJson(decode(cityUnionCatalog, const {})),
       stationCodes: stationCodes ?? prebuiltStationCodes,
     );
   }
 
-  /// 加载知识库：机构/终端规则/卡号前缀（城市码表随卡号前缀库派生）读自
-  /// assets；站点代码表默认使用应用内预制快照，开启「在线拉取数据」时由
-  /// 调用方注入会话内存数据。
+  /// 加载知识库：机构/终端规则/卡号前缀（城市码表随卡号前缀库派生）/
+  /// 城市一卡通识别库读自 assets；站点代码表默认使用应用内预制快照，
+  /// 开启「在线拉取数据」时由调用方注入会话内存数据。
   static Future<KnowledgeBase> load(
     AssetBundle bundle, {
     StationCodeTable? stationCodes,
@@ -419,10 +429,18 @@ class KnowledgeBase {
     } catch (_) {
       cardPrefixes = null;
     }
+    // 城市一卡通识别库同为增量资产：缺失/读取失败时降级为空表
+    String? cityUnionCatalog;
+    try {
+      cityUnionCatalog = await bundle.loadString(cityUnionCardAsset);
+    } catch (_) {
+      cityUnionCatalog = null;
+    }
     return KnowledgeBase.fromJsonStrings(
       issuerFingerprints: await bundle.loadString(issuerAsset),
       terminalRules: await bundle.loadString(terminalRulesAsset),
       cardPrefixes: cardPrefixes,
+      cityUnionCatalog: cityUnionCatalog,
       stationCodes: stationCodes ?? prebuiltStationCodes,
     );
   }

@@ -8,6 +8,7 @@ import '../core/analysis/tunion_analysis_models.dart';
 import '../core/app_info.dart';
 import '../core/card/card_parser.dart';
 import '../core/data/tunion_knowledge_base.dart';
+import '../core/data/city_union_knowledge_base.dart';
 import '../core/data/online_data_store.dart';
 import '../core/data/settings_store.dart';
 import '../core/data/station_codes.dart';
@@ -24,6 +25,7 @@ import '../core/transit/tunion/tunion_models.dart';
 import '../core/transit/tunion/tunion_parser.dart';
 import '../core/transit/tunion/tunion_process_parser.dart';
 import '../database/app_database.dart';
+import '../features/card_archive/card_records_export.dart';
 import '../features/card_archive/models/card_session_snapshot.dart';
 import '../features/card_archive/models/pending_card_save.dart';
 import '../features/card_archive/repositories/card_repository.dart';
@@ -204,10 +206,25 @@ class AppState extends ChangeNotifier {
   bool get cityUnionDetected =>
       _parsedCard?.parserId == CardParserIds.cityUnion;
 
-  /// 城市一卡通文件解析视图（CJ/T 331-2016：0x15 / 0x17 / 0x10 / 0x1A），
+  /// 城市一卡通文件解析视图（CJ/T 331-2016：0x15 / 0x18 / 0x1A），
   /// 供专家模式按统一视图渲染；非城市一卡通卡时为空。
   List<CityUnionFileView> get cityUnionFiles =>
       _parsedCard?.cityUnionFiles ?? const [];
+
+  /// 城市一卡通公共应用基本信息文件（SFI 0x15）解析结果；非城市一卡通
+  /// 卡或未读取到该文件时返回 null。城市代码 / 发卡方代码 / 应用序列号
+  /// 等卡片标识字段均由本视图提供，供卡片识别库查表与档案指纹计算使用。
+  CjT331PublicInfo? get cityUnionPublicInfo {
+    for (final view in cityUnionFiles) {
+      if (view is CjT331PublicInfo) return view;
+    }
+    return null;
+  }
+
+  /// 城市一卡通卡片识别库条目（按 0x15 城市代码 = 邮编前四位 /
+  /// CU 城市项目代码查表）；未收录或知识库未加载时返回 null。
+  CityUnionCardInfo? get cityUnionCard =>
+      _kb?.cityUnionCards.lookup(cityUnionPublicInfo?.cityCode);
 
   /// 当前卡片的钱包货币（按卡号前缀库判定，如八达通-全国通卡为港币）；
   /// 未读取分析结果或未收录时回退人民币。
@@ -242,6 +259,7 @@ class AppState extends ChangeNotifier {
       ? '未加载'
       : '已加载：${_kb!.cities.length} 城市 / ${_kb!.issuers.length} 指纹 / '
           '${_kb!.terminalRules.length} 终端规则 / '
+          '${_kb!.cityUnionCards.entryCount} 城市一卡通 / '
           '${_kb!.stationCodes.entryCount} 站点编码'
           '${_onlineStationCodes == null ? '（预制快照）' : '（在线拉取）'}';
 
@@ -274,6 +292,13 @@ class AppState extends ChangeNotifier {
   /// 弹出「是否保存」确认框；关闭时保持手动确认流程。
   bool _autoSaveEnabled = false;
   bool get autoSaveEnabled => _autoSaveEnabled;
+
+  /// 「莫奈取色（动态取色）」开关（默认关闭，持久化到设置文件）。
+  /// 开启后应用主题色跟随系统壁纸取色（Android 12+ Dynamic Color，
+  /// 由 dynamic_color 插件提供；不支持的系统自动回落到内置主题色）；
+  /// 关闭时使用内置固定主题色（青绿色 seed）。
+  bool _monetEnabled = false;
+  bool get monetEnabled => _monetEnabled;
 
   /// 自动保存结果提示（成功 / 失败文案），供首页 SnackBar 展示；
   /// 展示后由 [clearAutoSaveNotice] 清空，新一轮读取开始时也会重置。
@@ -449,6 +474,9 @@ class AppState extends ChangeNotifier {
       // 「读取后自动保存」默认关闭，仅显式开启（'true'）时启用
       final autoSave = await _settingsStore.read(SettingsKeys.autoSaveEnabled);
       _autoSaveEnabled = autoSave == 'true';
+      // 「莫奈取色」默认关闭，仅显式开启（'true'）时启用
+      final monet = await _settingsStore.read(SettingsKeys.monetEnabled);
+      _monetEnabled = monet == 'true';
     } catch (_) {
       // 设置存储不可用（如平台插件缺失）时按默认值降级
     }
@@ -639,6 +667,31 @@ class AppState extends ChangeNotifier {
     String pad2(int v) => v.toString().padLeft(2, '0');
     return '${t.year}${pad2(t.month)}${pad2(t.day)}_'
         '${pad2(t.hour)}${pad2(t.minute)}${pad2(t.second)}';
+  }
+
+  /// 导出全部卡片档案（含行程记录快照）到手机下载目录
+  /// （Download/transit_card_records_*.txt）。返回结果文案（保存路径 /
+  /// 失败原因 / 无卡片提示），供卡片列表页 SnackBar 直接展示。
+  Future<String> exportCards() async {
+    final cards = await cardRepository.getAllCards();
+    if (cards.isEmpty) return '暂无卡片记录可导出';
+
+    try {
+      final now = DateTime.now();
+      final content = buildCardRecordsExport(cards, exportedAt: now);
+      final path = await _logExporter.saveToDownloads(
+        'transit_card_records_${_fileStamp(now)}.txt',
+        content,
+      );
+      _logger.log('== 卡片记录导出完成：$path ==');
+      return '已导出 ${cards.length} 张卡片到下载目录：$path';
+    } on PlatformException catch (e) {
+      _logger.log('== 卡片记录导出失败：${e.message ?? e.code} ==');
+      return '导出失败：${e.message ?? e.code}';
+    } catch (e) {
+      _logger.log('== 卡片记录导出失败：$e ==');
+      return '导出失败：$e';
+    }
   }
 
   void _log(String entry) {
@@ -939,6 +992,19 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     try {
       await _settingsStore.write(SettingsKeys.autoSaveEnabled, '$enabled');
+    } catch (_) {
+      // 设置写入失败不影响本次会话内的开关状态
+    }
+  }
+
+  /// 设置「莫奈取色（动态取色）」开关（持久化到设置文件，默认关闭：开启后
+  /// 主题色跟随系统壁纸取色；关闭后使用内置固定主题色）。
+  Future<void> setMonetEnabled(bool enabled) async {
+    if (_monetEnabled == enabled) return;
+    _monetEnabled = enabled;
+    notifyListeners();
+    try {
+      await _settingsStore.write(SettingsKeys.monetEnabled, '$enabled');
     } catch (_) {
       // 设置写入失败不影响本次会话内的开关状态
     }

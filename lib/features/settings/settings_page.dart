@@ -102,35 +102,53 @@ class _SettingsPageState extends State<SettingsPage> {
               onChanged: (value) => app.setOnlineFetchEnabled(value),
             ),
           ),
-          if (app.onlineFetchEnabled)
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.cloud_sync_outlined, color: syncStatusColor),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Text(
-                        syncStatus,
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(color: syncStatusColor),
-                      ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            alignment: Alignment.topCenter,
+            child: app.onlineFetchEnabled
+                ? Card(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(Icons.cloud_sync_outlined, color: syncStatusColor),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Text(
+                                  syncStatus,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(color: syncStatusColor),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              OutlinedButton(
+                                onPressed: app.syncingData
+                                    ? null
+                                    : () => app.syncTripreaderData(),
+                                child: Text(app.syncingData ? '更新中…' : '在线更新'),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Divider(height: 1),
+                        ListTile(
+                          dense: true,
+                          leading: const Icon(Icons.menu_book_outlined),
+                          title: const Text('知识库'),
+                          subtitle: Text(app.knowledgeSummary),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    OutlinedButton(
-                      onPressed: app.syncingData
-                          ? null
-                          : () => app.syncTripreaderData(),
-                      child: Text(app.syncingData ? '更新中…' : '在线更新'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+                  )
+                : const SizedBox(width: double.infinity),
+          ),
           Card(
             child: SwitchListTile(
               secondary: const Icon(Icons.qr_code_scanner),
@@ -148,6 +166,20 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ),
           Card(
+            child: SwitchListTile(
+              secondary: const Icon(Icons.palette_outlined),
+              title: const Text('莫奈取色'),
+              subtitle: Text(
+                app.monetEnabled
+                    ? '已开启：主题色跟随系统壁纸动态取色（需 Android 12 及以上，'
+                        '低版本系统自动回落到内置主题色）'
+                    : '默认停用：使用应用内置固定主题色（青绿色）',
+              ),
+              value: app.monetEnabled,
+              onChanged: (value) => app.setMonetEnabled(value),
+            ),
+          ),
+          Card(
             child: Column(
               children: [
                 SwitchListTile(
@@ -161,36 +193,39 @@ class _SettingsPageState extends State<SettingsPage> {
                   value: app.loggingEnabled,
                   onChanged: (value) => app.setLoggingEnabled(value),
                 ),
-                if (app.loggingEnabled) ...[
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.download_outlined),
-                    title: const Text('导出日志'),
-                    subtitle: Text(
-                      logStatus,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: logStatusColor),
-                    ),
-                    trailing: app.exportingLog
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.chevron_right),
-                    onTap: app.exportingLog ? null : () => app.exportLog(),
-                  ),
-                ],
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  alignment: Alignment.topCenter,
+                  child: app.loggingEnabled
+                      ? Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Divider(height: 1),
+                            ListTile(
+                              leading: const Icon(Icons.download_outlined),
+                              title: const Text('导出日志'),
+                              subtitle: Text(
+                                logStatus,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(color: logStatusColor),
+                              ),
+                              trailing: app.exportingLog
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : const Icon(Icons.chevron_right),
+                              onTap: app.exportingLog ? null : () => app.exportLog(),
+                            ),
+                          ],
+                        )
+                      : const SizedBox(width: double.infinity),
+                ),
               ],
-            ),
-          ),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.menu_book_outlined),
-              title: const Text('知识库'),
-              subtitle: Text(app.knowledgeSummary),
             ),
           ),
           Card(

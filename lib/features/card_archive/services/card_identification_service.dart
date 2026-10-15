@@ -108,8 +108,9 @@ class CardIdentificationService {
   }
 
   /// 城市一卡通（CJ/T 331-2016）：卡片标识取自公共应用基本信息文件
-  /// （SFI 0x15）；正式卡名暂无住建部卡种目录数据源，保持未知（不猜测）；
-  /// 城市由公共应用基本信息文件城市代码查城市码表。
+  /// （SFI 0x15）；正式卡名与发卡地取自 CU 卡片识别库（城市代码 =
+  /// 邮编前四位 / CU 城市项目代码 → 本地卡名称参考 / 城市），识别库
+  /// 未收录城市时回退交通联合城市码表；均未命中时保持未知（不猜测）。
   IdentifiedCard? _identifyCityUnion(ParsedCard card) {
     CjT331PublicInfo? publicInfo;
     for (final view in card.cityUnionFiles) {
@@ -118,13 +119,19 @@ class CardIdentificationService {
         break;
       }
     }
-    final cityName = _cityNameOf(publicInfo?.cityCode);
+    final catalog = knowledge.cityUnionCards.lookup(publicInfo?.cityCode);
+    final officialName = catalog?.cardName;
+    final cityName = catalog?.city ?? _cityNameOf(publicInfo?.cityCode);
+    final source = officialName != null
+        ? CardIdentificationSources.cardCatalog
+        : cityName != null
+            ? CardIdentificationSources.cityCode
+            : CardIdentificationSources.parserOnly;
     final identity = resolve(
       cardType: CardTypes.cityUnion,
+      officialName: officialName,
       cityName: cityName,
-      source: cityName != null
-          ? CardIdentificationSources.cityCode
-          : CardIdentificationSources.parserOnly,
+      source: source,
     );
     final fingerprint = CardFingerprint.build(
       system: CardParserIds.cityUnion,

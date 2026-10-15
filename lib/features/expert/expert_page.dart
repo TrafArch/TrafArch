@@ -259,10 +259,13 @@ class _ExpertPageState extends State<ExpertPage> {
       if (isTUnion) _kv('交通联合应用', '已发现'),
       // 城市一卡通应用：城市一卡通解析器专属字段，仅在命中时展示
       if (isCityUnion) _kv('城市一卡通应用', '已发现'),
-      _kv('识别城市', identity?.cityName ?? '未知'),
+      _kv('识别城市', identity?.cityName ?? app.cityUnionCard?.city ?? '未知'),
       _kv('卡种', identity?.cardFamily ?? '未知'),
-      _kv('卡片名称',
-          app.cardPrefixByIssuerId(info?.issuerId)?.cardName ?? '未知'),
+      _kv(
+          '卡片名称',
+          app.cardPrefixByIssuerId(info?.issuerId)?.cardName ??
+              app.cityUnionCard?.cardName ??
+              '未知'),
       for (final e in identity?.evidence ?? const <Evidence>[])
         _kv(
           e.source,
@@ -290,19 +293,18 @@ class _ExpertPageState extends State<ExpertPage> {
   }
 
   /// 城市一卡通（CJ/T 331-2016）交通数据字段：按标准文件分组展示
-  /// 公共应用基本信息（0x15）、复合交易记录（0x17）、电子钱包异地消费
-  /// 交易明细（0x10）与充值交易明细（0x1A）的字段视图。
+  /// 公共应用基本信息（0x15）、电子钱包本地消费交易明细（0x18）
+  /// 与充值交易明细（0x1A）的字段视图。
   List<Widget> _cityUnionTransitFields(ParsedCard parsed) {
     final files = widget.app.cityUnionFiles;
     if (files.isEmpty) {
       return [
         _hintLine('已命中城市一卡通应用，但未读取到标准文件数据'
-            '（0x15 / 0x17 / 0x10 / 0x1A）'),
+            '（0x15 / 0x18 / 0x1A）'),
       ];
     }
     final public = files.where((f) => f.sfi == 0x15).toList();
-    final composite = files.where((f) => f.sfi == 0x17).toList();
-    final offline = files.where((f) => f.sfi == 0x10).toList();
+    final local = files.where((f) => f.sfi == 0x18).toList();
     final recharge = files.where((f) => f.sfi == 0x1A).toList();
 
     return [
@@ -310,16 +312,10 @@ class _ExpertPageState extends State<ExpertPage> {
       const Divider(height: 28),
       _cjPublicInfoSection(public),
       _cjRecordGroupTile(
-        title: '复合交易记录文件（0x17）',
-        storageKey: 'cj-composite',
-        records: composite,
-        emptyHint: '未读取到复合交易记录（文件不存在或记录未写入）',
-      ),
-      _cjRecordGroupTile(
-        title: '电子钱包异地消费交易明细（0x10）',
-        storageKey: 'cj-offline',
-        records: offline,
-        emptyHint: '未读取到异地消费交易明细（文件不存在或记录未写入）',
+        title: '电子钱包本地消费交易明细（0x18）',
+        storageKey: 'cj-local',
+        records: local,
+        emptyHint: '未读取到本地消费交易明细（文件不存在或记录未写入）',
       ),
       _cjRecordGroupTile(
         title: '电子钱包充值交易明细（0x1A）',
@@ -377,7 +373,7 @@ class _ExpertPageState extends State<ExpertPage> {
     );
   }
 
-  /// 记录文件子菜单（0x17 / 0x10 / 0x1A）：展开后逐条展示记录字段视图。
+  /// 记录文件子菜单（0x18 / 0x1A）：展开后逐条展示记录字段视图。
   Widget _cjRecordGroupTile({
     required String title,
     required String storageKey,
@@ -448,13 +444,12 @@ class _ExpertPageState extends State<ExpertPage> {
   /// 记录摘要小字：交易类记录给出日期时间与类型，复合交易给出锁定状态；
   /// 未按标准解析的记录给出字节数与原始数据提示。
   String _cjRecordSubtitle(CityUnionFileView record) => switch (record) {
-        CjT331WalletOfflineTransaction r =>
+        CjT331WalletLocalConsumption r =>
           '${r.transactionDate ?? '未知日期'} ${r.transactionTime ?? ''} · '
               '${r.transactionTypeName}',
         CjT331WalletRecharge r =>
           '${r.transactionDate ?? '未知日期'} ${r.transactionTime ?? ''} · '
               '${r.transactionTypeName}',
-        CjT331CompositeTransaction r => '复合消费锁定：${r.lockStatus}',
         _ => '${record.rawHex.split(' ').length} 字节 · 未按标准解析',
       };
 

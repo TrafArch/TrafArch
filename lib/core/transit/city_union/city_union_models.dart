@@ -5,17 +5,20 @@ import 'city_union_codec.dart';
 /// 已接入解析器的文件在此登记；后续实现发行基本信息、城市轨道交通
 /// 应用信息等文件时追加常量并挂接 CityUnionFileParser。
 abstract final class CityUnionFileIds {
-  /// 电子钱包异地消费交易明细记录文件（表 8，循环记录文件；
-  /// 单条记录 0x17=23 字节，标准要求至少容纳 10 条记录，
-  /// 解析单元为单条记录而非整文件）。
-  static const int walletOfflineTransaction = 0x10;
-
   /// 公共应用基本信息文件（表 5，二进制 0x1E=30 字节，读自由）。
   static const int publicBasicInfo = 0x15;
 
-  /// 复合交易记录文件（表 6，变长记录文件，文件大小 0x00A0=160 字节；
-  /// 单条标准记录 48 字节，解析单元为单条记录而非整文件）。
+  /// 复合交易记录文件（表 6，循环记录文件；单条记录 48 字节，
+  /// 由记录标识 0x09 + 数据长度 + 锁定标识 + 45 字节应用方自定义区组成）。
   static const int compositeTransaction = 0x17;
+
+  /// 电子钱包本地消费交易明细记录文件（表 7，循环记录文件；
+  /// 单条记录 0x17=23 字节，解析单元为单条记录而非整文件）。
+  static const int walletLocalConsumption = 0x18;
+
+  /// 电子钱包异地消费交易明细记录文件（表 8，循环记录文件；
+  /// 单条记录 0x17=23 字节，字段布局与表 7 一致）。
+  static const int walletOfflineTransaction = 0x19;
 
   /// 电子钱包充值交易明细记录文件（表 9，循环记录文件；
   /// 单条记录 0x17=23 字节，解析单元为单条记录而非整文件）。
@@ -301,7 +304,7 @@ class CjT331CompositeTransaction implements CityUnionFileView {
       };
 }
 
-/// CJ/T 331-2016 表 8：电子钱包异地消费交易明细记录文件（SFI 0x10）
+/// CJ/T 331-2016 表 8：电子钱包异地消费交易明细记录文件（SFI 0x19）
 /// 单条记录解析结果。
 ///
 /// 本类型代表单条记录视图（非整文件）。该文件为循环记录文件，单条记录
@@ -378,6 +381,122 @@ class CjT331WalletOfflineTransaction implements CityUnionFileView {
 
   @override
   String get fileLabel => '电子钱包异地消费交易明细记录文件';
+
+  /// 交易类型 HEX 原始值（如 "06"）。
+  String get transactionTypeHex => CityUnionCodec.hexByte(transactionType);
+
+  /// 交易类型名称：06 消费 / 09 复合消费 / 其他未知类型。
+  String get transactionTypeName => transactionTypeLabel(transactionType);
+
+  /// 交易类型取值 → 名称映射（解析层字段说明共用，保持单一来源）。
+  static String transactionTypeLabel(int type) => switch (type) {
+        0x06 => '消费',
+        0x09 => '复合消费',
+        _ => '未知类型',
+      };
+
+  @override
+  List<String> get errors => [
+        for (final f in fields)
+          if (f.error != null) '${f.name}：${f.error}',
+      ];
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'sfi': CityUnionCodec.sfiLabel(sfi),
+        'fileLabel': fileLabel,
+        'sequence': sequence,
+        'sequenceHex': sequenceHex,
+        'reservedHex': reservedHex,
+        'amountRaw': amountRaw,
+        'amountHex': amountHex,
+        'transactionType': transactionTypeHex,
+        'transactionTypeName': transactionTypeName,
+        'terminalNumber': terminalNumber,
+        'transactionDate': transactionDate,
+        'transactionTime': transactionTime,
+        'rawHex': rawHex,
+        'errors': errors,
+        'fields': [for (final f in fields) f.toJson()],
+      };
+}
+
+/// CJ/T 331-2016 表 7：电子钱包本地消费交易明细记录文件（SFI 0x18）
+/// 单条记录解析结果。
+///
+/// 本类型代表单条记录视图（非整文件）。该文件为循环记录文件，单条记录
+/// 长度 0x17（23 字节）；读取层必须按记录逐条获取（READ RECORD），
+/// 不能把文件当作连续交易数组切分，也不假定记录 1 是最新交易。
+///
+/// 字段布局（字节编号按标准表格 1 起计数）：
+/// - 01-02 电子钱包消费交易序号（HEX 大端无符号整数）；
+/// - 03-05 预留（HEX 原样保留）；
+/// - 06-09 交易金额（HEX 大端原始值；表 7 未定义金额单位与小数位，
+///   只保留原始值与十进制大端值，不擅自换算为元）；
+/// - 10 交易类型（HEX：06 消费 / 09 复合消费）；
+/// - 11-16 交易终端编号（BCD 12 位数字，保留前导零）；
+/// - 17-20 交易日期（BCD YYYYMMDD）；21-23 交易时间（BCD HHMMSS）。
+///
+/// 金额字段是 HEX 而非 BCD（不能按半字节十进制解码）；终端编号是 BCD
+/// 而非 HEX（必须保留 12 位数字前导零）。BCD / 日期 / 时间非法时类型化
+/// 字段为 null（日期 / 时间非法保留 BCD 数字串），异常标记在 [fields]
+/// 对应条目上，其他字段照常解析。
+class CjT331WalletLocalConsumption implements CityUnionFileView {
+  /// 字节01-02：电子钱包消费交易序号（HEX 大端解码值）。
+  final int sequence;
+
+  /// 字节01-02：交易序号 HEX 原始值（4 位大写，如 "0001"）。
+  final String sequenceHex;
+
+  /// 字节03-05：预留字段（连续大写 HEX；表 7 未定义内容，原样保留）。
+  final String reservedHex;
+
+  /// 字节06-09：交易金额 HEX 大端解码值（金额单位未定义，不换算）。
+  final int amountRaw;
+
+  /// 字节06-09：交易金额 HEX 原始值（8 位大写，如 "000003E8"）。
+  final String amountHex;
+
+  /// 字节10：交易类型原始值（0x06 消费 / 0x09 复合消费）。
+  final int transactionType;
+
+  /// 字节11-16：交易终端编号（BCD 12 位数字，保留前导零）；
+  /// BCD 非法时为 null。
+  final String? terminalNumber;
+
+  /// 字节17-20：交易日期（BCD）；合法时为 "YYYY-MM-DD"，日期非法时
+  /// 保留 BCD 数字串并标记异常（不猜测修正），BCD 非法时为 null。
+  final String? transactionDate;
+
+  /// 字节21-23：交易时间（BCD）；合法时为 "HH:MM:SS"，时刻非法时
+  /// 保留 BCD 数字串并标记异常（不猜测修正），BCD 非法时为 null。
+  final String? transactionTime;
+
+  @override
+  final List<CjField> fields;
+
+  @override
+  final String rawHex;
+
+  const CjT331WalletLocalConsumption({
+    required this.sequence,
+    required this.sequenceHex,
+    required this.reservedHex,
+    required this.amountRaw,
+    required this.amountHex,
+    required this.transactionType,
+    this.terminalNumber,
+    this.transactionDate,
+    this.transactionTime,
+    required this.fields,
+    required this.rawHex,
+  });
+
+  @override
+  int get sfi => CityUnionFileIds.walletLocalConsumption;
+
+  @override
+  String get fileLabel => '电子钱包本地消费交易明细记录文件';
 
   /// 交易类型 HEX 原始值（如 "06"）。
   String get transactionTypeHex => CityUnionCodec.hexByte(transactionType);

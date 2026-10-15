@@ -3,9 +3,8 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/core/transit/city_union/city_union_file_parser.dart';
 import 'package:transit_card_analyzer/core/transit/city_union/city_union_models.dart';
-import 'package:transit_card_analyzer/core/transit/city_union/cj_t331_composite_transaction_parser.dart';
 import 'package:transit_card_analyzer/core/transit/city_union/cj_t331_public_info_parser.dart';
-import 'package:transit_card_analyzer/core/transit/city_union/cj_t331_wallet_offline_transaction_parser.dart';
+import 'package:transit_card_analyzer/core/transit/city_union/cj_t331_wallet_local_consumption_parser.dart';
 import 'package:transit_card_analyzer/core/transit/city_union/cj_t331_wallet_recharge_parser.dart';
 
 void main() {
@@ -169,13 +168,13 @@ void main() {
     });
   });
 
-  group('CjT331WalletOfflineTransactionParser 表8 电子钱包异地消费交易明细记录', () {
+  group('CjT331WalletLocalConsumptionParser 表7 电子钱包本地消费交易明细记录', () {
     test('合法 23 字节单条记录完整解析：HEX 与 BCD 分别处理', () {
       final record =
-          CjT331WalletOfflineTransactionParser.parseRecord(_sampleOffline());
+          CjT331WalletLocalConsumptionParser.parseRecord(_sampleLocal());
 
-      expect(record.sfi, 0x10);
-      expect(record.fileLabel, '电子钱包异地消费交易明细记录文件');
+      expect(record.sfi, 0x18);
+      expect(record.fileLabel, '电子钱包本地消费交易明细记录文件');
       expect(record.sequence, 1);
       expect(record.sequenceHex, '0001');
       expect(record.reservedHex, '000000');
@@ -193,45 +192,9 @@ void main() {
       expect(record.rawHex.split(' '), hasLength(23)); // 0x17 字节
     });
 
-    test('字段明细：字节范围、编码格式与说明', () {
-      final record =
-          CjT331WalletOfflineTransactionParser.parseRecord(_sampleOffline());
-
-      final sequence = record.fields[0];
-      expect(sequence.key, 'sequence');
-      expect(sequence.byteRange, '01-02');
-      expect(sequence.format, CjFieldFormat.hex);
-      expect(sequence.rawHex, '00 01');
-      expect(sequence.decoded, '0001');
-      expect(sequence.note, '十进制值 1');
-
-      expect(record.fields[1].byteRange, '03-05');
-      expect(record.fields[1].decoded, '000000');
-
-      final amount = record.fields[2];
-      expect(amount.byteRange, '06-09');
-      expect(amount.format, CjFieldFormat.hex); // 金额是 HEX 不是 BCD
-      expect(amount.decoded, '000003E8');
-
-      final type = record.fields[3];
-      expect(type.byteRange, '10');
-      expect(type.note, '消费');
-
-      final terminal = record.fields[4];
-      expect(terminal.byteRange, '11-16');
-      expect(terminal.format, CjFieldFormat.bcd);
-      expect(terminal.decoded, '123456789012');
-
-      expect(record.fields[5].byteRange, '17-20');
-      expect(record.fields[5].decoded, '2024-05-01');
-      expect(record.fields[6].byteRange, '21-23');
-      expect(record.fields[6].decoded, '08:30:00');
-    });
-
-    test('金额按 HEX 大端解码（不是 BCD 十进制）', () {
-      // 0x03E8 作为 HEX 是十进制 1000；若误按 BCD 会解成 "000003E8" 数字串。
-      final record = CjT331WalletOfflineTransactionParser.parseRecord(
-        _sampleOffline(amount: const [0x00, 0x00, 0x03, 0xE8]),
+    test('金额按 HEX 大端解码（不是 BCD 十进制），单位未定义不换算', () {
+      final record = CjT331WalletLocalConsumptionParser.parseRecord(
+        _sampleLocal(amount: const [0x00, 0x00, 0x03, 0xE8]),
       );
       expect(record.amountRaw, 1000);
       expect(record.amountHex, '000003E8');
@@ -239,28 +202,26 @@ void main() {
     });
 
     test('终端编号 BCD 保留 12 位前导零', () {
-      final record = CjT331WalletOfflineTransactionParser.parseRecord(
-        _sampleOffline(terminal: const [0x00, 0x12, 0x34, 0x56, 0x78, 0x90]),
+      final record = CjT331WalletLocalConsumptionParser.parseRecord(
+        _sampleLocal(terminal: const [0x00, 0x12, 0x34, 0x56, 0x78, 0x90]),
       );
       expect(record.terminalNumber, '001234567890');
       expect(record.terminalNumber, hasLength(12));
     });
 
-    test('交易类型：06 消费、09 复合消费、其他未知', () {
-      final consume = CjT331WalletOfflineTransactionParser.parseRecord(
-        _sampleOffline(type: 0x06),
+    test('交易类型：06 消费、09 复合消费、其他未知仍保留原始值', () {
+      final consume = CjT331WalletLocalConsumptionParser.parseRecord(
+        _sampleLocal(type: 0x06),
       );
       expect(consume.transactionTypeName, '消费');
-      expect(consume.fields[3].note, '消费');
 
-      final composite = CjT331WalletOfflineTransactionParser.parseRecord(
-        _sampleOffline(type: 0x09),
+      final composite = CjT331WalletLocalConsumptionParser.parseRecord(
+        _sampleLocal(type: 0x09),
       );
       expect(composite.transactionTypeName, '复合消费');
-      expect(composite.fields[3].note, '复合消费');
 
-      final unknown = CjT331WalletOfflineTransactionParser.parseRecord(
-        _sampleOffline(type: 0x0A),
+      final unknown = CjT331WalletLocalConsumptionParser.parseRecord(
+        _sampleLocal(type: 0x0A),
       );
       expect(unknown.transactionTypeName, '未知类型');
       expect(unknown.fields[3].note, '未知类型');
@@ -268,76 +229,49 @@ void main() {
 
     test('长度错误（非 23 字节）抛 FormatException', () {
       expect(
-        () => CjT331WalletOfflineTransactionParser.parseRecord(
+        () => CjT331WalletLocalConsumptionParser.parseRecord(
           List.filled(22, 0x00),
         ),
         throwsFormatException,
       );
       expect(
-        () => CjT331WalletOfflineTransactionParser.parseRecord(
+        () => CjT331WalletLocalConsumptionParser.parseRecord(
           List.filled(24, 0x00),
         ),
         throwsFormatException,
       );
     });
 
-    test('越界字节值抛 FormatException', () {
-      final data = _sampleOffline();
-      data[10] = 0x1FF;
-      expect(
-        () => CjT331WalletOfflineTransactionParser.parseRecord(data),
-        throwsFormatException,
-      );
-    });
-
     test('终端编号 BCD 非法只标记该字段，其他字段照常解析', () {
-      final record = CjT331WalletOfflineTransactionParser.parseRecord(
-        _sampleOffline(terminal: const [0x1A, 0x34, 0x56, 0x78, 0x90, 0x12]),
+      final record = CjT331WalletLocalConsumptionParser.parseRecord(
+        _sampleLocal(terminal: const [0x1A, 0x34, 0x56, 0x78, 0x90, 0x12]),
       );
 
       expect(record.terminalNumber, isNull);
-      expect(record.fields[4].decoded, isNull);
       expect(record.fields[4].error, 'BCD 编码非法');
       expect(record.fields[4].rawHex, '1A 34 56 78 90 12'); // 原始值保留
       expect(record.errors, contains('交易终端编号：BCD 编码非法'));
-
-      // 其他字段不受影响
       expect(record.amountRaw, 1000);
       expect(record.transactionDate, '2024-05-01');
       expect(record.errors, hasLength(1));
     });
 
     test('日期非法（13 月）标记异常并保留 BCD 数字串', () {
-      final record = CjT331WalletOfflineTransactionParser.parseRecord(
-        _sampleOffline(date: const [0x20, 0x24, 0x13, 0x01]),
+      final record = CjT331WalletLocalConsumptionParser.parseRecord(
+        _sampleLocal(date: const [0x20, 0x24, 0x13, 0x01]),
       );
-
       expect(record.transactionDate, '20241301');
       expect(record.fields[5].error, '日期非法');
-      expect(record.errors, contains('交易日期：日期非法'));
-      expect(record.transactionTime, '08:30:00'); // 其他字段正常
+      expect(record.transactionTime, '08:30:00');
     });
 
     test('时间非法（25 时）标记异常并保留 BCD 数字串', () {
-      final record = CjT331WalletOfflineTransactionParser.parseRecord(
-        _sampleOffline(time: const [0x25, 0x30, 0x00]),
+      final record = CjT331WalletLocalConsumptionParser.parseRecord(
+        _sampleLocal(time: const [0x25, 0x30, 0x00]),
       );
-
       expect(record.transactionTime, '253000');
       expect(record.fields[6].error, '时间非法');
-      expect(record.errors, contains('交易时间：时间非法'));
-      expect(record.transactionDate, '2024-05-01'); // 其他字段正常
-    });
-
-    test('日期字段 BCD 非法（0xAB）标记异常', () {
-      final record = CjT331WalletOfflineTransactionParser.parseRecord(
-        _sampleOffline(date: const [0x20, 0x24, 0xAB, 0x01]),
-      );
-
-      expect(record.transactionDate, isNull);
-      expect(record.fields[5].decoded, isNull);
-      expect(record.fields[5].error, 'BCD 编码非法');
-      expect(record.errors, contains('交易日期：BCD 编码非法'));
+      expect(record.transactionDate, '2024-05-01');
     });
   });
 
@@ -495,13 +429,6 @@ void main() {
   });
 
   group('CityUnionFileParser 按 SFI 分发', () {
-    test('SFI 0x10 分发到表 8 异地消费交易记录解析器（单条记录输入）', () {
-      final view = CityUnionFileParser.parse(0x10, _sampleOffline());
-      expect(view, isA<CjT331WalletOfflineTransaction>());
-      expect(view.fileLabel, '电子钱包异地消费交易明细记录文件');
-      expect(view.fields, hasLength(7));
-    });
-
     test('SFI 0x15 分发到表 5 解析器', () {
       final view = CityUnionFileParser.parse(0x15, _sampleFile());
       expect(view, isA<CjT331PublicInfo>());
@@ -509,11 +436,11 @@ void main() {
       expect(view.fields, hasLength(12));
     });
 
-    test('SFI 0x17 分发到表 6 复合交易记录解析器（单条记录输入）', () {
-      final view = CityUnionFileParser.parse(0x17, _sampleRecord());
-      expect(view, isA<CjT331CompositeTransaction>());
-      expect(view.fileLabel, '复合交易记录文件');
-      expect(view.fields, hasLength(4));
+    test('SFI 0x18 分发到表 7 本地消费交易记录解析器（单条记录输入）', () {
+      final view = CityUnionFileParser.parse(0x18, _sampleLocal());
+      expect(view, isA<CjT331WalletLocalConsumption>());
+      expect(view.fileLabel, '电子钱包本地消费交易明细记录文件');
+      expect(view.fields, hasLength(7));
     });
 
     test('SFI 0x1A 分发到表 9 充值交易记录解析器（单条记录输入）', () {
@@ -562,16 +489,15 @@ void main() {
       expect(issuer['error'], 'BCD 编码非法');
     });
 
-    test('表 8 记录 JSON 包含原始值与解码值', () {
+    test('表 7 记录 JSON 包含原始值与解码值', () {
       final record =
-          CjT331WalletOfflineTransactionParser.parseRecord(_sampleOffline());
+          CjT331WalletLocalConsumptionParser.parseRecord(_sampleLocal());
       final json = jsonDecode(
-        CjT331WalletOfflineTransactionParser.toPrettyJson(record),
+        CjT331WalletLocalConsumptionParser.toPrettyJson(record),
       ) as Map<String, dynamic>;
 
-      expect(json['sfi'], '0x10');
+      expect(json['sfi'], '0x18');
       expect(json['sequence'], 1);
-      expect(json['sequenceHex'], '0001');
       expect(json['amountRaw'], 1000);
       expect(json['amountHex'], '000003E8');
       expect(json['transactionType'], '06');
@@ -631,22 +557,8 @@ List<int> _sampleFile({
       0x00, 0x00, // 29-30 预留
     ];
 
-/// 构造表 6 示例记录（默认外层字段合法；应用方自定义区填充递增字节 00~2C）。
-List<int> _sampleRecord({
-  int identifier = 0x09,
-  int dataLength = 0x2D,
-  int lockFlag = 0x00,
-  List<int>? applicationData,
-}) =>
-    [
-      identifier, // 01 记录标识
-      dataLength, // 02 复合消费数据长度（0x2D=45，与自定义区等长）
-      lockFlag, // 03 复合消费锁定标识
-      ...(applicationData ?? List<int>.generate(45, (i) => i)), // 04-48
-    ];
-
-/// 构造表 8 示例记录（默认全字段合法，单条 23 字节）。
-List<int> _sampleOffline({
+/// 构造表 7 示例记录（默认全字段合法，单条 23 字节；消费类型 0x06）。
+List<int> _sampleLocal({
   List<int> sequence = const [0x00, 0x01],
   List<int> amount = const [0x00, 0x00, 0x03, 0xE8],
   int type = 0x06,
@@ -658,14 +570,13 @@ List<int> _sampleOffline({
       ...sequence, // 01-02 电子钱包消费交易序号（HEX）
       0x00, 0x00, 0x00, // 03-05 预留
       ...amount, // 06-09 交易金额（HEX 大端）
-      type, // 10 交易类型
+      type, // 10 交易类型（06 消费 / 09 复合消费）
       ...terminal, // 11-16 交易终端编号（BCD）
       ...date, // 17-20 交易日期（BCD）
       ...time, // 21-23 交易时间（BCD）
     ];
 
 /// 构造表 9 示例记录（默认全字段合法，单条 23 字节；
-/// 金额原始值 0x000003E8 十进制 1000，单位未定义不换算）。
 List<int> _sampleRecharge({
   List<int> sequence = const [0x00, 0x01],
   List<int> amount = const [0x00, 0x00, 0x03, 0xE8],

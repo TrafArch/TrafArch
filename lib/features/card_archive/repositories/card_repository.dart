@@ -112,6 +112,20 @@ class CardRepository {
         .watch();
   }
 
+  /// 一次性获取全部卡片档案（排序同 [watchCards]），供导出使用。
+  Future<List<SavedCard>> getAllCards() {
+    return (db.select(db.savedCards)
+          ..orderBy([
+            (t) => OrderingTerm(
+                  expression: t.lastReadAt,
+                  mode: OrderingMode.desc,
+                  nulls: NullsOrder.last,
+                ),
+            (t) => OrderingTerm.desc(t.updatedAt),
+          ]))
+        .get();
+  }
+
   /// 单张档案数据流（卡片详情页监听改名 / 重复读取更新）；不存在时为空。
   Stream<SavedCard?> watchCard(String id) {
     return (db.select(db.savedCards)..where((t) => t.id.equals(id)))

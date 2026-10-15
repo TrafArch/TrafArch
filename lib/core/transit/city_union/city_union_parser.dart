@@ -11,9 +11,7 @@ import 'city_union_models.dart';
 /// - 先选择主文件（MF 3F00）复位（失败忽略）；
 /// - 城市一卡通应用 AID：A00000000386980701（CLA 0x00 / 0x80 双尝试）；
 /// - SFI 0x15 公共应用基本信息文件：READ BINARY 整体读取（30 字节）；
-/// - SFI 0x17 复合交易记录文件（变长记录）：逐条 READ RECORD，
-///   单条 48 字节，读至记录未找到 / 内容重复为止；
-/// - SFI 0x10 异地消费交易明细（循环记录）：逐条 READ RECORD，
+/// - SFI 0x18 电子钱包本地消费交易明细（循环记录）：逐条 READ RECORD，
 ///   单条 23 字节，不假定记录 1 是最新交易；
 /// - SFI 0x1A 充值交易明细（循环记录）：逐条 READ RECORD，单条 23 字节。
 ///
@@ -88,7 +86,7 @@ class CityUnionParser implements CardParser {
   }
 
   /// 读取已接入解析器的标准文件并返回统一视图列表：
-  /// 0x15 公共应用基本信息、0x17 复合交易记录、0x10 异地消费交易明细、
+  /// 0x15 公共应用基本信息、0x18 电子钱包本地消费交易明细、
   /// 0x1A 充值交易明细；文件不存在 / 未写入时跳过（不产出视图）。
   Future<List<CityUnionFileView>> readFiles() async {
     final out = <CityUnionFileView>[];
@@ -101,13 +99,12 @@ class CityUnionParser implements CardParser {
       out.add(_parseSafely(CityUnionFileIds.publicBasicInfo, public));
     }
 
-    out.addAll(await _readRecords(CityUnionFileIds.compositeTransaction));
-    out.addAll(await _readRecords(CityUnionFileIds.walletOfflineTransaction));
+    out.addAll(await _readRecords(CityUnionFileIds.walletLocalConsumption));
     out.addAll(await _readRecords(CityUnionFileIds.walletRecharge));
     return out;
   }
 
-  /// 逐条 READ RECORD 读取记录文件（0x17 变长 / 0x10、0x1A 循环记录）。
+  /// 逐条 READ RECORD 读取记录文件（0x18、0x1A 循环记录）。
   ///
   /// 终止条件与 TUnionParser 循环记录读取一致：
   /// - 读取失败（记录未找到 6A83 等）→ 停止；

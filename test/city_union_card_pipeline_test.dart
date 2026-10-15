@@ -5,7 +5,7 @@ import 'package:transit_card_analyzer/core/transit/city_union/city_union_parser.
 
 void main() {
   group('CityUnionParser 解析管道', () {
-    test('完整读取：0x15 公共信息 + 0x17 复合交易 + 0x10 异地消费 + 0x1A 充值', () async {
+    test('完整读取：0x15 公共信息 + 0x18 本地消费 + 0x1A 充值', () async {
       final parsed = await CityUnionParser(_baseLink().call).parse();
 
       expect(parsed, isNotNull);
@@ -16,23 +16,19 @@ void main() {
       expect(parsed.transactions, isEmpty);
 
       final files = parsed.cityUnionFiles;
-      expect(files, hasLength(4));
+      expect(files, hasLength(3));
 
       final info = files[0];
       expect(info, isA<CjT331PublicInfo>());
       expect((info as CjT331PublicInfo).issuerCode, '0123');
       expect(info.applicationSerialNumber, '1122334455667788');
 
-      final composite = files[1];
-      expect(composite, isA<CjT331CompositeTransaction>());
-      expect((composite as CjT331CompositeTransaction).lockStatus, '允许');
+      final local = files[1];
+      expect(local, isA<CjT331WalletLocalConsumption>());
+      expect((local as CjT331WalletLocalConsumption).amountHex, '000003E8');
+      expect(local.transactionTypeName, '消费');
 
-      final offline = files[2];
-      expect(offline, isA<CjT331WalletOfflineTransaction>());
-      expect((offline as CjT331WalletOfflineTransaction).amountHex, '000003E8');
-      expect(offline.transactionTypeName, '消费');
-
-      final recharge = files[3];
+      final recharge = files[2];
       expect(recharge, isA<CjT331WalletRecharge>());
       expect((recharge as CjT331WalletRecharge).isRecharge, isTrue);
     });
@@ -53,8 +49,7 @@ void main() {
       link.enqueue(0xA4, const [0x6A, 0x82]); // AID CLA 00 失败
       link.enqueue(0xA4, _sw9000(const [])); // AID CLA 80 成功
       link.enqueue(0xB0, _sw9000(_publicFile()));
-      link.enqueue(0xB2, const [0x6A, 0x83]); // 0x17 记录未找到
-      link.enqueue(0xB2, const [0x6A, 0x83]); // 0x10 记录未找到
+      link.enqueue(0xB2, const [0x6A, 0x83]); // 0x18 记录未找到
       link.enqueue(0xB2, const [0x6A, 0x83]); // 0x1A 记录未找到
 
       final parsed = await CityUnionParser(link.call).parse();
@@ -68,8 +63,7 @@ void main() {
       link.enqueue(0xA4, _sw9000(const [])); // 选择城市一卡通 AID
       link.enqueue(0xB0, const [0x6A, 0x82]); // 0x15 整体读取失败
       link.enqueue(0xB0, const [0x6A, 0x82]); // 0x15 按偏移补读同样失败
-      link.enqueue(0xB2, const [0x6A, 0x83]); // 0x17 记录未找到
-      link.enqueue(0xB2, const [0x6A, 0x83]); // 0x10 记录未找到
+      link.enqueue(0xB2, const [0x6A, 0x83]); // 0x18 记录未找到
       link.enqueue(0xB2, _sw9000(_rechargeRecord())); // 0x1A 记录 1 命中
       link.enqueue(0xB2, const [0x6A, 0x83]); // 0x1A 记录 2 未找到
 
@@ -84,18 +78,17 @@ void main() {
       link.enqueue(0xA4, const [0x90, 0x00]);
       link.enqueue(0xA4, _sw9000(const []));
       link.enqueue(0xB0, _sw9000(_publicFile()));
-      link.enqueue(0xB2, const [0x6A, 0x83]); // 0x17 未找到
-      link.enqueue(0xB2, _sw9000(List.filled(20, 0x5A))); // 0x10 记录 20 字节（非 23）
-      link.enqueue(0xB2, const [0x6A, 0x83]); // 0x10 记录 2 未找到
+      link.enqueue(0xB2, _sw9000(List.filled(20, 0x5A))); // 0x18 记录 20 字节（非 23）
+      link.enqueue(0xB2, const [0x6A, 0x83]); // 0x18 记录 2 未找到
       link.enqueue(0xB2, const [0x6A, 0x83]); // 0x1A 未找到
 
       final parsed = await CityUnionParser(link.call).parse();
 
       final files = parsed!.cityUnionFiles;
-      expect(files, hasLength(2)); // 0x15 正常 + 0x10 原始占位
+      expect(files, hasLength(2)); // 0x15 正常 + 0x18 原始占位
       final raw = files[1];
       expect(raw, isA<CityUnionRawFileView>());
-      expect(raw.sfi, 0x10);
+      expect(raw.sfi, 0x18);
       expect(raw.fields, isEmpty);
       expect(raw.errors, isNotEmpty); // 保留解析器给出的长度错误说明
       expect(raw.rawHex, contains('5A'));
@@ -107,18 +100,17 @@ void main() {
       link.enqueue(0xA4, _sw9000(const []));
       link.enqueue(0xB0, const [0x6A, 0x82]); // 0x15 整体失败
       link.enqueue(0xB0, const [0x6A, 0x82]); // 0x15 补读失败
-      link.enqueue(0xB2, const [0x6A, 0x83]); // 0x17 未找到
-      link.enqueue(0xB2, _sw9000(List.filled(23, 0x00))); // 0x10 记录 1 空白
-      link.enqueue(0xB2, _sw9000(_offlineRecord())); // 0x10 记录 2 有效
-      link.enqueue(0xB2, _sw9000(_offlineRecord())); // 0x10 记录 3 与记录 2 相同
+      link.enqueue(0xB2, _sw9000(List.filled(23, 0x00))); // 0x18 记录 1 空白
+      link.enqueue(0xB2, _sw9000(_localRecord())); // 0x18 记录 2 有效
+      link.enqueue(0xB2, _sw9000(_localRecord())); // 0x18 记录 3 与记录 2 相同
       link.enqueue(0xB2, const [0x6A, 0x83]); // 0x1A 未找到
 
       final parsed = await CityUnionParser(link.call).parse();
 
-      final offline =
-          parsed!.cityUnionFiles.where((f) => f.sfi == 0x10).toList();
-      expect(offline, hasLength(1)); // 重复内容停止，不产出重复条目
-      expect(offline.single, isA<CjT331WalletOfflineTransaction>());
+      final local =
+          parsed!.cityUnionFiles.where((f) => f.sfi == 0x18).toList();
+      expect(local, hasLength(1)); // 重复内容停止，不产出重复条目
+      expect(local.single, isA<CjT331WalletLocalConsumption>());
     });
   });
 }
@@ -138,16 +130,14 @@ class _ScriptedLink {
   }
 }
 
-/// 完整读取脚本：MF → AID → 0x15 → 0x17 (1 条) → 0x10 (1 条) → 0x1A (1 条)。
+/// 完整读取脚本：MF → AID → 0x15 → 0x18 (1 条) → 0x1A (1 条)。
 _ScriptedLink _baseLink() {
   final link = _ScriptedLink();
   link.enqueue(0xA4, const [0x90, 0x00]); // 选择主文件 MF
   link.enqueue(0xA4, _sw9000(const [])); // 选择城市一卡通 AID
   link.enqueue(0xB0, _sw9000(_publicFile())); // 0x15 整体读取
-  link.enqueue(0xB2, _sw9000(_compositeRecord())); // 0x17 记录 1
-  link.enqueue(0xB2, const [0x6A, 0x83]); // 0x17 记录 2 未找到
-  link.enqueue(0xB2, _sw9000(_offlineRecord())); // 0x10 记录 1
-  link.enqueue(0xB2, const [0x6A, 0x83]); // 0x10 记录 2 未找到
+  link.enqueue(0xB2, _sw9000(_localRecord())); // 0x18 记录 1
+  link.enqueue(0xB2, const [0x6A, 0x83]); // 0x18 记录 2 未找到
   link.enqueue(0xB2, _sw9000(_rechargeRecord())); // 0x1A 记录 1
   link.enqueue(0xB2, const [0x6A, 0x83]); // 0x1A 记录 2 未找到
   return link;
@@ -171,16 +161,8 @@ List<int> _publicFile() => [
       0x00, 0x00, // 29-30 预留
     ];
 
-/// 表 6 示例记录（48 字节，记录标识 0x09，锁定标识 0x00 允许）。
-List<int> _compositeRecord() => [
-      0x09, // 01 记录标识
-      0x2D, // 02 复合消费数据长度
-      0x00, // 03 复合消费锁定标识
-      ...List<int>.generate(45, (i) => i), // 04-48 应用方自定义
-    ];
-
-/// 表 8 示例记录（23 字节，消费 1000，终端 123456789012）。
-List<int> _offlineRecord() => [
+/// 表 7 示例记录（23 字节，本地消费 1000，终端 123456789012）。
+List<int> _localRecord() => [
       0x00, 0x01, // 01-02 交易序号
       0x00, 0x00, 0x00, // 03-05 预留
       0x00, 0x00, 0x03, 0xE8, // 06-09 交易金额
