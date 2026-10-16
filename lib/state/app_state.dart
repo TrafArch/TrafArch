@@ -19,10 +19,10 @@ import '../core/nfc/nfc_models.dart';
 import '../core/nfc/nfc_service.dart';
 import '../core/qr/gms_qr_scanner.dart';
 import '../core/transit/city_union/city_union_models.dart';
-import '../core/transit/city_union/city_union_parser.dart';
+import '../core/transit/local_card/local_card_models.dart';
+import '../core/transit/local_card/local_card_parser.dart';
 import '../core/transit/tunion/qr/jt_t1179_qr_parser.dart';
 import '../core/transit/tunion/tunion_models.dart';
-import '../core/transit/tunion/tunion_parser.dart';
 import '../core/transit/tunion/tunion_process_parser.dart';
 import '../database/app_database.dart';
 import '../features/bank_card/data/transport/nfc_card_transport.dart';
@@ -41,7 +41,8 @@ import '../features/card_archive/services/card_identification_service.dart';
 /// 职责：
 /// - 知识库加载（JSON 资产 + 站点数据：预制快照 / 在线拉取）；
 /// - 扫描会话管理（世代号防止旧请求误杀新扫描）；
-/// - 读卡流程编排：scanOnce → TUnionParser.parse → AnalysisEngine.analyze；
+/// - 读卡流程编排：scanOnce → LocalCardParser（统一识读模块，内含
+///   交通联合 / 城市一卡通 / 地方交通卡探测）→ AnalysisEngine.analyze；
 /// - 卡片档案：解析成功后识别卡型 / 正式卡名，待用户确认后归档
 ///   （不覆盖用户自定义名称）；
 /// - APDU 日志（专家页会话展示）与运行日志（持久化，可导出）；
@@ -154,6 +155,10 @@ class AppState extends ChangeNotifier {
 
   ParsedCard? _parsedCard;
   ParsedCard? get parsedCard => _parsedCard;
+
+  /// 地方交通卡识读结果（非地方卡时为 null）：卡信息 / 乘车流水 /
+  /// 扩展槽位，供展示层按 [CardParserIds.localCard] 分派渲染。
+  ReadResult? get localReadResult => _parsedCard?.localCard;
 
   BankCardResult? _lastBankCardResult;
   /// 最近一次银行卡只读分析结果（交通应用未命中时自动分析，会话内展示用，
@@ -791,18 +796,15 @@ class AppState extends ChangeNotifier {
 
     try {
       await init();
-      // 按序探测已注册解析器：交通联合（JT/T 978.2）优先，未命中时
-      // 尝试城市一卡通（CJ/T 331-2016）；双标准卡以交通联合载荷为主。
-      final cardParsers = <CardParser>[
-        TUnionParser(_transceive),
-        CityUnionParser(_transceive),
-      ];
-      ParsedCard? parsed;
-      for (final parser in cardParsers) {
-        _log('== 尝试解析：${parser.parserName} ==');
-        parsed = await parser.parse();
-        if (parsed != null) break;
-      }
+      // 交通卡识读统一交由独立模块（LocalCardParser）编排：模块以新架构
+      // 为主，内部已融入原交通联合 / 城市一卡通富识读与地方交通卡探测，
+      // 按「交通联合优先 → 城市一卡通 → 地方卡兜底」串联，产出结果各自
+      // 保留 tunion / cityUnion / localCard 的 parserId。
+      final parser = LocalCardParser(
+        _transceive,
+        onStage: (stage) => _log('== 尝试解析：$stage =='),
+      );
+      final parsed = await parser.parse();
       if (parsed == null) {
         // 交通应用均未命中：自动转入银行卡（EMV / PBOC）只读分析，
         // 无需用户切换模式；结果供首页「最近扫描」与专家页统一展示。

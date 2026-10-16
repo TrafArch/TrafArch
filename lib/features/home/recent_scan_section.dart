@@ -177,6 +177,8 @@ class _RecentScanSectionState extends State<RecentScanSection> {
     final identified = app.lastIdentified;
     final isTUnion = parsed?.parserId == CardParserIds.tunion;
     final isCityUnion = parsed?.parserId == CardParserIds.cityUnion;
+    final isLocal = parsed?.parserId == CardParserIds.localCard;
+    final local = parsed?.localCard;
     final info = parsed?.info;
     final publicInfo = app.cityUnionPublicInfo;
     final wallet = app.analysis?.wallet;
@@ -188,17 +190,23 @@ class _RecentScanSectionState extends State<RecentScanSection> {
         ? identified.displayName
         : parsed == null
             ? '未识别卡片'
-            : cardTypeLabel(
-                isCityUnion ? CardTypes.cityUnion : CardTypes.chinaTunion,
-              );
+            : isLocal
+                ? local!.info.cardKindLabel
+                : cardTypeLabel(
+                    isCityUnion ? CardTypes.cityUnion : CardTypes.chinaTunion,
+                  );
     // 发卡地：识别城市优先，回退城市码表（与识别引擎链路一致）。
     final cityName =
         identified?.identity.cityName ?? app.cityNameOf(app.cardCityCode);
     // 卡号（完整，不脱敏）：识别结果优先，回退解析字段，最后回退 UID。
     final cardNumber = identified?.cardNumber ??
-        (isCityUnion
-            ? publicInfo?.applicationSerialNumber
-            : info?.displayCardNumber) ??
+        (isLocal
+            ? (local!.info.cardNumber.isEmpty
+                ? null
+                : local.info.cardNumber)
+            : isCityUnion
+                ? publicInfo?.applicationSerialNumber
+                : info?.displayCardNumber) ??
         result?.uid ??
         '未知';
 
@@ -208,9 +216,11 @@ class _RecentScanSectionState extends State<RecentScanSection> {
         _kv(
           context,
           '类型',
-          cardTypeLabel(
-            isCityUnion ? CardTypes.cityUnion : CardTypes.chinaTunion,
-          ),
+          isLocal
+              ? '地方交通卡'
+              : cardTypeLabel(
+                  isCityUnion ? CardTypes.cityUnion : CardTypes.chinaTunion,
+                ),
         )
       else if (result?.cardType != null)
         _kv(context, '卡型', result!.cardType!),
@@ -219,6 +229,12 @@ class _RecentScanSectionState extends State<RecentScanSection> {
       if (cardKind != null)
         _kv(context, '卡种', app.cardKindName(cardKind) ?? cardKind),
       _kv(context, '卡号', cardNumber),
+      if (isLocal && local != null && local.info.balance != 0)
+        _kv(
+          context,
+          '余额',
+          '${(local.info.balance / 100).toStringAsFixed(2)} 元',
+        ),
       if (isTUnion && wallet?.balanceText != null)
         _kv(context, '余额', wallet!.balanceText!),
       if (expireDate != null) _kv(context, '有效期至', _fmtDate(expireDate)),

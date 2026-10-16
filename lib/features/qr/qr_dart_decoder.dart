@@ -65,13 +65,17 @@ Result? _tryDecode(LuminanceSource source) {
 ///
 /// 返回二维码原始载荷字节；未识别到二维码或图片无法读取时返回 null。
 Future<List<int>?> decodeQrFromImageFile(String path) async {
+  ui.ImmutableBuffer? buffer;
+  ui.ImageDescriptor? descriptor;
+  ui.Codec? codec;
+  ui.Image? image;
   try {
     final fileBytes = await File(path).readAsBytes();
-    final buffer = await ui.ImmutableBuffer.fromUint8List(fileBytes);
-    final descriptor = await ui.ImageDescriptor.encoded(buffer);
+    buffer = await ui.ImmutableBuffer.fromUint8List(fileBytes);
+    descriptor = await ui.ImageDescriptor.encoded(buffer!);
 
-    var targetWidth = descriptor.width;
-    var targetHeight = descriptor.height;
+    var targetWidth = descriptor!.width;
+    var targetHeight = descriptor!.height;
     const maxSide = 1800;
     final longest = targetWidth > targetHeight ? targetWidth : targetHeight;
     if (longest > maxSide) {
@@ -80,18 +84,13 @@ Future<List<int>?> decodeQrFromImageFile(String path) async {
       targetHeight = (targetHeight * scale).round();
     }
 
-    final codec = await descriptor.instantiateCodec(
+    codec = await descriptor!.instantiateCodec(
       targetWidth: targetWidth,
       targetHeight: targetHeight,
     );
-    final frame = await codec.getNextFrame();
-    final image = frame.image;
-    final byteData = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
-
-    image.dispose();
-    codec.dispose();
-    descriptor.dispose();
-    buffer.dispose();
+    final frame = await codec!.getNextFrame();
+    image = frame.image;
+    final byteData = await image!.toByteData(format: ui.ImageByteFormat.rawRgba);
 
     if (byteData == null) return null;
     final rgba = Uint8List.fromList(byteData.buffer
@@ -102,5 +101,11 @@ Future<List<int>?> decodeQrFromImageFile(String path) async {
     return decode?.payload;
   } catch (_) {
     return null;
+  } finally {
+    // 无论成功或中途抛异常，均已创建的原生资源必须全部释放，避免泄漏
+    image?.dispose();
+    codec?.dispose();
+    descriptor?.dispose();
+    buffer?.dispose();
   }
 }

@@ -12,7 +12,7 @@ class AppInfo {
   static String get appName => appNameZh.isEmpty ? appNameEn : appNameZh;
 
   static const String version = '1.0.1-beta.5';
-  static const String buildNumber = '2021';
+  static const String buildNumber = '2023';
   static const String author = 'kajolno';
   static const String copyright = '© 2026 kajolno';
 }

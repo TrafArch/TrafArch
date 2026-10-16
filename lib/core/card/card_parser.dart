@@ -1,4 +1,5 @@
 import '../transit/city_union/city_union_models.dart';
+import '../transit/local_card/local_card_models.dart';
 import '../transit/tunion/tunion_models.dart';
 
 /// APDU 收发函数签名：发送命令字节，返回响应字节（含 SW1SW2）。
@@ -12,6 +13,9 @@ abstract final class CardParserIds {
 
   /// 城市一卡通（住建部 City Union，CJ/T 331-2016）。
   static const String cityUnion = 'city_union';
+
+  /// 地方交通卡（北京 / 羊城通 / 深圳通 / 苏州 / 天府通等城市探测卡种）。
+  static const String localCard = 'local_card';
 }
 
 /// 统一卡片解析器接口。
@@ -47,6 +51,11 @@ class ParsedCard {
   /// 交易明细）；由城市一卡通解析器产出，交通联合解析器产出时为空。
   final List<CityUnionFileView> cityUnionFiles;
 
+  /// 地方交通卡识读结果（卡信息 + 乘车流水 + 扩展槽位）；
+  /// 由 [LocalCardParser]（parserId [CardParserIds.localCard]）产出，
+  /// 其它解析器产出时为 null。
+  final ReadResult? localCard;
+
   final String selectedAidHex;
 
   const ParsedCard({
@@ -56,6 +65,7 @@ class ParsedCard {
     required this.transactions,
     this.transitProcessRecords = const [],
     this.cityUnionFiles = const [],
+    this.localCard,
     this.selectedAidHex = '',
   });
 }

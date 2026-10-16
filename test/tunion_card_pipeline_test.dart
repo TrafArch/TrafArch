@@ -8,13 +8,26 @@ import 'package:transit_card_analyzer/core/data/tunion_knowledge_base.dart';
 import 'package:transit_card_analyzer/core/data/station_codes.dart';
 import 'package:transit_card_analyzer/core/data/tunion_terminal_decoder.dart';
 import 'package:transit_card_analyzer/core/transit/tunion/tunion_models.dart';
-import 'package:transit_card_analyzer/core/transit/tunion/tunion_parser.dart';
+import 'package:transit_card_analyzer/core/transit/local_card/apdu_exchange.dart';
+import 'package:transit_card_analyzer/core/transit/local_card/cards/common_unit_tu.dart';
+import 'package:transit_card_analyzer/core/transit/local_card/local_card_models.dart';
 import 'package:transit_card_analyzer/core/transit/tunion/tunion_process_parser.dart';
 
+/// 驱动新模块 TU 单元完成一次识读（等价原 TUnionParser.parse()，
+/// APDU 序列完全一致；老模块已移除，测试改为直接调用单元）。
+Future<ParsedCard?> _parseTu(LocalTransceive link) async {
+  final apdu = ApduExchange(transceive: link);
+  final info = CardInfo();
+  final records = <ApduRecord>[];
+  final tu = CommonUnitTu(apdu);
+  if (!await tu.select(info, records)) return null;
+  return tu.read(info, records);
+}
+
 void main() {
-  group('TUnionParser 解析管道', () {
+  group('交通联合（TU）解析管道', () {
     test('完整读取：标准文件 + 余额 + 交易记录', () async {
-      final parsed = await TUnionParser(_baseLink().call).parse();
+      final parsed = await _parseTu(_baseLink().call);
 
       expect(parsed, isNotNull);
       final info = parsed!.info;
@@ -39,7 +52,7 @@ void main() {
       final link = _baseLink(
         b2Response: _sw9000([0x70, 0x17, ..._record()]),
       );
-      final parsed = await TUnionParser(link.call).parse();
+      final parsed = await _parseTu(link.call);
       expect(parsed, isNotNull);
       expect(parsed!.transactions, hasLength(1));
       expect(parsed.transactions.first.amountFen, 4660);
@@ -49,7 +62,7 @@ void main() {
       final link = _baseLink(
         b2Response: _sw9000([...List.filled(23, 0), ..._record(seq: 2, day: 2)]),
       );
-      final parsed = await TUnionParser(link.call).parse();
+      final parsed = await _parseTu(link.call);
       expect(parsed!.transactions, hasLength(1));
       expect(parsed.transactions.first.sequence, 2);
     });
@@ -58,7 +71,7 @@ void main() {
       final link = _baseLink(
         b2Response: _sw9000(_record(amountFen: 5000, rawType: 0x02)),
       );
-      final parsed = await TUnionParser(link.call).parse();
+      final parsed = await _parseTu(link.call);
 
       final txn = parsed!.transactions.single;
       expect(txn.typeName, '充值');
@@ -82,7 +95,7 @@ void main() {
       link.enqueue(0xB2, _sw9000(_cycleProcessRecord())); // 0x1E 记录 1
       link.enqueue(0xB2, const [0x6A, 0x83]); // 0x1E 记录 2 未找到
 
-      final parsed = await TUnionParser(link.call).parse();
+      final parsed = await _parseTu(link.call);
 
       expect(parsed, isNotNull);
       final records = parsed!.transitProcessRecords;
@@ -131,7 +144,7 @@ void main() {
       link.enqueue(0xB2, const [0x6A, 0x83]); // 0x1E 整体读取失败
       link.enqueue(0xB2, const [0x6A, 0x83]); // 0x1E 逐条读取失败
 
-      final parsed = await TUnionParser(link.call).parse();
+      final parsed = await _parseTu(link.call);
 
       expect(parsed, isNotNull);
       final varRecords =
@@ -163,7 +176,7 @@ void main() {
       link.enqueue(0xB2, const [0x6A, 0x83]); // 0x1E 整体读取失败
       link.enqueue(0xB2, const [0x6A, 0x83]); // 0x1E 逐条读取失败
 
-      final parsed = await TUnionParser(link.call).parse();
+      final parsed = await _parseTu(link.call);
 
       expect(parsed, isNotNull);
       final varRecords =

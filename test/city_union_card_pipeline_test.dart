@@ -1,12 +1,25 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/core/card/card_parser.dart';
 import 'package:transit_card_analyzer/core/transit/city_union/city_union_models.dart';
-import 'package:transit_card_analyzer/core/transit/city_union/city_union_parser.dart';
+import 'package:transit_card_analyzer/core/transit/local_card/apdu_exchange.dart';
+import 'package:transit_card_analyzer/core/transit/local_card/cards/common_unit_cu.dart';
+import 'package:transit_card_analyzer/core/transit/local_card/local_card_models.dart';
+
+/// 驱动新模块 CU 单元完成一次识读（等价原 CityUnionParser.parse()，
+/// APDU 序列完全一致；老模块已移除，测试改为直接调用单元）。
+Future<ParsedCard?> _parseCu(LocalTransceive link) async {
+  final apdu = ApduExchange(transceive: link);
+  final info = CardInfo();
+  final records = <ApduRecord>[];
+  final cu = CommonUnitCu(apdu);
+  if (!await cu.select(info, records)) return null;
+  return cu.read(info, records);
+}
 
 void main() {
-  group('CityUnionParser 解析管道', () {
+  group('城市一卡通（CU）解析管道', () {
     test('完整读取：0x15 公共信息 + 0x18 本地消费 + 0x1A 充值', () async {
-      final parsed = await CityUnionParser(_baseLink().call).parse();
+      final parsed = await _parseCu(_baseLink().call);
 
       expect(parsed, isNotNull);
       expect(parsed!.parserId, CardParserIds.cityUnion);
@@ -39,7 +52,7 @@ void main() {
       link.enqueue(0xA4, const [0x6A, 0x82]); // AID CLA 00 失败
       link.enqueue(0xA4, const [0x6A, 0x82]); // AID CLA 80 失败
 
-      final parsed = await CityUnionParser(link.call).parse();
+      final parsed = await _parseCu(link.call);
       expect(parsed, isNull);
     });
 
@@ -52,7 +65,7 @@ void main() {
       link.enqueue(0xB2, const [0x6A, 0x83]); // 0x18 记录未找到
       link.enqueue(0xB2, const [0x6A, 0x83]); // 0x1A 记录未找到
 
-      final parsed = await CityUnionParser(link.call).parse();
+      final parsed = await _parseCu(link.call);
       expect(parsed, isNotNull);
       expect(parsed!.cityUnionFiles, hasLength(1)); // 仅 0x15 公共信息
     });
@@ -67,7 +80,7 @@ void main() {
       link.enqueue(0xB2, _sw9000(_rechargeRecord())); // 0x1A 记录 1 命中
       link.enqueue(0xB2, const [0x6A, 0x83]); // 0x1A 记录 2 未找到
 
-      final parsed = await CityUnionParser(link.call).parse();
+      final parsed = await _parseCu(link.call);
       expect(parsed, isNotNull);
       expect(parsed!.cityUnionFiles, hasLength(1));
       expect(parsed.cityUnionFiles.single, isA<CjT331WalletRecharge>());
@@ -82,7 +95,7 @@ void main() {
       link.enqueue(0xB2, const [0x6A, 0x83]); // 0x18 记录 2 未找到
       link.enqueue(0xB2, const [0x6A, 0x83]); // 0x1A 未找到
 
-      final parsed = await CityUnionParser(link.call).parse();
+      final parsed = await _parseCu(link.call);
 
       final files = parsed!.cityUnionFiles;
       expect(files, hasLength(2)); // 0x15 正常 + 0x18 原始占位
@@ -105,7 +118,7 @@ void main() {
       link.enqueue(0xB2, _sw9000(_localRecord())); // 0x18 记录 3 与记录 2 相同
       link.enqueue(0xB2, const [0x6A, 0x83]); // 0x1A 未找到
 
-      final parsed = await CityUnionParser(link.call).parse();
+      final parsed = await _parseCu(link.call);
 
       final local =
           parsed!.cityUnionFiles.where((f) => f.sfi == 0x18).toList();
