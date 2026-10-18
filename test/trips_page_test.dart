@@ -379,7 +379,7 @@ void main() {
       expect(app.busTransitRecord, isNull); // 记录 2 起始位置不可定位
     });
 
-    test('八达通-全国通卡：金额按港币（HK$）口径', () async {
+    test('八达通-全国通卡：金额按港币（HK\$）口径', () async {
       final app = await _scan(
         _FakeNfcChannel()
           ..enqueueWalletScript(

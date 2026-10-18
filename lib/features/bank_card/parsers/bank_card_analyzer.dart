@@ -1,33 +1,25 @@
 import 'dart:typed_data';
 
-import '../data/apdu/apdu_command.dart';
-import '../data/apdu/apdu_response.dart';
-import '../data/tlv/ber_tlv_decoder.dart';
-import '../data/tlv/hex_codec.dart';
+import '../../../core/emv/discovery/application_enumerator.dart';
+import '../../../core/emv/models/emv_application.dart';
+import '../../../core/emv/transport.dart';
 import '../data/transport/recording_card_transport.dart';
 import '../domain/interfaces/card_parser.dart';
 import '../domain/interfaces/card_transport.dart';
-import '../domain/models/apdu_trace.dart';
 import '../domain/models/bank_card_result.dart';
 import '../domain/models/card_application.dart';
 import '../domain/models/parse_issue.dart';
-import '../domain/models/tlv_node.dart';
 
 // 结果模型随协调器一并导出：页面引用本文件即可使用，无需逐层深入 domain。
 export '../domain/models/bank_card_result.dart';
 export '../domain/models/card_application.dart';
 
-/// PPSE（支付系统目录，2PAY.SYS.DDF01）AID。
-final Uint8List _ppseAid = Uint8List.fromList(
-  '2PAY.SYS.DDF01'.codeUnits,
-);
-
 /// 银行卡只读分析协调器：控制流程、枚举应用、按证据选择解析器、汇总异常。
 /// 页面不直接发送 APDU，统一经由本协调器。
-/// EMV / PBOC 的读取逻辑适配（PDOL 组包、83 00 回退、77 / 80 响应模板、
-/// AFL 定位）由解析器内部的共享流程自动完成，本协调器只负责协议族选择。
+/// 应用发现（PPSE / 候选 AID / FCI）委托独立模块 `core/emv`；
+/// EMV / PBOC 的读取适配（PDOL 组包、83 00 回退、77 / 80 模板、AFL 定位）
+/// 由解析器内部共享流程完成，本协调器只负责协议族选择。
 class BankCardAnalyzer {
-  /// PBOC 优先于 EMV（更具体的规则先判定）。
   final List<CardParser> parsers;
   final String parserVersion;
 
@@ -36,14 +28,54 @@ class BankCardAnalyzer {
   Future<BankCardResult> analyze(CardTransport transport) async {
     final recording = RecordingCardTransport(transport);
     final issues = <ParseIssue>[];
-    final applications = <CardApplication>[];
 
-    // 1. 枚举应用（SELECT PPSE → 目录）
-    final selected = await _enumerate(recording, applications, issues);
+    // 1. 应用枚举：委托独立 EMV 发现模块（经记录型通道，保留 APDU 轨迹）
+    final List<EmvApplication> discovered;
+    final bool usedFallback;
+    try {
+      final EmvTransceive emvTransceive =
+          (cmd) async => recording.transceive(Uint8List.fromList(cmd));
+      final result = await EmvApplicationEnumerator(emvTransceive).enumerate();
+      discovered = result.applications;
+      usedFallback = result.usedFallback;
+    } catch (e) {
+      // NFC 通信异常单独归为 nfc_io_error，不与「卡片不支持」混为一谈。
+      issues.add(ParseIssue(
+        stage: 'enumeration',
+        code: 'nfc_io_error',
+        message: 'NFC 通信异常，未能完成应用枚举：$e',
+      ));
+      return BankCardResult(
+        protocolFamily: BankCardProtocolFamily.emv,
+        analyzedAt: DateTime.now(),
+        parserVersion: parserVersion,
+        status: BankCardStatus.enumerationFailed,
+        traces: recording.traces,
+        issues: issues,
+      );
+    }
+
+    if (usedFallback) {
+      issues.add(const ParseIssue(
+        stage: 'ppse',
+        code: 'fallback_used',
+        message: 'PPSE 不可用，已回退到候选 AID 枚举',
+      ));
+    }
+
+    final applications = discovered.map(_toCardApplication).toList();
+    final selected = applications.isNotEmpty;
+    if (!selected) {
+      issues.add(const ParseIssue(
+        stage: 'enumeration',
+        code: 'no_candidate_aid',
+        message: 'PPSE 与候选 AID 均未匹配到任何应用',
+      ));
+    }
 
     final parsed = <ParsedApplication>[];
     if (selected) {
-      // 2/3/4. 逐应用按证据选择解析器并读取
+      // 2/3/4. 逐应用按证据选择解析器并读取（GPO / 记录读取由解析器完成）
       for (final app in applications) {
         final parser = _chooseParser(app);
         if (parser == null) {
@@ -90,43 +122,12 @@ class BankCardAnalyzer {
     );
   }
 
-  /// SELECT PPSE 并解析目录，得到应用列表；成功返回 true。
-  Future<bool> _enumerate(
-    RecordingCardTransport transport,
-    List<CardApplication> out,
-    List<ParseIssue> issues,
-  ) async {
-    final resp = await _exchange(transport, ApduCommand.select(_ppseAid));
-    if (resp.data.isEmpty && !resp.isSuccess) {
-      issues.add(ParseIssue(
-        stage: 'ppse',
-        code: resp.statusWord == 0 ? 'no_response' : _sw(resp),
-        message: 'PPSE 目录枚举未成功（卡片可能不支持或访问受限）',
-      ));
-      return false;
-    }
-    final roots = BerTlvDecoder.decode(resp.data);
-    // 目录条目：tag 61（EMV）/ 70 容器内的 61
-    for (final entry in BerTlvDecoder.findAll(roots, '61')) {
-      final aid = BerTlvDecoder.findFirst(entry.children, '4F');
-      if (aid == null) continue;
-      final label = BerTlvDecoder.findFirst(entry.children, '50');
-      out.add(CardApplication(
-        aidHex: HexCodec.encode(aid.value),
-        label: label == null ? null : _ascii(label.value),
-        directoryTags: entry.children.map(_toNodeShallow).toList(),
-      ));
-    }
-    if (out.isEmpty) {
-      issues.add(const ParseIssue(
-        stage: 'ppse',
-        code: 'empty_directory',
-        message: 'PPSE 返回目录为空',
-      ));
-      return false;
-    }
-    return true;
-  }
+  /// 发现模块产物 → 特性层应用模型：下游解析器会重新 SELECT + 读取记录。
+  CardApplication _toCardApplication(EmvApplication a) => CardApplication(
+        aidHex: a.aidHex,
+        label: a.displayName == a.aidHex ? null : a.displayName,
+        selected: true,
+      );
 
   CardParser? _chooseParser(CardApplication app) {
     for (final p in parsers) {
@@ -141,33 +142,4 @@ class BankCardAnalyzer {
     }
     return BankCardProtocolFamily.emv;
   }
-
-  TlvNode _toNodeShallow(RawTlv r) => TlvNode(
-        tagHex: r.tagHex,
-        length: r.length,
-        rawValue: r.value,
-        children: r.children.map(_toNodeShallow).toList(),
-      );
-
-  Future<ApduResponse> _exchange(
-    RecordingCardTransport transport,
-    Uint8List apdu,
-  ) async {
-    final bytes = await transport.transceive(apdu);
-    if (bytes.length < 2) {
-      return ApduResponse(data: Uint8List(0), sw1: 0, sw2: 0);
-    }
-    return ApduResponse.fromBytes(bytes);
-  }
-
-  /// 目录标签（ANS 文本）转可读字符串：空 / 全不可打印时返回 null（不猜测）。
-  static String? _ascii(Uint8List b) {
-    final s = String.fromCharCodes(
-      b.where((c) => c >= 0x20 && c < 0x7F),
-    ).trim();
-    return s.isEmpty ? null : s;
-  }
-
-  static String _sw(ApduResponse r) =>
-      r.statusWord.toRadixString(16).padLeft(4, '0').toUpperCase();
 }

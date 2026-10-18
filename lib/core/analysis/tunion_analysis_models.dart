@@ -267,3 +267,84 @@ class CardAnalysisResult {
     required this.generatedAt,
   });
 }
+
+/// 行程流条目：把交易明细（[TransitTrip]）与 0x1A 过程记录
+/// ——城市轨道交通进出站（[TransitRecord]）、公共汽电车上下车
+/// （[BusTransitRecord]）——统一为一类可按时间排序的元素，供行程页 /
+/// 卡片详情页合并成一条按时间倒序的行程流展示。0x1A 记录按进 / 出
+/// （上 / 下）两侧各拆为一条行程记录，展示样式与 0x1E 配对的行程卡片一致。
+sealed class TripEntry {
+  const TripEntry();
+
+  /// 排序用时间：取行程/记录的发生时间，进站/上车时间优先。
+  DateTime get time;
+}
+
+/// 交易明细行程（0x18）。
+final class TransactionTripEntry extends TripEntry {
+  final TransitTrip trip;
+  const TransactionTripEntry(this.trip);
+  @override
+  DateTime get time => trip.time;
+}
+
+/// 0x1A 记录 1：城市轨道交通进出站记录的一侧（进站 / 出站）。
+/// [isEntry] 为 true 表示进闸侧行程，false 表示出闸侧；
+/// 展示层按侧取对应字段渲染为单条行程卡片。
+final class RailRecordEntry extends TripEntry {
+  final TransitRecord record;
+  final bool isEntry;
+  const RailRecordEntry(this.record, {required this.isEntry});
+  @override
+  DateTime get time => isEntry
+      ? (record.entryTime ?? record.exitTime ?? DateTime(0))
+      : (record.exitTime ?? record.entryTime ?? DateTime(0));
+}
+
+/// 0x1A 记录 2：公共汽电车上下车记录的一侧（上车 / 下车）。
+/// [isEntry] 为 true 表示上车侧行程，false 表示下车侧；
+/// 展示层按侧取对应字段渲染为单条行程卡片。
+final class BusRecordEntry extends TripEntry {
+  final BusTransitRecord record;
+  final bool isEntry;
+  const BusRecordEntry(this.record, {required this.isEntry});
+  @override
+  DateTime get time => isEntry
+      ? (record.entryTime ?? record.exitTime ?? DateTime(0))
+      : (record.exitTime ?? record.entryTime ?? DateTime(0));
+}
+
+/// 合并交易行程与 0x1A 过程记录为按时间倒序的行程流：0x1A 记录按
+/// 进 / 出（上 / 下）两侧各产出一条行程（对应侧时间未写入时该侧不产出，
+/// 不猜测；两侧均缺失时保留一条出闸 / 下车侧记录兜底，避免整条丢失）。
+List<TripEntry> buildTripStream(
+  List<TransitTrip> trips,
+  TransitRecord? rail,
+  BusTransitRecord? bus,
+) {
+  final entries = <TripEntry>[
+    for (final t in trips) TransactionTripEntry(t),
+    if (rail != null) ..._railHalves(rail),
+    if (bus != null) ..._busHalves(bus),
+  ]..sort((a, b) => b.time.compareTo(a.time));
+  return entries;
+}
+
+/// 0x1A 记录 1 拆分：进站侧（有进站时间时）+ 出站侧（有出站时间时）；
+/// 两侧时间均未写入时保留一条出站侧兜底（时间排在行程流末尾）。
+List<TripEntry> _railHalves(TransitRecord rail) {
+  final halves = <TripEntry>[
+    if (rail.entryTime != null) RailRecordEntry(rail, isEntry: true),
+    if (rail.exitTime != null) RailRecordEntry(rail, isEntry: false),
+  ];
+  return halves.isEmpty ? [RailRecordEntry(rail, isEntry: false)] : halves;
+}
+
+/// 0x1A 记录 2 拆分：上车侧 + 下车侧，规则同 [_railHalves]。
+List<TripEntry> _busHalves(BusTransitRecord bus) {
+  final halves = <TripEntry>[
+    if (bus.entryTime != null) BusRecordEntry(bus, isEntry: true),
+    if (bus.exitTime != null) BusRecordEntry(bus, isEntry: false),
+  ];
+  return halves.isEmpty ? [BusRecordEntry(bus, isEntry: false)] : halves;
+}

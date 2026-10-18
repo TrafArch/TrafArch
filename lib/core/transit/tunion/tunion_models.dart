@@ -67,6 +67,22 @@ class TUnionCardInfo {
   /// 发卡日期，即应用生效日期。
   DateTime? get issueDate => effectiveDate;
 
+  /// 全国互联互通启用状态（依据管理信息文件 SFI 0x17「互通卡种」字段
+  /// [interopCardType]，JT/T 978.2 部标口径）：
+  /// - 0x01 互通卡：已开启全国互联互通（true）；
+  /// - 0x00 非互通卡：未开启全国互联互通（false）；
+  /// - 管理信息文件未读到 / 字段缺失 / 部标未定义取值：null（未知，不猜测）。
+  bool? get isNationalInteropEnabled {
+    final raw = interopCardType?.trim();
+    if (raw == null || raw.isEmpty) return null;
+    final value = int.tryParse(raw, radix: 16);
+    return switch (value) {
+      0x01 => true, // 互通卡
+      0x00 => false, // 非互通卡
+      _ => null, // 部标未定义取值 / HEX 非法：未知
+    };
+  }
+
   /// 替换余额字段（余额为动态读取，不随文件解析）。
   TUnionCardInfo withBalance(int? balanceFen) => TUnionCardInfo(
         issuerId: issuerId,

@@ -292,8 +292,15 @@ class _ExpertPageState extends State<ExpertPage> {
               : parsed.selectedAidHex),
       // 交通联合应用：交通联合解析器专属字段，仅在命中时展示
       if (isTUnion) _kv('交通联合应用', '已发现'),
-      // 城市一卡通应用：城市一卡通解析器专属字段，仅在命中时展示
-      if (isCityUnion) _kv('城市一卡通应用', '已发现'),
+      // 城市一卡通应用：城市一卡通解析器命中，或双应用卡在同一张卡上附带
+      // 住建部应用时展示（后者标注「双应用卡」）。
+      if (isCityUnion || parsed?.dualApplication == true)
+        _kv(
+          '城市一卡通应用',
+          (!isCityUnion && parsed?.dualApplication == true)
+              ? '已发现（双应用卡）'
+              : '已发现',
+        ),
       _kv('识别城市', identity?.cityName ?? app.cityUnionCard?.city ?? '未知'),
       _kv('卡种', identity?.cardFamily ?? '未知'),
       _kv(
@@ -321,10 +328,38 @@ class _ExpertPageState extends State<ExpertPage> {
       ];
     }
     return switch (parsed.parserId) {
-      CardParserIds.tunion => _tunionTransitFields(parsed),
+      CardParserIds.tunion => [
+        ..._tunionTransitFields(parsed),
+        if (parsed.dualApplication) ..._dualCityUnionFields(parsed),
+      ],
       CardParserIds.cityUnion => _cityUnionTransitFields(parsed),
       _ => [_hintLine('当前解析器暂未提供交通数据字段视图')],
     };
+  }
+
+  /// 双应用卡：在交通联合交通数据之后追加城市一卡通（住建部 CJ/T 331-2016）
+  /// 应用视图，明确区分两套网络的文件与钱包余额（与交通联合余额互不混用）。
+  List<Widget> _dualCityUnionFields(ParsedCard parsed) {
+    final bal = parsed.cityUnionBalanceFen;
+    return [
+      const Divider(height: 32),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          '城市一卡通应用（双应用 · 住建部 CJ/T 331-2016）',
+          style: Theme.of(context)
+              .textTheme
+              .titleSmall
+              ?.copyWith(color: Theme.of(context).colorScheme.primary),
+        ),
+      ),
+      const SizedBox(height: 4),
+      _kv(
+        '城市一卡通钱包余额',
+        bal == null ? '未知' : '${(bal / 100).toStringAsFixed(2)} 元',
+      ),
+      ..._cityUnionTransitFields(parsed),
+    ];
   }
 
   /// 城市一卡通（CJ/T 331-2016）交通数据字段：按标准文件分组展示
@@ -341,6 +376,9 @@ class _ExpertPageState extends State<ExpertPage> {
     final public = files.where((f) => f.sfi == 0x15).toList();
     final local = files.where((f) => f.sfi == 0x18).toList();
     final recharge = files.where((f) => f.sfi == 0x1A).toList();
+    // CU 城市代码（0x15 字节 03-04 HEX 解码 4 位）：用于终端索引同地区优先匹配。
+    final cuCityCode =
+        public.whereType<CjT331PublicInfo>().firstOrNull?.cityCode;
 
     return [
       _kv('已读取文件视图', '${files.length} 项'),
@@ -350,6 +388,7 @@ class _ExpertPageState extends State<ExpertPage> {
         title: '电子钱包本地消费交易明细（0x18）',
         storageKey: 'cj-local',
         records: local,
+        cityCode: cuCityCode,
         emptyHint: '未读取到本地消费交易明细（文件不存在或记录未写入）',
       ),
       _cjRecordGroupTile(
@@ -414,6 +453,7 @@ class _ExpertPageState extends State<ExpertPage> {
     required String storageKey,
     required List<CityUnionFileView> records,
     required String emptyHint,
+    String? cityCode,
   }) {
     final scheme = Theme.of(context).colorScheme;
     return ExpansionTile(
@@ -434,16 +474,27 @@ class _ExpertPageState extends State<ExpertPage> {
           ? [_hintLine(emptyHint)]
           : [
               for (var i = 0; i < records.length; i++)
-                _cjRecordView(i, records[i], last: i == records.length - 1),
+                _cjRecordView(
+                  i,
+                  records[i],
+                  last: i == records.length - 1,
+                  cityCode: cityCode,
+                ),
             ],
     );
   }
 
   /// 单条 City Union 记录视图：字段列表 + 原始数据；布局不符的记录
-  /// 展示解析器给出的原因并保留原始字节（不猜测字段值）。
-  Widget _cjRecordView(int index, CityUnionFileView record,
-      {required bool last}) {
+  /// 展示解析器给出的原因并保留原始字节（不猜测字段值）。本地消费
+  /// （0x18）记录附带按交易终端编号经 terminal_index 解析的站点名。
+  Widget _cjRecordView(
+    int index,
+    CityUnionFileView record, {
+    required bool last,
+    String? cityCode,
+  }) {
     final scheme = Theme.of(context).colorScheme;
+    final stationName = _cuStationName(record, cityCode);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -469,11 +520,25 @@ class _ExpertPageState extends State<ExpertPage> {
           for (final e in record.errors) _hintLine(e)
         else
           for (final f in record.fields) _kv(f.name, _cjFieldValue(f)),
+        if (stationName != null) _kv('站点（终端解析）', stationName),
         const SizedBox(height: 6),
         _hexSelectable(record.rawHex),
         if (!last) const Divider(height: 24),
       ],
     );
+  }
+
+  /// CU 本地消费记录（0x18）→ 站点名：以交易终端编号经 CU terminal_index
+  /// 精确 / 前缀匹配解析；未命中或非消费记录返回 null（不展示、不猜测）。
+  String? _cuStationName(CityUnionFileView record, String? cityCode) {
+    if (record is CjT331WalletLocalConsumption) {
+      return widget.app.resolveCuStationName(
+        record.terminalNumber,
+        cityCode: cityCode,
+        transactionType: record.transactionType,
+      );
+    }
+    return null;
   }
 
   /// 记录摘要小字：交易类记录给出日期时间与类型，复合交易给出锁定状态；

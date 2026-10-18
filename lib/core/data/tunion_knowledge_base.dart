@@ -2,8 +2,9 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 
 import 'city_union_knowledge_base.dart';
+import 'city_union_region_database.dart';
 import 'station_codes.dart';
-import 'prebuilt_station_data.dart';
+import 'tunion_region_database.dart';
 
 /// 城市信息。
 ///
@@ -55,6 +56,20 @@ class CityTable {
     }
     return CityTable._(codes);
   }
+
+  /// 直接由城市信息列表构建：相同城市代码保留首次出现者（调用方按
+  /// 「数据库优先、JSON 兜底」的顺序传入）。
+  factory CityTable.fromInfos(Iterable<CityInfo> infos) {
+    final codes = <String, CityInfo>{};
+    for (final info in infos) {
+      if (info.code.isEmpty) continue;
+      codes.putIfAbsent(info.code, () => info);
+    }
+    return CityTable._(codes);
+  }
+
+  /// 全部城市信息（供与外部数据源合并）。
+  Iterable<CityInfo> get infos => _codes.values;
 
   int get length => _codes.length;
 
@@ -306,6 +321,37 @@ class CardPrefixTable {
     return CardPrefixTable._(entries, byIssuer, cardKinds);
   }
 
+  /// 由「已合并」的卡号前缀条目构建（[mergedEntries] 每项含
+  /// prefix / cardName / city / issuer / currency），叠加 meta 的
+  /// 卡种对照 [cardKinds]；同 prefix 保留首条（调用方按数据库优先排序）。
+  factory CardPrefixTable.fromMergedEntries(
+    Iterable<Map<String, dynamic>> mergedEntries, {
+    Map<String, String> cardKinds = const {},
+  }) {
+    final entries = <String, CardPrefixInfo>{};
+    final byIssuer = <String, CardPrefixInfo>{};
+    for (final e in mergedEntries) {
+      final prefix = '${e['prefix'] ?? ''}'.replaceAll(RegExp(r'[^0-9]'), '');
+      final name = '${e['cardName'] ?? ''}';
+      if (prefix.isEmpty || name.isEmpty) continue;
+      final info = CardPrefixInfo(
+        prefix: prefix,
+        cardName: name,
+        city: e['city']?.toString(),
+        currency: e['currency']?.toString(),
+      );
+      entries[prefix] = info;
+      final issuer = '${e['issuer'] ?? ''}'.replaceAll(RegExp(r'[^0-9]'), '');
+      if (issuer.isNotEmpty) {
+        final issuerKey = issuer.length <= _prefixLength
+            ? issuer
+            : issuer.substring(0, _prefixLength);
+        byIssuer.putIfAbsent(issuerKey, () => info);
+      }
+    }
+    return CardPrefixTable._(entries, byIssuer, cardKinds);
+  }
+
   int get length => _entries.length;
 
   /// 卡号（应用序列号）→ 前缀信息：按前 8 位 IIN 匹配（最长前缀优先）；
@@ -347,10 +393,9 @@ class CardPrefixTable {
 ///
 /// 数据源：城市码表由卡号前缀库（assets/data/tunion_card_prefixes.json）的
 /// 发卡机构代码字段派生（后 4 位为城市代码）；发卡机构指纹与终端解码
-/// 规则为 assets/data/ 下的版本化 JSON；站点代码表默认使用应用内预制
-/// 快照（prebuilt_station_data.dart，读卡识途公开数据、开箱即用）。
-/// 设置中开启「在线拉取数据」后，由上层注入本次会话拉取到的最新数据；
-/// 进程重启后回到预制快照。
+/// 规则为 assets/data/ 下的版本化 JSON；站点代码表完全来自两个外部 SQLite
+/// 数据库（交通联合 TrafArch_Database_TU.sqlite 与城市一卡通
+/// TrafArch_Database_CU.sqlite，数据库优先、JSON 兜底），不再内置预制快照。
 class KnowledgeBase {
   final CityTable cities;
   final IssuerTable issuers;
@@ -364,6 +409,15 @@ class KnowledgeBase {
   /// （邮编前四位 / CU 城市项目代码）→ 城市名 / 省份 / 本地卡名称参考。
   final CityUnionCardTable cityUnionCards;
 
+  /// 城市一卡通终端索引匹配器（terminal_index 精确 / 前缀）：CU 行程交易
+  /// 终端编号 → 站点。空表示未加载 CU 站点数据库（展示层回退，不猜测）。
+  final CityUnionTerminalMatcher cuTerminals;
+
+  /// 站点覆盖原始数据集（交通联合 + 城市一卡通各地区的线路 / 站点），
+  /// 保留原始 system / cityName / province 与逐站点条目，供设置「知识库」
+  /// 子页面展示当前数据库支持的地区、线路与站点。
+  final List<StationDataset> coverageDatasets;
+
   const KnowledgeBase({
     required this.cities,
     required this.issuers,
@@ -371,12 +425,15 @@ class KnowledgeBase {
     this.cardPrefixes = CardPrefixTable.empty,
     this.stationCodes = StationCodeTable.empty,
     this.cityUnionCards = CityUnionCardTable.empty,
+    this.cuTerminals = CityUnionTerminalMatcher.empty,
+    this.coverageDatasets = const [],
   });
 
   static const issuerAsset = 'assets/data/tunion_issuer_fingerprints.json';
   static const terminalRulesAsset = 'assets/data/tunion_terminal_rules.json';
   static const cardPrefixAsset = 'assets/data/tunion_card_prefixes.json';
   static const cityUnionCardAsset = 'assets/data/cu_card_catalog.json';
+  static const cardMetaAsset = 'assets/data/tunion_card_meta.json';
 
   factory KnowledgeBase.empty() => KnowledgeBase(
         cities: CityTable.fromCardPrefixes(const {}),
@@ -390,6 +447,9 @@ class KnowledgeBase {
     String? cardPrefixes,
     String? cityUnionCatalog,
     StationCodeTable? stationCodes,
+    TunionRegionDatabaseContent? regionContent,
+    CityUnionRegionDatabaseContent? cuRegionContent,
+    String? cardMeta,
   }) {
     Object? decode(String? source, Object? fallback) {
       if (source == null || source.isEmpty) return fallback;
@@ -400,48 +460,250 @@ class KnowledgeBase {
       }
     }
 
-    // 城市码表与卡号前缀库同源：城市代码取条目 issuer 后 4 位，
-    // 城市名取条目 city 字段。
     final prefixJson = decode(cardPrefixes, const {});
+    final metaJson = decode(cardMeta, const {});
+    final cardKinds = <String, String>{};
+    final currencyByPrefix = <String, String>{};
+    if (metaJson is Map) {
+      final kinds = metaJson['cardKinds'];
+      if (kinds is Map) {
+        kinds.forEach((key, value) {
+          final k = '$key'.replaceAll(' ', '').toUpperCase();
+          if (k.isEmpty || value == null) return;
+          cardKinds[k] = '$value';
+        });
+      }
+      final currencies = metaJson['currencyByPrefix'];
+      if (currencies is Map) {
+        currencies.forEach((key, value) {
+          final p = '$key'.replaceAll(RegExp(r'[^0-9]'), '');
+          if (p.isEmpty || value == null) return;
+          currencyByPrefix[p] = '$value';
+        });
+      }
+    }
+
+    // 1A：卡号前缀库与城市码表均以「数据库优先 + JSON 兜底」合并；
+    // 数据库缺失时与既有实现完全一致（不改变旧行为）。
+    final mergedPrefixEntries =
+        _mergePrefixEntries(prefixJson, regionContent, currencyByPrefix);
+    // meta 卡种并入（数据库不含卡种），未提供 meta 时回退旧 JSON cardKinds
+    final prefixTable = CardPrefixTable.fromMergedEntries(
+      mergedPrefixEntries,
+      cardKinds: cardKinds.isNotEmpty
+          ? cardKinds
+          : _cardKindsOf(prefixJson),
+    );
+
+    final cityInfos = <CityInfo>[
+      ..._regionCityInfos(regionContent),
+      ..._cuCityInfos(cuRegionContent),
+      ...CityTable.fromCardPrefixes(prefixJson).infos,
+    ];
+
+    final baseStations = stationCodes ?? StationCodeTable.empty;
+    final coverageDatasets = <StationDataset>[
+      ...?regionContent?.stationDatasets,
+      ...?cuRegionContent?.stationDatasets,
+    ];
+
     return KnowledgeBase(
-      cities: CityTable.fromCardPrefixes(prefixJson),
+      cities: CityTable.fromInfos(cityInfos),
       issuers: IssuerTable.fromJson(decode(issuerFingerprints, const {})),
       terminalRules: TerminalRuleSet.fromJson(decode(terminalRules, const {})),
-      cardPrefixes: CardPrefixTable.fromJson(prefixJson),
+      cardPrefixes: prefixTable,
       cityUnionCards:
           CityUnionCardTable.fromJson(decode(cityUnionCatalog, const {})),
-      stationCodes: stationCodes ?? prebuiltStationCodes,
+      cuTerminals:
+          cuRegionContent?.terminalMatcher ?? CityUnionTerminalMatcher.empty,
+      coverageDatasets: coverageDatasets,
+      stationCodes: coverageDatasets.isEmpty
+          ? baseStations
+          : _mergeStations(baseStations, coverageDatasets),
     );
   }
 
-  /// 加载知识库：机构/终端规则/卡号前缀（城市码表随卡号前缀库派生）/
-  /// 城市一卡通识别库读自 assets；站点代码表默认使用应用内预制快照，
-  /// 开启「在线拉取数据」时由调用方注入会话内存数据。
+  /// JSON 前缀库 entries（列表或 {entries:[...]}）。
+  static List<dynamic> _entriesOf(Object? json) {
+    final raw = json is Map ? json['entries'] : json;
+    return raw is List ? raw : const [];
+  }
+
+  /// 旧 JSON 内联 cardKinds（meta 未提供时的兜底）。
+  static Map<String, String> _cardKindsOf(Object? json) {
+    final out = <String, String>{};
+    if (json is Map) {
+      final kinds = json['cardKinds'];
+      if (kinds is Map) {
+        kinds.forEach((key, value) {
+          final k = '$key'.replaceAll(' ', '').toUpperCase();
+          if (k.isEmpty || value == null) return;
+          out[k] = '$value';
+        });
+      }
+    }
+    return out;
+  }
+
+  /// 合并卡号前缀条目：JSON 建基表，数据库同前缀覆盖非空字段（1A 数据库
+  /// 优先），最后套用 meta 的按前缀货币覆盖（八达通 HKD）。
+  static List<Map<String, dynamic>> _mergePrefixEntries(
+    Object? prefixJson,
+    TunionRegionDatabaseContent? region,
+    Map<String, String> currencyByPrefix,
+  ) {
+    const prefixLength = 8;
+    final map = <String, Map<String, dynamic>>{};
+    for (final e in _entriesOf(prefixJson)) {
+      if (e is! Map) continue;
+      final prefix = '${e['prefix'] ?? ''}'.replaceAll(RegExp(r'[^0-9]'), '');
+      if (prefix.isEmpty) continue;
+      map[prefix] = {
+        'prefix': prefix,
+        'cardName': e['cardName'] ?? e['name'],
+        'city': e['city'],
+        'currency': e['currency'],
+        'issuer': e['issuer'],
+      };
+    }
+    if (region != null) {
+      for (final row in region.issuerCityCodes) {
+        final raw = row.prefix.isNotEmpty ? row.prefix : row.issuer;
+        if (raw.isEmpty) continue;
+        final key = raw.length > prefixLength
+            ? raw.substring(0, prefixLength)
+            : raw;
+        final entry = map[key] ?? <String, dynamic>{'prefix': key};
+        if ((row.cardName ?? '').isNotEmpty) entry['cardName'] = row.cardName;
+        if (row.cityName.isNotEmpty) entry['city'] = row.cityName;
+        if (row.issuer.isNotEmpty) entry['issuer'] = row.issuer;
+        map[key] = entry;
+      }
+    }
+    currencyByPrefix.forEach((prefix, code) {
+      final entry = map[prefix];
+      if (entry != null) entry['currency'] = code;
+    });
+    return map.values.toList();
+  }
+
+  /// 数据库城市信息（地区名 + 发卡号段城市名，均优先于 JSON 派生城市）。
+  static List<CityInfo> _regionCityInfos(TunionRegionDatabaseContent? region) {
+    if (region == null) return const [];
+    final out = <CityInfo>[];
+    for (final r in region.regions) {
+      if (r.regionCode.isEmpty || r.regionName.isEmpty) continue;
+      out.add(CityInfo(
+        code: r.regionCode,
+        name: r.regionName,
+        province: r.province,
+      ));
+    }
+    for (final i in region.issuerCityCodes) {
+      final code = i.regionCode.isNotEmpty
+          ? i.regionCode
+          : (i.issuer.length >= 4
+              ? i.issuer.substring(i.issuer.length - 4)
+              : '');
+      if (code.isEmpty || i.cityName.isEmpty) continue;
+      out.add(CityInfo(code: code, name: i.cityName));
+    }
+    return out;
+  }
+
+  /// 城市一卡通（CU）数据库城市信息：regions + region_codes 城市字典
+  /// （4 位 CU 邮编前缀 → 地区名），排在交通联合之后、JSON 之前。
+  static List<CityInfo> _cuCityInfos(CityUnionRegionDatabaseContent? cu) {
+    if (cu == null) return const [];
+    final out = <CityInfo>[];
+    for (final c in cu.cities) {
+      if (c.regionCode.isEmpty || c.regionName.isEmpty) continue;
+      out.add(CityInfo(code: c.regionCode, name: c.regionName));
+    }
+    return out;
+  }
+
+  /// 站点合并：既有（在线/预制）数据优先，数据库站点仅补空位（精确相等
+  /// 才命中，不覆盖、不模糊）。
+  static StationCodeTable _mergeStations(
+    StationCodeTable base,
+    List<StationDataset> extra,
+  ) {
+    if (extra.isEmpty) return base;
+    final merged = Map<String, StationCodeEntry>.from(base.rows);
+    for (final ds in extra) {
+      final city = ds.cityCode;
+      if (city == null || city.isEmpty) continue;
+      final cityKey = city.replaceAll(' ', '').toUpperCase();
+      ds.codes.forEach((code, entry) {
+        merged.putIfAbsent('$cityKey|$code', () => entry);
+      });
+    }
+    final byCity = <String, StationDataset>{};
+    merged.forEach((key, entry) {
+      final sep = key.indexOf('|');
+      if (sep < 0) return;
+      final cityKey = key.substring(0, sep);
+      final code = key.substring(sep + 1);
+      final bucket = byCity.putIfAbsent(
+        cityKey,
+        () => StationDataset(
+          file: 'merged',
+          cityCode: cityKey,
+          system: 'tu',
+          kind: 'mixed',
+          codes: {},
+        ),
+      );
+      // 以「完整登记键」而非 entry.code 分桶：保留同一条目的站点片段键
+      // 与线路+站点拼接键，并避免同站点片段跨线路复用时的相互覆盖——
+      // 覆盖会使条目无法进入 fromDatasets 的 TU 片段索引，导致 0x1E
+      // （及 0x1A）线路 / 站点查询落空、页面显示为空。
+      bucket.codes.putIfAbsent(code, () => entry);
+    });
+    return StationCodeTable.fromDatasets(byCity.values);
+  }
+
+  /// 加载知识库：机构/终端规则/城市一卡通识别库读自 assets；站点数据完全
+  /// 迁移至两个外部 SQLite 数据库——交通联合 TrafArch_Database_TU.sqlite
+  /// 与城市一卡通 TrafArch_Database_CU.sqlite（数据库优先、JSON 兜底），
+  /// 卡号前缀库合并进城市码表，cardKinds / currency 从独立 meta 资产读取。
+  /// 任一数据库 / meta 缺失或读取失败均降级，不阻断其余知识库加载。
   static Future<KnowledgeBase> load(
     AssetBundle bundle, {
     StationCodeTable? stationCodes,
   }) async {
-    // 卡号前缀库为增量资产：缺失/读取失败时降级为空表（城市码表随之
-    // 为空），不阻断其余知识库加载
     String? cardPrefixes;
     try {
       cardPrefixes = await bundle.loadString(cardPrefixAsset);
     } catch (_) {
       cardPrefixes = null;
     }
-    // 城市一卡通识别库同为增量资产：缺失/读取失败时降级为空表
     String? cityUnionCatalog;
     try {
       cityUnionCatalog = await bundle.loadString(cityUnionCardAsset);
     } catch (_) {
       cityUnionCatalog = null;
     }
+    // 2A：卡种 / 货币独立小资产（缺失降级为空，不阻断）
+    String? cardMeta;
+    try {
+      cardMeta = await bundle.loadString(cardMetaAsset);
+    } catch (_) {
+      cardMeta = null;
+    }
+    // 1A：外部地区数据库（缺失 / 失败返回 null → 回退纯 JSON 行为）
+    final regionContent = await TunionRegionDatabase.load(bundle: bundle);
+    final cuRegionContent = await CityUnionRegionDatabase.load(bundle: bundle);
     return KnowledgeBase.fromJsonStrings(
       issuerFingerprints: await bundle.loadString(issuerAsset),
       terminalRules: await bundle.loadString(terminalRulesAsset),
       cardPrefixes: cardPrefixes,
       cityUnionCatalog: cityUnionCatalog,
-      stationCodes: stationCodes ?? prebuiltStationCodes,
+      stationCodes: stationCodes ?? StationCodeTable.empty,
+      regionContent: regionContent,
+      cuRegionContent: cuRegionContent,
+      cardMeta: cardMeta,
     );
   }
 }

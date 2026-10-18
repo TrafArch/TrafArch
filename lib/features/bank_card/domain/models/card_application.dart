@@ -1,3 +1,4 @@
+import 'card_field_summary.dart';
 import 'card_record.dart';
 import 'parse_issue.dart';
 import 'tlv_node.dart';
@@ -38,6 +39,9 @@ class ParsedApplication {
   final List<CardRecord> records;
   final List<ParseIssue> issues;
 
+  /// 从各标签树提炼的卡号 / 交易信息汇总（供列表与详情页醒目展示）。
+  final CardFieldSummary summary;
+
   const ParsedApplication({
     required this.application,
     required this.parserId,
@@ -46,6 +50,7 @@ class ParsedApplication {
     this.gpoHex = '',
     this.records = const [],
     this.issues = const [],
+    this.summary = const CardFieldSummary([]),
   });
 
   bool get hasData =>

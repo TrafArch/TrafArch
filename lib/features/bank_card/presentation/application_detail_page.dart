@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 
 import '../domain/models/card_application.dart';
+import '../domain/models/card_field_summary.dart';
 import '../domain/models/card_record.dart';
 import '../domain/models/parse_issue.dart';
 import 'tag_tree_view.dart';
@@ -27,6 +28,12 @@ class ApplicationDetailPage extends StatelessWidget {
           _kv('解析规则', app.parserId.toUpperCase()),
           _kv('选择状态', app.application.selected ? '已选择' : '未选择'),
           _kv('读取记录', '${app.records.length} 条'),
+          const Divider(height: 28),
+          _sectionTitle(context, '卡号与交易信息'),
+          if (app.summary.isEmpty)
+            _hint(context, '未读取到可识别的卡号/交易标签（记录为空或读取被访问条件拒绝）')
+          else
+            _summaryTable(context, app.summary),
           const Divider(height: 28),
           _sectionTitle(context, '应用选择 FCI 标签（${app.fciTags.length}）'),
           if (app.fciTags.isEmpty)
@@ -62,6 +69,40 @@ class ApplicationDetailPage extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+
+  /// 关键信息表：左侧「中文名 [tag]」，右侧值（完整呈现，供本机读卡核对）。
+  Widget _summaryTable(BuildContext context, CardFieldSummary s) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final f in s.fields)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 140,
+                  child: Text(
+                    '${f.label}\n[${f.tag}]${f.sensitive ? ' · 敏感' : ''}',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.outline),
+                  ),
+                ),
+                Expanded(
+                  child: SelectableText(
+                    f.value,
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 

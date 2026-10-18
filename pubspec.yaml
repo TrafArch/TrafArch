@@ -1,7 +1,7 @@
 name: transit_card_analyzer
 description: "TrafArch - NFC 交通卡读取与分析"
 publish_to: 'none'
-version: 1.0.1-beta.5+2024
+version: 1.0.1-beta.6+2040
 
 environment:
   sdk: ^3.13.5
@@ -31,6 +31,8 @@ dependencies:
   # 后续交易记录、余额快照表统一在本数据库管理
   drift: ^2.35.0
   drift_flutter: ^0.3.1
+  # 只读接入外部 SQLite 地区/线路站点库（原生库由 sqlite3_flutter_libs 提供）
+  sqlite3: ^3.5.2
   # 卡片档案 ID 生成
   uuid: ^4.4.0
 

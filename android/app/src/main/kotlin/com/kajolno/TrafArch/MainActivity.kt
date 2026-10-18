@@ -159,7 +159,11 @@ class MainActivity : FlutterActivity(), NfcAdapter.ReaderCallback {
     }
 
     private fun transceive(call: MethodCall, result: MethodChannel.Result) {
-        val apduBytes = (call.arguments as? List<*>)?.map { (it as Number).toByte() }?.toByteArray()
+        val apduBytes = when (val args = call.arguments) {
+            is ByteArray -> args
+            is List<*> -> args.map { (it as Number).toByte() }.toByteArray()
+            else -> null
+        }
         if (apduBytes == null) {
             result.error("BAD_ARGUMENT", "APDU 数据格式错误", null)
             return

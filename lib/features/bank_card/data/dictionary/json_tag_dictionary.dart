@@ -93,7 +93,14 @@ class JsonTagDictionary implements TagDictionary {
   }
 
   static String? _decodeDateYymmdd(List<int> raw) {
-    final s = _decodeText(raw);
+    // 卡片有效期 / 生效日期多为 3 字节 BCD（如 27 12 31 = 2027-12-31），
+    // 少数卡为 6 字节 ASCII。两种形态都支持，避免有效期恒解析失败。
+    String? s;
+    if (raw.length == 3) {
+      s = raw.map((b) => '${(b >> 4) & 0xF}${b & 0xF}').join();
+    } else {
+      s = _decodeText(raw);
+    }
     if (s == null || !RegExp(r'^\d{6}$').hasMatch(s)) return null;
     final yy = int.parse(s.substring(0, 2));
     final year = yy <= 69 ? 2000 + yy : 1900 + yy;

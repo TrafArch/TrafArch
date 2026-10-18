@@ -28,7 +28,9 @@ class TUnionApdu {
       [0x00, 0xB2, record & 0xFF, ((sfi << 3) | (mode & 0x07)) & 0xFF, le & 0xFF];
 
   /// 电子钱包余额查询命令（GET BALANCE）。
-  /// P1 = 0x00 标准余额查询；P1 = 0x03 T-Union 电子钱包余额（主流工具用法）。
+  /// P1 = 0x00 电子钱包当前余额（JT/T 978.2 标准）；
+  /// P1 = 0x03 透支限额 / 已透支金额相关数据（非余额，规范应为 8 字节，
+  /// 此处 Le=04 仅取前 4 字节，只能作兜底参考，不可直接当余额展示）。
   static List<int> getBalance({int cla = 0x80, int p1 = 0x00}) =>
       [cla, 0x5C, p1 & 0xFF, 0x02, 0x04];
 

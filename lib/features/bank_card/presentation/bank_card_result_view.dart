@@ -44,12 +44,27 @@ class BankCardResultView extends StatelessWidget {
       ? 'PBOC（JR/T 0025 系列规则）'
       : 'EMV（通用规范规则）';
 
-  String get _statusText => switch (result.status) {
-        BankCardStatus.noCard => '未读到应用数据',
-        BankCardStatus.enumerationFailed => '应用枚举失败（PPSE 不支持或访问受限）',
-        BankCardStatus.partial => '部分解析成功（仅公开可读数据）',
-        BankCardStatus.success => '解析完成',
-      };
+  String get _statusText {
+    if (result.status == BankCardStatus.enumerationFailed) {
+      return '应用枚举未完成${_enumerationDetail}';
+    }
+    return switch (result.status) {
+      BankCardStatus.noCard => '未读到应用数据',
+      BankCardStatus.enumerationFailed => '应用枚举未完成',
+      BankCardStatus.partial => '部分解析成功（仅公开可读数据）',
+      BankCardStatus.success => '解析完成',
+    };
+  }
+
+  /// 从 issues 中提取枚举失败的具体原因码（NFC 异常 / 无候选 AID / SW）。
+  String get _enumerationDetail {
+    for (final issue in result.issues) {
+      if (issue.stage == 'enumeration' || issue.stage == 'ppse') {
+        return '（${issue.code}）：${issue.message}';
+      }
+    }
+    return '';
+  }
 
   String get _emptyReason {
     for (final issue in result.issues) {
@@ -71,7 +86,8 @@ class BankCardResultView extends StatelessWidget {
       ),
       title: Text(app.application.displayLabel),
       subtitle: Text(
-        'AID ${app.application.aidHex}\n'
+        'AID ${app.application.aidHex}'
+        '${app.summary.panTail == null ? '' : '  ·  卡号尾号 ****${app.summary.panTail}'}\n'
         '${app.parserId.toUpperCase()} · FCI ${app.fciTags.length} 标签'
         ' · GPO ${app.gpoTags.length} 标签'
         ' · 记录 ${app.records.length} 条'
@@ -127,6 +143,14 @@ class BankCardResultView extends StatelessWidget {
           ],
         ),
       );
+
+  /// 卡号尾号提示行（读到 PAN 才显示）。
+  String _panLine(ParsedApplication app) {
+    final tail = app.summary.panTail;
+    return tail == null ? '' : '•••• $tail  $_sep';
+  }
+
+  static const String _sep = '';
 
   static String _fmtTime(DateTime t) {
     final m = t.month.toString().padLeft(2, '0');

@@ -75,6 +75,8 @@ class _CardDetailBody extends StatelessWidget {
         hasLive ? liveTrips : (snapshot?.trips ?? const <TransitTrip>[]);
     final TransitRecord? railRecord = hasLive ? liveRail : snapshot?.railRecord;
     final BusTransitRecord? busRecord = hasLive ? liveBus : snapshot?.busRecord;
+    // 交易明细与 0x1A 过程记录合并为按时间倒序的行程流。
+    final stream = buildTripStream(trips, railRecord, busRecord);
 
     // 异地用卡判定：实时数据按当前卡片城市；快照按读取时记录的城市代码。
     bool isRemoteOf(String? code) => hasLive
@@ -118,7 +120,7 @@ class _CardDetailBody extends StatelessWidget {
             label: const Text('编辑卡片名称'),
           ),
         ),
-        if (trips.isNotEmpty || railRecord != null || busRecord != null) ...[
+        if (stream.isNotEmpty) ...[
           const SizedBox(height: 24),
           Text(
             hasLive ? '本次读取行程' : '最近读取记录',
@@ -126,16 +128,31 @@ class _CardDetailBody extends StatelessWidget {
                 ?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
-          for (final trip in trips)
-            _DetailTripCard(trip: trip, isRemote: isRemoteOf(trip.cityCode)),
-          if (railRecord != null) ...[
-            const SizedBox(height: 8),
-            _DetailRailCard(record: railRecord),
-          ],
-          if (busRecord != null) ...[
-            const SizedBox(height: 8),
-            _DetailBusCard(record: busRecord),
-          ],
+          for (final entry in stream)
+            switch (entry) {
+              TransactionTripEntry(:final trip) => _DetailTripCard(
+                  trip: trip,
+                  isRemote: isRemoteOf(trip.cityCode),
+                ),
+              RailRecordEntry(:final record, :final isEntry) =>
+                  _DetailRailTripCard(
+                    record: record,
+                    isEntry: isEntry,
+                    app: app,
+                    isRemote: isRemoteOf(
+                      isEntry ? record.entryCityCode : record.exitCityCode,
+                    ),
+                  ),
+              BusRecordEntry(:final record, :final isEntry) =>
+                  _DetailBusTripCard(
+                    record: record,
+                    isEntry: isEntry,
+                    app: app,
+                    isRemote: isRemoteOf(
+                      isEntry ? record.entryCityCode : record.exitCityCode,
+                    ),
+                  ),
+            },
         ],
       ],
     );
@@ -252,13 +269,40 @@ class _DetailTripCard extends StatelessWidget {
   }
 }
 
-class _DetailRailCard extends StatelessWidget {
+/// 详情页内嵌 0x1A 轨道单侧行程卡片（进站 / 出站）：与详情页行程卡片
+/// 同样式，站点查不到线路库时回退原始编码（不猜测）。
+class _DetailRailTripCard extends StatelessWidget {
   final TransitRecord record;
-  const _DetailRailCard({required this.record});
+  final bool isEntry;
+  final AppState app;
+  final bool isRemote;
+  const _DetailRailTripCard({
+    required this.record,
+    required this.isEntry,
+    required this.app,
+    required this.isRemote,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final symbol = app.cardCurrency.symbol;
+    final time = isEntry ? record.entryTime : record.exitTime;
+    final cityCode = isEntry ? record.entryCityCode : record.exitCityCode;
+    final rawStation = isEntry ? record.entryStationId : record.exitStationId;
+    final rawLine =
+        (isEntry ? record.entryLineCode : record.exitLineCode)?.toString();
+    final station = app.resolveStationName(cityCode, rawStation) ?? rawStation;
+    final line = app.resolveLineName(cityCode, rawLine) ?? rawLine;
+    final amountFen = isEntry ? record.entryAmountFen : record.exitAmountFen;
+    final balanceFen = isEntry ? record.entryBalanceFen : null;
+
+    final titleParts = <String>[
+      isEntry ? '进站' : '出站',
+      if (station != null) station,
+    ];
+
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
@@ -266,23 +310,71 @@ class _DetailRailCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '城市轨道交通 · 进出站记录',
-              style:
-                  theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    titleParts.join(' · '),
+                    style: theme.textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                if (isRemote)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: scheme.tertiaryContainer,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      '异地用卡',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: scheme.onTertiaryContainer,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+              ],
             ),
-            const SizedBox(height: 8),
-            _detailKv(context, '交易状态', record.statusName),
-            if (record.entryTime != null)
-              _detailKv(context, '进站时间', _fmtDt(record.entryTime!)),
-            if (record.exitTime != null)
-              _detailKv(context, '出站时间', _fmtDt(record.exitTime!)),
-            if (record.exitAmountFen != null)
-              _detailKv(
-                context,
-                '出站金额',
-                '¥${(record.exitAmountFen! / 100).toStringAsFixed(2)}',
+            if (line != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                line,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: scheme.onSurfaceVariant),
               ),
+            ],
+            if (time != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                _fmtDt(time),
+                style:
+                    theme.textTheme.bodySmall?.copyWith(color: scheme.outline),
+              ),
+            ],
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                if (amountFen != null && amountFen > 0)
+                  Text(
+                    '-$symbol${(amountFen / 100).toStringAsFixed(2)}',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: scheme.error,
+                    ),
+                  ),
+                if (balanceFen != null) ...[
+                  const SizedBox(width: 12),
+                  Text(
+                    '余额 $symbol${(balanceFen / 100).toStringAsFixed(2)}',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: scheme.outline),
+                  ),
+                ],
+              ],
+            ),
           ],
         ),
       ),
@@ -290,13 +382,40 @@ class _DetailRailCard extends StatelessWidget {
   }
 }
 
-class _DetailBusCard extends StatelessWidget {
+/// 详情页内嵌 0x1A 公交单侧行程卡片（上车 / 下车）：与详情页行程卡片
+/// 同样式；交易金额为整程一次性扣费，仅展示在下车侧，里程同侧展示。
+class _DetailBusTripCard extends StatelessWidget {
   final BusTransitRecord record;
-  const _DetailBusCard({required this.record});
+  final bool isEntry;
+  final AppState app;
+  final bool isRemote;
+  const _DetailBusTripCard({
+    required this.record,
+    required this.isEntry,
+    required this.app,
+    required this.isRemote,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final symbol = app.cardCurrency.symbol;
+    final time = isEntry ? record.entryTime : record.exitTime;
+    final cityCode = isEntry ? record.entryCityCode : record.exitCityCode;
+    final rawStation =
+        isEntry ? record.entryStationCode : record.exitStationCode;
+    final rawLine = isEntry ? record.entryLineCode : record.exitLineCode;
+    final station = app.resolveStationName(cityCode, rawStation) ?? rawStation;
+    final line = app.resolveLineName(cityCode, rawLine);
+    final amountFen = isEntry ? null : record.transactionAmountFen;
+    final mileage = isEntry ? null : record.mileage;
+
+    final titleParts = <String>[
+      isEntry ? '上车' : '下车',
+      if (station != null) station,
+    ];
+
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
@@ -304,49 +423,77 @@ class _DetailBusCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '公共汽电车 · 上下车记录',
-              style:
-                  theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    titleParts.join(' · '),
+                    style: theme.textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                if (isRemote)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: scheme.tertiaryContainer,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      '异地用卡',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: scheme.onTertiaryContainer,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+              ],
             ),
-            const SizedBox(height: 8),
-            _detailKv(context, '交易状态', record.statusName),
-            if (record.entryTime != null)
-              _detailKv(context, '上车时间', _fmtDt(record.entryTime!)),
-            if (record.exitTime != null)
-              _detailKv(context, '下车时间', _fmtDt(record.exitTime!)),
-            if (record.transactionAmountFen != null)
-              _detailKv(
-                context,
-                '交易金额',
-                '¥${(record.transactionAmountFen! / 100).toStringAsFixed(2)}',
+            if (line != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                line,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: scheme.onSurfaceVariant),
               ),
+            ],
+            if (time != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                _fmtDt(time),
+                style:
+                    theme.textTheme.bodySmall?.copyWith(color: scheme.outline),
+              ),
+            ],
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                if (amountFen != null && amountFen > 0)
+                  Text(
+                    '-$symbol${(amountFen / 100).toStringAsFixed(2)}',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: scheme.error,
+                    ),
+                  ),
+                if (mileage != null) ...[
+                  const SizedBox(width: 12),
+                  Text(
+                    '里程 $mileage 站',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: scheme.outline),
+                  ),
+                ],
+              ],
+            ),
           ],
         ),
       ),
     );
   }
 }
-
-Widget _detailKv(BuildContext context, String label, String value) => Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 72,
-            child: Text(
-              label,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: Theme.of(context).colorScheme.outline),
-            ),
-          ),
-          Expanded(child: Text(value)),
-        ],
-      ),
-    );
 
 String _fmtDt(DateTime t) {
   String pad2(int v) => v.toString().padLeft(2, '0');

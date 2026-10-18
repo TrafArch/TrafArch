@@ -1053,6 +1053,16 @@ class _ScriptedLink {
 
 List<int> _sw9000(List<int> data) => [...data, 0x90, 0x00];
 
+/// 将十进制数字串按压缩 BCD（每字节两位、高位半字节在前）打包为字节序列。
+/// 若长度为奇数，则最高字节补 0 前导。
+List<int> _bcd(String digits) {
+  if (digits.length.isOdd) digits = '0$digits';
+  return [
+    for (var i = 0; i < digits.length; i += 2)
+      (int.parse(digits[i]) << 4) | int.parse(digits[i + 1]),
+  ];
+}
+
 _ScriptedLink _baseLink({List<int>? b2Response}) {
   final link = _ScriptedLink();
   link.enqueue(0xA4, const [0x90, 0x00]); // 选择主文件 MF

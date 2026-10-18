@@ -240,13 +240,52 @@ class _RecentScanSectionState extends State<RecentScanSection> {
       if (expireDate != null) _kv(context, '有效期至', _fmtDate(expireDate)),
       if (isCityUnion && publicInfo?.applicationExpiryDate != null)
         _kv(context, '有效期至', publicInfo!.applicationExpiryDate!),
-      if (isTUnion) _kv(context, '全国互联互通', '已启用'),
-      if (isCityUnion && publicInfo != null)
+      // 全国互联互通启用状态：两套网络分别判定，均以解析数据为准，不臆断。
+      // - 交通联合（TU）：取自管理信息文件（SFI 0x17）「互通卡种」字段——
+      //   部标口径 01 互通卡（已启用）/ 00 非互通卡（未启用），未读到管理
+      //   信息文件或部标未定义取值时为未知；
+      // - 城市一卡通（CU）：住建部「全国城市一卡通互联互通」网络，启用状态
+      //   取自公共应用基本信息文件（SFI 0x15）字节 09 的互联互通启用标识；
+      //   未读取到该文件时标记「未知」，不猜测、不隐藏。
+      if (isTUnion)
         _kv(
           context,
           '全国互联互通',
-          publicInfo.isInterconnectionEnabled ? '已启用' : '未启用',
+          _tuInteropText(info?.isNationalInteropEnabled),
+        )
+      else if (isCityUnion)
+        _kv(
+          context,
+          '全国互联互通',
+          publicInfo == null
+              ? '未知（未读到公共信息文件）'
+              : publicInfo.isInterconnectionEnabled
+                  ? '已启用（城市一卡通）'
+                  : '未启用',
         ),
+      // 双应用卡：在同一张物理卡上另有城市一卡通（住建部）钱包，与上面的
+      // 交通联合余额分属两套独立网络，逐一列出避免混淆。
+      if (parsed?.dualApplication == true) ...[
+        _kv(context, '城市一卡通应用', '已发现（双应用卡）'),
+        if (app.cityUnionBalanceFen != null)
+          _kv(
+            context,
+            '城市一卡通余额',
+            '${(app.cityUnionBalanceFen! / 100).toStringAsFixed(2)} 元',
+          ),
+        if (publicInfo?.applicationSerialNumber != null &&
+            publicInfo!.applicationSerialNumber!.isNotEmpty)
+          _kv(context, '城市一卡通卡号', publicInfo.applicationSerialNumber!),
+        _kv(
+          context,
+          '城市一卡通互联互通',
+          publicInfo == null
+              ? '未知（未读到公共信息文件）'
+              : publicInfo.isInterconnectionEnabled
+                  ? '已启用（城市一卡通）'
+                  : '未启用',
+        ),
+      ],
     ];
   }
 
@@ -313,7 +352,7 @@ class _RecentScanSectionState extends State<RecentScanSection> {
             ? 'PBOC（JR/T 0025 系列规则）'
             : 'EMV（通用规范规则）',
       ),
-      _kv(context, '结果状态', _bankStatusText(bank.status)),
+      _kv(context, '结果状态', _bankStatusText(bank)),
       if (bank.applications.isEmpty)
         _hint(context, '未解析到应用：${_bankEmptyReason(bank)}')
       else ...[
@@ -353,12 +392,22 @@ class _RecentScanSectionState extends State<RecentScanSection> {
     );
   }
 
-  String _bankStatusText(BankCardStatus status) => switch (status) {
+  String _bankStatusText(BankCardResult bank) => switch (bank.status) {
         BankCardStatus.noCard => '未读到应用数据',
-        BankCardStatus.enumerationFailed => '应用枚举失败（PPSE 不支持或访问受限）',
+        BankCardStatus.enumerationFailed => _bankEnumerationText(bank),
         BankCardStatus.partial => '部分解析成功（仅公开可读数据）',
         BankCardStatus.success => '解析完成',
       };
+
+  /// 银行卡枚举失败文案：优先展示具体原因码，避免统一盖成「PPSE 不支持」。
+  String _bankEnumerationText(BankCardResult bank) {
+    for (final issue in bank.issues) {
+      if (issue.stage == 'enumeration' || issue.stage == 'ppse') {
+        return '应用枚举未完成（${issue.code}）';
+      }
+    }
+    return '应用枚举未完成';
+  }
 
   String _bankEmptyReason(BankCardResult bank) {
     for (final issue in bank.issues) {
@@ -411,4 +460,13 @@ class _RecentScanSectionState extends State<RecentScanSection> {
     final day = d.day.toString().padLeft(2, '0');
     return '${d.year}-$m-$day';
   }
+
+  /// 交通联合「互通卡种」推导的全国互联互通启用状态文案：与解析层
+  /// [TUnionCardInfo.isNationalInteropEnabled] 的 bool? 三态一一对应
+  /// （true 互通卡 / false 非互通卡 / null 未知），不猜测。
+  static String _tuInteropText(bool? enabled) => switch (enabled) {
+        true => '已启用（互通卡）',
+        false => '未启用（非互通卡）',
+        null => '未知（未读到管理信息文件或部标未定义取值）',
+      };
 }

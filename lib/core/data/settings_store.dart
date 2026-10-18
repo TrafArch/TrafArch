@@ -4,9 +4,6 @@ import 'package:path_provider/path_provider.dart';
 
 /// 设置键名。
 abstract final class SettingsKeys {
-  /// 「开启在线拉取数据」开关（'true' / 'false'）。
-  static const onlineFetchEnabled = 'online_fetch_enabled';
-
   /// 「启用运行日志」开关（'true' / 'false'；缺省视为关闭）。
   static const loggingEnabled = 'logging_enabled';
 

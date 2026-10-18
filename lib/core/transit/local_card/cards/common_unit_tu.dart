@@ -113,6 +113,10 @@ class CommonUnitTu {
     if (_selectedAid == null) return null;
 
     final cardInfo = await _readCardInfo();
+    if (!_isValidTUnionSerial(cardInfo)) {
+      info.isTU = false;
+      return null;
+    }
     final balance = await _readBalance();
     final merged = (cardInfo ?? const TUnionCardInfo())
         .withBalance(balance ?? cardInfo?.balanceFen);
@@ -131,6 +135,17 @@ class CommonUnitTu {
     _appendTrips(info, records, transactions);
     parsedCard = parsed;
     return parsed;
+  }
+
+  /// 校验应用序列号是否符合交通联合 IIN 标准（JT/T 978.2）：
+  /// 10 字节 BCD 纯数字，去前导零后以"31"开头；
+  /// 不满足时视为非交通联合卡（即使 AID SELECT 成功也拒绝认定）。
+  static bool _isValidTUnionSerial(TUnionCardInfo? info) {
+    final serial = info?.applicationSerial;
+    if (serial == null || serial.isEmpty) return false;
+    if (!RegExp(r'^[0-9]+$').hasMatch(serial)) return false;
+    final trimmed = serial.replaceFirst(RegExp(r'^0+'), '');
+    return trimmed.length >= 8 && trimmed.startsWith('31');
   }
 
   // ---- 以下为原 TUnionParser 读取实现（整体内联，行为零漂移） ----
@@ -173,11 +188,13 @@ class CommonUnitTu {
   }
 
   Future<int?> _readBalance() async {
-    final wallet = await _queryBalance(0x03);
-    if (wallet != null && wallet != 0) return wallet;
+    // 修正语义：P1=00 才是电子钱包余额（JT/T 978.2），优先采用；
+    // P1=03 为透支限额/已透支数据，仅在 P1=00 读不到时作兜底参考。
     final standard = await _queryBalance(0x00);
     if (standard != null && standard != 0) return standard;
-    return wallet ?? standard;
+    final wallet = await _queryBalance(0x03);
+    if (wallet != null && wallet != 0) return wallet;
+    return standard ?? wallet;
   }
 
   Future<int?> _queryBalance(int p1) async {

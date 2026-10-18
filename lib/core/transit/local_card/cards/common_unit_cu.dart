@@ -59,14 +59,23 @@ class CommonUnitCu {
   }
 
   /// 完整识读：读取标准文件并生成统一视图列表。
-  Future<ParsedCard?> read(CardInfo info, List<ApduRecord> records) async {
+  ///
+  /// [readBalance] 为 true 时额外读取电子钱包余额（GET BALANCE，相对当前
+  /// 选中的住建部应用）——仅在双应用卡的次应用探测中启用；默认 false 时
+  /// APDU 序列与原 CityUnionParser.parse() 完全一致（零行为漂移）。
+  Future<ParsedCard?> read(
+    CardInfo info,
+    List<ApduRecord> records, {
+    bool readBalance = false,
+  }) async {
     if (_selectedAid == null) return null;
 
     final files = await _readFiles();
+    final balance = readBalance ? await _readBalance() : null;
     final parsed = ParsedCard(
       parserId: CardParserIds.cityUnion,
       parserName: moduleName,
-      info: const TUnionCardInfo(),
+      info: const TUnionCardInfo().withBalance(balance),
       transactions: const [],
       cityUnionFiles: files,
       selectedAidHex: CityUnionCodec.hex(_selectedAid ?? const []),
@@ -269,5 +278,18 @@ class CommonUnitCu {
     if (date == null || date.isEmpty) return null;
     final iso = (time == null || time.isEmpty) ? date : '$date\'T$time';
     return DateTime.tryParse(iso);
+  }
+
+  /// 读取电子钱包余额（GET BALANCE，相对当前选中的住建部 CU 应用）。
+  /// 命令形态与交通联合及本项目地方卡一致：`80 5C 00 02 04`，返回 4 字节
+  /// 大端无符号整数，单位为分；需剥离末尾状态字 `90 00` 后取前 4 字节。
+  /// CLA 0x80 失败时回退 0x00；均失败返回 null（不猜测）。
+  Future<int?> _readBalance() async {
+    for (final cla in const [0x80, 0x00]) {
+      final resp = await _exchange(TUnionApdu.getBalance(cla: cla, p1: 0x00));
+      if (!_isSuccess(resp) || resp.length < 6) continue;
+      return (resp[0] << 24) | (resp[1] << 16) | (resp[2] << 8) | resp[3];
+    }
+    return null;
   }
 }

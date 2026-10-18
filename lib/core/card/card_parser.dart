@@ -58,6 +58,17 @@ class ParsedCard {
 
   final String selectedAidHex;
 
+  /// 双应用卡标记：同一张物理卡上同时读取到交通联合（TU，JT/T 978.2）与
+  /// 城市一卡通（CU，CJ/T 331-2016）两个应用。为 true 时，[info] /
+  /// [transactions] / [transitProcessRecords] 承载交通部互联互通应用数据，
+  /// [cityUnionFiles] 与 [cityUnionBalanceFen] 承载住建部城市一卡通应用数据；
+  /// [parserId] 保持 [CardParserIds.tunion]（以互联互通应用驱动分析链路）。
+  final bool dualApplication;
+
+  /// 双应用卡上城市一卡通（CU）应用的电子钱包余额（分）；非双应用或未读到
+  /// 余额时为 null。与 [info]（交通联合钱包余额）分属两套独立钱包。
+  final int? cityUnionBalanceFen;
+
   const ParsedCard({
     this.parserId = '',
     required this.parserName,
@@ -67,5 +78,7 @@ class ParsedCard {
     this.cityUnionFiles = const [],
     this.localCard,
     this.selectedAidHex = '',
+    this.dualApplication = false,
+    this.cityUnionBalanceFen,
   });
 }

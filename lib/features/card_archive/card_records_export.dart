@@ -13,9 +13,16 @@ import 'models/card_types.dart';
 /// 供卡片列表页「导出卡片记录」使用：输出人类可读的分节文本，展示口径
 /// 与卡片列表 / 详情页一致（名称 / 卡型 / 卡号 / 余额 / 交易条数 / 最近
 /// 读取 + 行程记录）；最终由原生层写入手机下载目录（text/plain）。
+///
+/// [stationResolver] / [lineResolver]：可选的城市 + 原始编码 → 名称解析
+/// 回调（TU 环境下由 AppState 注入 `resolveStationName / resolveLineName`），
+/// 供 0x1A 城市轨道进出站记录在导出中展示线路名 / 站点名；未注入或解析
+/// 未命中时回退原始编码（与页面口径一致，不猜测）。
 String buildCardRecordsExport(
   List<SavedCard> cards, {
   DateTime? exportedAt,
+  String? Function(String? cityCode, String? rawStationId)? stationResolver,
+  String? Function(String? cityCode, String? rawLineCode)? lineResolver,
 }) {
   final now = exportedAt ?? DateTime.now();
   final buffer = StringBuffer()
@@ -62,7 +69,7 @@ String buildCardRecordsExport(
     if (rail != null) {
       buffer
         ..writeln('城市轨道交通 · 进出站记录：')
-        ..writeln('  · ${_railLine(rail)}');
+        ..writeln('  · ${_railLine(rail, stationResolver, lineResolver)}');
     }
     if (bus != null) {
       buffer
@@ -95,13 +102,31 @@ String _tripLine(TransitTrip trip, CardSessionSnapshot? snapshot) {
   return parts.join(' | ');
 }
 
-/// 城市轨道进出站记录文本行。
-String _railLine(TransitRecord r) {
+/// 城市轨道进出站记录文本行。0x1A 站点 / 线路号在有解析回调时优先展示
+/// 解析后的名称（TU 环境下与行程页 / 卡片详情页同一口径），未命中或
+/// 未注入时回退原始编码（保持旧版导出内容不变）。
+String _railLine(
+  TransitRecord r, [
+  String? Function(String? cityCode, String? rawStationId)? stationResolver,
+  String? Function(String? cityCode, String? rawLineCode)? lineResolver,
+]) {
   final parts = <String>['状态 ${r.statusName}'];
   if (r.entryTime != null) parts.add('进站 ${_fmt(r.entryTime!)}');
   if (r.exitTime != null) parts.add('出站 ${_fmt(r.exitTime!)}');
-  if (r.entryStationId != null) parts.add('进站站点 ${r.entryStationId}');
-  if (r.exitStationId != null) parts.add('出站站点 ${r.exitStationId}');
+  final entryLine = lineResolver?.call(r.entryCityCode, r.entryLineCode?.toString());
+  final exitLine = lineResolver?.call(r.exitCityCode, r.exitLineCode?.toString());
+  final entryStation =
+      stationResolver?.call(r.entryCityCode, r.entryStationId);
+  final exitStation =
+      stationResolver?.call(r.exitCityCode, r.exitStationId);
+  if (entryLine != null) parts.add('进站线路 $entryLine');
+  if (exitLine != null) parts.add('出站线路 $exitLine');
+  if (r.entryStationId != null) {
+    parts.add('进站站点 ${entryStation ?? r.entryStationId}');
+  }
+  if (r.exitStationId != null) {
+    parts.add('出站站点 ${exitStation ?? r.exitStationId}');
+  }
   if (r.entryBalanceFen != null) {
     parts.add('进站余额 ${_yuan(r.entryBalanceFen!)}');
   }

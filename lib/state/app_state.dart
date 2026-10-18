@@ -9,10 +9,7 @@ import '../core/app_info.dart';
 import '../core/card/card_parser.dart';
 import '../core/data/tunion_knowledge_base.dart';
 import '../core/data/city_union_knowledge_base.dart';
-import '../core/data/online_data_store.dart';
 import '../core/data/settings_store.dart';
-import '../core/data/station_codes.dart';
-import '../core/data/tripreader_sync.dart';
 import '../core/logging/app_logger.dart';
 import '../core/logging/log_exporter.dart';
 import '../core/nfc/nfc_models.dart';
@@ -25,9 +22,9 @@ import '../core/transit/tunion/qr/jt_t1179_qr_parser.dart';
 import '../core/transit/tunion/tunion_models.dart';
 import '../core/transit/tunion/tunion_process_parser.dart';
 import '../database/app_database.dart';
-import '../features/bank_card/data/transport/nfc_card_transport.dart';
 import '../features/bank_card/domain/models/bank_card_result.dart';
 import '../features/bank_card/parsers/bank_card_analyzer.dart';
+import '../features/bank_card/parsers/bank_card_probe_impl.dart';
 import '../features/bank_card/parsers/emv/emv_parser.dart';
 import '../features/bank_card/parsers/pboc/pboc_parser.dart';
 import '../features/card_archive/card_records_export.dart';
@@ -39,7 +36,7 @@ import '../features/card_archive/services/card_identification_service.dart';
 /// 应用级状态与会话编排：NFC 通道 → 解析器 → 分析引擎。
 ///
 /// 职责：
-/// - 知识库加载（JSON 资产 + 站点数据：预制快照 / 在线拉取）；
+/// - 知识库加载（JSON 资产 + 站点数据：本地数据库 / 预制快照）；
 /// - 扫描会话管理（世代号防止旧请求误杀新扫描）；
 /// - 读卡流程编排：scanOnce → LocalCardParser（统一识读模块，内含
 ///   交通联合 / 城市一卡通 / 地方交通卡探测）→ AnalysisEngine.analyze；
@@ -52,16 +49,12 @@ class AppState extends ChangeNotifier {
     NfcChannel? channel,
     AssetBundle? bundle,
     SettingsStore? settingsStore,
-    OnlineDataStore? onlineDataStore,
-    TripreaderSyncService? syncService,
     AppLogger? logger,
     LogExporter? logExporter,
     AppDatabase? database,
   })  : _channel = channel ?? const MethodChannelNfcChannel(),
         _bundle = bundle,
         _settingsStore = settingsStore ?? FileSettingsStore(),
-        _onlineDataStore = onlineDataStore ?? FileOnlineDataStore(),
-        _syncService = syncService ?? TripreaderSyncService(),
         _logger = logger ?? AppLogger(),
         _logExporter = logExporter ?? const MethodChannelLogExporter(),
         cardRepository = CardRepository(database ?? AppDatabase());
@@ -71,13 +64,6 @@ class AppState extends ChangeNotifier {
 
   /// 设置持久化（app_settings.txt 文本键值对；测试注入内存实现）。
   final SettingsStore _settingsStore;
-
-  /// 在线站点数据本地快照持久化（online_station_data.txt；
-  /// 测试注入内存实现）。
-  final OnlineDataStore _onlineDataStore;
-
-  /// 读卡识途数据在线同步服务（手机端直接联网拉取，结果由本类持久化）。
-  final TripreaderSyncService _syncService;
 
   /// 运行日志记录（应用私有目录持久化；测试注入内存实现）。
   final AppLogger _logger;
@@ -130,29 +116,6 @@ class AppState extends ChangeNotifier {
   String? _error;
   String? get error => _error;
 
-  /// 「开启在线拉取数据」开关（默认停用，持久化到设置文件）。
-  bool _onlineFetchEnabled = false;
-  bool get onlineFetchEnabled => _onlineFetchEnabled;
-
-  /// 在线拉取的站点代码表（拉取后持久化到本地，重启后继续取代预制快照；
-  /// null 时使用应用内预制数据）。
-  StationCodeTable? _onlineStationCodes;
-
-  /// 当前是否使用在线拉取的数据（本地快照或本次会话拉取）。
-  bool get usingOnlineData => _onlineStationCodes != null;
-
-  bool _syncingData = false;
-  /// 站点数据在线同步是否进行中。
-  bool get syncingData => _syncingData;
-
-  String? _syncError;
-  /// 最近一次同步的失败原因；重新发起同步时清空。
-  String? get syncError => _syncError;
-
-  String? _syncReport;
-  /// 最近一次同步成功摘要（数据集数 / 编码数 / 来源）。
-  String? get syncReport => _syncReport;
-
   ParsedCard? _parsedCard;
   ParsedCard? get parsedCard => _parsedCard;
 
@@ -161,9 +124,12 @@ class AppState extends ChangeNotifier {
   ReadResult? get localReadResult => _parsedCard?.localCard;
 
   BankCardResult? _lastBankCardResult;
-  /// 最近一次银行卡只读分析结果（交通应用未命中时自动分析，会话内展示用，
-  /// 不写入普通日志）。
+  /// 最近一次银行卡只读分析结果（统一识读流程在交通应用未命中后作为一等
+  /// 阶段自动分析，会话内展示用，不写入普通日志）。
   BankCardResult? get lastBankCardResult => _lastBankCardResult;
+
+  /// 缓存的银行卡分析器（字典随资产加载，一次会话内复用，避免重复读资产）。
+  BankCardAnalyzer? _bankAnalyzer;
 
   /// 加载银行卡解析器（字典随资产加载，失败自动降级为空字典）。
   Future<BankCardAnalyzer> _buildBankCardAnalyzer() async {
@@ -174,7 +140,7 @@ class AppState extends ChangeNotifier {
       (p) => (_bundle ?? rootBundle).loadString(p),
     );
     // PBOC 优先（更具体的规则先判定），EMV 兜底。
-    return BankCardAnalyzer([pboc, emv]);
+    return _bankAnalyzer ??= BankCardAnalyzer([pboc, emv]);
   }
 
   TUnionCardInfo? get cardInfo => _parsedCard?.info;
@@ -240,6 +206,13 @@ class AppState extends ChangeNotifier {
   bool get cityUnionDetected =>
       _parsedCard?.parserId == CardParserIds.cityUnion;
 
+  /// 是否在同一张物理卡上同时读取到交通联合与城市一卡通两个应用（双应用卡）。
+  bool get dualApplicationDetected => _parsedCard?.dualApplication ?? false;
+
+  /// 双应用卡上城市一卡通（住建部）应用的电子钱包余额（分）；非双应用或
+  /// 未读到余额时为 null。与 [cardInfo] 的交通联合钱包余额分属两套独立钱包。
+  int? get cityUnionBalanceFen => _parsedCard?.cityUnionBalanceFen;
+
   /// 城市一卡通文件解析视图（CJ/T 331-2016：0x15 / 0x18 / 0x1A），
   /// 供专家模式按统一视图渲染；非城市一卡通卡时为空。
   List<CityUnionFileView> get cityUnionFiles =>
@@ -287,6 +260,10 @@ class AppState extends ChangeNotifier {
   CardAnalysisResult? _analysis;
   CardAnalysisResult? get analysis => _analysis;
 
+  /// 已加载的知识库（未加载时为 null）：供设置「知识库」子页面展示
+  /// 当前 TU / CU 数据库支持的地区、线路与站点覆盖范围。
+  KnowledgeBase? get knowledgeBase => _kb;
+
   bool get ready => _engine != null;
 
   String get knowledgeSummary => _kb == null
@@ -294,8 +271,7 @@ class AppState extends ChangeNotifier {
       : '已加载：${_kb!.cities.length} 城市 / ${_kb!.issuers.length} 指纹 / '
           '${_kb!.terminalRules.length} 终端规则 / '
           '${_kb!.cityUnionCards.entryCount} 城市一卡通 / '
-          '${_kb!.stationCodes.entryCount} 站点编码'
-          '${_onlineStationCodes == null ? '（预制快照）' : '（在线拉取）'}';
+          '${_kb!.stationCodes.entryCount} 站点编码（本地数据库）';
 
   /// 「启用运行日志」开关（默认关闭，持久化到设置文件）。
   bool _loggingEnabled = false;
@@ -377,6 +353,70 @@ class AppState extends ChangeNotifier {
   /// 卡种类型取值（SFI 0x17 卡种类型，HEX 字符串）→ 名称；
   /// 未收录或知识库未加载时返回 null（展示层回退原始 HEX）。
   String? cardKindName(String? hex) => _kb?.cardPrefixes.cardKindName(hex);
+
+  /// 站点编码（原始 16 位 HEX / 数字编码）→ 站点名（按城市代码精确
+  /// 命中线路站点库）；未命中、城市代码无效或知识库未加载时返回 null
+  /// （展示层回退原始编码，不猜测）。
+  ///
+  /// TU 环境优先按 0x1A 规则匹配：卡片进/出闸站点末 4 位（12 位库）
+  /// 或末 2 位（8 位库）与 source_field 9-12/7-8 位数字精确对齐；
+  /// 未命中回退原有末四位 / HEX→十进制通道，兼容 CSV 与 CU 数据集。
+  String? resolveStationName(String? cityCode, String? rawCode) {
+    final kb = _kb;
+    if (kb == null || rawCode == null || rawCode.isEmpty) return null;
+    final city = _lookupCityCode(cityCode);
+    if (city == null) return null;
+    final code = rawCode.replaceAll(RegExp(r'[^0-9A-Za-z]'), '');
+    if (code.isEmpty) return null;
+    final tuHit = kb.stationCodes
+        .lookupTuStationByCardId(rawStationId: code, cityCode: city);
+    if (tuHit != null) return tuHit.displayLabel;
+    return kb.stationCodes
+        .lookupStation(rawCode: code, cityCode: city)
+        ?.displayLabel;
+  }
+
+  /// 线路号（原始编码）→ 线路名。TU 环境优先按 0x1A 规则匹配：卡片
+  /// 入/出站线路号数字与 source_field 5-8/5-6 位线路片段数字精确对齐；
+  /// 未命中回退按 line_name 数字对齐的旧通道（未收录仍返回 null，不猜测）。
+  String? resolveLineName(String? cityCode, String? rawLineCode) {
+    final kb = _kb;
+    if (kb == null || rawLineCode == null || rawLineCode.isEmpty) return null;
+    final city = _lookupCityCode(cityCode);
+    if (city == null) return null;
+    final code = rawLineCode.replaceAll(RegExp(r'[^0-9A-Za-z]'), '');
+    if (code.isEmpty) return null;
+    final tuHit = kb.stationCodes
+        .lookupTuLineByCardValue(rawLineCode: code, cityCode: city);
+    if (tuHit?.line != null) return tuHit!.line;
+    return kb.stationCodes.lookupLineName(rawLineCode: code, cityCode: city);
+  }
+
+  /// 城市一卡通（CU）交易终端编号 → 站点名：经 CU 站点数据库 terminal_index
+  /// 的精确 / 前缀规则匹配（同地区优先、键更长者优先、按交易类型过滤）；
+  /// 未命中、终端编号缺失或知识库未加载时返回 null（展示层回退，不猜测）。
+  String? resolveCuStationName(
+    String? terminalNumber, {
+    String? cityCode,
+    int? transactionType,
+  }) {
+    final kb = _kb;
+    if (kb == null || terminalNumber == null || terminalNumber.isEmpty) {
+      return null;
+    }
+    return kb.cuTerminals
+        .match(terminalNumber, cityCode: cityCode, transactionType: transactionType)
+        ?.displayLabel;
+  }
+
+  /// 城市代码查询键规范化：空 / 全 0（未写入）视为无效（返回 null）；
+  /// 与 [_isUnsetCityCode] 同口径，供站点名精确匹配使用。
+  String? _lookupCityCode(String? code) {
+    if (code == null) return null;
+    final t = code.trim();
+    if (t.isEmpty || t.replaceAll('0', '').isEmpty) return null;
+    return t.toUpperCase();
+  }
 
   // ---- JT/T 1179 乘车码二维码 ----
 
@@ -487,17 +527,12 @@ class AppState extends ChangeNotifier {
   Future<void> _initialize() async {
     await _loadSettings();
     await _detectScanChannels();
-    await _loadOnlineStationData();
     await _loadKnowledge();
   }
 
-  /// 读取持久化设置（缺失/不可用时保持默认：在线拉取、运行日志与系统扫码均停用）。
+  /// 读取持久化设置（缺失/不可用时保持默认：运行日志与系统扫码均停用）。
   Future<void> _loadSettings() async {
     try {
-      // 在线拉取默认关闭，仅显式开启（'true'）时启用
-      final enabled =
-          await _settingsStore.read(SettingsKeys.onlineFetchEnabled);
-      _onlineFetchEnabled = enabled == 'true';
       // 运行日志默认关闭，仅显式开启（'true'）时启用
       final logging = await _settingsStore.read(SettingsKeys.loggingEnabled);
       _loggingEnabled = logging == 'true';
@@ -529,28 +564,11 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// 加载本地在线数据快照（仅开关开启时）：存在则取代应用内预制快照。
-  Future<void> _loadOnlineStationData() async {
-    if (!_onlineFetchEnabled) return;
-    try {
-      final datasets = await _onlineDataStore.load();
-      if (datasets.isNotEmpty) {
-        _onlineStationCodes = StationCodeTable.fromDatasets(datasets);
-      }
-    } catch (_) {
-      // 快照读取失败（文件损坏等）时回退应用内预制快照
-    }
-  }
-
   Future<void> _loadKnowledge() async {
     KnowledgeBase kb;
     try {
-      kb = await KnowledgeBase.load(
-        _bundle ?? rootBundle,
-        // 已有在线拉取数据（本地快照或本次会话拉取）时用在线数据；
-        // 否则回退应用内预制快照
-        stationCodes: _onlineStationCodes,
-      );
+      // 站点数据来自本地：TrafArch_Database_TU / CU 两个外部 SQLite 数据库
+      kb = await KnowledgeBase.load(_bundle ?? rootBundle);
     } catch (_) {
       // 资产缺失或解析失败时降级为空知识库，识别引擎自动失效但流程不断
       kb = KnowledgeBase.empty();
@@ -560,78 +578,6 @@ class AppState extends ChangeNotifier {
     _identification = CardIdentificationService(kb);
     _logEvent('知识库加载：$knowledgeSummary');
     notifyListeners();
-  }
-
-  /// 重建知识库与识别引擎（在线数据变化后刷新查询层；不重读设置）。
-  Future<void> reloadKnowledge() async {
-    _initFuture = _loadKnowledge();
-    await _initFuture;
-  }
-
-  /// 设置「开启在线拉取数据」开关（持久化到设置文件）。
-  /// 关闭时清除在线数据（内存 + 本地快照）与同步结果，
-  /// 回到应用内预制快照。
-  Future<void> setOnlineFetchEnabled(bool enabled) async {
-    if (_onlineFetchEnabled == enabled) return;
-    _onlineFetchEnabled = enabled;
-    notifyListeners();
-    try {
-      await _settingsStore.write(
-        SettingsKeys.onlineFetchEnabled,
-        '$enabled',
-      );
-    } catch (_) {
-      // 设置写入失败不影响本次会话内的开关状态
-    }
-    if (!enabled) {
-      // 一并清除同步报告/错误，避免再次开启时展示过期结果
-      _syncError = null;
-      _syncReport = null;
-      final hadOnlineData = _onlineStationCodes != null;
-      _onlineStationCodes = null;
-      try {
-        await _onlineDataStore.clear();
-      } catch (_) {
-        // 本地快照删除失败不影响流程（再次在线更新会整体覆盖）
-      }
-      if (hadOnlineData) {
-        await reloadKnowledge();
-      } else {
-        notifyListeners();
-      }
-    }
-  }
-
-  /// 在线拉取读卡识途站点数据（手机端直接联网，从 GitHub 主源
-  /// 下载归档，主分支失败自动尝试备用分支）。需开启「在线拉取数据」
-  /// 开关；拉取成功后持久化到本地快照并取代预制数据（重启后继续生效）。
-  /// 失败原因写入 [syncError]，成功摘要写入 [syncReport]。
-  Future<void> syncTripreaderData() async {
-    if (_syncingData || !_onlineFetchEnabled) return;
-    _syncingData = true;
-    _syncError = null;
-    notifyListeners();
-    try {
-      final result = await _syncService.sync();
-      // 拉取期间若开关被关闭（在线数据已按设计清除），丢弃本次结果，
-      // 避免把已清除的在线数据重新写回内存与本地快照
-      if (!_onlineFetchEnabled) return;
-      _onlineStationCodes = StationCodeTable.fromDatasets(result.datasets);
-      _syncReport = result.report;
-      try {
-        // 持久化快照：拉取的数据取代预制数据，重启后继续生效
-        await _onlineDataStore.save(result.datasets);
-      } catch (_) {
-        // 保存失败时降级为仅本次运行生效（重启后回退预制快照）
-        _syncReport = '${result.report}（本地保存失败，仅本次运行生效）';
-      }
-      await reloadKnowledge();
-    } catch (e) {
-      _syncError = '$e';
-    } finally {
-      _syncingData = false;
-      notifyListeners();
-    }
   }
 
   /// 设置「启用运行日志」开关（持久化到设置文件，默认关闭）。
@@ -712,7 +658,12 @@ class AppState extends ChangeNotifier {
 
     try {
       final now = DateTime.now();
-      final content = buildCardRecordsExport(cards, exportedAt: now);
+      final content = buildCardRecordsExport(
+        cards,
+        exportedAt: now,
+        stationResolver: resolveStationName,
+        lineResolver: resolveLineName,
+      );
       final path = await _logExporter.saveToDownloads(
         'transit_card_records_${_fileStamp(now)}.txt',
         content,
@@ -796,27 +747,40 @@ class AppState extends ChangeNotifier {
 
     try {
       await init();
-      // 交通卡识读统一交由独立模块（LocalCardParser）编排：模块以新架构
-      // 为主，内部已融入原交通联合 / 城市一卡通富识读与地方交通卡探测，
-      // 按「交通联合优先 → 城市一卡通 → 地方卡兜底」串联，产出结果各自
-      // 保留 tunion / cityUnion / localCard 的 parserId。
+      // 卡片识读统一交由独立模块（LocalCardParser）编排：模块以新架构为主，
+      // 内部串联「交通联合 → 城市一卡通 → 地方交通卡 → 银行卡（EMV / PBOC）」
+      // 四类一等阶段，产出结果各自保留 tunion / cityUnion / localCard 的
+      // parserId 或银行卡产物，供上层统一分派。银行卡不再是上层兜底分支。
       final parser = LocalCardParser(
         _transceive,
         onStage: (stage) => _log('== 尝试解析：$stage =='),
+        bankProbe: BankCardProbeImpl(_buildBankCardAnalyzer),
       );
-      final parsed = await parser.parse();
-      if (parsed == null) {
-        // 交通应用均未命中：自动转入银行卡（EMV / PBOC）只读分析，
-        // 无需用户切换模式；结果供首页「最近扫描」与专家页统一展示。
-        _log('== 未发现受支持的交通应用，转入银行卡只读分析 ==');
-        await _analyzeBankCard();
+      final outcome = await parser.read();
+      if (outcome == null) {
+        _log('== 未发现受支持的卡片应用 ==');
         return;
       }
+      if (outcome.isBankCard) {
+        // 银行卡（EMV / PBOC）只读结果：供首页「最近扫描」与专家页统一展示。
+        final result = outcome.bank as BankCardResult;
+        _lastBankCardResult = result;
+        _log('== 银行卡识读完成：${result.applications.length} 个应用 / '
+            '${result.issues.length} 项异常 ==');
+        return;
+      }
+      final parsed = outcome.parsedCard!;
       _parsedCard = parsed;
       if (parsed.parserId == CardParserIds.tunion) {
         _analysis = _engine?.analyze(parsed);
         _log('== 解析完成：${parsed.transactions.length} 条交易记录 / '
             '${parsed.transitProcessRecords.length} 条过程记录 ==');
+        if (parsed.dualApplication) {
+          final cu = parsed.cityUnionBalanceFen;
+          _log('== 检测到双应用卡：交通联合 + 城市一卡通（'
+              '城市一卡通 ${parsed.cityUnionFiles.length} 个文件视图'
+              '${cu == null ? '' : ' / 余额 ${(cu / 100).toStringAsFixed(2)} 元'}）==');
+        }
       } else {
         // 分析引擎（识别 / 行程 / 符合性）为交通联合专属：
         // 其他卡型只提供文件级解析视图，不进入分析链路。
@@ -835,23 +799,6 @@ class AppState extends ChangeNotifier {
     } finally {
       _parsing = false;
       notifyListeners();
-    }
-  }
-
-  /// 银行卡只读分析：枚举应用 → 选择 EMV/PBOC 解析器 → 汇总结果。
-  /// 由 [_parseAndAnalyze] 在交通应用未命中时自动调用；全程复用
-  /// [_transceive]（含 APDU 日志），异常仅记录不影响其它应用。
-  Future<void> _analyzeBankCard() async {
-    _log('== 银行卡只读分析（EMV / PBOC）==');
-    try {
-      final analyzer = await _buildBankCardAnalyzer();
-      final transport = NfcCardTransport(_transceive);
-      final result = await analyzer.analyze(transport);
-      _lastBankCardResult = result;
-      _log('== 银行卡分析完成：${result.applications.length} 个应用 / '
-          '${result.issues.length} 项异常 ==');
-    } catch (e) {
-      _log('!! 银行卡分析异常：$e');
     }
   }
 

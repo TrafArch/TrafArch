@@ -46,7 +46,13 @@ class MethodChannelNfcChannel implements NfcChannel {
 
   @override
   Future<List<int>> transceive(List<int> apdu) async {
-    final raw = await _channel.invokeMethod<List<dynamic>>('transceive', apdu);
+    // Uint8List 会被 StandardMessageCodec 编码为 ByteArray，而原生 transceive
+    // 仅接受 List<Number>（ByteArray 在 Kotlin 非 List，as? List<*> 得 null，
+    // 触发「APDU 数据格式错误」）。统一 toList() 归一化为普通 List<int> 再发送。
+    final raw = await _channel.invokeMethod<List<dynamic>>(
+      'transceive',
+      apdu is Uint8List ? apdu.toList() : apdu,
+    );
     // 兼容两种原生返回形态：ByteArray（Uint8List，0~255）或 List<Byte>（-128~127）。
     // 统一 & 0xFF 归一化为无符号字节，防止 SW1SW2 判断与解析出错。
     return raw?.map((e) => (e as num).toInt() & 0xFF).toList() ?? const [];

@@ -52,6 +52,7 @@ void main() {
       final transport = ReplayCardTransport([
         _ppsePboc,
         _selectPboc,
+        _selectPboc, // 发现阶段 SELECT + 解析阶段各 SELECT 一次
         _gpoPboc,
         _recordPan,
         _recordAtc,
@@ -65,10 +66,10 @@ void main() {
       expect(app.records, hasLength(2));
       expect(app.records.first.parseError, isNull);
 
-      expect(HexCodec.encode(transport.sent[2]),
+      expect(HexCodec.encode(transport.sent[3]),
           '80A800000C830A0100000000000001560000');
-      expect(HexCodec.encode(transport.sent[3]), '00B2010C00');
-      expect(HexCodec.encode(transport.sent[4]), '00B2020C00');
+      expect(HexCodec.encode(transport.sent[4]), '00B2010C00');
+      expect(HexCodec.encode(transport.sent[5]), '00B2020C00');
     });
   });
 
@@ -77,6 +78,7 @@ void main() {
       final transport = ReplayCardTransport([
         _ppseEmv,
         _selectEmv,
+        _selectEmv, // 发现阶段 SELECT + 解析阶段各 SELECT 一次
         _gpoEmv,
         _recordPan,
       ]);
@@ -88,8 +90,8 @@ void main() {
       expect(app.parserId, 'emv');
       expect(app.records, hasLength(1));
 
-      expect(HexCodec.encode(transport.sent[2]), '80A8000002830000');
-      expect(HexCodec.encode(transport.sent[3]), '00B2010C00');
+      expect(HexCodec.encode(transport.sent[3]), '80A8000002830000');
+      expect(HexCodec.encode(transport.sent[4]), '00B2010C00');
     });
   });
 
@@ -98,6 +100,7 @@ void main() {
       final transport = ReplayCardTransport([
         _ppsePboc,
         _selectPboc,
+        _selectPboc, // 发现阶段 SELECT + 解析阶段各 SELECT 一次
         '6985',
         _gpoPboc,
         _recordPan,
@@ -110,10 +113,10 @@ void main() {
       expect(result.status, BankCardStatus.partial);
       expect(app.issues.any((i) => i.code == 'switch_empty_pdol'), isTrue);
 
-      expect(HexCodec.encode(transport.sent[2]),
+      expect(HexCodec.encode(transport.sent[3]),
           '80A800000C830A0100000000000001560000');
-      expect(HexCodec.encode(transport.sent[3]), '80A8000002830000');
-      expect(HexCodec.encode(transport.sent[4]), '00B2010C00');
+      expect(HexCodec.encode(transport.sent[4]), '80A8000002830000');
+      expect(HexCodec.encode(transport.sent[5]), '00B2010C00');
     });
   });
 }

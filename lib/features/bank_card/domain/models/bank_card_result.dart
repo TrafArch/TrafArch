@@ -1,3 +1,4 @@
+import '../../../../core/transit/local_card/bank_card_probe.dart';
 import 'apdu_trace.dart';
 import 'card_application.dart';
 import 'parse_issue.dart';
@@ -24,7 +25,8 @@ enum BankCardStatus {
 }
 
 /// 一次银行卡只读分析的统一结果（结构对齐后续落库表字段）。
-class BankCardResult {
+/// 实现核心标记接口 [BankCardOutcome]，从而可作为统一识读流程的一等产物回传。
+class BankCardResult implements BankCardOutcome {
   final String protocolFamily;
   final DateTime analyzedAt;
   final String parserVersion;

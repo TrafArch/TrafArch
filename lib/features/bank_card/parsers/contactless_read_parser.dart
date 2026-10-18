@@ -10,6 +10,7 @@ import '../domain/interfaces/card_parser.dart';
 import '../domain/interfaces/card_transport.dart';
 import '../domain/interfaces/tag_dictionary.dart';
 import '../domain/models/card_application.dart';
+import '../domain/models/card_field_summary.dart';
 import '../domain/models/card_record.dart';
 import '../domain/models/parse_issue.dart';
 import '../domain/models/tlv_node.dart';
@@ -145,6 +146,11 @@ abstract class ContactlessReadParser implements CardParser {
       gpoHex: gpoHex,
       records: records,
       issues: issues,
+      summary: _buildSummary([
+        ...fciTags,
+        ...gpoTags,
+        for (final r in records) ...r.tags,
+      ]),
     );
   }
 
@@ -272,6 +278,34 @@ abstract class ContactlessReadParser implements CardParser {
       : r.statusWord.toRadixString(16).padLeft(4, '0').toUpperCase();
 
   static final Uint8List _empty = Uint8List(0);
+
+  /// 需提炼展示的关键标签（按 UI 优先顺序）：卡面身份 + 交易信息。
+  static const List<String> _summaryTags = [
+    '5A', '5F20', '5F24', '5F25', '5F30', '57',
+    '50', '9F12', '9F08',
+    '9F36', '9A', '9F21', '9F02', '9F03', '5F2A', '9C',
+    '9F27', '9F26', '9F17', '9F4C',
+  ];
+
+  /// 遍历 FCI/GPO/记录标签树，命中关键标签即解码出值（解码失败回退原始 HEX）。
+  CardFieldSummary _buildSummary(List<TlvNode> trees) {
+    final fields = <CardField>[];
+    for (final tag in _summaryTags) {
+      final node = findTag(trees, tag);
+      if (node == null) continue;
+      final decoded = dictionary.decodeValue(tag, node.rawValue);
+      final value = (decoded != null && decoded.trim().isNotEmpty)
+          ? decoded.trim()
+          : node.rawValueHex;
+      fields.add(CardField(
+        tag: tag,
+        label: dictionary.lookup(tag)?.nameZh ?? tag,
+        value: value,
+        sensitive: dictionary.shouldMask(tag),
+      ));
+    }
+    return CardFieldSummary(fields);
+  }
 }
 
 class _AflRef {
