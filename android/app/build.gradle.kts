@@ -1,4 +1,6 @@
 import java.io.FileInputStream
+import java.io.RandomAccessFile
+import java.security.MessageDigest
 import java.util.Properties
 
 plugins {
@@ -64,6 +66,67 @@ if (isReleaseBuild) {
             }
         }
     }
+}
+// ==========================================================
+
+// ===================== 交通数据库自动同步 =====================
+// 把 transitDbMasterDir 下的 TrafArch_Database_CU/TU.sqlite 同步进
+// assets/data，并强制刷新修改时间戳——使 Flutter 按 mtime 判断的资产
+// 增量打包缓存失效，保证 compileFlutterBuild*（flutter assemble）
+// 读取到的永远是最新库。debug / release 构建均生效；属性未配置或
+// 目录不存在时静默跳过，直接使用仓库内资产。
+val transitDbMasterDirPath =
+    providers.gradleProperty("transitDbMasterDir").orNull?.trim().orEmpty()
+val transitDbAssetsDir = rootProject.file("../assets/data")
+val transitDbNames = listOf("TrafArch_Database_CU.sqlite", "TrafArch_Database_TU.sqlite")
+
+fun transitDbSha256(f: File): String =
+    MessageDigest.getInstance("SHA-256")
+        .digest(f.readBytes()).joinToString("") { "%02x".format(it) }
+
+fun transitDbUserVersion(f: File): Int? =
+    if (f.length() > 64) {
+        val b = ByteArray(4)
+        RandomAccessFile(f, "r").use { it.seek(60); it.readFully(b) }
+        ((b[0].toInt() and 0xFF) shl 24) or ((b[1].toInt() and 0xFF) shl 16) or
+            ((b[2].toInt() and 0xFF) shl 8) or (b[3].toInt() and 0xFF)
+    } else null
+
+val syncTransitDatabases = tasks.register("syncTransitDatabases") {
+    description = "Sync latest TrafArch_Database_*.sqlite into assets/data before packaging"
+    // 每次执行都做内容比对与 touch，不接受 up-to-date 判定
+    outputs.upToDateWhen { false }
+    doLast {
+        if (transitDbMasterDirPath.isEmpty()) {
+            logger.info("transitDbMasterDir 未配置，跳过交通数据库同步")
+            return@doLast
+        }
+        val masterDir = File(transitDbMasterDirPath)
+        if (!masterDir.isDirectory) {
+            logger.warn("transitDbMasterDir 不存在: $transitDbMasterDirPath，跳过同步")
+            return@doLast
+        }
+        for (name in transitDbNames) {
+            val src = masterDir.resolve(name)
+            if (!src.isFile) continue
+            val dst = transitDbAssetsDir.resolve(name)
+            if (!dst.isFile || dst.length() != src.length() ||
+                transitDbSha256(dst) != transitDbSha256(src)
+            ) {
+                dst.parentFile.mkdirs()
+                src.copyTo(dst, overwrite = true)
+                logger.lifecycle("Transit database synced: $name (user_version=${transitDbUserVersion(dst)})")
+            }
+            // 无论是否刚复制，都刷新 mtime，打破 Flutter 资产增量缓存
+            dst.setLastModified(System.currentTimeMillis())
+        }
+    }
+}
+
+// Flutter 资产打包（flutter assemble）所在的 Gradle 任务：
+// 同步必须先于它执行，APK 内的 SQLite 才是同步后的版本
+tasks.matching { it.name.startsWith("compileFlutterBuild") }.configureEach {
+    dependsOn(syncTransitDatabases)
 }
 // ==========================================================
 

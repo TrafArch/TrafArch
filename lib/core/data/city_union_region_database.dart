@@ -1,9 +1,7 @@
-import 'dart:io';
-
-import 'package:flutter/services.dart' show rootBundle, AssetBundle;
-import 'package:path_provider/path_provider.dart';
+import 'package:flutter/services.dart' show AssetBundle;
 import 'package:sqlite3/sqlite3.dart';
 
+import 'region_db_store.dart';
 import 'station_codes.dart';
 
 /// 城市一卡通（CU）地区行：地区编码（4 位邮编前缀）→ 地区名。
@@ -140,10 +138,14 @@ class CityUnionRegionDatabaseContent {
   /// 终端索引匹配器（terminal_index 精确 / 前缀，供 CU 行程站点名解析）。
   final CityUnionTerminalMatcher terminalMatcher;
 
+  /// 数据库版本号（PRAGMA user_version）；未设置或读取失败为 null。
+  final int? databaseVersion;
+
   const CityUnionRegionDatabaseContent({
     required this.cities,
     required this.stationDatasets,
     this.terminalMatcher = CityUnionTerminalMatcher.empty,
+    this.databaseVersion,
   });
 
   int get stationDatasetCount => stationDatasets.length;
@@ -162,22 +164,31 @@ class CityUnionRegionDatabaseContent {
 /// 不可用或读取异常时返回 null（调用方回退既有知识库，不阻断、不猜测）。
 class CityUnionRegionDatabase {
   static const assetPath = 'assets/data/TrafArch_Database_CU.sqlite';
+  static const _fileName = 'trafarch_database_cu.sqlite';
 
   CityUnionRegionDatabase._();
 
   static Future<CityUnionRegionDatabaseContent?> load({
     AssetBundle? bundle,
   }) async {
-    final root = bundle ?? rootBundle;
-    File? tmp;
     Database? db;
     try {
-      final data = await root.load(assetPath);
-      final dir = await getTemporaryDirectory();
-      tmp = File('${dir.path}/trafarch_database_cu.sqlite');
-      await tmp.writeAsBytes(data.buffer.asUint8List(), flush: true);
+      db = await RegionDatabaseStore.openCached(
+        assetPath: assetPath,
+        fileName: _fileName,
+        bundle: bundle,
+      );
+      if (db == null) return null;
 
-      db = sqlite3.open(tmp.path);
+      int? dbVersion;
+      try {
+        dbVersion = (db.select('PRAGMA user_version').first['user_version']
+                as num?)
+            ?.toInt();
+        if (dbVersion == 0) dbVersion = null;
+      } catch (_) {
+        dbVersion = null;
+      }
 
       // 地区主表（region_code / region_name / table_name）
       final regions = <CuRegionRow>[];
@@ -297,16 +308,14 @@ class CityUnionRegionDatabase {
         cities: cities,
         stationDatasets: datasets,
         terminalMatcher: CityUnionTerminalMatcher(terminalRules),
+        databaseVersion: dbVersion,
       );
     } catch (_) {
       // 资产缺失 / 原生库不可用 / 表结构异常：整体降级为空（调用方回退）
       return null;
     } finally {
       try {
-        db?.close();
-      } catch (_) {}
-      try {
-        if (tmp != null && tmp.existsSync()) tmp.deleteSync();
+        db?.dispose();
       } catch (_) {}
     }
   }

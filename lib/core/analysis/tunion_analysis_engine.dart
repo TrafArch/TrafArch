@@ -74,10 +74,28 @@ class AnalysisEngine {
       // 0x1E 注解优先；无 0x1E 注解时用 0x1A 记录进站兜底（兜底配对键
       // 金额恒为 0，仅可能命中进站刷卡的 0 元交易）。
       final fallback = annotation == null ? entryFallbacks[key] : null;
-      final stationEntry =
-          _lookupStationEntry(loc, identity, card) ?? annotation?.entry;
+      final stationMatch = annotation?.match;
+      final terminalEntry = _lookupStationEntry(loc, identity, card);
+      final stationEntry = terminalEntry ?? stationMatch?.entry;
+      // 匹配置信级别：0x1E 三键联合通道按判定结果；终端拼接命中记精确；
+      // 歧义 / 未匹配不展示站名（回退原始终端站点编码或城市回退）。
+      final confidence = stationMatch?.confidence ??
+          (terminalEntry != null
+              ? StationMatchConfidence.exact
+              : (stationEntry != null ? StationMatchConfidence.probable : null));
+      // 歧义候选整体压制名称（线路 / 站点均回退原始编码，不强行显示）。
+      final suppressed =
+          confidence == StationMatchConfidence.ambiguous;
+      final lineLabel = stationMatch?.lineName ??
+          (suppressed ? null : stationEntry?.line) ??
+          loc?.lineCode;
+      final resolvedStation =
+          (confidence == StationMatchConfidence.exact ||
+                  confidence == StationMatchConfidence.probable)
+              ? stationEntry?.station
+              : null;
       // 复合消费（0x09）配对命中时以行程状态短名（出站 / 进站 / 上车 /
-      // 下车…）替代类型名展示；未配对保持 null（展示层回退交易类型名）。
+      // 下车…）替代类型名展示；未配对保持 null（展示层不替换，不猜测）。
       final rideStatusName = txn.isCompositeConsume
           ? annotation?.record.statusShortName ?? fallback?.statusName
           : null;
@@ -87,6 +105,7 @@ class AnalysisEngine {
         overdraftLimitFen: txn.overdraftLimitFen,
         isConsume: txn.isConsume,
         typeName: txn.typeName,
+        isCompositeConsume: txn.isCompositeConsume,
         sequence: txn.sequence,
         terminalId: txn.terminalId,
         location: loc,
@@ -94,15 +113,17 @@ class AnalysisEngine {
         cityCode: _validCityCode(
           loc?.cityCode ?? annotation?.record.cityCode ?? fallback?.cityCode,
         ),
-        lineLabel: stationEntry?.line ?? loc?.lineCode,
-        stationLabel: stationEntry?.station ??
-            loc?.stationCode ??
-            fallback?.stationLabel,
+        lineLabel: lineLabel,
+        stationLabel:
+            resolvedStation ?? loc?.stationCode ?? fallback?.stationLabel,
         stationType: stationEntry?.type,
         appTypeName: annotation?.record.appTypeLabel,
         balanceAfterFen: annotation?.record.balanceFen,
         rideStatusName: rideStatusName,
         isEntry: annotation?.record.isEntry ?? (fallback != null),
+        matchedProcessTrip: annotation?.record,
+        stationConfidence: confidence,
+        rawHex: txn.rawHex,
         currency: currency,
       );
     }).toList()
@@ -139,14 +160,20 @@ class AnalysisEngine {
   ) {
     final byKey = <String, _RideAnnotation>{};
     final ambiguous = <String>{};
+    final transactionCounts = <String, int>{};
+    for (final txn in card.transactions) {
+      final key = _pairKey(txn.time, txn.amountFen);
+      transactionCounts.update(key, (count) => count + 1, ifAbsent: () => 1);
+    }
     for (final record in card.transitProcessRecords) {
+      if (record.sfi != 0x1E) continue;
       final trip = record.trip;
       if (trip == null) continue;
       // 入站类记录金额字段为 0 时才有配对意义（与 0 元交易同键）；
       // 非 0 视为异常数据，不参与配对（不猜测）。
       if (trip.isEntry && trip.amountFen != 0) continue;
       final cityCode = trip.cityCode ?? identity.cityCode ?? card.info.cityCode;
-      final entry = knowledge.stationCodes.lookupLineStationField(
+      final match = knowledge.stationCodes.matchLineStationField(
         field: trip.lineStationCode,
         cityCode: cityCode,
       );
@@ -156,14 +183,15 @@ class AnalysisEngine {
       } else {
         byKey[key] = _RideAnnotation(
           record: trip,
-          entry: entry,
+          match: match,
           cityName: cityCode == null || cityCode.isEmpty
               ? null
               : knowledge.cities.lookup(cityCode)?.name,
         );
       }
     }
-    byKey.removeWhere((key, _) => ambiguous.contains(key));
+    byKey.removeWhere((key, _) =>
+        ambiguous.contains(key) || transactionCounts[key] != 1);
     return byKey;
   }
 
@@ -475,14 +503,14 @@ class AnalysisEngine {
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 }
 
-/// 0x1E 行程注解（内部用）：配对的 0x1E 记录、站点代码表查得的
-/// 线路/站点条目（未命中时为 null）与城市名。
+/// 0x1E 行程注解（内部用）：配对的 0x1E 记录、站点代码表匹配置信结果
+/// （未命中时为 [StationMatch.unmatched]）与城市名。
 class _RideAnnotation {
   final TUnionTripRecord record;
-  final StationCodeEntry? entry;
+  final StationMatch match;
   final String? cityName;
 
-  const _RideAnnotation({required this.record, this.entry, this.cityName});
+  const _RideAnnotation({required this.record, required this.match, this.cityName});
 }
 
 /// 0x1A 进站兜底注解（内部用）：进站城市名（编码查得时）、城市代码

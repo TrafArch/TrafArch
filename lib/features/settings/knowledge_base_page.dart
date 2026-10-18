@@ -94,6 +94,14 @@ class _SummaryCard extends StatelessWidget {
           children: [
             Text('数据概况', style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
+            _row(context, 'TU 数据库版本',
+                kb.tuDatabaseVersion == null
+                    ? '未加载 / 未设置'
+                    : 'v${kb.tuDatabaseVersion}'),
+            _row(context, 'CU 数据库版本',
+                kb.cuDatabaseVersion == null
+                    ? '未加载 / 未设置'
+                    : 'v${kb.cuDatabaseVersion}'),
             _row(context, '交通联合覆盖',
                 '${tu.length} 个地区 · ${entryCount(tu)} 条站点编码'),
             _row(context, '城市一卡通覆盖',

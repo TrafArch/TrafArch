@@ -17,8 +17,9 @@ class CardRepository {
   /// 保存识别结果与读取快照：按 [fingerprint] 命中已有档案时更新识别字段、
   /// 读取快照（余额 / 货币 / 交易条数）与最近读取时间（不触碰
   /// [SavedCards.customName]）；未命中时新建档案。
-  /// [sessionDataJson] 为本次读取的行程记录快照（JSON）；已有档案在本轮
-  /// 未解析到行程（传 null）时保留既有快照，避免历史记录被清空。
+  /// [sessionDataJson] 为本次读取的原始记录快照（CardSessionSnapshot v2）；
+  /// 同时作为**读取批次**累积写入 [CardReadBatches]（同卡同内容去重，
+  /// 历史不覆盖），[parseVersion] 记录产出批次的解析口径版本。
   Future<void> saveIdentity({
     required String fingerprint,
     required CardArchiveIdentity identity,
@@ -27,6 +28,7 @@ class CardRepository {
     String? currencyCode,
     int? transactionCount,
     String? sessionDataJson,
+    int? parseVersion,
     DateTime? readAt,
   }) async {
 
@@ -37,10 +39,12 @@ class CardRepository {
             ..where((t) => t.cardFingerprint.equals(fingerprint)))
           .getSingleOrNull();
 
+      final String cardId;
       if (existing == null) {
+        cardId = const Uuid().v4();
         await db.into(db.savedCards).insert(
               SavedCardsCompanion.insert(
-                id: const Uuid().v4(),
+                id: cardId,
                 cardFingerprint: fingerprint,
                 cardType: identity.cardType,
                 officialName: Value(identity.officialName),
@@ -59,6 +63,7 @@ class CardRepository {
               ),
             );
       } else {
+        cardId = existing.id;
         // 更新识别结果，但绝不修改 customName。
         await (db.update(db.savedCards)
               ..where((t) => t.id.equals(existing.id)))
@@ -82,6 +87,28 @@ class CardRepository {
             updatedAt: Value(at),
           ),
         );
+      }
+      // 读取批次累积：本次有记录快照时追加一行；同卡内容完全一致
+      // （同一记录集重复读取）时去重跳过，历史批次绝不覆盖。
+      if (sessionDataJson != null) {
+        final duplicate = await (db.select(db.cardReadBatches)
+              ..where((t) =>
+                  t.cardFingerprint.equals(fingerprint) &
+                  t.payloadJson.equals(sessionDataJson))
+              ..limit(1))
+            .getSingleOrNull();
+        if (duplicate == null) {
+          await db.into(db.cardReadBatches).insert(
+                CardReadBatchesCompanion.insert(
+                  id: const Uuid().v4(),
+                  cardId: cardId,
+                  cardFingerprint: fingerprint,
+                  readAt: at,
+                  parseVersion: Value(parseVersion ?? 1),
+                  payloadJson: sessionDataJson,
+                ),
+              );
+        }
       }
     });
   }
@@ -130,5 +157,19 @@ class CardRepository {
   Stream<SavedCard?> watchCard(String id) {
     return (db.select(db.savedCards)..where((t) => t.id.equals(id)))
         .watchSingleOrNull();
+  }
+
+  /// 单张档案的读取批次流（新批次优先）：详情页历史累积与按批重解析入口。
+  Stream<List<CardReadBatch>> watchBatches(String cardId) {
+    return (db.select(db.cardReadBatches)
+          ..where((t) => t.cardId.equals(cardId))
+          ..orderBy([(t) => OrderingTerm.desc(t.readAt)]))
+        .watch();
+  }
+
+  /// 解析口径升级后重解析用：更新指定批次的解析版本号（原始 payload 不动）。
+  Future<void> updateBatchParseVersion(String batchId, int parseVersion) {
+    return (db.update(db.cardReadBatches)..where((t) => t.id.equals(batchId)))
+        .write(CardReadBatchesCompanion(parseVersion: Value(parseVersion)));
   }
 }

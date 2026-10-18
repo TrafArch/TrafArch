@@ -263,25 +263,29 @@ void main() {
             rideStatusName: '出站',
           ),
         ],
-        railRecord: TransitRecord(
-          statusCode: 0x02,
-          entryCityCode: '3910',
-          exitCityCode: '3501',
-          entryStationId: '0800190030000123',
-          exitStationId: '0800190030000456',
-          entryTime: DateTime(2026, 8, 8, 9, 6, 2),
-          exitTime: DateTime(2026, 8, 8, 9, 12, 31),
-          entryBalanceFen: 2500,
-          exitAmountFen: 300,
-        ),
-        busRecord: BusTransitRecord(
-          statusCode: 0x02,
-          exitCityCode: '3501',
-          entryTime: DateTime(2026, 8, 8, 9, 6, 2),
-          exitTime: DateTime(2026, 8, 8, 9, 12, 31),
-          transactionAmountFen: 300,
-          mileage: 5,
-        ),
+        rails: [
+          TransitRecord(
+            statusCode: 0x02,
+            entryCityCode: '3910',
+            exitCityCode: '3501',
+            entryStationId: '0800190030000123',
+            exitStationId: '0800190030000456',
+            entryTime: DateTime(2026, 8, 8, 9, 6, 2),
+            exitTime: DateTime(2026, 8, 8, 9, 12, 31),
+            entryBalanceFen: 2500,
+            exitAmountFen: 300,
+          ),
+        ],
+        buses: [
+          BusTransitRecord(
+            statusCode: 0x02,
+            exitCityCode: '3501',
+            entryTime: DateTime(2026, 8, 8, 9, 6, 2),
+            exitTime: DateTime(2026, 8, 8, 9, 12, 31),
+            transactionAmountFen: 300,
+            mileage: 5,
+          ),
+        ],
       );
 
       final decoded = CardSessionSnapshot.decode(snapshot.encode())!;

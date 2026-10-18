@@ -10,6 +10,7 @@ import '../core/card/card_parser.dart';
 import '../core/data/tunion_knowledge_base.dart';
 import '../core/data/city_union_knowledge_base.dart';
 import '../core/data/settings_store.dart';
+import '../core/data/station_codes.dart';
 import '../core/logging/app_logger.dart';
 import '../core/logging/log_exporter.dart';
 import '../core/nfc/nfc_models.dart';
@@ -152,19 +153,22 @@ class AppState extends ChangeNotifier {
   List<TUnionProcessRecord> get transitProcessRecords =>
       _parsedCard?.transitProcessRecords ?? const [];
 
+  /// 0x1E 公共交通过程信息循环记录集合（解码成功且非空白）：供行程流
+  /// 保留未与 0x18 交易关联的独立过程事件（逐条关联、无法关联不漏显），
+  /// 并随快照按批次持久化。
+  List<TUnionTripRecord> get cycleProcessTrips => [
+        for (final r in transitProcessRecords)
+          if (r.sfi == 0x1E && !r.isBlank && r.trip != null) r.trip!,
+      ];
+
   /// 0x1A 记录 1（城市轨道应用信息记录）解析结果，供行程页展示
-  /// 「城市轨道交通 · 进出站记录」卡片。数据源优先级：当卡片同时存在
-  /// 城市轨道交通行业（应用分类码 0x01）的 0x1E 循环记录时，轨道行程
-  /// 已由行程列表按 0x1E 呈现，以 0x1E 为准，不展示 0x1A 记录（返回 null）。
+  /// 「城市轨道交通 · 进出站记录」卡片。完整保留记录，由行程流按侧关联去重。
   /// 逐条读取不可用、仅有整体读取数据时，将整体数据前缀按记录 1 解析
   /// （与专家模式展示一致）；记录未写入（初始值）或解析失败时返回 null
   /// （行程页不产出卡片）。
+  /// 0x1E 已有城市轨道行业记录时抑制本 getter（以 0x1E 为准，不重复）。
   TransitRecord? get railTransitRecord {
-    // 0x1E 优先：城市轨道交通行业循环记录存在时隐藏 0x1A 进出站卡片
-    final hasCityRailCycle = transitProcessRecords.any(
-      (r) => r.sfi == 0x1E && (r.trip?.isCityRail ?? false),
-    );
-    if (hasCityRailCycle) return null;
+    if (cycleProcessTrips.any((t) => t.isCityRail)) return null;
     TUnionProcessRecord? wholeBlob;
     for (final r in transitProcessRecords) {
       if (r.sfi != 0x1A) continue;
@@ -178,18 +182,13 @@ class AppState extends ChangeNotifier {
   }
 
   /// 0x1A 记录 2（公共汽电车应用信息记录）解析结果，供行程页展示
-  /// 「公共汽电车 · 上下车记录」卡片。数据源优先级：当卡片同时存在
-  /// 公共汽电车行业（应用分类码 0x02）的 0x1E 循环记录时，公交行程
-  /// 已由行程列表按 0x1E 呈现，以 0x1E 为准，不展示 0x1A 记录（返回 null）。
+  /// 「公共汽电车 · 上下车记录」卡片。完整保留记录，由行程流按侧关联去重。
   /// 逐条读取不可用、仅有整体读取数据时，记录 2 的起始位置无法定位，
   /// 不猜测（返回 null）；记录未写入（初始值）或解析失败时也返回 null
   /// （行程页不产出卡片）。
+  /// 0x1E 已有公共汽电车行业记录时抑制本 getter（以 0x1E 为准，不重复）。
   BusTransitRecord? get busTransitRecord {
-    // 0x1E 优先：公共汽电车行业循环记录存在时隐藏 0x1A 上下车卡片
-    final hasBusCycle = transitProcessRecords.any(
-      (r) => r.sfi == 0x1E && (r.trip?.isBus ?? false),
-    );
-    if (hasBusCycle) return null;
+    if (cycleProcessTrips.any((t) => t.isBus)) return null;
     for (final r in transitProcessRecords) {
       if (r.sfi != 0x1A) continue;
       if (r.recordNumber == 2) {
@@ -354,31 +353,52 @@ class AppState extends ChangeNotifier {
   /// 未收录或知识库未加载时返回 null（展示层回退原始 HEX）。
   String? cardKindName(String? hex) => _kb?.cardPrefixes.cardKindName(hex);
 
-  /// 站点编码（原始 16 位 HEX / 数字编码）→ 站点名（按城市代码精确
-  /// 命中线路站点库）；未命中、城市代码无效或知识库未加载时返回 null
-  /// （展示层回退原始编码，不猜测）。
-  ///
-  /// TU 环境优先按 0x1A 规则匹配：卡片进/出闸站点末 4 位（12 位库）
-  /// 或末 2 位（8 位库）与 source_field 9-12/7-8 位数字精确对齐；
-  /// 未命中回退原有末四位 / HEX→十进制通道，兼容 CSV 与 CU 数据集。
-  String? resolveStationName(String? cityCode, String? rawCode) {
+  /// 站点匹配（含置信级别）：TU 通道按站点尾码判定（末 4 位精确、
+  /// 末 2 位推测，候选站名不唯一记歧义）；未命中回退 CSV / CU
+  /// 末四位 / HEX 转译通道，命中记推测；歧义不强行显示站名。
+  StationMatch resolveStationMatch(String? cityCode, String? rawCode,
+      {int? lineValue}) {
     final kb = _kb;
-    if (kb == null || rawCode == null || rawCode.isEmpty) return null;
+    if (kb == null || rawCode == null || rawCode.isEmpty) {
+      return StationMatch.unmatched;
+    }
     final city = _lookupCityCode(cityCode);
-    if (city == null) return null;
+    if (city == null) return StationMatch.unmatched;
     final code = rawCode.replaceAll(RegExp(r'[^0-9A-Za-z]'), '');
-    if (code.isEmpty) return null;
-    final tuHit = kb.stationCodes
-        .lookupTuStationByCardId(rawStationId: code, cityCode: city);
-    if (tuHit != null) return tuHit.displayLabel;
-    return kb.stationCodes
-        .lookupStation(rawCode: code, cityCode: city)
-        ?.displayLabel;
+    if (code.isEmpty) return StationMatch.unmatched;
+    final tu = kb.stationCodes.matchTuStationByCardId(
+        rawStationId: code, cityCode: city, lineValue: lineValue);
+    if (!tu.isUnmatched) return tu;
+    final fallback =
+        kb.stationCodes.lookupStation(rawCode: code, cityCode: city);
+    if (fallback != null) {
+      return StationMatch(fallback, StationMatchConfidence.probable);
+    }
+    return StationMatch.unmatched;
   }
 
-  /// 线路号（原始编码）→ 线路名。TU 环境优先按 0x1A 规则匹配：卡片
-  /// 入/出站线路号数字与 source_field 5-8/5-6 位线路片段数字精确对齐；
-  /// 未命中回退按 line_name 数字对齐的旧通道（未收录仍返回 null，不猜测）。
+  /// 0x1E「线路和站点代码」匹配置信版（城市 + 线路 + 站点三键联合）。
+  StationMatch resolveCycleStationMatch(String? cityCode, String? field) {
+    final kb = _kb;
+    if (kb == null || field == null || field.isEmpty) {
+      return StationMatch.unmatched;
+    }
+    return kb.stationCodes.matchLineStationField(
+      field: field,
+      cityCode: _lookupCityCode(cityCode),
+    );
+  }
+
+  String? resolveStationName(String? cityCode, String? rawCode) {
+    final match = resolveStationMatch(cityCode, rawCode);
+    // 歧义 / 未匹配不强行显示站名（展示层回退原始编码）。
+    if (match.confidence == StationMatchConfidence.exact ||
+        match.confidence == StationMatchConfidence.probable) {
+      return match.entry?.displayLabel;
+    }
+    return null;
+  }
+
   String? resolveLineName(String? cityCode, String? rawLineCode) {
     final kb = _kb;
     if (kb == null || rawLineCode == null || rawLineCode.isEmpty) return null;
@@ -386,9 +406,10 @@ class AppState extends ChangeNotifier {
     if (city == null) return null;
     final code = rawLineCode.replaceAll(RegExp(r'[^0-9A-Za-z]'), '');
     if (code.isEmpty) return null;
-    final tuHit = kb.stationCodes
-        .lookupTuLineByCardValue(rawLineCode: code, cityCode: city);
-    if (tuHit?.line != null) return tuHit!.line;
+    final tu =
+        kb.stationCodes.matchTuLineByCardValue(rawLineCode: code, cityCode: city);
+    if (tu.confidence == StationMatchConfidence.ambiguous) return null;
+    if (tu.entry?.line != null) return tu.entry!.line;
     return kb.stationCodes.lookupLineName(rawLineCode: code, cityCode: city);
   }
 
@@ -841,10 +862,12 @@ class AppState extends ChangeNotifier {
   /// 无任何行程记录时返回 null（不写入 / 不覆盖既有快照）。
   String? _encodeSessionSnapshot() {
     final snapshot = CardSessionSnapshot(
+      parseVersion: kTripParseVersion,
       cardCityCode: cardCityCode,
       trips: _analysis?.trips ?? const [],
-      railRecord: railTransitRecord,
-      busRecord: busTransitRecord,
+      rails: [if (railTransitRecord != null) railTransitRecord!],
+      buses: [if (busTransitRecord != null) busTransitRecord!],
+      processTrips: cycleProcessTrips,
     );
     return snapshot.isEmpty ? null : snapshot.encode();
   }
@@ -866,6 +889,7 @@ class AppState extends ChangeNotifier {
         currencyCode: pending.currencyCode,
         transactionCount: pending.transactionCount,
         sessionDataJson: pending.sessionDataJson,
+        parseVersion: kTripParseVersion,
         readAt: DateTime.now(),
       );
       _logEvent(

@@ -523,7 +523,7 @@ void main() {
 
       expect(find.text('最近读取记录'), findsOneWidget);
       expect(find.text('消费 · 苏洋 · 序号 1'), findsOneWidget);
-      expect(find.text('城市轨道交通 · 进出站记录'), findsOneWidget);
+      expect(find.text('城市轨道交通'), findsWidgets);
 
       await tester.pumpWidget(const SizedBox());
       await tester.pump();

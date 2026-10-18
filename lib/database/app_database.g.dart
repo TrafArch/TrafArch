@@ -1180,15 +1180,457 @@ class SavedCardsCompanion extends UpdateCompanion<SavedCard> {
   }
 }
 
+class $CardReadBatchesTable extends CardReadBatches
+    with TableInfo<$CardReadBatchesTable, CardReadBatch> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CardReadBatchesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _cardIdMeta = const VerificationMeta('cardId');
+  @override
+  late final GeneratedColumn<String> cardId = GeneratedColumn<String>(
+    'card_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _cardFingerprintMeta = const VerificationMeta(
+    'cardFingerprint',
+  );
+  @override
+  late final GeneratedColumn<String> cardFingerprint = GeneratedColumn<String>(
+    'card_fingerprint',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _readAtMeta = const VerificationMeta('readAt');
+  @override
+  late final GeneratedColumn<int> readAt = GeneratedColumn<int>(
+    'read_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _parseVersionMeta = const VerificationMeta(
+    'parseVersion',
+  );
+  @override
+  late final GeneratedColumn<int> parseVersion = GeneratedColumn<int>(
+    'parse_version',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
+  static const VerificationMeta _payloadJsonMeta = const VerificationMeta(
+    'payloadJson',
+  );
+  @override
+  late final GeneratedColumn<String> payloadJson = GeneratedColumn<String>(
+    'payload_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    cardId,
+    cardFingerprint,
+    readAt,
+    parseVersion,
+    payloadJson,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'card_read_batches';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CardReadBatch> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('card_id')) {
+      context.handle(
+        _cardIdMeta,
+        cardId.isAcceptableOrUnknown(data['card_id']!, _cardIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_cardIdMeta);
+    }
+    if (data.containsKey('card_fingerprint')) {
+      context.handle(
+        _cardFingerprintMeta,
+        cardFingerprint.isAcceptableOrUnknown(
+          data['card_fingerprint']!,
+          _cardFingerprintMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_cardFingerprintMeta);
+    }
+    if (data.containsKey('read_at')) {
+      context.handle(
+        _readAtMeta,
+        readAt.isAcceptableOrUnknown(data['read_at']!, _readAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_readAtMeta);
+    }
+    if (data.containsKey('parse_version')) {
+      context.handle(
+        _parseVersionMeta,
+        parseVersion.isAcceptableOrUnknown(
+          data['parse_version']!,
+          _parseVersionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('payload_json')) {
+      context.handle(
+        _payloadJsonMeta,
+        payloadJson.isAcceptableOrUnknown(
+          data['payload_json']!,
+          _payloadJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_payloadJsonMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  CardReadBatch map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CardReadBatch(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      cardId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}card_id'],
+      )!,
+      cardFingerprint: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}card_fingerprint'],
+      )!,
+      readAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}read_at'],
+      )!,
+      parseVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}parse_version'],
+      )!,
+      payloadJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}payload_json'],
+      )!,
+    );
+  }
+
+  @override
+  $CardReadBatchesTable createAlias(String alias) {
+    return $CardReadBatchesTable(attachedDatabase, alias);
+  }
+}
+
+class CardReadBatch extends DataClass implements Insertable<CardReadBatch> {
+  /// 批次 ID（uuid v4）。
+  final String id;
+
+  /// 所属卡片档案 ID（SavedCards.id）。
+  final String cardId;
+
+  /// 卡片指纹（冗余存储，跨档案迁移与内容去重查询用）。
+  final String cardFingerprint;
+
+  /// 读取时刻（毫秒时间戳）。
+  final int readAt;
+
+  /// 产出该批次的解析口径版本。
+  final int parseVersion;
+
+  /// 原始记录快照 JSON（CardSessionSnapshot v2）。
+  final String payloadJson;
+  const CardReadBatch({
+    required this.id,
+    required this.cardId,
+    required this.cardFingerprint,
+    required this.readAt,
+    required this.parseVersion,
+    required this.payloadJson,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['card_id'] = Variable<String>(cardId);
+    map['card_fingerprint'] = Variable<String>(cardFingerprint);
+    map['read_at'] = Variable<int>(readAt);
+    map['parse_version'] = Variable<int>(parseVersion);
+    map['payload_json'] = Variable<String>(payloadJson);
+    return map;
+  }
+
+  CardReadBatchesCompanion toCompanion(bool nullToAbsent) {
+    return CardReadBatchesCompanion(
+      id: Value(id),
+      cardId: Value(cardId),
+      cardFingerprint: Value(cardFingerprint),
+      readAt: Value(readAt),
+      parseVersion: Value(parseVersion),
+      payloadJson: Value(payloadJson),
+    );
+  }
+
+  factory CardReadBatch.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CardReadBatch(
+      id: serializer.fromJson<String>(json['id']),
+      cardId: serializer.fromJson<String>(json['cardId']),
+      cardFingerprint: serializer.fromJson<String>(json['cardFingerprint']),
+      readAt: serializer.fromJson<int>(json['readAt']),
+      parseVersion: serializer.fromJson<int>(json['parseVersion']),
+      payloadJson: serializer.fromJson<String>(json['payloadJson']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'cardId': serializer.toJson<String>(cardId),
+      'cardFingerprint': serializer.toJson<String>(cardFingerprint),
+      'readAt': serializer.toJson<int>(readAt),
+      'parseVersion': serializer.toJson<int>(parseVersion),
+      'payloadJson': serializer.toJson<String>(payloadJson),
+    };
+  }
+
+  CardReadBatch copyWith({
+    String? id,
+    String? cardId,
+    String? cardFingerprint,
+    int? readAt,
+    int? parseVersion,
+    String? payloadJson,
+  }) => CardReadBatch(
+    id: id ?? this.id,
+    cardId: cardId ?? this.cardId,
+    cardFingerprint: cardFingerprint ?? this.cardFingerprint,
+    readAt: readAt ?? this.readAt,
+    parseVersion: parseVersion ?? this.parseVersion,
+    payloadJson: payloadJson ?? this.payloadJson,
+  );
+  CardReadBatch copyWithCompanion(CardReadBatchesCompanion data) {
+    return CardReadBatch(
+      id: data.id.present ? data.id.value : this.id,
+      cardId: data.cardId.present ? data.cardId.value : this.cardId,
+      cardFingerprint: data.cardFingerprint.present
+          ? data.cardFingerprint.value
+          : this.cardFingerprint,
+      readAt: data.readAt.present ? data.readAt.value : this.readAt,
+      parseVersion: data.parseVersion.present
+          ? data.parseVersion.value
+          : this.parseVersion,
+      payloadJson: data.payloadJson.present
+          ? data.payloadJson.value
+          : this.payloadJson,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CardReadBatch(')
+          ..write('id: $id, ')
+          ..write('cardId: $cardId, ')
+          ..write('cardFingerprint: $cardFingerprint, ')
+          ..write('readAt: $readAt, ')
+          ..write('parseVersion: $parseVersion, ')
+          ..write('payloadJson: $payloadJson')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    cardId,
+    cardFingerprint,
+    readAt,
+    parseVersion,
+    payloadJson,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CardReadBatch &&
+          other.id == this.id &&
+          other.cardId == this.cardId &&
+          other.cardFingerprint == this.cardFingerprint &&
+          other.readAt == this.readAt &&
+          other.parseVersion == this.parseVersion &&
+          other.payloadJson == this.payloadJson);
+}
+
+class CardReadBatchesCompanion extends UpdateCompanion<CardReadBatch> {
+  final Value<String> id;
+  final Value<String> cardId;
+  final Value<String> cardFingerprint;
+  final Value<int> readAt;
+  final Value<int> parseVersion;
+  final Value<String> payloadJson;
+  final Value<int> rowid;
+  const CardReadBatchesCompanion({
+    this.id = const Value.absent(),
+    this.cardId = const Value.absent(),
+    this.cardFingerprint = const Value.absent(),
+    this.readAt = const Value.absent(),
+    this.parseVersion = const Value.absent(),
+    this.payloadJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CardReadBatchesCompanion.insert({
+    required String id,
+    required String cardId,
+    required String cardFingerprint,
+    required int readAt,
+    this.parseVersion = const Value.absent(),
+    required String payloadJson,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       cardId = Value(cardId),
+       cardFingerprint = Value(cardFingerprint),
+       readAt = Value(readAt),
+       payloadJson = Value(payloadJson);
+  static Insertable<CardReadBatch> custom({
+    Expression<String>? id,
+    Expression<String>? cardId,
+    Expression<String>? cardFingerprint,
+    Expression<int>? readAt,
+    Expression<int>? parseVersion,
+    Expression<String>? payloadJson,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (cardId != null) 'card_id': cardId,
+      if (cardFingerprint != null) 'card_fingerprint': cardFingerprint,
+      if (readAt != null) 'read_at': readAt,
+      if (parseVersion != null) 'parse_version': parseVersion,
+      if (payloadJson != null) 'payload_json': payloadJson,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CardReadBatchesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? cardId,
+    Value<String>? cardFingerprint,
+    Value<int>? readAt,
+    Value<int>? parseVersion,
+    Value<String>? payloadJson,
+    Value<int>? rowid,
+  }) {
+    return CardReadBatchesCompanion(
+      id: id ?? this.id,
+      cardId: cardId ?? this.cardId,
+      cardFingerprint: cardFingerprint ?? this.cardFingerprint,
+      readAt: readAt ?? this.readAt,
+      parseVersion: parseVersion ?? this.parseVersion,
+      payloadJson: payloadJson ?? this.payloadJson,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (cardId.present) {
+      map['card_id'] = Variable<String>(cardId.value);
+    }
+    if (cardFingerprint.present) {
+      map['card_fingerprint'] = Variable<String>(cardFingerprint.value);
+    }
+    if (readAt.present) {
+      map['read_at'] = Variable<int>(readAt.value);
+    }
+    if (parseVersion.present) {
+      map['parse_version'] = Variable<int>(parseVersion.value);
+    }
+    if (payloadJson.present) {
+      map['payload_json'] = Variable<String>(payloadJson.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CardReadBatchesCompanion(')
+          ..write('id: $id, ')
+          ..write('cardId: $cardId, ')
+          ..write('cardFingerprint: $cardFingerprint, ')
+          ..write('readAt: $readAt, ')
+          ..write('parseVersion: $parseVersion, ')
+          ..write('payloadJson: $payloadJson, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $SavedCardsTable savedCards = $SavedCardsTable(this);
+  late final $CardReadBatchesTable cardReadBatches = $CardReadBatchesTable(
+    this,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
-  List<DatabaseSchemaEntity> get allSchemaEntities => [savedCards];
+  List<DatabaseSchemaEntity> get allSchemaEntities => [
+    savedCards,
+    cardReadBatches,
+  ];
 }
 
 typedef $$SavedCardsTableCreateCompanionBuilder = SavedCardsCompanion Function({
@@ -1689,10 +2131,248 @@ typedef $$SavedCardsTableProcessedTableManager =
       SavedCard,
       PrefetchHooks Function()
     >;
+typedef $$CardReadBatchesTableCreateCompanionBuilder =
+    CardReadBatchesCompanion Function({
+      required String id,
+      required String cardId,
+      required String cardFingerprint,
+      required int readAt,
+      Value<int> parseVersion,
+      required String payloadJson,
+      Value<int> rowid,
+    });
+typedef $$CardReadBatchesTableUpdateCompanionBuilder =
+    CardReadBatchesCompanion Function({
+      Value<String> id,
+      Value<String> cardId,
+      Value<String> cardFingerprint,
+      Value<int> readAt,
+      Value<int> parseVersion,
+      Value<String> payloadJson,
+      Value<int> rowid,
+    });
+
+class $$CardReadBatchesTableFilterComposer
+    extends Composer<_$AppDatabase, $CardReadBatchesTable> {
+  $$CardReadBatchesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get cardId => $composableBuilder(
+    column: $table.cardId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get cardFingerprint => $composableBuilder(
+    column: $table.cardFingerprint,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get readAt => $composableBuilder(
+    column: $table.readAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get parseVersion => $composableBuilder(
+    column: $table.parseVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CardReadBatchesTableOrderingComposer
+    extends Composer<_$AppDatabase, $CardReadBatchesTable> {
+  $$CardReadBatchesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get cardId => $composableBuilder(
+    column: $table.cardId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get cardFingerprint => $composableBuilder(
+    column: $table.cardFingerprint,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get readAt => $composableBuilder(
+    column: $table.readAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get parseVersion => $composableBuilder(
+    column: $table.parseVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CardReadBatchesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CardReadBatchesTable> {
+  $$CardReadBatchesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get cardId =>
+      $composableBuilder(column: $table.cardId, builder: (column) => column);
+
+  GeneratedColumn<String> get cardFingerprint => $composableBuilder(
+    column: $table.cardFingerprint,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get readAt =>
+      $composableBuilder(column: $table.readAt, builder: (column) => column);
+
+  GeneratedColumn<int> get parseVersion => $composableBuilder(
+    column: $table.parseVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => column,
+  );
+}
+
+class $$CardReadBatchesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CardReadBatchesTable,
+          CardReadBatch,
+          $$CardReadBatchesTableFilterComposer,
+          $$CardReadBatchesTableOrderingComposer,
+          $$CardReadBatchesTableAnnotationComposer,
+          $$CardReadBatchesTableCreateCompanionBuilder,
+          $$CardReadBatchesTableUpdateCompanionBuilder,
+          (
+            CardReadBatch,
+            BaseReferences<_$AppDatabase, $CardReadBatchesTable, CardReadBatch>,
+          ),
+          CardReadBatch,
+          PrefetchHooks Function()
+        > {
+  $$CardReadBatchesTableTableManager(
+    _$AppDatabase db,
+    $CardReadBatchesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CardReadBatchesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CardReadBatchesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CardReadBatchesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> cardId = const Value.absent(),
+                Value<String> cardFingerprint = const Value.absent(),
+                Value<int> readAt = const Value.absent(),
+                Value<int> parseVersion = const Value.absent(),
+                Value<String> payloadJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CardReadBatchesCompanion(
+                id: id,
+                cardId: cardId,
+                cardFingerprint: cardFingerprint,
+                readAt: readAt,
+                parseVersion: parseVersion,
+                payloadJson: payloadJson,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String cardId,
+                required String cardFingerprint,
+                required int readAt,
+                Value<int> parseVersion = const Value.absent(),
+                required String payloadJson,
+                Value<int> rowid = const Value.absent(),
+              }) => CardReadBatchesCompanion.insert(
+                id: id,
+                cardId: cardId,
+                cardFingerprint: cardFingerprint,
+                readAt: readAt,
+                parseVersion: parseVersion,
+                payloadJson: payloadJson,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$CardReadBatchesTable, CardReadBatch>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $CardReadBatchesTable,
+                    CardReadBatch
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CardReadBatchesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CardReadBatchesTable,
+      CardReadBatch,
+      $$CardReadBatchesTableFilterComposer,
+      $$CardReadBatchesTableOrderingComposer,
+      $$CardReadBatchesTableAnnotationComposer,
+      $$CardReadBatchesTableCreateCompanionBuilder,
+      $$CardReadBatchesTableUpdateCompanionBuilder,
+      (
+        CardReadBatch,
+        BaseReferences<_$AppDatabase, $CardReadBatchesTable, CardReadBatch>,
+      ),
+      CardReadBatch,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
   $AppDatabaseManager(this._db);
   $$SavedCardsTableTableManager get savedCards =>
       $$SavedCardsTableTableManager(_db, _db.savedCards);
+  $$CardReadBatchesTableTableManager get cardReadBatches =>
+      $$CardReadBatchesTableTableManager(_db, _db.cardReadBatches);
 }

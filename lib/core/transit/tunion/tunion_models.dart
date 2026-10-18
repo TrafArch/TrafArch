@@ -113,6 +113,9 @@ class TUnionTransaction {
   final int rawType; // 交易类型原始值（0x02 充值 / 0x06 消费 / 0x09 复合消费）
   final String terminalId; // 交易终端编号（BCD 字符串）
   final DateTime time; // 交易时间
+
+  /// 记录体原始字节 HEX（详情页原始数据展示 / 重解析依据）；未保留时为 null。
+  final String? rawHex;
   // 线路/站点等位置信息不在原始记录中直接给出，
   // 由分析层通过终端编号(TAC)规则库二次解码（见 analysis/tunion_analysis_engine.dart）。
 
@@ -123,6 +126,7 @@ class TUnionTransaction {
     required this.rawType,
     required this.terminalId,
     required this.time,
+    this.rawHex,
   });
 
   /// 是否为消费类交易（0x06 消费 / 0x09 复合消费）。
@@ -228,6 +232,9 @@ class TUnionTripRecord {
   final String? cityCode; // [0x20-0x21] 受理方城市代码（HEX）
   final String? acquirerId; // [0x22-0x29] 受理方机构标识（HEX）
 
+  /// 记录原始字节 HEX（历史批次按值关联 / 原始数据展示）；未保留时为 null。
+  final String? rawHex;
+
   const TUnionTripRecord({
     required this.typeCode,
     required this.terminalId,
@@ -238,6 +245,7 @@ class TUnionTripRecord {
     required this.time,
     this.cityCode,
     this.acquirerId,
+    this.rawHex,
   });
 
   /// 交易类型名称（标准类型表 0x01~0x0A；其余显式标注未知）。
@@ -372,6 +380,9 @@ class TransitRecord {
   /// 交易金额（分）：当前布局无独立字段，解析时保持 null（兼容保留）。
   final int? transactionAmountFen;
 
+  /// 字段体原始字节 HEX（详情页原始数据展示 / 重解析依据）。
+  final String? rawHex;
+
   // 动态线路数据库预留：解析层不填充，由线路库二次解码后展示。
   final String? entryStationName; // 进闸站点名称
   final String? exitStationName; // 出闸站点名称
@@ -399,6 +410,7 @@ class TransitRecord {
     this.entryBalanceFen,
     this.exitAmountFen,
     this.transactionAmountFen,
+    this.rawHex,
     this.entryStationName,
     this.exitStationName,
     this.lineName,
@@ -438,6 +450,13 @@ class TransitRecord {
 /// [4B-51] 下车时间（BCD）　[52-55] 交易金额　[56-57] 乘车里程。
 class BusTransitRecord {
   final int statusCode; // [00] 交易状态（0x00 初始值）
+
+  /// 是否携带 14 字节记录头（完整格式 27 02，专家模式结构核对用）。
+  final bool hasRecordHeader;
+
+  /// 记录体标准长度之外的发卡机构自定义数据（HEX）；未写入时为 null。
+  final String? issuerCustomHex;
+
   final String? entryCityCode; // [01-02] 上车城市代码（HEX）
   final String? entryAgencyId; // [03-0A] 上车机构标识（HEX）
   final String? entryOperatorCode; // [0B-0C] 上车运营商代码（HEX）
@@ -461,16 +480,13 @@ class BusTransitRecord {
   final int? transactionAmountFen; // [52-55] 交易金额（分）
   final int? mileage; // [56-57] 乘车里程
 
-  /// 记录头（14 字节）探测结果：记录以记录标识 27 02 开头（完整格式）时
-  /// 为 true（解析时记录体偏移自动后移）；不带头的 88 字节裸记录体时为
-  /// false。记录头内的应用有效标识～交易流水号字段不产出（仅用于结构探测）。
-  final bool hasRecordHeader;
-  final String? issuerCustomHex; // 记录体 88 字节后的发卡机构自定义字节
-
+  /// 记录体原始字节 HEX（详情页原始数据展示 / 重解析依据）。
+  final String? rawHex;
   const BusTransitRecord({
     required this.statusCode,
     this.hasRecordHeader = false,
     this.issuerCustomHex,
+    this.rawHex,
     this.entryCityCode,
     this.entryAgencyId,
     this.entryOperatorCode,
@@ -495,28 +511,29 @@ class BusTransitRecord {
     this.mileage,
   });
 
-  /// 交易状态名称（仅收录实测取值，其余显式标注未知）。
+  /// 交易状态名称（公交记录仅收录实测确认的初始值，其余显式标注未知，
+  /// 不套用轨道记录的"进闸 / 出闸"取值表——避免猜测）。
   String get statusName =>
       _statusNames[statusCode] ??
       '未知(0x${statusCode.toRadixString(16).padLeft(2, '0').toUpperCase()})';
 
-  /// 方向标识名称（仅收录实测取值，其余显式标注未知）。
-  String get directionName {
-    final code = directionCode;
-    if (code == null) return '未知方向';
-    return _directionNames[code] ??
-        '未知(0x${code.toRadixString(16).padLeft(2, '0').toUpperCase()})';
-  }
+  /// 方向标识名称（标准表未收录取值时显式"未知方向"）。
+  String get directionName => _directionNames[directionCode] ?? '未知方向';
 
-  /// 发卡机构自定义数据是否含有效信息（已读取到且非全 0）。
-  /// 未写入的记录该段为全 0x00，展示层据此隐藏该字段。
+  /// 是否读取到有效的发卡机构自定义数据（标准记录体之后的尾部字节）：
+  /// 未写入（null / 空）或整段为 0x00 / 0xFF（擦除态）时视为未读取到
+  /// 有效信息，展示层据此隐藏该字段（与轨道记录口径一致）。
   bool get hasIssuerCustomData {
-    final hex = issuerCustomHex;
-    if (hex == null || hex.isEmpty) return false;
-    return !RegExp(r'^0+$').hasMatch(hex);
+    final hex = issuerCustomHex?.replaceAll(RegExp(r'\s'), '');
+    if (hex == null || hex.length < 2) return false;
+    for (var i = 0; i + 1 < hex.length; i += 2) {
+      final byte = hex.substring(i, i + 2).toUpperCase();
+      if (byte != '00' && byte != 'FF') return true;
+    }
+    return false;
   }
 
   static const _statusNames = <int, String>{0x00: '初始值'};
 
-  static const _directionNames = <int, String>{0x00: '未知方向'};
+  static const _directionNames = <int, String>{0x01: '上行', 0x02: '下行'};
 }

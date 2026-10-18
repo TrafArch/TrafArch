@@ -418,6 +418,11 @@ class KnowledgeBase {
   /// 子页面展示当前数据库支持的地区、线路与站点。
   final List<StationDataset> coverageDatasets;
 
+  /// 外部 SQLite 数据库版本号（PRAGMA user_version）：null 表示未加载
+  /// 或库内未设置版本，供「知识库」页数据概况展示与 release 校验。
+  final int? tuDatabaseVersion;
+  final int? cuDatabaseVersion;
+
   const KnowledgeBase({
     required this.cities,
     required this.issuers,
@@ -427,6 +432,8 @@ class KnowledgeBase {
     this.cityUnionCards = CityUnionCardTable.empty,
     this.cuTerminals = CityUnionTerminalMatcher.empty,
     this.coverageDatasets = const [],
+    this.tuDatabaseVersion,
+    this.cuDatabaseVersion,
   });
 
   static const issuerAsset = 'assets/data/tunion_issuer_fingerprints.json';
@@ -517,6 +524,8 @@ class KnowledgeBase {
       cuTerminals:
           cuRegionContent?.terminalMatcher ?? CityUnionTerminalMatcher.empty,
       coverageDatasets: coverageDatasets,
+      tuDatabaseVersion: regionContent?.databaseVersion,
+      cuDatabaseVersion: cuRegionContent?.databaseVersion,
       stationCodes: coverageDatasets.isEmpty
           ? baseStations
           : _mergeStations(baseStations, coverageDatasets),

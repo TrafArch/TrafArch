@@ -2,6 +2,7 @@
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
+import 'tables/card_read_batches.dart';
 import 'tables/saved_cards.dart';
 
 part 'app_database.g.dart';
@@ -11,14 +12,14 @@ part 'app_database.g.dart';
 ///
 /// 表结构变更时递增 [schemaVersion] 并在 [migration] 中为已安装用户编写
 /// 迁移逻辑，避免升级后既有卡片档案丢失。
-@DriftDatabase(tables: [SavedCards])
+@DriftDatabase(tables: [SavedCards, CardReadBatches])
 class AppDatabase extends _$AppDatabase {
   /// 测试可注入内存执行器：
   /// `AppDatabase(DatabaseConnection(NativeDatabase.memory()))`。
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -49,6 +50,12 @@ class AppDatabase extends _$AppDatabase {
           // 追加列，既有档案不丢失。
           if (from < 4) {
             await m.addColumn(savedCards, savedCards.sessionDataJson);
+          }
+          // v5：新增读取批次表：原始记录 + 解析版本按批次累积，
+          // 历史不再被新快照覆盖（旧档案无批次行，详情页与既有
+          // sessionDataJson 快照合并展示，口径一致）。
+          if (from < 5) {
+            await m.createTable(cardReadBatches);
           }
         },
       );

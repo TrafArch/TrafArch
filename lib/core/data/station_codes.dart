@@ -356,6 +356,92 @@ class StationCodeTable {
     return null;
   }
 
+  /// 0x1A 站点匹配（TU 规则）：卡片进/出闸站点（8 字节编码字符串）先取
+  /// 末尾数字段，按「末 4 位」（对齐 12 位 source_field 的 9-12 位）
+  /// 「末 2 位」（对齐 8 位 source_field 的 7-8 位）两档依次做数字归一化
+  /// 精确匹配；命中优先返回；均未命中返回 null（不猜测）。
+  StationCodeEntry? lookupTuStationByCardId({
+    required String rawStationId,
+    String? cityCode,
+  }) =>
+      matchTuStationByCardId(rawStationId: rawStationId, cityCode: cityCode).entry;
+
+  /// 0x1A 站点匹配置信版：给定线路号字节时优先「城市+线路+站点」三键组合
+  /// （精确）；组合未命中再按站点尾码「末 4 位精确 / 末 2 位推测」单维匹配；
+  /// 候选站名不唯一记歧义；未命中为 unmatched。[lineValue] 为卡片线路号
+  /// 原始字节值，同时按十进制 / HEX 两种口径尝试（兼容进制约定差异）。
+  StationMatch matchTuStationByCardId({
+    required String rawStationId,
+    String? cityCode,
+    int? lineValue,
+  }) {
+    if (cityCode == null || cityCode.isEmpty) return StationMatch.unmatched;
+    final digits = RegExp(r'(\d+)$').firstMatch(rawStationId)?.group(1);
+    if (digits == null || digits.length < 2) return StationMatch.unmatched;
+    final cityKey = _normalizeCity(cityCode);
+    final stationNum =
+        _normalizeNumericSegment(digits.substring(digits.length - 2));
+    if (lineValue != null && stationNum != null) {
+      for (final candidate in _lineValueCandidates(lineValue)) {
+        final lineNum = _normalizeNumericSegment(candidate);
+        if (lineNum == null) continue;
+        final rows = _tuByLineStation['$cityKey|$lineNum|$stationNum'];
+        if (rows != null && rows.isNotEmpty) {
+          return _classifyTu(rows, StationMatchConfidence.exact);
+        }
+      }
+    }
+    for (final n in const [4, 2]) {
+      if (digits.length < n) continue;
+      final num = _normalizeNumericSegment(digits.substring(digits.length - n));
+      if (num == null) continue;
+      final rows = _tuByStation['$cityKey|$num'];
+      if (rows != null && rows.isNotEmpty) {
+        return _classifyTu(
+            rows, n == 4 ? StationMatchConfidence.exact : StationMatchConfidence.probable);
+      }
+    }
+    return StationMatch.unmatched;
+  }
+
+  /// 线路号字节的两种展示口径候选：十进制字符串 + HEX 字符串（如 0x15 →
+  /// {"21", "15"}），消除卡片写入约定（BCD 文本 vs 十进制值）差异。
+  static List<String> _lineValueCandidates(int value) => [
+        value.toRadixString(16).toUpperCase(),
+        value.toString(),
+      ];
+
+  /// 0x1A 线路匹配（TU 规则）：卡片入/出站线路号（1 字节，展示为整数
+  /// 字符串或 HEX）数字归一化后，与库中 source_field 5-8/5-6 位线路片段
+  /// 数字精确匹配；候选多者按「有站点名 → 类别优先级」择优；未命中返回
+  /// null（不猜测）。
+  StationCodeEntry? lookupTuLineByCardValue({
+    required String rawLineCode,
+    String? cityCode,
+  }) =>
+      matchTuLineByCardValue(rawLineCode: rawLineCode, cityCode: cityCode).entry;
+
+  /// 0x1A 线路匹配置信版：线路号单维命中记推测；候选线路名不唯一记歧义。
+  StationMatch matchTuLineByCardValue({
+    required String rawLineCode,
+    String? cityCode,
+  }) {
+    if (cityCode == null || cityCode.isEmpty) return StationMatch.unmatched;
+    final num = _normalizeNumericSegment(rawLineCode);
+    if (num == null) return StationMatch.unmatched;
+    final rows = _tuByLine['${_normalizeCity(cityCode)}|$num'];
+    if (rows == null || rows.isEmpty) return StationMatch.unmatched;
+    final lineNames = rows
+        .map((e) => e.line)
+        .whereType<String>()
+        .where((s) => s.isNotEmpty)
+        .toSet();
+    if (lineNames.length > 1) {
+      return StationMatch(_pickBestTu(rows), StationMatchConfidence.ambiguous);
+    }
+    return StationMatch(_pickBestTu(rows), StationMatchConfidence.probable);
+  }
+
   /// 0x1E「线路和站点代码」字段查询（TU 规则）：卡片 BCD 前 2 位线路 +
   /// 第 5-6 位站点（或福州分段布局：第 3-4 位线路 + 第 7-8 位站点）经数字
   /// 归一化后，与库中 source_field 5-8/5-6 位线路片段、9-12/7-8 位站点
@@ -365,22 +451,29 @@ class StationCodeTable {
   StationCodeEntry? lookupLineStationField({
     required String field,
     String? cityCode,
+  }) =>
+      matchLineStationField(field: field, cityCode: cityCode).entry;
+
+  /// 0x1E 线路+站点字段匹配置信版：城市 + 线路 + 站点三键联合命中，
+  /// 候选站名唯一 → 精确；站名不唯一 → 歧义（不强行显示站名）；
+  /// 回退通道（line_name + 站点末两位）命中 → 推测。
+  StationMatch matchLineStationField({
+    required String field,
+    String? cityCode,
   }) {
-    if (field.length < 8) return null;
-    if (cityCode == null || cityCode.isEmpty) return null;
+    if (field.length < 8) return StationMatch.unmatched;
+    if (cityCode == null || cityCode.isEmpty) return StationMatch.unmatched;
     const layouts = <(int, int)>[(0, 4), (2, 6)];
     final cityKey = _normalizeCity(cityCode);
     for (final layout in layouts) {
-      final lineRaw = field.substring(layout.$1, layout.$1 + 2);
-      final stationRaw = field.substring(layout.$2, layout.$2 + 2);
-      if (stationRaw == '00') continue; // 站点段未写入（补齐零）跳过
-      final lineNum = _normalizeNumericSegment(lineRaw);
-      final stationNum = _normalizeNumericSegment(stationRaw);
+      final lineNum = _normalizeNumericSegment(field.substring(layout.$1, layout.$1 + 2));
+      final stationNum = _normalizeNumericSegment(field.substring(layout.$2, layout.$2 + 2));
       if (lineNum == null || stationNum == null) continue;
-      final hit = _pickBestTu(_tuByLineStation['$cityKey|$lineNum|$stationNum']);
-      if (hit != null) return hit;
+      final rows = _tuByLineStation['$cityKey|$lineNum|$stationNum'];
+      if (rows != null && rows.isNotEmpty) {
+        return _classifyTu(rows, StationMatchConfidence.exact);
+      }
     }
-    // 回退：CSV / 老口径数据集无 source_field 片段时沿用 line_name + 站点末两位。
     for (final layout in layouts) {
       final line = field.substring(layout.$1, layout.$1 + 2);
       final station = field.substring(layout.$2, layout.$2 + 2);
@@ -390,46 +483,26 @@ class StationCodeTable {
         stationCode: station,
         cityCode: cityCode,
       );
-      if (hit != null) return hit;
+      if (hit != null) return StationMatch(hit, StationMatchConfidence.probable);
     }
-    return null;
+    return StationMatch.unmatched;
   }
 
-  /// 0x1A 站点匹配（TU 规则）：卡片进/出闸站点（8 字节编码字符串）先取
-  /// 末尾数字段，按「末 4 位」（对齐 12 位 source_field 的 9-12 位）
-  /// 「末 2 位」（对齐 8 位 source_field 的 7-8 位）两档依次做数字归一化
-  /// 精确匹配；命中优先返回；均未命中返回 null（不猜测）。
-  StationCodeEntry? lookupTuStationByCardId({
-    required String rawStationId,
-    String? cityCode,
-  }) {
-    if (cityCode == null || cityCode.isEmpty) return null;
-    final digits = RegExp(r'(\d+)$').firstMatch(rawStationId)?.group(1);
-    if (digits == null || digits.length < 2) return null;
-    final cityKey = _normalizeCity(cityCode);
-    for (final n in const [4, 2]) {
-      if (digits.length < n) continue;
-      final tail = digits.substring(digits.length - n);
-      final num = _normalizeNumericSegment(tail);
-      if (num == null) continue;
-      final hit = _pickBestTu(_tuByStation['$cityKey|$num']);
-      if (hit != null) return hit;
+  /// TU 候选集置信判定：站名唯一给 [hitConfidence]；站名不唯一给歧义；
+  /// 全部候选无站名降级推测（仅线路信息）。
+  static StationMatch _classifyTu(
+      List<StationCodeEntry> rows, StationMatchConfidence hitConfidence) {
+    final best = _pickBestTu(rows);
+    final names = rows
+        .map((e) => e.station)
+        .whereType<String>()
+        .where((s) => s.isNotEmpty)
+        .toSet();
+    if (names.length > 1) {
+      return StationMatch(best, StationMatchConfidence.ambiguous);
     }
-    return null;
-  }
-
-  /// 0x1A 线路匹配（TU 规则）：卡片入/出站线路号（1 字节，展示为整数
-  /// 字符串或 HEX）数字归一化后，与库中 source_field 5-8/5-6 位线路片段
-  /// 数字精确匹配；候选多者按「有站点名 → 类别优先级」择优；未命中返回
-  /// null（不猜测）。
-  StationCodeEntry? lookupTuLineByCardValue({
-    required String rawLineCode,
-    String? cityCode,
-  }) {
-    if (cityCode == null || cityCode.isEmpty) return null;
-    final num = _normalizeNumericSegment(rawLineCode);
-    if (num == null) return null;
-    return _pickBestTu(_tuByLine['${_normalizeCity(cityCode)}|$num']);
+    if (names.length == 1) return StationMatch(best, hitConfidence);
+    return StationMatch(best, StationMatchConfidence.probable);
   }
 
   /// 线路号 + 站点尾码组合查询（CSV / 无 source_field 片段数据集的兜底通
@@ -566,4 +639,37 @@ List<List<String>> _parseCsv(String text) {
     rows.add(row);
   }
   return rows.where((r) => r.any((c) => c.trim().isNotEmpty)).toList();
+}
+
+/// 站点匹配置信级别（提高站点匹配可靠性）：
+/// - exact：城市 + 线路 + 站点联合命中且候选站名唯一；
+/// - probable：仅单维命中或走末两位 / 回退通道对齐（展示名称并标注推测）；
+/// - ambiguous：联合命中但候选站名不唯一（禁止展示站名，回退原始编码）；
+/// - unmatched：未命中（展示原始编码）。
+enum StationMatchConfidence { exact, probable, ambiguous, unmatched }
+
+/// 站点匹配结果：候选条目 + 置信级别；歧义 / 未匹配不产出名称。
+class StationMatch {
+  final StationCodeEntry? entry;
+  final StationMatchConfidence confidence;
+
+  const StationMatch(this.entry, this.confidence);
+
+  static const unmatched = StationMatch(null, StationMatchConfidence.unmatched);
+
+  bool get isUnmatched => confidence == StationMatchConfidence.unmatched;
+
+  /// 可展示的线路名（精确 / 推测给出；歧义与未匹配不给出，不强行显示）。
+  String? get lineName =>
+      (confidence == StationMatchConfidence.exact ||
+              confidence == StationMatchConfidence.probable)
+          ? entry?.line
+          : null;
+
+  /// 可展示的站点名（推测 / 精确给出；歧义与未匹配不给出，不强行显示）。
+  String? get stationName =>
+      (confidence == StationMatchConfidence.exact ||
+              confidence == StationMatchConfidence.probable)
+          ? entry?.station
+          : null;
 }

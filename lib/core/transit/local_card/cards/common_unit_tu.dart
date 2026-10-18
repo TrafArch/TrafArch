@@ -598,6 +598,7 @@ class CommonUnitTu {
           TUnionCodec.hexBytes(payload.sublist(10, 16)) ??
           '',
       time: DateTime(date.year, date.month, date.day, hour, minute, second),
+      rawHex: TUnionCodec.hexBytes(payload),
     );
   }
 

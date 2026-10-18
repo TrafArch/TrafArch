@@ -86,6 +86,7 @@ class TUnionProcessParser {
       acquirerId: data.length >= 0x2A
           ? TUnionCodec.hexBytes(data.sublist(0x22, 0x2A))
           : null,
+      rawHex: TUnionCodec.hexBytes(data),
     );
   }
 
@@ -160,6 +161,7 @@ class TUnionProcessParser {
       entryAmountFen: _beIntAt(payload, base + 0x49, 4),
       entryBalanceFen: _beIntAt(payload, base + 0x4D, 4),
       exitAmountFen: _beIntAt(payload, base + 0x51, 4),
+      rawHex: TUnionCodec.hexBytes(payload),
     );
   }
 
@@ -246,6 +248,7 @@ class TUnionProcessParser {
           : TUnionCodec.bcdString(exitTimeBytes),
       transactionAmountFen: _beIntAt(payload, 0x52, 4),
       mileage: _beIntAt(payload, 0x56, 2),
+      rawHex: TUnionCodec.hexBytes(payload),
     );
   }
 

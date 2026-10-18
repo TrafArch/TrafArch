@@ -11,8 +11,8 @@ class AppInfo {
   /// 当前展示用应用名称：中文名留空时回退为英文名。
   static String get appName => appNameZh.isEmpty ? appNameEn : appNameZh;
 
-  static const String version = '1.0.1-beta.6';
-  static const String buildNumber = '2039';
+  static const String version = '1.0.1-beta.7';
+  static const String buildNumber = '2044';
   static const String author = 'kajolno';
   static const String copyright = '© 2026 kajolno';
 }

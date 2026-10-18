@@ -1,5 +1,10 @@
+import '../data/station_codes.dart';
 import '../data/tunion_terminal_decoder.dart';
 import '../transit/tunion/tunion_models.dart';
+
+/// 行程解析口径版本：解析 / 关联规则变更时递增，随读取批次持久化，
+/// 历史数据据此识别产出批次所用的解析口径。
+const int kTripParseVersion = 2;
 
 /// 识别证据：来源、说明与权重（0 表示"出场但未命中"）。
 class Evidence {
@@ -114,6 +119,12 @@ class TransitTrip {
   final int overdraftLimitFen;
   final bool isConsume;
   final String typeName;
+
+  /// 是否为复合消费（0x09）交易：0x18 用一条记录一次性结算进出站行程。
+  /// 供行程流去重——其时间戳与某条 0x1A 进 / 出站记录完全匹配时，
+  /// 该行程已由更完整的 0x1A 明细表达，复合消费条目被屏蔽。
+  final bool isCompositeConsume;
+
   final int sequence;
   final String terminalId;
   final TerminalLocation? location;
@@ -148,6 +159,16 @@ class TransitTrip {
   /// 展示层据此改显进站时间与站点。
   final bool isEntry;
 
+  /// 与 0x18 双向唯一配对的 0x1E 原始证据；无来源时不得推断 1A 去重。
+  final TUnionTripRecord? matchedProcessTrip;
+
+  /// 站点名称匹配置信级别（精确 / 推测 / 歧义 / 未匹配）；名称来自
+  /// 站点库命中时非 null，回退原始编码时为 null（不猜测）。
+  final StationMatchConfidence? stationConfidence;
+
+  /// 0x18 原始记录字节 HEX（详情页原始数据展示）；未保留时为 null。
+  final String? rawHex;
+
   /// 钱包货币（与钱包摘要一致，金额文本按该货币符号展示）。
   final Currency currency;
 
@@ -157,6 +178,7 @@ class TransitTrip {
     required this.overdraftLimitFen,
     required this.isConsume,
     required this.typeName,
+    this.isCompositeConsume = false,
     required this.sequence,
     required this.terminalId,
     this.location,
@@ -169,6 +191,9 @@ class TransitTrip {
     this.balanceAfterFen,
     this.rideStatusName,
     this.isEntry = false,
+    this.matchedProcessTrip,
+    this.stationConfidence,
+    this.rawHex,
     this.currency = Currency.cny,
   });
 
@@ -314,20 +339,142 @@ final class BusRecordEntry extends TripEntry {
       : (record.exitTime ?? record.entryTime ?? DateTime(0));
 }
 
-/// 合并交易行程与 0x1A 过程记录为按时间倒序的行程流：0x1A 记录按
-/// 进 / 出（上 / 下）两侧各产出一条行程（对应侧时间未写入时该侧不产出，
-/// 不猜测；两侧均缺失时保留一条出闸 / 下车侧记录兜底，避免整条丢失）。
-List<TripEntry> buildTripStream(
-  List<TransitTrip> trips,
-  TransitRecord? rail,
-  BusTransitRecord? bus,
-) {
-  final entries = <TripEntry>[
-    for (final t in trips) TransactionTripEntry(t),
-    if (rail != null) ..._railHalves(rail),
-    if (bus != null) ..._busHalves(bus),
+/// 未与任何 0x18 交易关联的 0x1E 过程记录（独立过程事件条目）。
+/// 关联不成立时保留展示（不漏显），统计口径计入过程事件、
+/// 出站/结算类另计行程，不重复计入消费。
+final class ProcessTripEntry extends TripEntry {
+  final TUnionTripRecord record;
+  const ProcessTripEntry(this.record);
+  @override
+  DateTime get time => record.time;
+}
+
+/// 合并交易行程（0x18，主干来源）、0x1A 过程记录（按进 / 出侧拆分）与
+/// 0x1E 过程记录为按时间倒序的行程流：
+/// - 0x1A 侧记录仅当与某条交易的配对 0x1E（双向唯一、时间 + 城市 +
+///   金额 / 终端逐条互证）确认重复时才隐藏，关联不成立一律保留；
+/// - 已与交易配对的 0x1E 由交易条目代表；无法配对的 0x1E 保留为
+///   [ProcessTripEntry]（独立过程事件，不丢弃）。
+List<TripEntry> buildTripStream({
+  required List<TransitTrip> trips,
+  List<TransitRecord> rails = const [],
+  List<BusTransitRecord> buses = const [],
+  List<TUnionTripRecord> processTrips = const [],
+}) {
+  final halves = <TripEntry>[
+    for (final rail in rails) ..._railHalves(rail),
+    for (final bus in buses) ..._busHalves(bus),
+  ];
+  // 0x1A 进 / 出站记录时间戳全集（两侧各计）：复合消费去重依据。
+  final recordTimes = <DateTime>{
+    for (final rail in rails) ...[
+      if (rail.entryTime != null) rail.entryTime!,
+      if (rail.exitTime != null) rail.exitTime!,
+    ],
+    for (final bus in buses) ...[
+      if (bus.entryTime != null) bus.entryTime!,
+      if (bus.exitTime != null) bus.exitTime!,
+    ],
+  };
+  // 复合消费（0x09）交易时间戳与某条 0x1A 进 / 出站记录完全一致时，该行程
+  // 已由更完整的 0x1A 明细（含进 / 出两侧 + 城市 + 终端）表达，屏蔽 0x18
+  // 复合消费条目避免重复；其余交易类型（普通消费 / 充值）不屏蔽。
+  final shownTrips = <TransitTrip>[
+    for (final t in trips)
+      if (!(t.isCompositeConsume && recordTimes.contains(t.time))) t,
+  ];
+  final matches = <TransitTrip, List<TripEntry>>{
+    for (final trip in shownTrips)
+      trip: halves.where((side) => _matchesProcessSide(trip, side)).toList(),
+  };
+  // 两边均唯一才去重；默认 isEntry=false、显示文本或时间金额相似不是来源证据。
+  final hidden = <TripEntry>{};
+  for (final candidates in matches.values) {
+    if (candidates.length != 1) continue;
+    final side = candidates.single;
+    if (matches.values.where((list) => list.contains(side)).length == 1) {
+      hidden.add(side);
+    }
+  }
+  // 已关联到交易的 0x1E 记录（配对证据随快照保存，按值比对）不再单独展示。
+  // 被屏蔽的复合消费交易仍计入关联集，避免其配对 0x1E 重新以独立事件出现。
+  final linked = trips
+      .map((t) => t.matchedProcessTrip)
+      .whereType<TUnionTripRecord>()
+      .toList();
+  return <TripEntry>[
+    for (final t in shownTrips) TransactionTripEntry(t),
+    ...halves.where((side) => !hidden.contains(side)),
+    for (final p in processTrips)
+      if (!linked.any((l) => _sameProcessRecord(l, p))) ProcessTripEntry(p),
   ]..sort((a, b) => b.time.compareTo(a.time));
-  return entries;
+}
+
+bool _matchesProcessSide(TransitTrip trip, TripEntry side) {
+  final source = trip.matchedProcessTrip;
+  if (source == null || !trip.isConsume) return false;
+  final bool entry;
+  switch (source.typeCode) {
+    case 0x01:
+    case 0x03:
+      entry = true;
+    case 0x02:
+    case 0x04:
+      entry = false;
+    default:
+      return false;
+  }
+  DateTime? time;
+  String? city;
+  String? terminal;
+  int? amount;
+  if (side is RailRecordEntry && source.isCityRail) {
+    if (side.isEntry != entry) return false;
+    final r = side.record;
+    time = entry ? r.entryTime : r.exitTime;
+    city = entry ? r.entryCityCode : r.exitCityCode;
+    terminal = entry ? r.entryTerminalId : r.exitTerminalId;
+    amount = entry ? r.entryAmountFen : r.exitAmountFen;
+  } else if (side is BusRecordEntry && source.isBus) {
+    if (side.isEntry != entry) return false;
+    final r = side.record;
+    time = entry ? r.entryTime : r.exitTime;
+    city = entry ? r.entryCityCode : r.exitCityCode;
+    terminal = entry ? r.entryTerminalId : r.exitTerminalId;
+    // 公交 transactionAmountFen 未声明侧归属，不能用作任一侧金额证据。
+  } else {
+    return false;
+  }
+  String? validHex(String? value, int length) {
+    final text = value?.trim().toUpperCase();
+    if (text == null || !RegExp('^[0-9A-F]{$length}\$').hasMatch(text) ||
+        RegExp(r'^[0F]+$').hasMatch(text)) return null;
+    return text;
+  }
+  final validCity = validHex(city, 4);
+  if (time == null || time != source.time || validCity == null ||
+      validCity != validHex(source.cityCode, 4)) return false;
+  if (amount != null && amount != source.amountFen) return false;
+  final sideTerminal = validHex(terminal, 16);
+  final sourceTerminal = validHex(source.terminalId, 16);
+  if (sideTerminal != null && sourceTerminal != null &&
+      sideTerminal != sourceTerminal) return false;
+  // 无侧金额（包括公交）时必须另有同侧终端证据。
+  return amount != null ||
+      (sideTerminal != null && sideTerminal == sourceTerminal);
+}
+
+/// 0x1E 记录同一性判定（跨快照重建对象后仍可按值关联）：
+/// 优先按原始 HEX；无原始字节时按 类型 + 时间 + 金额 + 终端 四要素。
+bool _sameProcessRecord(TUnionTripRecord a, TUnionTripRecord b) {
+  if (identical(a, b)) return true;
+  final ra = a.rawHex;
+  final rb = b.rawHex;
+  if (ra != null && rb != null) return ra == rb;
+  return a.typeCode == b.typeCode &&
+      a.time == b.time &&
+      a.amountFen == b.amountFen &&
+      a.terminalId == b.terminalId;
 }
 
 /// 0x1A 记录 1 拆分：进站侧（有进站时间时）+ 出站侧（有出站时间时）；
@@ -347,4 +494,78 @@ List<TripEntry> _busHalves(BusTransitRecord bus) {
     if (bus.exitTime != null) BusRecordEntry(bus, isEntry: false),
   ];
   return halves.isEmpty ? [BusRecordEntry(bus, isEntry: false)] : halves;
+}
+
+/// 行程流统一统计口径（三类计数互不混用；0x1E / 0x1A 过程记录
+/// 不重复计入交易与消费）：
+/// - [transactionCount] / [consumeCount]：0x18 交易明细笔数 / 其中消费；
+/// - [processEventCount]：独立展示的 0x1E 与 0x1A 过程事件条数
+///   （已与交易确认重复合并的不重复计数）；
+/// - [tripCount]：实际行程数 = 0x18 消费交易 + 未关联 0x1E 的
+///   出站 / 结算类记录（入站 / 上车类过程不计行程）。
+class TripStreamStats {
+  final int transactionCount;
+  final int consumeCount;
+  final int processEventCount;
+  final int tripCount;
+
+  const TripStreamStats({
+    required this.transactionCount,
+    required this.consumeCount,
+    required this.processEventCount,
+    required this.tripCount,
+  });
+
+  String get summaryText => '交易 $transactionCount 笔（消费 $consumeCount） · '
+      '过程事件 $processEventCount 条 · 行程 $tripCount 次';
+}
+
+TripStreamStats summarizeTripStream(List<TripEntry> stream) {
+  var txn = 0, consume = 0, process = 0, trips = 0;
+  for (final entry in stream) {
+    switch (entry) {
+      case TransactionTripEntry(:final trip):
+        txn++;
+        if (trip.isConsume) {
+          consume++;
+          trips++;
+        }
+      case ProcessTripEntry(:final record):
+        process++;
+        if (!record.isEntry) trips++;
+      case RailRecordEntry():
+      case BusRecordEntry():
+        process++;
+    }
+  }
+  return TripStreamStats(
+    transactionCount: txn,
+    consumeCount: consume,
+    processEventCount: process,
+    tripCount: trips,
+  );
+}
+
+/// 行程流按自然日分组（流已按时间倒序，组内保持原顺序）。
+class TripDateGroup {
+  final DateTime date;
+  final List<TripEntry> entries;
+  const TripDateGroup({required this.date, required this.entries});
+
+  String get dateText => '${date.year}-'
+      '${date.month.toString().padLeft(2, '0')}-'
+      '${date.day.toString().padLeft(2, '0')}';
+}
+
+List<TripDateGroup> groupTripsByDate(List<TripEntry> stream) {
+  final groups = <TripDateGroup>[];
+  for (final entry in stream) {
+    final day = DateTime(entry.time.year, entry.time.month, entry.time.day);
+    if (groups.isNotEmpty && groups.last.date == day) {
+      groups.last.entries.add(entry);
+    } else {
+      groups.add(TripDateGroup(date: day, entries: [entry]));
+    }
+  }
+  return groups;
 }

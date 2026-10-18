@@ -167,15 +167,17 @@ void main() {
     test('城市轨道进出站记录：状态 / 时间 / 站点 / 余额 / 金额', () {
       final card = _savedCard(
         sessionDataJson: CardSessionSnapshot(
-          railRecord: TransitRecord(
-            statusCode: 0x02,
-            entryStationId: '0800190030000123',
-            exitStationId: '0800190030000456',
-            entryTime: DateTime(2026, 8, 8, 9, 6, 2),
-            exitTime: DateTime(2026, 8, 8, 9, 12, 31),
-            entryBalanceFen: 2500,
-            exitAmountFen: 300,
-          ),
+          rails: [
+            TransitRecord(
+              statusCode: 0x02,
+              entryStationId: '0800190030000123',
+              exitStationId: '0800190030000456',
+              entryTime: DateTime(2026, 8, 8, 9, 6, 2),
+              exitTime: DateTime(2026, 8, 8, 9, 12, 31),
+              entryBalanceFen: 2500,
+              exitAmountFen: 300,
+            ),
+          ],
         ).encode(),
       );
       final text = buildCardRecordsExport([card], exportedAt: exportedAt);
@@ -192,14 +194,16 @@ void main() {
     test('公共汽电车上下车记录：状态 / 时间 / 金额 / 里程 / 方向', () {
       final card = _savedCard(
         sessionDataJson: CardSessionSnapshot(
-          busRecord: BusTransitRecord(
-            statusCode: 0x00,
-            entryTime: DateTime(2026, 8, 8, 9, 6, 2),
-            exitTime: DateTime(2026, 8, 8, 9, 12, 31),
-            transactionAmountFen: 300,
-            mileage: 5,
-            directionCode: 0x00,
-          ),
+          buses: [
+            BusTransitRecord(
+              statusCode: 0x00,
+              entryTime: DateTime(2026, 8, 8, 9, 6, 2),
+              exitTime: DateTime(2026, 8, 8, 9, 12, 31),
+              transactionAmountFen: 300,
+              mileage: 5,
+              directionCode: 0x00,
+            ),
+          ],
         ).encode(),
       );
       final text = buildCardRecordsExport([card], exportedAt: exportedAt);

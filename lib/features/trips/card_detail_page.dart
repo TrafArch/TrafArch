@@ -5,12 +5,14 @@ import '../../core/transit/tunion/tunion_models.dart';
 import '../../database/app_database.dart';
 import '../../state/app_state.dart';
 import '../card_archive/models/card_name_extension.dart';
+import '../card_archive/models/card_session_snapshot.dart';
 import '../card_archive/repositories/card_repository.dart';
+import 'trip_stream_view.dart';
 
-/// 卡片详情页：展示单张卡片的最近一次读取快照
-/// （名称 / 卡号 / 余额 / 交易记录条数 / 最近读取时间），
-/// 支持编辑自定义名称；当本次会话读取的正是该卡片时，
-/// 同时展示解析出的行程数据；数据流监听数据库，改名与重复读取后即时刷新。
+/// 卡片详情页：展示单张卡片的档案信息（名称 / 卡号 / 余额 / 交易记录
+/// 条数 / 最近读取时间），支持编辑自定义名称；行程记录按**读取批次**
+/// 累积合并展示（新读取追加批次、不覆盖历史），当前会话正在读取该卡
+/// 时优先展示实时解析结果；数据流监听数据库，改名与重复读取后即时刷新。
 class CardDetailPage extends StatelessWidget {
   final CardRepository repository;
   final String cardId;
@@ -62,105 +64,141 @@ class _CardDetailBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isCurrentSession = app.lastCardFingerprint == card.cardFingerprint;
-    // 当前会话读取的正是该卡片时优先展示实时解析结果；否则回退最近一次
-    // 保存到档案的行程记录快照——读取新卡片后，老卡片的记录不再消失。
-    final snapshot = card.sessionSnapshot;
-    final liveTrips = isCurrentSession
-        ? (app.analysis?.trips ?? const <TransitTrip>[])
-        : const <TransitTrip>[];
-    final liveRail = isCurrentSession ? app.railTransitRecord : null;
-    final liveBus = isCurrentSession ? app.busTransitRecord : null;
-    final hasLive = liveTrips.isNotEmpty || liveRail != null || liveBus != null;
-    final List<TransitTrip> trips =
-        hasLive ? liveTrips : (snapshot?.trips ?? const <TransitTrip>[]);
-    final TransitRecord? railRecord = hasLive ? liveRail : snapshot?.railRecord;
-    final BusTransitRecord? busRecord = hasLive ? liveBus : snapshot?.busRecord;
-    // 交易明细与 0x1A 过程记录合并为按时间倒序的行程流。
-    final stream = buildTripStream(trips, railRecord, busRecord);
-
-    // 异地用卡判定：实时数据按当前卡片城市；快照按读取时记录的城市代码。
-    bool isRemoteOf(String? code) => hasLive
-        ? app.isRemoteUse(code)
-        : (snapshot?.isRemoteUse(code) ?? false);
-
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Text(
-          card.displayName,
-          style: theme.textTheme.headlineSmall
-              ?.copyWith(fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          card.subtitle,
-          style: theme.textTheme.bodyMedium
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-        ),
-        const SizedBox(height: 16),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Column(
-              children: [
-                _kv(context, '卡号', card.cardNumberText),
-                _kv(context, '余额', card.balanceText ?? '未读取到'),
-                _kv(context, '交易记录', card.transactionCountText ?? '未记录'),
-                _kv(context, '最近读取', card.lastReadFullText ?? '未记录'),
-              ],
+    // 遗留的最近一次快照（升级前的单快照档案）作为一份历史并入合并池。
+    final legacySnapshot = card.sessionSnapshot;
+    return StreamBuilder<List<CardReadBatch>>(
+      stream: repository.watchBatches(card.id),
+      builder: (context, batchSnapshot) {
+        final batches = batchSnapshot.data ?? const <CardReadBatch>[];
+        // 历史累积：读取批次（新批次优先）+ 遗留快照 → 按记录身份去重合并。
+        final histories = <CardSessionSnapshot?>[
+          ...batches.map((b) => CardSessionSnapshot.decode(b.payloadJson)),
+          if (batches.isEmpty) legacySnapshot,
+        ].whereType<CardSessionSnapshot>().toList();
+        // 当前会话正在读取该卡：实时解析结果并入合并池最前（较新优先），
+        // 让尚未落库 / 刚落库的这一轮记录立即展示。
+        final TransitRecord? liveRail = app.railTransitRecord;
+        final BusTransitRecord? liveBus = app.busTransitRecord;
+        final live = isCurrentSession
+            ? CardSessionSnapshot(
+                cardCityCode: app.cardCityCode,
+                trips: app.analysis?.trips ?? const <TransitTrip>[],
+                rails: [if (liveRail != null) liveRail],
+                buses: [if (liveBus != null) liveBus],
+                processTrips: app.cycleProcessTrips,
+              )
+            : null;
+        final pool = <CardSessionSnapshot>[
+          if (live != null && !live.isEmpty) live,
+          ...histories,
+        ];
+        final view = pool.isEmpty
+            ? const CardSessionSnapshot()
+            : CardSessionSnapshot.mergeHistories(pool);
+        // 0x18 交易明细为主干，0x1A 按侧拆分、0x1E 未关联记录独立保留。
+        final stream = buildTripStream(
+          trips: view.trips,
+          rails: view.rails,
+          buses: view.buses,
+          processTrips: view.processTrips,
+        );
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 28),
+          children: [
+            _ArchiveHeader(card: card, repository: repository),
+            const SizedBox(height: 12),
+            Text(
+              isCurrentSession
+                  ? '行程记录 · ${batches.length + (histories.length > batches.length ? 1 : 0)} 次读取'
+                  : '行程记录 · ${batches.length} 次读取',
+              style: theme.textTheme.titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w600),
             ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: FilledButton.tonalIcon(
-            onPressed: () => _renameCard(context, repository, card),
-            icon: const Icon(Icons.edit_outlined),
-            label: const Text('编辑卡片名称'),
-          ),
-        ),
-        if (stream.isNotEmpty) ...[
-          const SizedBox(height: 24),
-          Text(
-            hasLive ? '本次读取行程' : '最近读取记录',
-            style: theme.textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 8),
-          for (final entry in stream)
-            switch (entry) {
-              TransactionTripEntry(:final trip) => _DetailTripCard(
-                  trip: trip,
-                  isRemote: isRemoteOf(trip.cityCode),
+            const SizedBox(height: 8),
+            if (isCurrentSession && app.parsing)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(
+                  child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
                 ),
-              RailRecordEntry(:final record, :final isEntry) =>
-                  _DetailRailTripCard(
-                    record: record,
-                    isEntry: isEntry,
-                    app: app,
-                    isRemote: isRemoteOf(
-                      isEntry ? record.entryCityCode : record.exitCityCode,
-                    ),
-                  ),
-              BusRecordEntry(:final record, :final isEntry) =>
-                  _DetailBusTripCard(
-                    record: record,
-                    isEntry: isEntry,
-                    app: app,
-                    isRemote: isRemoteOf(
-                      isEntry ? record.entryCityCode : record.exitCityCode,
-                    ),
-                  ),
-            },
-        ],
-      ],
+              )
+            else
+              TripStreamView(
+                stream: stream,
+                app: app,
+                isRemote: view.isRemoteUse,
+              ),
+          ],
+        );
+      },
     );
   }
 }
 
-Widget _kv(BuildContext context, String label, String value) => Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+/// 档案信息卡：名称 / 副标题 / 卡号 / 余额 / 交易条数 / 最近读取时间，
+/// 右上角写入用户自定义名称（识别结果不被覆盖，改名后数据流即时刷新）。
+class _ArchiveHeader extends StatelessWidget {
+  final SavedCard card;
+  final CardRepository repository;
+
+  const _ArchiveHeader({required this.card, required this.repository});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 8, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        card.displayName,
+                        style: theme.textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        card.subtitle,
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: scheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: '自定义名称',
+                  onPressed: () => _rename(context),
+                  icon: const Icon(Icons.edit_outlined),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            _row(context, '卡号', card.cardNumberText),
+            _row(context, '余额', card.balanceText ?? '—'),
+            _row(context, '交易记录', card.transactionCountText ?? '—'),
+            _row(context, '最近读取', card.lastReadFullText ?? '—'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _row(BuildContext context, String label, String value) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -168,385 +206,55 @@ Widget _kv(BuildContext context, String label, String value) => Padding(
             width: 88,
             child: Text(
               label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.outline,
-                  ),
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.outline),
             ),
           ),
-          Expanded(child: Text(value)),
-        ],
-      ),
-    );
-
-/// 详情页内嵌行程卡片（与行程页共用展示逻辑）。
-class _DetailTripCard extends StatelessWidget {
-  final TransitTrip trip;
-  final bool isRemote;
-  const _DetailTripCard({required this.trip, required this.isRemote});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final titleParts = <String>[
-      trip.rideStatusName ?? trip.typeName,
-      if (trip.stationLabel != null) trip.stationLabel!,
-      '序号 ${trip.sequence}',
-    ];
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    titleParts.join(' · '),
-                    style: theme.textTheme.titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w600),
-                  ),
-                ),
-                if (isRemote)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: scheme.tertiaryContainer,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      '异地用卡',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: scheme.onTertiaryContainer,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-              ],
+          Expanded(
+            child: SelectableText(
+              value,
+              style: theme.textTheme.bodyMedium,
             ),
-            if (trip.lineLabel != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                trip.lineLabel!,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: scheme.onSurfaceVariant),
-              ),
-            ],
-            const SizedBox(height: 6),
-            Text(
-              trip.timeText,
-              style: theme.textTheme.bodySmall?.copyWith(color: scheme.outline),
-            ),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Text(
-                  trip.amountText,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: trip.isConsume ? scheme.error : scheme.primary,
-                  ),
-                ),
-                if (trip.balanceAfterText != null) ...[
-                  const SizedBox(width: 12),
-                  Text(
-                    '余额 ${trip.balanceAfterText}',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: scheme.outline),
-                  ),
-                ],
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// 详情页内嵌 0x1A 轨道单侧行程卡片（进站 / 出站）：与详情页行程卡片
-/// 同样式，站点查不到线路库时回退原始编码（不猜测）。
-class _DetailRailTripCard extends StatelessWidget {
-  final TransitRecord record;
-  final bool isEntry;
-  final AppState app;
-  final bool isRemote;
-  const _DetailRailTripCard({
-    required this.record,
-    required this.isEntry,
-    required this.app,
-    required this.isRemote,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final symbol = app.cardCurrency.symbol;
-    final time = isEntry ? record.entryTime : record.exitTime;
-    final cityCode = isEntry ? record.entryCityCode : record.exitCityCode;
-    final rawStation = isEntry ? record.entryStationId : record.exitStationId;
-    final rawLine =
-        (isEntry ? record.entryLineCode : record.exitLineCode)?.toString();
-    final station = app.resolveStationName(cityCode, rawStation) ?? rawStation;
-    final line = app.resolveLineName(cityCode, rawLine) ?? rawLine;
-    final amountFen = isEntry ? record.entryAmountFen : record.exitAmountFen;
-    final balanceFen = isEntry ? record.entryBalanceFen : null;
-
-    final titleParts = <String>[
-      isEntry ? '进站' : '出站',
-      if (station != null) station,
-    ];
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    titleParts.join(' · '),
-                    style: theme.textTheme.titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w600),
-                  ),
-                ),
-                if (isRemote)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: scheme.tertiaryContainer,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      '异地用卡',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: scheme.onTertiaryContainer,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            if (line != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                line,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: scheme.onSurfaceVariant),
-              ),
-            ],
-            if (time != null) ...[
-              const SizedBox(height: 6),
-              Text(
-                _fmtDt(time),
-                style:
-                    theme.textTheme.bodySmall?.copyWith(color: scheme.outline),
-              ),
-            ],
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                if (amountFen != null && amountFen > 0)
-                  Text(
-                    '-$symbol${(amountFen / 100).toStringAsFixed(2)}',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: scheme.error,
-                    ),
-                  ),
-                if (balanceFen != null) ...[
-                  const SizedBox(width: 12),
-                  Text(
-                    '余额 $symbol${(balanceFen / 100).toStringAsFixed(2)}',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: scheme.outline),
-                  ),
-                ],
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// 详情页内嵌 0x1A 公交单侧行程卡片（上车 / 下车）：与详情页行程卡片
-/// 同样式；交易金额为整程一次性扣费，仅展示在下车侧，里程同侧展示。
-class _DetailBusTripCard extends StatelessWidget {
-  final BusTransitRecord record;
-  final bool isEntry;
-  final AppState app;
-  final bool isRemote;
-  const _DetailBusTripCard({
-    required this.record,
-    required this.isEntry,
-    required this.app,
-    required this.isRemote,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final symbol = app.cardCurrency.symbol;
-    final time = isEntry ? record.entryTime : record.exitTime;
-    final cityCode = isEntry ? record.entryCityCode : record.exitCityCode;
-    final rawStation =
-        isEntry ? record.entryStationCode : record.exitStationCode;
-    final rawLine = isEntry ? record.entryLineCode : record.exitLineCode;
-    final station = app.resolveStationName(cityCode, rawStation) ?? rawStation;
-    final line = app.resolveLineName(cityCode, rawLine);
-    final amountFen = isEntry ? null : record.transactionAmountFen;
-    final mileage = isEntry ? null : record.mileage;
-
-    final titleParts = <String>[
-      isEntry ? '上车' : '下车',
-      if (station != null) station,
-    ];
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    titleParts.join(' · '),
-                    style: theme.textTheme.titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w600),
-                  ),
-                ),
-                if (isRemote)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: scheme.tertiaryContainer,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      '异地用卡',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: scheme.onTertiaryContainer,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            if (line != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                line,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: scheme.onSurfaceVariant),
-              ),
-            ],
-            if (time != null) ...[
-              const SizedBox(height: 6),
-              Text(
-                _fmtDt(time),
-                style:
-                    theme.textTheme.bodySmall?.copyWith(color: scheme.outline),
-              ),
-            ],
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                if (amountFen != null && amountFen > 0)
-                  Text(
-                    '-$symbol${(amountFen / 100).toStringAsFixed(2)}',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: scheme.error,
-                    ),
-                  ),
-                if (mileage != null) ...[
-                  const SizedBox(width: 12),
-                  Text(
-                    '里程 $mileage 站',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: scheme.outline),
-                  ),
-                ],
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-String _fmtDt(DateTime t) {
-  String pad2(int v) => v.toString().padLeft(2, '0');
-  return '${t.year}-${pad2(t.month)}-${pad2(t.day)} '
-      '${pad2(t.hour)}:${pad2(t.minute)}:${pad2(t.second)}';
-}
-
-/// 编辑自定义卡片名称：留空恢复显示正式卡名；保存失败仅提示不中断。
-Future<void> _renameCard(
-  BuildContext context,
-  CardRepository repository,
-  SavedCard card,
-) async {
-  final controller = TextEditingController(text: card.customName ?? '');
-
-  final name = await showDialog<String>(
-    context: context,
-    builder: (dialogContext) {
-      return AlertDialog(
-        title: const Text('自定义卡片名称'),
-        content: TextField(
-          controller: controller,
-          maxLength: 40,
-          autofocus: true,
-          decoration: const InputDecoration(
-            hintText: '例如：上学用的卡',
-            helperText: '留空则恢复显示正式卡名',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () =>
-                Navigator.pop(dialogContext, controller.text.trim()),
-            child: const Text('保存'),
           ),
         ],
+      ),
+    );
+  }
+
+  /// 改名对话框：留空即清除自定义名称（回退展示正式卡名）。
+  Future<void> _rename(BuildContext context) async {
+    final controller = TextEditingController(text: card.customName ?? '');
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final name = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('自定义卡片名称'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            maxLength: 24,
+            textInputAction: TextInputAction.done,
+            decoration: const InputDecoration(hintText: '留空则恢复正式卡名'),
+            onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+              child: const Text('保存'),
+            ),
+          ],
+        ),
       );
-    },
-  );
-  controller.dispose();
-
-  if (name == null) return;
-
-  try {
-    await repository.renameCard(card.id, name.isEmpty ? null : name);
-  } catch (e) {
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('卡片名称保存失败：$e')),
-    );
+      if (name == null) return;
+      await repository.renameCard(card.id, name);
+      messenger.showSnackBar(const SnackBar(content: Text('已更新卡片名称')));
+    } finally {
+      controller.dispose();
+    }
   }
 }
