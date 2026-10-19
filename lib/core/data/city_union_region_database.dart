@@ -12,25 +12,7 @@ class CuRegionRow {
   const CuRegionRow({required this.regionCode, required this.regionName});
 }
 
-/// 城市站点行（region_* 表一行，station_id 非卡面编码，仅内部键）。
-class _CuStation {
-  final String transport;
-  final String? line;
-  final String? station;
-
-  const _CuStation({
-    required this.transport,
-    this.line,
-    this.station,
-  });
-}
-
-/// 城市一卡通终端索引规则（terminal_index 一行）：卡面交易终端编号 → 站点。
-///
-/// [matchKey] 为归一化（仅数字）后的匹配键；[isPrefix] 为真表示前缀匹配
-/// （卡面终端码以 [matchKey] 开头即命中），否则按精确匹配。
-/// [requiredTxnType] 为限定交易类型（-1 表示不限）；[priority] 越大越优先。
-/// [entry] 为命中站点（线路 / 站点名，system 'cu'）。
+/// 城市一卡通终端索引规则（内存形态；数据库形态见 `kb_terminal_rule`）。
 class CuTerminalRule {
   final String regionCode;
   final String matchKey;
@@ -49,32 +31,38 @@ class CuTerminalRule {
   });
 }
 
-/// 城市一卡通终端匹配器：以 terminal_index 的精确 / 前缀规则把卡面交易
-/// 终端编号解析到站点（线路 / 站点名）。多候选按「同地区优先 → 精确优先
-/// 于前缀 → 匹配键更长（更具体）优先 → 交易类型精确匹配优先 → priority
-/// 更大优先」择优；均未命中返回 null（保持未知，不猜测）。
+/// 城市一卡通终端匹配器：优先委派持久化 `kb_terminal_rule` 索引查询；
+/// 内存规则列表仅保留给测试 / 特殊数据源。
 class CityUnionTerminalMatcher {
   static const _anyTxnType = -1;
-
-  /// 前缀匹配最小键长（防止 1~3 位短前缀过度命中，与末四端口径一致）。
   static const _minPrefixLength = 4;
 
   final List<CuTerminalRule> _rules;
+  final RegionKnowledgeDb? _live;
 
-  const CityUnionTerminalMatcher(this._rules);
+  const CityUnionTerminalMatcher(this._rules) : _live = null;
+
+  const CityUnionTerminalMatcher.live(RegionKnowledgeDb source)
+      : _rules = const [],
+        _live = source;
 
   static const empty = CityUnionTerminalMatcher([]);
 
-  int get length => _rules.length;
+  int get length => _live?.terminalRuleCount ?? _rules.length;
 
-  /// 交易终端编号 → 站点条目。[terminalNumber] 为卡片 BCD 终端编号（12 位
-  /// 数字）；[cityCode] 为卡片城市代码（CU 邮编前四位，用于同地区优先）；
-  /// [transactionType] 为交易类型原始值（如 0x06 / 0x09，用于类型过滤）。
   StationCodeEntry? match(
     String? terminalNumber, {
     String? cityCode,
     int? transactionType,
   }) {
+    final live = _live;
+    if (live != null) {
+      return live.matchTerminal(
+        terminalNumber,
+        cityCode: cityCode,
+        transactionType: transactionType,
+      );
+    }
     final digits = _digits(terminalNumber ?? '');
     if (digits.isEmpty) return null;
     final city = _digits(cityCode ?? '');
@@ -89,13 +77,17 @@ class CityUnionTerminalMatcher {
           key.length >= _minPrefixLength &&
           digits.startsWith(key);
       if (!exact && !prefixHit) continue;
-      // 交易类型过滤：规则限定类型（非 -1）且卡类型已知时须相等。
       if (rule.requiredTxnType != _anyTxnType &&
           transactionType != null &&
           rule.requiredTxnType != transactionType) {
         continue;
       }
-      final score = _score(rule, city: city, exact: exact, txnGiven: transactionType != null);
+      final score = _score(
+        rule,
+        city: city,
+        exact: exact,
+        txnGiven: transactionType != null,
+      );
       if (best == null || score > bestScore) {
         best = rule;
         bestScore = score;
@@ -104,8 +96,6 @@ class CityUnionTerminalMatcher {
     return best?.entry;
   }
 
-  /// 候选评分（数值越大越优，按位打包一次性比较）：
-  /// 同地区(bit16) > 精确(bit15) > 键长度(bit8-14) > 交易类型精确(bit7) > priority(bit0-6)。
   int _score(
     CuTerminalRule rule, {
     required String city,
@@ -114,8 +104,11 @@ class CityUnionTerminalMatcher {
   }) {
     final regionHit = city.isNotEmpty && rule.regionCode == city ? 1 : 0;
     final txnHit = txnGiven && rule.requiredTxnType != _anyTxnType ? 1 : 0;
-    final priority = rule.priority.clamp(0, 63);
-    final keyLen = rule.matchKey.length.clamp(0, 127);
+    var priority = rule.priority;
+    if (priority < 0) priority = 0;
+    if (priority > 63) priority = 63;
+    var keyLen = rule.matchKey.length;
+    if (keyLen > 127) keyLen = 127;
     return (regionHit << 16) |
         ((exact ? 1 : 0) << 15) |
         (keyLen << 8) |
@@ -126,42 +119,29 @@ class CityUnionTerminalMatcher {
   static String _digits(String s) => s.replaceAll(RegExp(r'[^0-9]'), '');
 }
 
-/// 城市一卡通地区 / 站点数据库读取内容：地区识别（regions + region_codes
-/// 城市字典）+ 线路站点（各 region_* 表，经 terminal_index 匹配卡面终端码）。
-///
-/// 只承载数据、不含查询逻辑；由 [KnowledgeBase] 合并进城市码表 /
-/// 站点代码表（数据库优先、JSON 兜底）。
+/// 城市一卡通地区 / 站点数据库读取内容。
 class CityUnionRegionDatabaseContent {
   final List<CuRegionRow> cities;
-  final List<StationDataset> stationDatasets;
-
-  /// 终端索引匹配器（terminal_index 精确 / 前缀，供 CU 行程站点名解析）。
+  final CityUnionRegionKnowledgeDb? live;
   final CityUnionTerminalMatcher terminalMatcher;
-
-  /// 数据库版本号（PRAGMA user_version）；未设置或读取失败为 null。
   final int? databaseVersion;
 
   const CityUnionRegionDatabaseContent({
     required this.cities,
-    required this.stationDatasets,
+    this.live,
     this.terminalMatcher = CityUnionTerminalMatcher.empty,
     this.databaseVersion,
   });
 
-  int get stationDatasetCount => stationDatasets.length;
-  int get stationEntryCount =>
-      stationDatasets.fold(0, (a, d) => a + d.codes.length);
+  int get stationDatasetCount => live?.datasetCount ?? 0;
+  int get stationEntryCount => live?.totalEntryCount ?? 0;
+
+  /// 兼容旧字段：惰性数据集，仅按需点查。
+  List<StationDataset> get stationDatasets =>
+      live?.lazyDatasets() ?? const [];
 }
 
-/// 城市一卡通（CU）地区 / 线路站点数据库（外部 SQLite，只读接入）。
-///
-/// 数据源：assets/data/TrafArch_Database_CU.sqlite（cu-standalone-2）。
-/// 站点表以 station_id 为内部主键（非卡面编码），卡面终端 / 站点编码经
-/// terminal_index（match_key exact / prefix → station_id）匹配到站点行；
-/// 本读取器按「完整键 + 后四位键」两种口径登记命中站点，与交通联合站点
-/// 查询层（[StationCodeTable]）末四位策略对齐。Android 资产只读，先提取
-/// 到临时文件，经 [sqlite3] 打开，读取完毕删除临时文件。资产缺失、原生库
-/// 不可用或读取异常时返回 null（调用方回退既有知识库，不阻断、不猜测）。
+/// 城市一卡通（CU）地区 / 线路站点数据库（持久化接入）。
 class CityUnionRegionDatabase {
   static const assetPath = 'assets/data/TrafArch_Database_CU.sqlite';
   static const _fileName = 'trafarch_database_cu.sqlite';
@@ -178,140 +158,27 @@ class CityUnionRegionDatabase {
         fileName: _fileName,
         bundle: bundle,
       );
-      if (db == null) return null;
+      final handle = db;
+      if (handle == null) return null;
+      final live = CityUnionRegionKnowledgeDb.open(handle);
+      if (live == null) return null;
+      db = null; // 句柄移交 live。
 
-      int? dbVersion;
-      try {
-        dbVersion = (db.select('PRAGMA user_version').first['user_version']
-                as num?)
-            ?.toInt();
-        if (dbVersion == 0) dbVersion = null;
-      } catch (_) {
-        dbVersion = null;
-      }
-
-      // 地区主表（region_code / region_name / table_name）
-      final regions = <CuRegionRow>[];
-      final tableByCode = <String, String>{};
-      for (final r in db.select(
-        'SELECT region_code, region_name, table_name FROM regions',
-      )) {
-        final code = _digits('${r['region_code'] ?? ''}');
-        final name = '${r['region_name'] ?? ''}'.trim();
-        final table = '${r['table_name'] ?? ''}'.trim();
-        if (code.isEmpty || name.isEmpty) continue;
-        regions.add(CuRegionRow(regionCode: code, regionName: name));
-        if (table.isNotEmpty) tableByCode[code] = table;
-      }
-
-      // 城市字典（region_codes：4 位 CU 邮编前缀 → 地区名，覆盖广）
-      final dict = <String, String>{};
-      try {
-        for (final r in db.select(
-          'SELECT region_code, region_name FROM region_codes',
-        )) {
-          final code = _digits('${r['region_code'] ?? ''}');
-          final name = '${r['region_name'] ?? ''}'.trim();
-          if (code.isEmpty || name.isEmpty) continue;
-          dict.putIfAbsent(code, () => name);
-        }
-      } catch (_) {
-        // 无 region_codes 表：仅用 regions
-      }
-
+      final regions = _CuReader.readRegions(handle);
+      final dict = _CuReader.readCityDict(handle);
       final cities = <CuRegionRow>[
-        ...regions,
+        for (final r in regions)
+          CuRegionRow(regionCode: r.code, regionName: r.name),
         for (final e in dict.entries)
           CuRegionRow(regionCode: e.key, regionName: e.value),
       ];
-
-      // 站点数据集：每地区一张表，经 terminal_index 匹配卡面编码
-      final datasets = <StationDataset>[];
-      final terminalRules = <CuTerminalRule>[];
-      // terminal_index 列名集合（match_mode / required_transaction_type /
-      // priority 缺失时按精确 / 不限类型 / 0 优先级降级，不猜测）。
-      final tcols = _tableColumns(db, 'terminal_index');
-      for (final region in regions) {
-        final table = tableByCode[region.regionCode];
-        if (table == null) continue;
-        final stationById = <int, _CuStation>{};
-        final cols = _tableColumns(db, table);
-        if (cols == null) continue;
-        if (!cols.contains('station_id') || !cols.contains('station_name')) {
-          continue;
-        }
-        for (final r in db.select('SELECT * FROM "$table"')) {
-          final id = (r['station_id'] as num?)?.toInt();
-          if (id == null) continue;
-          stationById[id] = _CuStation(
-            transport: _cell(r, cols, 'transport_type').trim(),
-            line: _nullIfEmpty(_cell(r, cols, 'line_name')),
-            station: _nullIfEmpty(_cell(r, cols, 'station_name')),
-          );
-        }
-
-        final codes = <String, StationCodeEntry>{};
-        // 优先经 terminal_index 匹配（卡面终端 / 站点编码 → station_id）
-        try {
-          for (final r in db.select(
-            'SELECT * FROM terminal_index WHERE region_code = ?',
-            [region.regionCode],
-          )) {
-            final id = (r['station_id'] as num?)?.toInt();
-            final st = id == null ? null : stationById[id];
-            if (st == null) continue;
-            final matchKey = '${r['match_key'] ?? ''}'.trim();
-            if (matchKey.isEmpty) continue;
-            _register(codes, matchKey, region.regionCode, st);
-            // 同步收集终端索引规则（CU 行程站点名的精确 / 前缀匹配用）
-            final mk = _digits(matchKey);
-            if (mk.isNotEmpty && (st.station != null || st.line != null)) {
-              terminalRules.add(CuTerminalRule(
-                regionCode: region.regionCode,
-                matchKey: mk,
-                isPrefix: tcols != null && tcols.contains('match_mode')
-                    ? '${r['match_mode'] ?? ''}'.toLowerCase().contains('prefix')
-                    : false,
-                requiredTxnType:
-                    tcols != null && tcols.contains('required_transaction_type')
-                        ? ((r['required_transaction_type'] as num?)?.toInt() ??
-                            -1)
-                        : -1,
-                priority: tcols != null && tcols.contains('priority')
-                    ? ((r['priority'] as num?)?.toInt() ?? 0)
-                    : 0,
-                entry: _entry(region.regionCode, mk, st),
-              ));
-            }
-          }
-        } catch (_) {
-          // 无 terminal_index 表：回退按 station_id 登记（尽力而为）
-        }
-        // terminal_index 未覆盖时，回退按 station_id 末位登记
-        if (codes.isEmpty) {
-          stationById.forEach((id, st) {
-            _register(codes, '$id', region.regionCode, st);
-          });
-        }
-        if (codes.isEmpty) continue;
-        datasets.add(StationDataset(
-          file: 'cu:${region.regionCode}',
-          cityCode: region.regionCode,
-          cityName: region.regionName,
-          system: 'cu',
-          kind: 'mixed',
-          codes: codes,
-        ));
-      }
-
       return CityUnionRegionDatabaseContent(
         cities: cities,
-        stationDatasets: datasets,
-        terminalMatcher: CityUnionTerminalMatcher(terminalRules),
-        databaseVersion: dbVersion,
+        live: live,
+        terminalMatcher: CityUnionTerminalMatcher.live(live),
+        databaseVersion: live.databaseVersion,
       );
     } catch (_) {
-      // 资产缺失 / 原生库不可用 / 表结构异常：整体降级为空（调用方回退）
       return null;
     } finally {
       try {
@@ -319,42 +186,56 @@ class CityUnionRegionDatabase {
       } catch (_) {}
     }
   }
+}
 
-  /// 将站点条目登记到 codes：完整匹配键 + 末四位键各一份（与交通联合
-  /// 站点查询层「末四位」口径对齐）；同键保留首条（不覆盖）。
-  static void _register(
-    Map<String, StationCodeEntry> out,
-    String rawCode,
-    String cityCode,
-    _CuStation st,
-  ) {
-    if (st.station == null && st.line == null) return;
-    void add(String key) {
-      if (key.isEmpty) return;
-      out.putIfAbsent(key, () => _entry(cityCode, key, st));
-    }
+class _CuRegion {
+  final String code;
+  final String name;
+  final String? table;
 
-    add(rawCode);
-    final tail = StationCodeTable.tailFourDigits(rawCode);
-    if (tail != null) add(tail);
+  const _CuRegion(this.code, this.name, this.table);
+}
+
+class _CuReader {
+  _CuReader._();
+
+  static List<_CuRegion> readRegions(Database db) {
+    final out = <_CuRegion>[];
+    final cols = tableColumns(db, 'regions');
+    if (cols == null) return out;
+    final select = <String>[
+      cols.contains('region_code') ? 'region_code' : "'' AS region_code",
+      cols.contains('region_name') ? 'region_name' : "'' AS region_name",
+      cols.contains('table_name') ? 'table_name' : 'NULL AS table_name',
+    ];
+    try {
+      for (final r in db.select('SELECT ${select.join(', ')} FROM regions')) {
+        final code = digits('${r['region_code'] ?? ''}');
+        final name = '${r['region_name'] ?? ''}'.trim();
+        final table = '${r['table_name'] ?? ''}'.trim();
+        if (code.isEmpty || name.isEmpty) continue;
+        out.add(_CuRegion(code, name, table.isEmpty ? null : table));
+      }
+    } catch (_) {}
+    return out;
   }
 
-  /// 构造城市一卡通站点条目（system 'cu'）：[key] 作编码键，
-  /// 类型 / 线路 / 站点取自站点行。
-  static StationCodeEntry _entry(String cityCode, String key, _CuStation st) {
-    return StationCodeEntry(
-      code: key,
-      type: _typeName(st.transport),
-      line: st.line,
-      station: st.station,
-      system: 'cu',
-      kind: _kind(st.transport),
-      datasetFile: 'cu:$cityCode',
-    );
+  static Map<String, String> readCityDict(Database db) {
+    final out = <String, String>{};
+    try {
+      for (final r in db.select(
+        'SELECT region_code, region_name FROM region_codes',
+      )) {
+        final code = digits('${r['region_code'] ?? ''}');
+        final name = '${r['region_name'] ?? ''}'.trim();
+        if (code.isEmpty || name.isEmpty) continue;
+        out.putIfAbsent(code, () => name);
+      }
+    } catch (_) {}
+    return out;
   }
 
-  /// 读取表的列名集合（PRAGMA table_info）；表不存在或异常返回 null。
-  static Set<String>? _tableColumns(Database db, String table) {
+  static Set<String>? tableColumns(Database db, String table) {
     try {
       return {
         for (final r in db.select('PRAGMA table_info("$table")'))
@@ -365,11 +246,227 @@ class CityUnionRegionDatabase {
     }
   }
 
-  /// 安全读取单元格：列不存在时返回空串（避免访问未知列抛异常）。
-  static String _cell(Row r, Set<String> cols, String name) {
-    if (!cols.contains(name)) return '';
-    return '${r[name] ?? ''}';
+  static String digits(String s) => s.replaceAll(RegExp(r'[^0-9]'), '');
+
+  static String? nullIfEmpty(String s) {
+    final t = s.trim();
+    return t.isEmpty ? null : t;
   }
+}
+
+/// CU 持久化知识库：站点与终端规则一次性流式写入 `kb_*`，运行期点查。
+class CityUnionRegionKnowledgeDb extends RegionKnowledgeDb {
+  CityUnionRegionKnowledgeDb._(Database db) : super(db, 'cu');
+
+  static const _model = 'cu-idx-1';
+
+  int? get databaseVersion => _version;
+  int? _version;
+
+  static CityUnionRegionKnowledgeDb? open(Database db) {
+    try {
+      RegionDatabaseStore.ensureSchema(db);
+      final uv = RegionDatabaseStore.userVersion(db);
+      final inst = CityUnionRegionKnowledgeDb._(db)
+        .._version = uv == 0 ? null : uv;
+      final stamp = '$uv:$_model';
+      final key = RegionDatabaseStore.stampKey('cu');
+      if (RegionDatabaseStore.metaValue(db, key) != stamp) {
+        RegionDatabaseStore.setMetaValue(db, key, '');
+        if (inst._rebuild()) {
+          RegionDatabaseStore.setMetaValue(db, key, stamp);
+        }
+      }
+      return inst;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool _rebuild() {
+    RegionDatabaseStore.resetDerived(db);
+    final regions = _CuReader.readRegions(db);
+    final session = RegionIngestSession.begin(db, 'cu');
+    if (session == null) return false;
+    var totalRegions = 0;
+    var ingested = 0;
+    var skipped = 0;
+    try {
+      for (final region in regions) {
+        totalRegions++;
+        if (!_ingestRegion(db, region, session)) {
+          skipped++;
+          continue;
+        }
+        session.addRegion(
+          RegionDatabaseStore.normalizeCity(region.code),
+          region.name,
+        );
+        ingested++;
+      }
+      if (!session.commit()) {
+        // ignore: avoid_print
+        print('[CityUnionRegionKnowledgeDb] 提交失败，已回滚（下次启动重试）');
+        return false;
+      }
+      RegionDatabaseStore.refreshCounts(db, 'cu');
+      // ignore: avoid_print
+      print('[CityUnionRegionKnowledgeDb] rebuild: regions=$totalRegions '
+          'ingested=$ingested skipped=$skipped dbVersion=$_version');
+      return true;
+    } catch (e) {
+      session.rollback();
+      // ignore: avoid_print
+      print('[CityUnionRegionKnowledgeDb] rebuild 失败(已回滚): $e');
+      return false;
+    }
+  }
+
+  /// 单地区：terminal_index JOIN 站点表流式写入；缺索引时回退按 station_id。
+  static bool _ingestRegion(
+    Database db,
+    _CuRegion region,
+    RegionIngestSession session,
+  ) {
+    final table = region.table;
+    if (table == null) return false;
+    final scols = _CuReader.tableColumns(db, table);
+    if (scols == null ||
+        !scols.contains('station_id') ||
+        !scols.contains('station_name')) {
+      return false;
+    }
+    final cityKey = RegionDatabaseStore.normalizeCity(region.code);
+
+    final tcols = _CuReader.tableColumns(db, 'terminal_index');
+    if (tcols != null && _hasTerminalRows(db, region.code)) {
+      final select = <String>[
+        't.match_key AS match_key',
+        tcols.contains('match_mode')
+            ? 't.match_mode AS match_mode'
+            : 'NULL AS match_mode',
+        tcols.contains('required_transaction_type')
+            ? 't.required_transaction_type AS required_txn'
+            : '-1 AS required_txn',
+        tcols.contains('priority') ? 't.priority AS priority' : '0 AS priority',
+        's.station_id AS station_id',
+        scols.contains('transport_type')
+            ? 's.transport_type AS transport_type'
+            : 'NULL AS transport_type',
+        scols.contains('line_name')
+            ? 's.line_name AS line_name'
+            : 'NULL AS line_name',
+        's.station_name AS station_name',
+      ];
+      final stmt = db.prepare(
+        'SELECT ${select.join(', ')} FROM terminal_index t '
+        'JOIN "$table" s ON s.station_id = t.station_id '
+        'WHERE t.region_code = ?',
+      );
+      var emitted = 0;
+      try {
+        final cursor = stmt.selectCursor([region.code]);
+        while (cursor.moveNext()) {
+          final row = cursor.current;
+          final key = _CuReader.digits('${row['match_key'] ?? ''}');
+          if (key.isEmpty) continue;
+          final transport = '${row['transport_type'] ?? ''}'.trim();
+          final line = _CuReader.nullIfEmpty('${row['line_name'] ?? ''}');
+          final station =
+              _CuReader.nullIfEmpty('${row['station_name'] ?? ''}');
+          if (line == null && station == null) continue;
+          final entryId = session.addEntry(
+            cityKey,
+            _entry(region.code, key, transport, line, station),
+          );
+          if (entryId == null) continue;
+          final tail = StationCodeTable.tailFourDigits(key);
+          if (tail != null && tail != key) {
+            session.addEntry(
+              cityKey,
+              _entry(region.code, tail, transport, line, station),
+            );
+          }
+          session.addTerminalRule(
+            regionCode: region.code,
+            matchKey: key,
+            isPrefix:
+                '${row['match_mode'] ?? ''}'.toLowerCase().contains('prefix'),
+            txnType: (row['required_txn'] as num?)?.toInt() ?? -1,
+            priority: (row['priority'] as num?)?.toInt() ?? 0,
+            entryId: entryId,
+          );
+          emitted++;
+        }
+      } finally {
+        stmt.dispose();
+      }
+      return emitted > 0;
+    }
+
+    // 无 terminal_index：回退按 station_id 登记（尽力而为）。
+    final select = <String>[
+      'station_id',
+      scols.contains('transport_type')
+          ? 'transport_type'
+          : 'NULL AS transport_type',
+      scols.contains('line_name') ? 'line_name' : 'NULL AS line_name',
+      'station_name',
+    ];
+    final stmt = db.prepare('SELECT ${select.join(', ')} FROM "$table"');
+    var emitted = 0;
+    try {
+      final cursor = stmt.selectCursor();
+      while (cursor.moveNext()) {
+        final row = cursor.current;
+        final id = (row['station_id'] as num?)?.toInt();
+        if (id == null) continue;
+        final transport = '${row['transport_type'] ?? ''}'.trim();
+        final line = _CuReader.nullIfEmpty('${row['line_name'] ?? ''}');
+        final station =
+            _CuReader.nullIfEmpty('${row['station_name'] ?? ''}');
+        if (line == null && station == null) continue;
+        if (session.addEntry(
+              cityKey,
+              _entry(region.code, '$id', transport, line, station),
+            ) !=
+            null) {
+          emitted++;
+        }
+      }
+    } finally {
+      stmt.dispose();
+    }
+    return emitted > 0;
+  }
+
+  static bool _hasTerminalRows(Database db, String regionCode) {
+    try {
+      return db.select(
+        'SELECT 1 FROM terminal_index WHERE region_code = ? LIMIT 1',
+        [regionCode],
+      ).isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static StationCodeEntry _entry(
+    String cityCode,
+    String key,
+    String transport,
+    String? line,
+    String? station,
+  ) =>
+      StationCodeEntry(
+        code: key,
+        type: _typeName(transport),
+        line: line,
+        station: station,
+        system: 'cu',
+        kind: _kind(transport),
+        datasetFile: 'cu:$cityCode',
+      );
 
   static String? _kind(String transport) => switch (transport) {
         'metro' => 'metro',
@@ -386,11 +483,4 @@ class CityUnionRegionDatabase {
         'intercity_rail' => '城际铁路',
         _ => null,
       };
-
-  static String _digits(String s) => s.replaceAll(RegExp(r'[^0-9]'), '');
-
-  static String? _nullIfEmpty(String s) {
-    final t = s.trim();
-    return t.isEmpty ? null : t;
-  }
 }

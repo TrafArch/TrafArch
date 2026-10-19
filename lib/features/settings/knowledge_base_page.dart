@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../core/data/region_db_store.dart'
+    show LiveRegionDataset, RegionLineCoverage;
 import '../../core/data/station_codes.dart';
 import '../../core/data/tunion_knowledge_base.dart';
 import '../../state/app_state.dart';
@@ -18,7 +20,22 @@ class KnowledgeBasePage extends StatelessWidget {
         builder: (context, _) {
           final kb = app.knowledgeBase;
           if (kb == null) {
-            return const Center(child: Text('知识库尚未加载'));
+            // 数据库启动即并行预热；预热未完成前进入本页展示加载态，
+            // 加载完成（notifyListeners）后自动刷新为数据内容。
+            return const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: CircularProgressIndicator(strokeWidth: 2.5),
+                  ),
+                  SizedBox(height: 12),
+                  Text('数据库预热中，请稍候…'),
+                ],
+              ),
+            );
           }
           final coverage = kb.coverageDatasets;
           final tu =
@@ -84,7 +101,7 @@ class _SummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     int entryCount(List<StationDataset> d) =>
-        d.fold(0, (a, x) => a + x.codes.length);
+        d.fold(0, (a, x) => a + x.entryCountOverride);
     return Card(
       margin: const EdgeInsets.fromLTRB(12, 12, 12, 4),
       child: Padding(
@@ -174,10 +191,16 @@ class _CoverageList extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
             sliver: SliverList(
               delegate: SliverChildBuilderDelegate(
-                (context, i) => Card(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: _RegionTile(dataset: datasets[i]),
-                ),
+                (context, i) {
+                  final ds = datasets[i];
+                  final widget = ds is LiveRegionDataset
+                      ? _LazyRegionTile(dataset: ds)
+                      : _RegionTile(dataset: ds);
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: widget,
+                  );
+                },
                 childCount: datasets.length,
               ),
             ),
@@ -222,9 +245,77 @@ class _RegionTile extends StatelessWidget {
   }
 }
 
+/// 惰性地区瓦片（TU / CU 共用）：展开时仅点查该地区的线路/站点。
+class _LazyRegionTile extends StatefulWidget {
+  final LiveRegionDataset dataset;
+  const _LazyRegionTile({required this.dataset});
+
+  @override
+  State<_LazyRegionTile> createState() => _LazyRegionTileState();
+}
+
+class _LazyRegionTileState extends State<_LazyRegionTile> {
+  bool _loaded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final ds = widget.dataset;
+    final province = ds.province;
+    final subtitleParts = <String>[
+      '${ds.overview.lineCount} 条线路 · ${ds.entryCountOverride} 条站点条目',
+      if (province != null && province.isNotEmpty) province,
+    ];
+    return ExpansionTile(
+      title: Text(ds.cityName ?? ds.cityCode ?? '未知地区'),
+      subtitle: Text(subtitleParts.join(' · ')),
+      trailing: (ds.cityCode != null && ds.cityCode!.isNotEmpty)
+          ? Text(
+              ds.cityCode!,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.outline),
+            )
+          : null,
+      shape: const Border(),
+      collapsedShape: const Border(),
+      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      onExpansionChanged: (v) {
+        if (v && !_loaded) setState(() => _loaded = true);
+      },
+      children: !_loaded
+          ? const []
+          : [
+              FutureBuilder<List<RegionLineCoverage>>(
+                future: ds.linesOnce(),
+                builder: (context, snap) => switch (snap) {
+                  _ when !snap.hasData && snap.hasError =>
+                    const ListTile(dense: true, title: Text('查询失败')),
+                  _ when !snap.hasData => const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Center(
+                          child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )),
+                    ),
+                  final s => Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final RegionLineCoverage l in s.data!)
+                          _LineTile(line: l),
+                      ],
+                    ),
+                },
+              ),
+            ],
+    );
+  }
+}
+
 /// 线路子瓦片：展开后以标签云列出该线路全部站点。
 class _LineTile extends StatelessWidget {
-  final _LineCoverage line;
+  final RegionLineCoverage line;
   const _LineTile({required this.line});
 
   @override
@@ -270,16 +361,8 @@ class _LineTile extends StatelessWidget {
   }
 }
 
-/// 一条线路及其站点集合（站点名去重后按名排序）。
-class _LineCoverage {
-  final String line;
-  final List<String> stations;
-  const _LineCoverage(this.line, this.stations);
-}
-
-/// 按线路名分组站点：同线路站点名去重；"未标注线路"排最后，其余按线路
-/// 内首个数字升序（无数字的按名称字典序），与展示习惯对齐。
-List<_LineCoverage> _groupLines(Iterable<StationCodeEntry> entries) {
+/// 按线路名分组站点：同线路站点名去重；"未标注线路"排最后。
+List<RegionLineCoverage> _groupLines(Iterable<StationCodeEntry> entries) {
   final byLine = <String, Set<String>>{};
   for (final e in entries) {
     final line = (e.line == null || e.line!.trim().isEmpty)
@@ -291,10 +374,10 @@ List<_LineCoverage> _groupLines(Iterable<StationCodeEntry> entries) {
     final bucket = byLine.putIfAbsent(line, () => <String>{});
     if (station != null) bucket.add(station);
   }
-  final out = <_LineCoverage>[];
+  final out = <RegionLineCoverage>[];
   byLine.forEach((line, stations) {
     final list = stations.toList()..sort();
-    out.add(_LineCoverage(line, list));
+    out.add(RegionLineCoverage(line, list));
   });
   out.sort((a, b) {
     const unlabeled = '未标注线路';

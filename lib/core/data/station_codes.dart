@@ -68,6 +68,40 @@ class StationCodeEntry {
   }
 }
 
+/// 运行期点查数据源契约：[StationCodeTable] 的 live 模式经此接口委派到持久化
+/// 库。定义在本库以避免 `station_codes.dart` 与 `region_db_store.dart` 循环
+/// import（实现类 `RegionKnowledgeDb` 位于 region_db_store.dart）。
+abstract class LiveStationSource {
+  /// 所属体系：tu（交通联合）/ cu（城市一卡通）。
+  String get system;
+
+  StationCodeEntry? lookupEntry(String cityKey, String key);
+  String? lookupLineNameDigits(String cityKey, String digits);
+  List<StationCodeEntry> fragLineStation(
+      String cityKey, String lineNum, String stationNum);
+  List<StationCodeEntry> fragStation(String cityKey, String stationNum);
+  List<StationCodeEntry> fragLine(String cityKey, String lineNum);
+  Iterable<StationCodeEntry> lineNameEntryCandidates(String cityKey);
+
+  /// 线路号数字 + 编码末两位直查（避免整城扫描）；默认按候选流过滤。
+  List<StationCodeEntry> lookupLineStationTail(
+      String cityKey, String lineDigits, String stationTail) {
+    final out = <StationCodeEntry>[];
+    for (final e in lineNameEntryCandidates(cityKey)) {
+      if (StationCodeTable.lineNameDigitsOf(e.line) != lineDigits) continue;
+      if (StationCodeTable.tailDigitsOf(e.code, 2) != stationTail) continue;
+      out.add(e);
+    }
+    return out;
+  }
+
+  /// 知识库页惰性地区数据集；默认无。
+  List<StationDataset> lazyDatasets() => const [];
+
+  int get totalEntryCount;
+  int get datasetCount;
+}
+
 /// 站点/线路代码数据集（读卡识途数据源的一份数据文件）。
 class StationDataset {
   /// 数据集相对路径（如 Fujian/Fuzhou/metro-tu.csv，溯源用）。
@@ -90,6 +124,18 @@ class StationDataset {
 
   /// 编码 → 条目。
   final Map<String, StationCodeEntry> codes;
+
+  /// 数据集条目数覆盖（惰性数据集用构建期计数代替空 codes Map）。
+  int get entryCountOverride => codes.length;
+
+  /// 数据集线路数覆盖（惰性数据集用构建期概况计数；物化数据集缺省 0）。
+  int get lineCountOverride => 0;
+
+  /// 惰性条目（知识库页按需查询）；物化数据集直接返回内存条目。
+  Future<List<StationCodeEntry>> lazyEntries() async => codes.values.toList();
+
+  /// 是否按需点查的惰性数据集（知识库页据此选择瓦片形态）。
+  bool get isLazy => false;
 
   const StationDataset({
     required this.file,
@@ -175,6 +221,9 @@ class StationCodeTable {
   /// 已索引数据集数量（prefix 模式数据集不计入）。
   final int datasetCount;
 
+  /// 持久化知识库点查源列表（内存索引未命中时按顺序回落到持久化库）。
+  final List<LiveStationSource> _liveSources;
+
   const StationCodeTable._(
     this._entries,
     this._lineNames,
@@ -182,17 +231,63 @@ class StationCodeTable {
     this._tuByStation,
     this._tuByLine,
     this.datasetCount,
+    this._liveSources,
   );
 
   /// 空表（无站点数据时的降级值）。
   static const empty =
-      StationCodeTable._({}, {}, {}, {}, {}, 0);
+      StationCodeTable._({}, {}, {}, {}, {}, 0, const []);
+
+  /// 首个 live 源（兼容旧字段语义）。
+  LiveStationSource? get live =>
+      _liveSources.isEmpty ? null : _liveSources.first;
+
+  /// 以一组 live 点查源包装（替换原有 live 源）。
+  StationCodeTable withLiveSources(Iterable<LiveStationSource> sources) {
+    final next = <LiveStationSource>[];
+    for (final s in sources) {
+      if (next.any((e) => identical(e, s))) continue;
+      next.add(s);
+    }
+    if (next.length == _liveSources.length) {
+      var same = true;
+      for (var i = 0; i < next.length; i++) {
+        if (!identical(next[i], _liveSources[i])) {
+          same = false;
+          break;
+        }
+      }
+      if (same) return this;
+    }
+    return StationCodeTable._(
+      _entries,
+      _lineNames,
+      _tuByLineStation,
+      _tuByStation,
+      _tuByLine,
+      datasetCount,
+      List<LiveStationSource>.unmodifiable(next),
+    );
+  }
+
+  /// 以单个 live 点查源包装（兼容旧调用）。
+  StationCodeTable withLive(LiveStationSource? source) =>
+      withLiveSources([if (source != null) source]);
+
+  LiveStationSource? _sourceOf(String system) {
+    for (final s in _liveSources) {
+      if (s.system == system) return s;
+    }
+    return null;
+  }
 
   /// 只读行视图："规范化城市代码|编码" → 条目（供上层与外部数据源合并）。
   Map<String, StationCodeEntry> get rows => Map.unmodifiable(_entries);
 
-  /// 可查询编码条目数。
-  int get entryCount => _entries.length;
+  /// 可查询编码条目数（live 模式 = 内存条目 + 各持久化库构建期计数）。
+  int get entryCount =>
+      _entries.length +
+      _liveSources.fold(0, (sum, s) => sum + s.totalEntryCount);
 
   /// 由数据集列表构建查询表：无城市键的数据集跳过、不计入 datasetCount；
   /// 同城市同编码冲突时保留类别优先级更高的条目
@@ -249,17 +344,20 @@ class StationCodeTable {
       byStation,
       byLine,
       datasetCount,
+      const [],
     );
   }
 
   /// 类别优先级（数值越小越优先）：地铁 > BRT > 公交 > 自行车 > 其它。
-  static int _kindPriority(String? kind) => switch (kind) {
+  static int kindPriority(String? kind) => switch (kind) {
         'metro' => 0,
         'brt' => 1,
         'bus' => 2,
         'bike' => 3,
         _ => 4,
       };
+
+  static int _kindPriority(String? kind) => kindPriority(kind);
 
   static String _normalizeCity(String cityCode) =>
       cityCode.replaceAll(' ', '').toUpperCase();
@@ -274,6 +372,9 @@ class StationCodeTable {
     return trimmed.isEmpty ? '0' : trimmed;
   }
 
+  /// 线路名首个数字段（去前导零）；无数字返回 null（供 live 源默认实现）。
+  static String? lineNameDigitsOf(String? line) => _lineNameDigits(line);
+
   /// 编码末四位（仅数字）：取字符串末尾连续数字的最后 4 位；不足 4 位
   /// 返回 null。与数据库「后四位」站点键口径一致。
   static String? tailFourDigits(String rawCode) {
@@ -282,6 +383,9 @@ class StationCodeTable {
     final digits = m.group(1)!;
     return digits.length >= 4 ? digits.substring(digits.length - 4) : null;
   }
+
+  /// 编码末尾连续数字的最后 [n] 位；不足返回 null（供 live 源默认实现）。
+  static String? tailDigitsOf(String code, int n) => _tailDigits(code, n);
 
   /// 站点编码的「后四位」候选键（含进制转译，按优先级）：
   /// 1) 直接取末尾连续数字的后四位（BCD / 十进制形态，与库同口径即命中）；
@@ -303,10 +407,17 @@ class StationCodeTable {
     return out;
   }
 
-  /// 按城市 + 编码查询；未收录返回 null。
+  /// 按城市 + 编码查询；未收录返回 null（live 模式先查内存再点查持久化库）。
   StationCodeEntry? lookup({required String code, String? cityCode}) {
     if (code.isEmpty || cityCode == null || cityCode.isEmpty) return null;
-    return _entries['${_normalizeCity(cityCode)}|$code'];
+    final cityKey = _normalizeCity(cityCode);
+    final hit = _entries['$cityKey|$code'];
+    if (hit != null) return hit;
+    for (final source in _liveSources) {
+      final entry = source.lookupEntry(cityKey, code);
+      if (entry != null) return entry;
+    }
+    return null;
   }
 
   /// 站点查询（兼容卡片侧多种编码形态）：先按完整编码精确命中，未命中
@@ -332,7 +443,14 @@ class StationCodeTable {
     if (cityCode == null || cityCode.isEmpty) return null;
     final digits = _lineNameDigits(rawLineCode);
     if (digits == null) return null;
-    return _lineNames['${_normalizeCity(cityCode)}|$digits'];
+    final cityKey = _normalizeCity(cityCode);
+    final hit = _lineNames['$cityKey|$digits'];
+    if (hit != null) return hit;
+    for (final source in _liveSources) {
+      final name = source.lookupLineNameDigits(cityKey, digits);
+      if (name != null) return name;
+    }
+    return null;
   }
 
   /// 组合查询：候选编码按"最具体优先"依次精确匹配
@@ -381,11 +499,15 @@ class StationCodeTable {
     final cityKey = _normalizeCity(cityCode);
     final stationNum =
         _normalizeNumericSegment(digits.substring(digits.length - 2));
+    final tuSource = _sourceOf('tu');
     if (lineValue != null && stationNum != null) {
       for (final candidate in _lineValueCandidates(lineValue)) {
         final lineNum = _normalizeNumericSegment(candidate);
         if (lineNum == null) continue;
-        final rows = _tuByLineStation['$cityKey|$lineNum|$stationNum'];
+        var rows = _tuByLineStation['$cityKey|$lineNum|$stationNum'];
+        if ((rows == null || rows.isEmpty) && tuSource != null) {
+          rows = tuSource.fragLineStation(cityKey, lineNum, stationNum);
+        }
         if (rows != null && rows.isNotEmpty) {
           return _classifyTu(rows, StationMatchConfidence.exact);
         }
@@ -395,10 +517,16 @@ class StationCodeTable {
       if (digits.length < n) continue;
       final num = _normalizeNumericSegment(digits.substring(digits.length - n));
       if (num == null) continue;
-      final rows = _tuByStation['$cityKey|$num'];
+      var rows = _tuByStation['$cityKey|$num'];
+      if ((rows == null || rows.isEmpty) && tuSource != null) {
+        rows = tuSource.fragStation(cityKey, num);
+      }
       if (rows != null && rows.isNotEmpty) {
         return _classifyTu(
-            rows, n == 4 ? StationMatchConfidence.exact : StationMatchConfidence.probable);
+            rows,
+            n == 4
+                ? StationMatchConfidence.exact
+                : StationMatchConfidence.probable);
       }
     }
     return StationMatch.unmatched;
@@ -429,7 +557,13 @@ class StationCodeTable {
     if (cityCode == null || cityCode.isEmpty) return StationMatch.unmatched;
     final num = _normalizeNumericSegment(rawLineCode);
     if (num == null) return StationMatch.unmatched;
-    final rows = _tuByLine['${_normalizeCity(cityCode)}|$num'];
+    final cityKey = _normalizeCity(cityCode);
+    final tuSource = _sourceOf('tu');
+    var rows = _tuByLine['$cityKey|$num'];
+    if ((rows == null || rows.isEmpty) && tuSource != null) {
+      rows = tuSource.fragLine(cityKey, num);
+    }
+
     if (rows == null || rows.isEmpty) return StationMatch.unmatched;
     final lineNames = rows
         .map((e) => e.line)
@@ -469,7 +603,10 @@ class StationCodeTable {
       final lineNum = _normalizeNumericSegment(field.substring(layout.$1, layout.$1 + 2));
       final stationNum = _normalizeNumericSegment(field.substring(layout.$2, layout.$2 + 2));
       if (lineNum == null || stationNum == null) continue;
-      final rows = _tuByLineStation['$cityKey|$lineNum|$stationNum'];
+      var rows = _tuByLineStation['$cityKey|$lineNum|$stationNum'];
+      if ((rows == null || rows.isEmpty) && live != null) {
+        rows = live!.fragLineStation(cityKey, lineNum, stationNum);
+      }
       if (rows != null && rows.isNotEmpty) {
         return _classifyTu(rows, StationMatchConfidence.exact);
       }
@@ -520,6 +657,7 @@ class StationCodeTable {
     final stationTail = _tailDigits(stationCode, 2);
     if (lineDigits == null || stationTail == null) return null;
     final prefix = '${_normalizeCity(cityCode)}|';
+    final cityKey = prefix.substring(0, prefix.length - 1);
     StationCodeEntry? best;
     var bestScore = _stationMatchScore(null);
     for (final row in _entries.entries) {
@@ -531,6 +669,16 @@ class StationCodeTable {
       if (best == null || score < bestScore) {
         best = entry;
         bestScore = score;
+      }
+    }
+    for (final source in _liveSources) {
+      for (final entry
+          in source.lookupLineStationTail(cityKey, lineDigits, stationTail)) {
+        final score = _stationMatchScore(entry);
+        if (best == null || score < bestScore) {
+          best = entry;
+          bestScore = score;
+        }
       }
     }
     return best;

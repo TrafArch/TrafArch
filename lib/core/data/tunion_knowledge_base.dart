@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'city_union_knowledge_base.dart';
 import 'city_union_region_database.dart';
 import 'station_codes.dart';
+import 'tu_station_repository.dart';
 import 'tunion_region_database.dart';
 
 /// 城市信息。
@@ -423,6 +424,10 @@ class KnowledgeBase {
   final int? tuDatabaseVersion;
   final int? cuDatabaseVersion;
 
+  /// 交通联合原始地区表查询入口（用户覆盖 + 未知站点上报）。
+  /// 为 null 表示 TU 数据库未加载；页面应经此查询，不要自行拼 SQL。
+  final TuStationRepository? tuStations;
+
   const KnowledgeBase({
     required this.cities,
     required this.issuers,
@@ -434,6 +439,7 @@ class KnowledgeBase {
     this.coverageDatasets = const [],
     this.tuDatabaseVersion,
     this.cuDatabaseVersion,
+    this.tuStations,
   });
 
   static const issuerAsset = 'assets/data/tunion_issuer_fingerprints.json';
@@ -509,10 +515,22 @@ class KnowledgeBase {
     ];
 
     final baseStations = stationCodes ?? StationCodeTable.empty;
+    final tuLive = regionContent?.live;
+    final cuLive = cuRegionContent?.live;
     final coverageDatasets = <StationDataset>[
-      ...?regionContent?.stationDatasets,
-      ...?cuRegionContent?.stationDatasets,
+      // TU / CU 均为惰性数据集：页面展开时才点查，不整表物化。
+      ...?tuLive?.lazyDatasets(),
+      ...?cuLive?.lazyDatasets(),
     ];
+
+    var stationTable = baseStations;
+    if (tuLive != null || cuLive != null) {
+      // CU 在前保持旧「内存 CU 优先于 TU live」的查询顺序。
+      stationTable = stationTable.withLiveSources([
+        if (cuLive != null) cuLive,
+        if (tuLive != null) tuLive,
+      ]);
+    }
 
     return KnowledgeBase(
       cities: CityTable.fromInfos(cityInfos),
@@ -526,9 +544,8 @@ class KnowledgeBase {
       coverageDatasets: coverageDatasets,
       tuDatabaseVersion: regionContent?.databaseVersion,
       cuDatabaseVersion: cuRegionContent?.databaseVersion,
-      stationCodes: coverageDatasets.isEmpty
-          ? baseStations
-          : _mergeStations(baseStations, coverageDatasets),
+      stationCodes: stationTable,
+      tuStations: regionContent?.repository,
     );
   }
 
@@ -632,47 +649,6 @@ class KnowledgeBase {
     return out;
   }
 
-  /// 站点合并：既有（在线/预制）数据优先，数据库站点仅补空位（精确相等
-  /// 才命中，不覆盖、不模糊）。
-  static StationCodeTable _mergeStations(
-    StationCodeTable base,
-    List<StationDataset> extra,
-  ) {
-    if (extra.isEmpty) return base;
-    final merged = Map<String, StationCodeEntry>.from(base.rows);
-    for (final ds in extra) {
-      final city = ds.cityCode;
-      if (city == null || city.isEmpty) continue;
-      final cityKey = city.replaceAll(' ', '').toUpperCase();
-      ds.codes.forEach((code, entry) {
-        merged.putIfAbsent('$cityKey|$code', () => entry);
-      });
-    }
-    final byCity = <String, StationDataset>{};
-    merged.forEach((key, entry) {
-      final sep = key.indexOf('|');
-      if (sep < 0) return;
-      final cityKey = key.substring(0, sep);
-      final code = key.substring(sep + 1);
-      final bucket = byCity.putIfAbsent(
-        cityKey,
-        () => StationDataset(
-          file: 'merged',
-          cityCode: cityKey,
-          system: 'tu',
-          kind: 'mixed',
-          codes: {},
-        ),
-      );
-      // 以「完整登记键」而非 entry.code 分桶：保留同一条目的站点片段键
-      // 与线路+站点拼接键，并避免同站点片段跨线路复用时的相互覆盖——
-      // 覆盖会使条目无法进入 fromDatasets 的 TU 片段索引，导致 0x1E
-      // （及 0x1A）线路 / 站点查询落空、页面显示为空。
-      bucket.codes.putIfAbsent(code, () => entry);
-    });
-    return StationCodeTable.fromDatasets(byCity.values);
-  }
-
   /// 加载知识库：机构/终端规则/城市一卡通识别库读自 assets；站点数据完全
   /// 迁移至两个外部 SQLite 数据库——交通联合 TrafArch_Database_TU.sqlite
   /// 与城市一卡通 TrafArch_Database_CU.sqlite（数据库优先、JSON 兜底），
@@ -682,37 +658,34 @@ class KnowledgeBase {
     AssetBundle bundle, {
     StationCodeTable? stationCodes,
   }) async {
-    String? cardPrefixes;
-    try {
-      cardPrefixes = await bundle.loadString(cardPrefixAsset);
-    } catch (_) {
-      cardPrefixes = null;
-    }
-    String? cityUnionCatalog;
-    try {
-      cityUnionCatalog = await bundle.loadString(cityUnionCardAsset);
-    } catch (_) {
-      cityUnionCatalog = null;
-    }
-    // 2A：卡种 / 货币独立小资产（缺失降级为空，不阻断）
-    String? cardMeta;
-    try {
-      cardMeta = await bundle.loadString(cardMetaAsset);
-    } catch (_) {
-      cardMeta = null;
-    }
-    // 1A：外部地区数据库（缺失 / 失败返回 null → 回退纯 JSON 行为）
-    final regionContent = await TunionRegionDatabase.load(bundle: bundle);
-    final cuRegionContent = await CityUnionRegionDatabase.load(bundle: bundle);
+    // 所有小资产与两个数据库同时发起加载；任一缺失仅降级，不阻断其余源。
+    final cardPrefixesFuture = _safeLoadString(bundle, cardPrefixAsset);
+    final cityUnionCatalogFuture = _safeLoadString(bundle, cityUnionCardAsset);
+    final cardMetaFuture = _safeLoadString(bundle, cardMetaAsset);
+    final issuerFuture = _safeLoadString(bundle, issuerAsset);
+    final terminalRulesFuture = _safeLoadString(bundle, terminalRulesAsset);
+    final regionFuture = TunionRegionDatabase.load(bundle: bundle);
+    final cuRegionFuture = CityUnionRegionDatabase.load(bundle: bundle);
+
     return KnowledgeBase.fromJsonStrings(
-      issuerFingerprints: await bundle.loadString(issuerAsset),
-      terminalRules: await bundle.loadString(terminalRulesAsset),
-      cardPrefixes: cardPrefixes,
-      cityUnionCatalog: cityUnionCatalog,
+      issuerFingerprints: await issuerFuture,
+      terminalRules: await terminalRulesFuture,
+      cardPrefixes: await cardPrefixesFuture,
+      cityUnionCatalog: await cityUnionCatalogFuture,
       stationCodes: stationCodes ?? StationCodeTable.empty,
-      regionContent: regionContent,
-      cuRegionContent: cuRegionContent,
-      cardMeta: cardMeta,
+      regionContent: await regionFuture,
+      cuRegionContent: await cuRegionFuture,
+      cardMeta: await cardMetaFuture,
     );
+  }
+
+  /// 安全读取文本资产：缺失 / 读取异常返回 null（调用方按缺省口径降级，
+  /// 不阻断其余数据源加载）。
+  static Future<String?> _safeLoadString(AssetBundle bundle, String path) async {
+    try {
+      return await bundle.loadString(path);
+    } catch (_) {
+      return null;
+    }
   }
 }

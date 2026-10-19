@@ -263,6 +263,10 @@ class AppState extends ChangeNotifier {
   /// 当前 TU / CU 数据库支持的地区、线路与站点覆盖范围。
   KnowledgeBase? get knowledgeBase => _kb;
 
+  /// TU / CU 外部数据库与知识库是否已预热完成（false = 启动预热进行中，
+  /// 知识库页据此展示加载态，预热完成后自动刷新为数据内容）。
+  bool get knowledgeReady => _kb != null;
+
   bool get ready => _engine != null;
 
   String get knowledgeSummary => _kb == null
@@ -546,9 +550,14 @@ class AppState extends ChangeNotifier {
   Future<void> init() => _initFuture ??= _initialize();
 
   Future<void> _initialize() async {
-    await _loadSettings();
+    // 数据库提前预热：知识库（含 TU / CU 两个外部 SQLite 的资产解包与
+    // 派生索引构建）在应用启动的第一时间发起，与设置读取、扫码通道
+    // 探测并行，知识库页尽早可查，不再排在这两步之后。
+    final settings = _loadSettings();
+    final knowledge = _loadKnowledge(settingsLanded: settings);
+    await settings;
     await _detectScanChannels();
-    await _loadKnowledge();
+    await knowledge;
   }
 
   /// 读取持久化设置（缺失/不可用时保持默认：运行日志与系统扫码均停用）。
@@ -585,7 +594,7 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> _loadKnowledge() async {
+  Future<void> _loadKnowledge({Future<void>? settingsLanded}) async {
     KnowledgeBase kb;
     try {
       // 站点数据来自本地：TrafArch_Database_TU / CU 两个外部 SQLite 数据库
@@ -597,6 +606,9 @@ class AppState extends ChangeNotifier {
     _kb = kb;
     _engine = AnalysisEngine(kb);
     _identification = CardIdentificationService(kb);
+    // 与设置读取并行预热：日志开关要等设置落地才确定，先等其完成再记
+    // 「知识库加载」事件，避免开关为开启时漏记（默认口径不变）。
+    await (settingsLanded ?? Future.value());
     _logEvent('知识库加载：$knowledgeSummary');
     notifyListeners();
   }
