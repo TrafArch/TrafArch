@@ -33,8 +33,9 @@ class AnalysisEngine {
   }
 
   /// 钱包货币判定：卡号（应用序列号）IIN 前缀命中卡前缀库且条目声明
-  /// currency 时按其取值（如八达通-全国通卡 HKD），未命中再按发卡机构
-  /// 标识反查；均未收录时回退人民币（缺省口径，不猜测外币）。
+  /// currency 时按其取值，未命中再按发卡机构标识反查；均未收录时回退
+  /// 人民币（缺省口径，不猜测外币）。八达通-全国通卡不单独适配货币，
+  /// 金额统一按人民币展示。
   Currency _resolveCurrency(TUnionCardInfo info) =>
       Currency.fromCode(
         (knowledge.cardPrefixes.lookup(info.displayCardNumber) ??
@@ -74,26 +75,37 @@ class AnalysisEngine {
       // 0x1E 注解优先；无 0x1E 注解时用 0x1A 记录进站兜底（兜底配对键
       // 金额恒为 0，仅可能命中进站刷卡的 0 元交易）。
       final fallback = annotation == null ? entryFallbacks[key] : null;
-      final stationMatch = annotation?.match;
-      final terminalEntry = _lookupStationEntry(loc, identity, card);
+      // 公共汽电车（0x1E 注解或 0x1A 记录 2 兜底）：屏蔽站点与线路匹配
+      // ——公交线网 / 站点库未建立，套用城市轨道站点表会错配；
+      // 线路 / 站点仅保留原始编码，不查表、不产出置信级别。
+      final isBus = (annotation?.record.isBus ?? false) ||
+          (fallback?.isBus ?? false);
+      final stationMatch = isBus ? null : annotation?.match;
+      final terminalEntry =
+          isBus ? null : _lookupStationEntry(loc, identity, card);
       final stationEntry = terminalEntry ?? stationMatch?.entry;
-      // 匹配置信级别：0x1E 三键联合通道按判定结果；终端拼接命中记精确；
-      // 歧义 / 未匹配不展示站名（回退原始终端站点编码或城市回退）。
-      final confidence = stationMatch?.confidence ??
-          (terminalEntry != null
+      // 匹配置信级别：终端解码查表精确命中优先；其次取 0x1E 查表结论；
+      // 存在站点原始编码但查不到表时直接标记未匹配（已取消站名推测）。
+      final confidence = isBus
+          ? null
+          : (terminalEntry != null
               ? StationMatchConfidence.exact
-              : (stationEntry != null ? StationMatchConfidence.probable : null));
+              : (stationMatch?.confidence ??
+                  (loc?.stationCode != null
+                      ? StationMatchConfidence.unmatched
+                      : null)));
       // 歧义候选整体压制名称（线路 / 站点均回退原始编码，不强行显示）。
       final suppressed =
           confidence == StationMatchConfidence.ambiguous;
-      final lineLabel = stationMatch?.lineName ??
-          (suppressed ? null : stationEntry?.line) ??
-          loc?.lineCode;
-      final resolvedStation =
-          (confidence == StationMatchConfidence.exact ||
-                  confidence == StationMatchConfidence.probable)
-              ? stationEntry?.station
-              : null;
+      final lineLabel = isBus
+          ? loc?.lineCode
+          : (stationMatch?.lineName ??
+              (suppressed ? null : stationEntry?.line) ??
+              loc?.lineCode);
+      final resolvedStation = !isBus &&
+              confidence == StationMatchConfidence.exact
+          ? stationEntry?.station
+          : null;
       // 复合消费（0x09）配对命中时以行程状态短名（出站 / 进站 / 上车 /
       // 下车…）替代类型名展示；未配对保持 null（展示层不替换，不猜测）。
       final rideStatusName = txn.isCompositeConsume
@@ -116,13 +128,13 @@ class AnalysisEngine {
         lineLabel: lineLabel,
         stationLabel:
             resolvedStation ?? loc?.stationCode ?? fallback?.stationLabel,
-        stationType: stationEntry?.type,
+        stationType: isBus ? null : stationEntry?.type,
         appTypeName: annotation?.record.appTypeLabel,
         balanceAfterFen: annotation?.record.balanceFen,
         rideStatusName: rideStatusName,
         isEntry: annotation?.record.isEntry ?? (fallback != null),
         matchedProcessTrip: annotation?.record,
-        stationConfidence: confidence,
+        stationConfidence: isBus ? null : confidence,
         rawHex: txn.rawHex,
         currency: currency,
       );
@@ -173,10 +185,14 @@ class AnalysisEngine {
       // 非 0 视为异常数据，不参与配对（不猜测）。
       if (trip.isEntry && trip.amountFen != 0) continue;
       final cityCode = trip.cityCode ?? identity.cityCode ?? card.info.cityCode;
-      final match = knowledge.stationCodes.matchLineStationField(
-        field: trip.lineStationCode,
-        cityCode: cityCode,
-      );
+      // 公共汽电车：屏蔽站点与线路匹配——公交线网 / 站点库未建立，
+      // 套用城市轨道站点表会错配；公交记录按未匹配处理（不查表）。
+      final match = trip.isBus
+          ? StationMatch.unmatched
+          : knowledge.stationCodes.matchLineStationField(
+              field: trip.lineStationCode,
+              cityCode: cityCode,
+            );
       final key = _pairKey(trip.time, trip.amountFen);
       if (byKey.containsKey(key)) {
         ambiguous.add(key);
@@ -245,6 +261,7 @@ class AnalysisEngine {
           cityCode: entryCityCode,
           stationLabel: entryStationId,
           statusName: statusName,
+          isBus: bus != null,
         );
       }
     }
@@ -516,17 +533,20 @@ class _RideAnnotation {
 /// 0x1A 进站兜底注解（内部用）：进站城市名（编码查得时）、城市代码
 /// （记录原始值，供异地用卡判定；未写入时为 null）、站点原始编码
 /// （记录中的站点 ID，线路库接入前保持原始值；未写入时为 null）与
-/// 行程状态短名（"进站" / "上车"，复合消费标题展示用）。
+/// 行程状态短名（"进站" / "上车"，复合消费标题展示用）；[isBus]
+/// 标识注解来源是否为记录 2（公共汽电车），供展示层屏蔽线路 / 站点匹配。
 class _EntryFallback {
   final String? cityName;
   final String? cityCode;
   final String? stationLabel;
   final String statusName;
+  final bool isBus;
 
   const _EntryFallback({
     this.cityName,
     this.cityCode,
     this.stationLabel,
     required this.statusName,
+    this.isBus = false,
   });
 }

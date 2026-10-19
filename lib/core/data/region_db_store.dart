@@ -155,20 +155,23 @@ class RegionDatabaseStore {
     return t.isEmpty ? '0' : t;
   }
 
+  /// 片段键：完整值 / 前两位 / 后两位（兼容 12 位码左右补零）。
+  /// **不做进制转译**——索引必须与库内原始编码同口径；HEX→十进制
+  /// 转译只在查询侧分轮兜底（否则 0x1B 会以十进制 27 与 0x27 混淆）。
   static Set<String> tuFragmentKeys(String? fragment) {
-    if (fragment == null) return const {};
-    final digits = fragment.replaceAll(RegExp(r'\D'), '');
-    if (digits.isEmpty) return const {};
+    final text =
+        (fragment ?? '').trim().toUpperCase().replaceAll(RegExp(r'[^0-9A-F]'), '');
+    if (text.isEmpty) return const {};
     final keys = <String>{};
     void add(String part) {
       final s = part.replaceFirst(RegExp(r'^0+'), '');
       if (s.isNotEmpty) keys.add(s);
     }
 
-    add(digits);
-    if (digits.length > 2) {
-      add(digits.substring(0, 2));
-      add(digits.substring(digits.length - 2));
+    add(text);
+    if (text.length > 2) {
+      add(text.substring(0, 2));
+      add(text.substring(text.length - 2));
     }
     return keys;
   }

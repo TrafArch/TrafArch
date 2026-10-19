@@ -242,7 +242,7 @@ class CardPrefixInfo {
   final String cardName;
   final String? city;
 
-  /// 钱包货币（ISO 4217 代码，如 'HKD' 港币）；条目未声明时为 null
+  /// 钱包货币（ISO 4217 代码）；条目未声明时为 null
   /// （按人民币缺省口径处理，不猜测外币）。
   final String? currency;
 
@@ -572,7 +572,7 @@ class KnowledgeBase {
   }
 
   /// 合并卡号前缀条目：JSON 建基表，数据库同前缀覆盖非空字段（1A 数据库
-  /// 优先），最后套用 meta 的按前缀货币覆盖（八达通 HKD）。
+  /// 优先），最后套用 meta 的按前缀货币覆盖。
   static List<Map<String, dynamic>> _mergePrefixEntries(
     Object? prefixJson,
     TunionRegionDatabaseContent? region,

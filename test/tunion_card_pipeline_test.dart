@@ -785,6 +785,42 @@ void main() {
       );
     });
 
+    test('前缀库声明货币的卡片：余额、行程与合规明细按声明货币展示', () {
+      final foreignKb = KnowledgeBase.fromJsonStrings(
+        cardPrefixes: jsonEncode({
+          'entries': [
+            {
+              'prefix': '99999999',
+              'cardName': '示例外币卡',
+              'city': '示例城市',
+              'currency': 'HKD',
+            },
+          ]
+        }),
+      );
+      final engine = AnalysisEngine(foreignKb);
+      final parsed = ParsedCard(
+        parserName: 't',
+        info: const TUnionCardInfo(
+          applicationSerial: '99999999000000001234',
+          balanceFen: 5340,
+        ),
+        transactions: [
+          _txn(seq: 1, time: DateTime(2024, 5, 1), amountFen: 200),
+        ],
+        selectedAidHex: 'A000000632010105',
+      );
+      final result = engine.analyze(parsed, now: DateTime(2026, 10, 7));
+
+      expect(result.currency.code, 'HKD');
+      expect(result.wallet.balanceText, 'HK\$53.40');
+      expect(result.trips.single.amountText, '-HK\$2.00');
+      expect(
+        result.compliance.items.firstWhere((i) => i.id == 'balance').detail,
+        '余额 53.40 港元',
+      );
+    });
+
     test('前缀库未声明货币的卡片：金额保持人民币缺省口径', () {
       final engine = AnalysisEngine(kb);
       final parsed = ParsedCard(

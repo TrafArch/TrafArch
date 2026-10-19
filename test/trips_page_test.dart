@@ -379,6 +379,23 @@ void main() {
       expect(app.busTransitRecord, isNull); // 记录 2 起始位置不可定位
     });
 
+    test('八达通-全国通卡：金额按人民币缺省口径（屏蔽单独适配）', () async {
+      final app = await _scan(
+        _FakeNfcChannel()
+          ..enqueueWalletScript(
+            record: _record(terminal: '123456789012'),
+            varRecord: _railRecord(),
+            publicFile: _octopusPublicFile(),
+          ),
+        assets: _octopusAssets,
+      );
+      final trip = app.analysis!.trips.single;
+      expect(trip.amountText, '-¥46.60');
+      expect(app.cardCurrency.code, 'CNY');
+      expect(app.cardCurrency.symbol, '¥');
+      expect(app.railTransitRecord!.entryBalanceFen, 300);
+    });
+
     test('八达通-全国通卡：金额按港币（HK\$）口径', () async {
       final app = await _scan(
         _FakeNfcChannel()
@@ -659,6 +676,50 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       await tester.pump();
     });
+
+    testWidgets('卡片列表：删除需确认，确认后档案与读取记录一并移除',
+        (tester) async {
+      final database = _memoryDatabase();
+      final app = AppState(database: database);
+      await app.cardRepository.saveIdentity(
+        fingerprint: 'tunion:1:2',
+        identity: const CardArchiveIdentity(
+          cardType: CardTypes.chinaTunion,
+          officialName: '福路通·榕城通',
+        ),
+        sessionDataJson: '{"trips":[{"sequence":1}]}',
+        readAt: DateTime(2026, 10, 14, 21, 40),
+      );
+
+      await tester.pumpWidget(MaterialApp(home: CardsPage(app: app)));
+      await tester.pumpAndSettle();
+
+      // 打开操作菜单 → 删除卡片 → 取消：档案保留
+      await tester.tap(find.byTooltip('卡片操作'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('删除卡片'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('取消'));
+      await tester.pumpAndSettle();
+      expect(find.text('福路通·榕城通'), findsOneWidget);
+      expect(await database.select(database.savedCards).get(), isNotEmpty);
+
+      // 再次删除并确认：档案与读取批次一并移除，列表回到空状态
+      await tester.tap(find.byTooltip('卡片操作'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('删除卡片'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('删除'));
+      await tester.pumpAndSettle();
+
+      expect(await database.select(database.savedCards).get(), isEmpty);
+      expect(await database.select(database.cardReadBatches).get(), isEmpty);
+      expect(find.text('还没有保存的卡片'), findsOneWidget);
+      expect(find.text('已删除：福路通·榕城通'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    });
   });
 }
 
@@ -727,7 +788,7 @@ final Map<String, String> _assets = {
   }),
 };
 
-/// 八达通-全国通卡资产：卡号前缀库声明钱包货币 HKD（香港）。
+/// 八达通-全国通卡资产：不声明货币（屏蔽金额单独适配，按人民币缺省口径）。
 final Map<String, String> _octopusAssets = {
   ..._assets,
   'assets/data/tunion_card_prefixes.json': jsonEncode({
@@ -736,7 +797,6 @@ final Map<String, String> _octopusAssets = {
         'prefix': '31048500',
         'cardName': '八达通-全国通卡',
         'city': '香港',
-        'currency': 'HKD',
       }
     ]
   }),

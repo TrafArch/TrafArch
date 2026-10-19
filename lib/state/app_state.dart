@@ -109,6 +109,11 @@ class AppState extends ChangeNotifier {
   bool _parsing = false;
   bool get parsing => _parsing;
 
+  /// 读卡解析进度（0–100）：等待贴卡 / 知识库准备等无法量化阶段为 null，
+  /// 由统一识读模块的进度回调驱动，供首页进度条展示。
+  int? _readProgress;
+  int? get readProgress => _readProgress;
+
   // 自动读取模式：应用启动后自动进入读取模式；
   // 仅在成功读取过一次卡片后结束，此后再次读取必须由用户点击按钮触发。
   bool _autoScanConsumed = false;
@@ -232,8 +237,8 @@ class AppState extends ChangeNotifier {
   CityUnionCardInfo? get cityUnionCard =>
       _kb?.cityUnionCards.lookup(cityUnionPublicInfo?.cityCode);
 
-  /// 当前卡片的钱包货币（按卡号前缀库判定，如八达通-全国通卡为港币）；
-  /// 未读取分析结果或未收录时回退人民币。
+  /// 当前卡片的钱包货币（按卡号前缀库条目声明判定）；未读取分析结果
+  /// 或未声明时回退人民币。
   Currency get cardCurrency => _analysis?.currency ?? Currency.cny;
 
   /// 卡片所属城市代码（发卡地）：识别城市优先，回退卡片管理信息城市
@@ -357,9 +362,10 @@ class AppState extends ChangeNotifier {
   /// 未收录或知识库未加载时返回 null（展示层回退原始 HEX）。
   String? cardKindName(String? hex) => _kb?.cardPrefixes.cardKindName(hex);
 
-  /// 站点匹配（含置信级别）：TU 通道按站点尾码判定（末 4 位精确、
-  /// 末 2 位推测，候选站名不唯一记歧义）；未命中回退 CSV / CU
-  /// 末四位 / HEX 转译通道，命中记推测；歧义不强行显示站名。
+  /// 站点匹配（含置信级别）：TU 通道按「城市 + 线路 + 站点」三键查表
+  /// （无线路号时按站点末 4 位单维查表），未命中再按 CU / CSV 精确编码
+  /// 查表；只认查表命中，查不到表一律未匹配（已取消站名推测），歧义
+  /// 不强行显示站名。
   StationMatch resolveStationMatch(String? cityCode, String? rawCode,
       {int? lineValue}) {
     final kb = _kb;
@@ -376,12 +382,12 @@ class AppState extends ChangeNotifier {
     final fallback =
         kb.stationCodes.lookupStation(rawCode: code, cityCode: city);
     if (fallback != null) {
-      return StationMatch(fallback, StationMatchConfidence.probable);
+      return StationMatch(fallback, StationMatchConfidence.exact);
     }
     return StationMatch.unmatched;
   }
 
-  /// 0x1E「线路和站点代码」匹配置信版（城市 + 线路 + 站点三键联合）。
+  /// 0x1E「线路和站点代码」匹配置信版（城市 + 线路 + 站点三键联合查表）。
   StationMatch resolveCycleStationMatch(String? cityCode, String? field) {
     final kb = _kb;
     if (kb == null || field == null || field.isEmpty) {
@@ -396,8 +402,7 @@ class AppState extends ChangeNotifier {
   String? resolveStationName(String? cityCode, String? rawCode) {
     final match = resolveStationMatch(cityCode, rawCode);
     // 歧义 / 未匹配不强行显示站名（展示层回退原始编码）。
-    if (match.confidence == StationMatchConfidence.exact ||
-        match.confidence == StationMatchConfidence.probable) {
+    if (match.confidence == StationMatchConfidence.exact) {
       return match.entry?.displayLabel;
     }
     return null;
@@ -728,6 +733,7 @@ class AppState extends ChangeNotifier {
     final gen = ++_scanGeneration;
     _scanning = true;
     _error = null;
+    _readProgress = null;
     _logEvent('开始扫描 NFC 标签，等待贴近…');
     notifyListeners();
 
@@ -768,6 +774,7 @@ class AppState extends ChangeNotifier {
           // 原生层关闭失败不影响流程
         }
         _scanning = false;
+        _readProgress = null;
         notifyListeners();
       }
     }
@@ -775,11 +782,13 @@ class AppState extends ChangeNotifier {
 
   Future<void> _parseAndAnalyze() async {
     _parsing = true;
+    _readProgress = null;
     _resetCard();
     notifyListeners();
 
     try {
       await init();
+      _reportReadProgress(5);
       // 卡片识读统一交由独立模块（LocalCardParser）编排：模块以新架构为主，
       // 内部串联「交通联合 → 城市一卡通 → 地方交通卡 → 银行卡（EMV / PBOC）」
       // 四类一等阶段，产出结果各自保留 tunion / cityUnion / localCard 的
@@ -787,6 +796,7 @@ class AppState extends ChangeNotifier {
       final parser = LocalCardParser(
         _transceive,
         onStage: (stage) => _log('== 尝试解析：$stage =='),
+        onProgress: _reportReadProgress,
         bankProbe: BankCardProbeImpl(_buildBankCardAnalyzer),
       );
       final outcome = await parser.read();
@@ -800,6 +810,7 @@ class AppState extends ChangeNotifier {
         _lastBankCardResult = result;
         _log('== 银行卡识读完成：${result.applications.length} 个应用 / '
             '${result.issues.length} 项异常 ==');
+        _reportReadProgress(100);
         return;
       }
       final parsed = outcome.parsedCard!;
@@ -827,12 +838,23 @@ class AppState extends ChangeNotifier {
       if (_autoSaveEnabled) {
         await _autoSavePending();
       }
+      _reportReadProgress(100);
     } catch (e) {
       _log('!! 解析异常：$e');
     } finally {
       _parsing = false;
       notifyListeners();
     }
+  }
+
+  /// 更新读卡解析进度（0–100）：仅解析阶段接受回调，且只允许前进
+  /// （阶段回退不改变进度条）；每次前进通知界面刷新。
+  void _reportReadProgress(int percent) {
+    if (!_parsing) return;
+    final value = percent.clamp(0, 100).toInt();
+    if (_readProgress != null && value <= _readProgress!) return;
+    _readProgress = value;
+    notifyListeners();
   }
 
   /// 识别本次读取结果并暂存为「待确认保存」：由首页弹出是否保存对话框，

@@ -238,6 +238,15 @@ class _HomePageState extends State<HomePage> with NfcScanMixin<HomePage> {
                             _statusText,
                             textAlign: TextAlign.center,
                           ),
+                          if (scanning) ...[
+                            const SizedBox(height: 16),
+                            _ReadProgressBar(
+                              value: app.readProgress == null
+                                  ? null
+                                  : app.readProgress! / 100,
+                              percent: app.readProgress,
+                            ),
+                          ],
                           if (!scanning) ...[
                             const SizedBox(height: 16),
                             FilledButton.icon(
@@ -326,6 +335,51 @@ class _HomePageState extends State<HomePage> with NfcScanMixin<HomePage> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 读卡进度条：等待贴卡 / 进度未知时为不确定进度动画，识读到卡片后
+/// 按 [AppState.readProgress] 展示真实百分比。
+class _ReadProgressBar extends StatelessWidget {
+  const _ReadProgressBar({this.value, this.percent});
+
+  /// 0.0–1.0；null 表示进度未知（不确定进度动画）。
+  final double? value;
+
+  /// 百分比文案；null 时不展示。
+  final int? percent;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: value,
+              minHeight: 6,
+              semanticsLabel: '读卡进度',
+              backgroundColor: theme.colorScheme.surfaceContainerHighest,
+            ),
+          ),
+        ),
+        if (percent != null) ...[
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 36,
+            child: Text(
+              '$percent%',
+              textAlign: TextAlign.end,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.primary,
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

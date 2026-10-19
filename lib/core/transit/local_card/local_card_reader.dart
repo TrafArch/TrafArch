@@ -100,10 +100,10 @@ class LocalCardReader {
     if (probe == null) return null;
     try {
       onStage?.call('银行卡（EMV / PBOC）');
-      callback.onProgress(50);
+      callback.onProgress(30);
       final outcome = await probe.probe(_transceive);
       if (outcome == null) return null;
-      callback.onProgress(100);
+      callback.onProgress(95);
       return LocalReadOutcome.bankCard(outcome);
     } on Exception catch (e) {
       callback.onError(_mapError(e));
@@ -120,15 +120,19 @@ class LocalCardReader {
     final tripReader = TripRecordReader(apdu);
 
     try {
-      callback.onProgress(10);
+      callback.onProgress(5);
 
       // 1) 交通联合富识读：命中后不立即返回——先记录结果，再在同一张卡上
       //    探测城市一卡通应用，双应用卡合并为一个结果（见 _mergeDual）。
       onStage?.call(CommonUnitTu.moduleName);
-      final tu = CommonUnitTu(apdu);
+      callback.onProgress(10);
+      // 模块内部进度（0–1）映射到本次识读的 15%–55% 区间
+      final tu = CommonUnitTu(
+        apdu,
+        onProgress: (p) => callback.onProgress(15 + (p * 40).round()),
+      );
       ParsedCard? tuParsed;
       if (await tu.select(info, records)) {
-        callback.onProgress(70);
         tuParsed = await tu.read(info, records);
       }
 
@@ -136,7 +140,15 @@ class LocalCardReader {
       //    标准文件视图）；已命中交通联合时，用独立的 CardInfo / records
       //    再探测一次住建部应用，避免污染交通联合汇总与行程分析链路。
       onStage?.call(CommonUnitCu.moduleName);
-      final cu = CommonUnitCu(apdu);
+      // 双应用卡的 CU 为次应用（58%–88%）；单 CU 卡为主读法（20%–78%）
+      final dual = tuParsed != null;
+      final cuBase = dual ? 58 : 20;
+      final cuSpan = dual ? 30 : 58;
+      final cu = CommonUnitCu(
+        apdu,
+        onProgress: (p) => callback.onProgress(cuBase + (p * cuSpan).round()),
+      );
+      callback.onProgress(cuBase);
       ParsedCard? cuParsed;
       if (tuParsed != null) {
         // 双应用卡次应用探测：仅在确实读到 CU 标准文件时才认定为双应用，
@@ -154,6 +166,7 @@ class LocalCardReader {
       }
 
       if (tuParsed != null) {
+        callback.onProgress(95);
         return _outcome(
           info,
           records,
@@ -162,16 +175,20 @@ class LocalCardReader {
         );
       }
       if (cuParsed != null) {
+        callback.onProgress(95);
         return _outcome(info, records, extras, cuParsed);
       }
 
       // 3~7) 地方交通卡探测（通用单元均未命中时）
+      callback.onProgress(25);
       // 3) 北京地方卡探测
       if (await BeijingLocalCard(apdu).probe(info, records)) {
         info.isBeijing = true;
-        callback.onProgress(30);
+        callback.onProgress(35);
         await extrasReader.readCommon(info, records, extras); // m790f
+        callback.onProgress(55);
         await tripReader.readFile(info, records, extras, TripFile.metro); // m789e 196
+        callback.onProgress(80);
         return await _finishLocal(tripReader, info, records, extras);
       }
 
@@ -179,10 +196,13 @@ class LocalCardReader {
       final yct = YangchengTong(apdu);
       if (await yct.selectAppy(records)) {
         info.isYCT = true;
+        callback.onProgress(35);
         await yct.readInfoAndBalance(info, records);
-        callback.onProgress(30);
+        callback.onProgress(50);
         await extrasReader.readCommon(info, records, extras); // m790f
+        callback.onProgress(65);
         await tripReader.readFile(info, records, extras, TripFile.metro); // m789e 196
+        callback.onProgress(80);
         return await _finishLocal(tripReader, info, records, extras);
       }
 
@@ -200,9 +220,11 @@ class LocalCardReader {
 
       // 8) 共用读取 m791g（条件：YCT/SUXIN/CIKA/SZT）
       if (info.isYCT || info.isSuxin || info.isCika || info.isSZT) {
+        callback.onProgress(35);
         if (await CommonCardInfo(apdu).read(info, records)) {
-          callback.onProgress(30);
+          callback.onProgress(50);
           await _readNonTuTrips(extrasReader, tripReader, info, records, extras);
+          callback.onProgress(80);
           return await _finishLocal(tripReader, info, records, extras);
         }
       }
@@ -250,6 +272,7 @@ class LocalCardReader {
   ) async {
     final result = await _finish(reader, info, records, extras); // m785a + m786b
     if (!info.isLocalCard) return null;
+    callback.onProgress(90);
     final parsed = ParsedCard(
       parserId: CardParserIds.localCard,
       parserName: '地方交通卡 · ${info.cardKindLabel}',
@@ -260,6 +283,7 @@ class LocalCardReader {
       transactions: const [],
       localCard: result,
     );
+    callback.onProgress(95);
     return LocalReadOutcome.transit(readResult: result, parsedCard: parsed);
   }
 
@@ -300,7 +324,6 @@ class LocalCardReader {
   ) async {
     await reader.reconstructBalances(info, records); // m785a
     TripDeduper().process(info, records); // m786b
-    callback.onProgress(100);
     return ReadResult(info: info, records: records, extras: extras);
   }
 

@@ -15,12 +15,20 @@ import 'local_card_reader.dart';
 /// 传输经应用侧 [ApduTransceive]（`AppState._transceive`）注入，模块不依赖
 /// 任何上层状态，可独立复用与测试。
 class LocalCardParser implements CardParser {
-  LocalCardParser(this._transceive, {this.onStage, this.bankProbe});
+  LocalCardParser(
+    this._transceive, {
+    this.onStage,
+    this.onProgress,
+    this.bankProbe,
+  });
 
   final ApduTransceive _transceive;
 
   /// 识读阶段回调（供上层写「== 尝试解析：xx ==」日志；可空）。
   final void Function(String stage)? onStage;
+
+  /// 识读进度回调（0–100 百分比，供上层进度条展示；可空）。
+  final void Function(int percent)? onProgress;
 
   /// 银行卡（EMV / PBOC）探测抽象；作为统一流程的一等阶段被 [LocalCardReader]
   /// 调用。为空时仅识读交通卡。
@@ -37,8 +45,25 @@ class LocalCardParser implements CardParser {
         _transceive,
         onStage: onStage,
         bankProbe: bankProbe,
+        callback: onProgress == null
+            ? const NoopLocalCardReaderCallback()
+            : _ProgressCallback(onProgress!),
       ).read();
 
   @override
   Future<ParsedCard?> parse() async => (await read())?.parsedCard;
+}
+
+/// 把上层进度函数适配为 [LocalCardReaderCallback]：错误信息仍由上层
+/// APDU 日志 / 异常链路承载，这里不重复上报。
+class _ProgressCallback implements LocalCardReaderCallback {
+  const _ProgressCallback(this._onProgress);
+
+  final void Function(int percent) _onProgress;
+
+  @override
+  void onProgress(int percent) => _onProgress(percent);
+
+  @override
+  void onError(String message) {}
 }

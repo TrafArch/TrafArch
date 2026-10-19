@@ -313,8 +313,8 @@ _EntryInfo _describeEntry(TripEntry entry, AppState app) {
     case TransactionTripEntry(:final trip):
       final badges = <String>[
         switch (trip.stationConfidence) {
-          StationMatchConfidence.probable => '站名推测',
           StationMatchConfidence.ambiguous => '站名歧义',
+          StationMatchConfidence.unmatched => '未匹配',
           _ => '',
         },
       ].where((b) => b.isNotEmpty).toList();
@@ -352,7 +352,7 @@ _EntryInfo _describeEntry(TripEntry entry, AppState app) {
           if (trip.location?.stationCode != null)
             ('站点原始编码', trip.location!.stationCode!),
           if (trip.stationConfidence != null)
-            ('站点匹配置信', trip.stationConfidence!.name),
+            ('站点匹配置信', _stationConfidenceLabel(trip.stationConfidence!)),
           if (trip.appTypeName != null) ('应用分类', trip.appTypeName!),
         ],
       );
@@ -391,7 +391,8 @@ _EntryInfo _describeEntry(TripEntry entry, AppState app) {
             ? null
             : '余额 $symbol${(balanceFen / 100).toStringAsFixed(2)}',
         category: '城市轨道交通',
-        badges: _confidenceBadges(match),
+        badges: _confidenceBadges(match,
+            hasRawCode: rawStation != null && rawStation.isNotEmpty),
         related: '过程记录（未与交易确认重复，独立保留）',
         rawHex: record.rawHex,
         fields: [
@@ -409,12 +410,11 @@ _EntryInfo _describeEntry(TripEntry entry, AppState app) {
         ],
       );
     case BusRecordEntry(:final record, :final isEntry):
-      final cityCode = isEntry ? record.entryCityCode : record.exitCityCode;
-      final rawStation = isEntry ? record.entryStationCode : record.exitStationCode;
+      // 公共汽电车：屏蔽线路与站点匹配——公交线网 / 站点库未建立，
+      // 套用城市轨道数据会错配；线路与站点直接展示卡片上报的原始编码。
+      final rawStation =
+          isEntry ? record.entryStationCode : record.exitStationCode;
       final rawLine = isEntry ? record.entryLineCode : record.exitLineCode;
-      final match = app.resolveStationMatch(cityCode, rawStation);
-      final station = match.stationName ?? rawStation;
-      final line = app.resolveLineName(cityCode, rawLine);
       final symbol = app.cardCurrency.symbol;
       final amountFen = isEntry ? null : record.transactionAmountFen;
       final mileage = isEntry ? null : record.mileage;
@@ -423,9 +423,9 @@ _EntryInfo _describeEntry(TripEntry entry, AppState app) {
         sourceLabel: '0x1A 公交记录',
         title: <String>[
           isEntry ? '上车' : '下车',
-          if (station != null) station,
+          if (rawStation != null) rawStation,
         ].join(' · '),
-        line: line,
+        line: rawLine,
         timeText: time == null ? null : _fmtTime(time),
         amountText: amountFen == null || amountFen <= 0
             ? null
@@ -433,7 +433,7 @@ _EntryInfo _describeEntry(TripEntry entry, AppState app) {
         isConsume: (amountFen ?? 0) > 0,
         subText: mileage == null ? null : '里程 $mileage 站',
         category: '公共汽电车',
-        badges: _confidenceBadges(match),
+        badges: const [],
         related: '过程记录（未与交易确认重复，独立保留）',
         rawHex: record.rawHex,
         fields: [
@@ -450,8 +450,14 @@ _EntryInfo _describeEntry(TripEntry entry, AppState app) {
         ],
       );
     case ProcessTripEntry(:final record):
-      final match =
-          app.resolveCycleStationMatch(record.cityCode, record.lineStationCode);
+      // 公共汽电车：屏蔽站点与线路匹配——公交线网 / 站点库未建立，
+      // 套用城市轨道站点表会造成错配；不产出线路名 / 站名 / 置信徽章。
+      final match = record.isBus
+          ? StationMatch.unmatched
+          : app.resolveCycleStationMatch(
+              record.cityCode,
+              record.lineStationCode,
+            );
       final station = match.stationName;
       final symbol = app.cardCurrency.symbol;
       return _EntryInfo(
@@ -470,7 +476,7 @@ _EntryInfo _describeEntry(TripEntry entry, AppState app) {
             ? null
             : '余额 $symbol${(record.balanceFen / 100).toStringAsFixed(2)}',
         category: record.appTypeLabel,
-        badges: _confidenceBadges(match),
+        badges: record.isBus ? const [] : _confidenceBadges(match),
         related: '未与 0x18 交易关联，作为独立过程事件保留',
         rawHex: record.rawHex,
         fields: [
@@ -487,13 +493,20 @@ _EntryInfo _describeEntry(TripEntry entry, AppState app) {
   }
 }
 
-List<String> _confidenceBadges(StationMatch match) => [
-      switch (match.confidence) {
-        StationMatchConfidence.probable => '站名推测',
-        StationMatchConfidence.ambiguous => '站名歧义',
-        _ => '',
-      },
+List<String> _confidenceBadges(StationMatch match, {bool hasRawCode = true}) => [
+      if (hasRawCode)
+        switch (match.confidence) {
+          StationMatchConfidence.ambiguous => '站名歧义',
+          StationMatchConfidence.unmatched => '未匹配',
+          _ => '',
+        },
     ].where((b) => b.isNotEmpty).toList();
+
+String _stationConfidenceLabel(StationMatchConfidence c) => switch (c) {
+      StationMatchConfidence.exact => '精确匹配',
+      StationMatchConfidence.ambiguous => '歧义',
+      StationMatchConfidence.unmatched => '未匹配',
+    };
 
 class _EntryCard extends StatelessWidget {
   final _EntryInfo info;

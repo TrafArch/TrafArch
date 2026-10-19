@@ -221,7 +221,7 @@ void main() {
       expect(card.lastReadFullText, '2026-10-14 21:40:00');
     });
 
-    test('余额货币按存储的货币代码展示（如八达通 HKD）', () {
+    test('余额货币按存储的货币代码展示（如 HKD）', () {
       final card = _savedCard(balanceFen: 200, currencyCode: 'HKD');
       expect(card.balanceText, 'HK\$ 2.00');
     });
@@ -505,6 +505,33 @@ void main() {
         'tunion:1:1',
       ]);
     });
+
+    test('deleteCard：删除档案并清理其读取批次，其他卡片不受影响', () async {
+      await repository.saveIdentity(
+        fingerprint: 'tunion:1:1',
+        identity: const CardArchiveIdentity(cardType: CardTypes.chinaTunion),
+        sessionDataJson: '{"trips":[{"sequence":1}]}',
+      );
+      await repository.saveIdentity(
+        fingerprint: 'tunion:1:2',
+        identity: const CardArchiveIdentity(cardType: CardTypes.chinaTunion),
+        sessionDataJson: '{"trips":[{"sequence":2}]}',
+      );
+      final cards = await repository.watchCards().first;
+      final target = cards.firstWhere((c) => c.cardFingerprint == 'tunion:1:2');
+      final survivor =
+          cards.firstWhere((c) => c.cardFingerprint == 'tunion:1:1');
+
+      expect(await repository.deleteCard(target.id), isTrue);
+
+      final remaining = await repository.watchCards().first;
+      expect(remaining.map((c) => c.cardFingerprint).toList(), ['tunion:1:1']);
+      final batches = await db.select(db.cardReadBatches).get();
+      expect(batches.map((b) => b.cardId).toSet(), {survivor.id});
+
+      // 重复删除：档案已不存在时返回 false
+      expect(await repository.deleteCard(target.id), isFalse);
+    });
   });
 }
 
@@ -522,7 +549,6 @@ KnowledgeBase _knowledge() => KnowledgeBase.fromJsonStrings(
             'prefix': '31048500',
             'cardName': '八达通-全国通卡',
             'city': '香港',
-            'currency': 'HKD',
           },
         ]
       }),

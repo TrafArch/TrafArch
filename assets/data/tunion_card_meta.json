@@ -2,8 +2,5 @@
   "cardKinds": {
     "04": "爱心卡",
     "96": "巡检卡"
-  },
-  "currencyByPrefix": {
-    "31048500": "HKD"
   }
 }

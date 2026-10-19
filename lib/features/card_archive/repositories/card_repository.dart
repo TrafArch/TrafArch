@@ -125,6 +125,19 @@ class CardRepository {
     );
   }
 
+  /// 删除卡片档案及其全部读取批次（同一事务，避免残留孤儿批次数据）；
+  /// 返回是否确实删除了档案（档案不存在时返回 false）。
+  /// 列表 / 详情页数据流会随删除自动刷新；该卡再次读取时可重新建档。
+  Future<bool> deleteCard(String id) {
+    return db.transaction(() async {
+      await (db.delete(db.cardReadBatches)..where((t) => t.cardId.equals(id)))
+          .go();
+      final deleted =
+          await (db.delete(db.savedCards)..where((t) => t.id.equals(id))).go();
+      return deleted > 0;
+    });
+  }
+
   /// 卡片档案列表（最近读取优先，其次最近更新）。
   Stream<List<SavedCard>> watchCards() {
     return (db.select(db.savedCards)

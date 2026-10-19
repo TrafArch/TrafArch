@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
 
+import 'package:transit_card_analyzer/core/data/station_codes.dart';
 import 'package:transit_card_analyzer/core/data/tu_station_repository.dart';
 
 void main() {
@@ -439,6 +440,141 @@ CREATE TABLE "region_回退_4000"(
       repo.invalidate();
       // 表不存在 → 返回空，不抛异常
       expect(repo.findStations(sourceKey: '1', regionCode: '9999'), isEmpty);
+    });
+  });
+
+  group('北京 10 位 HEX 编码（昌平线 0x5E）', () {
+    setUp(() {
+      db.execute(
+        "INSERT INTO \"region_北京_1000\" VALUES"
+        "(20,'metro','昌平线','昌平西山口','北京地铁','M0.i0.a','10005E0013',"
+        "'1000','北京',NULL,'high')",
+      );
+      db.execute(
+        "INSERT INTO \"region_北京_1000\" VALUES"
+        "(21,'metro','昌平线','北邵洼','北京地铁','M0.i1.a','10005E001B',"
+        "'1000','北京',NULL,'high')",
+      );
+      db.execute(
+        "INSERT INTO \"region_北京_1000\" VALUES"
+        "(22,'metro','昌平线','西二旗','北京地铁','M0.i2.a','10005E0029',"
+        "'1000','北京',NULL,'high')",
+      );
+      // 5 号线同站号：验证 5E 不会再被当成 5
+      db.execute(
+        "INSERT INTO \"region_北京_1000\" VALUES"
+        "(23,'metro','5号线','五号线测试站','北京地铁','M0.i3.a','1000050013',"
+        "'1000','北京',NULL,'high')",
+      );
+      // 十进制撞码回归：0x1B 的十进制 27 等于真实站码 0x27，
+      // 0x1D 的十进制 29 等于真实站码 0x29。
+      db.execute(
+        "INSERT INTO \"region_北京_1000\" VALUES"
+        "(24,'metro','昌平线','南邵','北京地铁','M0.i4.a','10005E001D',"
+        "'1000','北京',NULL,'high')",
+      );
+      db.execute(
+        "INSERT INTO \"region_北京_1000\" VALUES"
+        "(25,'metro','昌平线','生命科学园','北京地铁','M0.i5.a','10005E0027',"
+        "'1000','北京',NULL,'high')",
+      );
+      repo.invalidate();
+    });
+
+    test('10 位键切分为 2 位线路 + 4 位站点', () {
+      final row =
+          repo.findStations(sourceKey: '10005E0013', regionCode: '1000').first;
+      expect(row.segments, ('5E', '0013'));
+    });
+
+    test('线路 5E + 站点 13 命中昌平线，不落入 5 号线', () {
+      final rows = repo.fragLineStation('1000', '5E', '13');
+      expect(rows, hasLength(1));
+      expect(rows.first.lineName, '昌平线');
+      expect(rows.first.stationName, '昌平西山口');
+    });
+
+    test('含 A-F 的站点码 001B 可命中', () {
+      final rows = repo.fragLineStation('1000', '5E', '1B');
+      expect(rows, hasLength(1));
+      expect(rows.first.stationName, '北邵洼');
+    });
+
+    test('线路 5 只命中 5 号线（5E 不参与 5 的匹配）', () {
+      final rows = repo.fragLineStation('1000', '5', '13');
+      expect(rows, hasLength(1));
+      expect(rows.first.lineName, '5号线');
+    });
+
+    test('0x1E 字段 005E0029 命中昌平线西二旗', () {
+      final table =
+          StationCodeTable.empty.withLiveSources([TuRegionLiveSource(repo)]);
+      final m = table.matchLineStationField(
+        field: '005E0029000000',
+        cityCode: '1000',
+      );
+      expect(m.confidence, StationMatchConfidence.exact);
+      expect(m.lineName, '昌平线');
+      expect(m.stationName, '西二旗');
+    });
+
+    test('0x1E 001B 不被十进制撞码 0027 干扰（北邵洼）', () {
+      final table =
+          StationCodeTable.empty.withLiveSources([TuRegionLiveSource(repo)]);
+      final m = table.matchLineStationField(
+        field: '005E001B000000',
+        cityCode: '1000',
+      );
+      expect(m.confidence, StationMatchConfidence.exact);
+      expect(m.stationName, '北邵洼');
+    });
+
+    test('0x1E 001D 命中南邵而非西二旗（十六进制 29 撞码）', () {
+      final table =
+          StationCodeTable.empty.withLiveSources([TuRegionLiveSource(repo)]);
+      final m = table.matchLineStationField(
+        field: '005E001D000000',
+        cityCode: '1000',
+      );
+      expect(m.confidence, StationMatchConfidence.exact);
+      expect(m.stationName, '南邵');
+    });
+
+    test('内存索引（fromDatasets）同样按 HEX 口径命中', () {
+      final table = StationCodeTable.fromDatasets([
+        StationDataset(
+          file: 'tu:1000',
+          cityCode: '1000',
+          system: 'tu',
+          kind: 'metro',
+          codes: {
+            '10005E001B': StationCodeEntry(
+              code: '10005E001B',
+              line: '昌平线',
+              station: '北邵洼',
+              system: 'tu',
+              kind: 'metro',
+              lineCode: '5E',
+              stationCode: '001B',
+            ),
+            '10005E0027': StationCodeEntry(
+              code: '10005E0027',
+              line: '昌平线',
+              station: '生命科学园',
+              system: 'tu',
+              kind: 'metro',
+              lineCode: '5E',
+              stationCode: '0027',
+            ),
+          },
+        ),
+      ]);
+      final m = table.matchLineStationField(
+        field: '005E001B000000',
+        cityCode: '1000',
+      );
+      expect(m.confidence, StationMatchConfidence.exact);
+      expect(m.stationName, '北邵洼');
     });
   });
 }

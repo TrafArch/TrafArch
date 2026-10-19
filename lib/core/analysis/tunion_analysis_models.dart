@@ -4,7 +4,7 @@ import '../transit/tunion/tunion_models.dart';
 
 /// 行程解析口径版本：解析 / 关联规则变更时递增，随读取批次持久化，
 /// 历史数据据此识别产出批次所用的解析口径。
-const int kTripParseVersion = 2;
+const int kTripParseVersion = 3;
 
 /// 识别证据：来源、说明与权重（0 表示"出场但未命中"）。
 class Evidence {
@@ -45,8 +45,8 @@ class CardIdentity {
 }
 
 /// 钱包货币：金额字段口径为该货币的最小单位（分），展示符号与单位随
-/// 发卡方而定（如八达通-全国通卡余额为港币）。数据源为卡号前缀库条目
-/// 的 currency 字段；未收录时缺省人民币（不猜测外币）。
+/// 条目声明而定。数据源为卡号前缀库条目的 currency 字段；未声明时
+/// 缺省人民币（不猜测外币）。
 class Currency {
   final String code; // ISO 4217 货币代码（CNY / HKD）
   final String symbol; // 展示符号（¥ / HK$）
@@ -162,8 +162,8 @@ class TransitTrip {
   /// 与 0x18 双向唯一配对的 0x1E 原始证据；无来源时不得推断 1A 去重。
   final TUnionTripRecord? matchedProcessTrip;
 
-  /// 站点名称匹配置信级别（精确 / 推测 / 歧义 / 未匹配）；名称来自
-  /// 站点库命中时非 null，回退原始编码时为 null（不猜测）。
+  /// 站点名称匹配置信级别（精确 / 歧义 / 未匹配；已取消站名推测）；
+  /// 名称来自站点库命中时非 null，回退原始编码时为 null（不猜测）。
   final StationMatchConfidence? stationConfidence;
 
   /// 0x18 原始记录字节 HEX（详情页原始数据展示）；未保留时为 null。
@@ -275,7 +275,7 @@ class CardAnalysisResult {
   final CardIdentity identity;
   final WalletSummary wallet;
 
-  /// 钱包货币（按卡号前缀库判定，如八达通-全国通卡为 HKD）。
+  /// 钱包货币（按卡号前缀库条目声明判定）；未声明时缺省人民币。
   final Currency currency;
   final List<TransitTrip> trips;
   final ComplianceReport compliance;

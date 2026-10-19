@@ -20,8 +20,14 @@ import '../local_card_models.dart';
 /// 读取遵循 JT/T 978.2，逐条 APDU 日志由注入的 transceive 承载，
 /// 序列与原 `TUnionParser.parse()` 完全一致（零行为漂移）。
 class CommonUnitTu {
-  CommonUnitTu(this._apdu);
+  CommonUnitTu(this._apdu, {this.onProgress});
+
   final ApduExchange _apdu;
+
+  /// 模块内部识读进度（0.0–1.0）：供统一识读流程映射为整体百分比；可空。
+  final void Function(double progress)? onProgress;
+
+  void _report(double progress) => onProgress?.call(progress);
 
   /// 交通部电子钱包应用 AID。
   static const List<int> walletAid = [
@@ -117,11 +123,15 @@ class CommonUnitTu {
       info.isTU = false;
       return null;
     }
+    _report(0.25); // 卡信息文件读取完成
     final balance = await _readBalance();
+    _report(0.4); // 余额读取完成
     final merged = (cardInfo ?? const TUnionCardInfo())
         .withBalance(balance ?? cardInfo?.balanceFen);
     final transactions = await _readTransactions();
+    _report(0.6); // 0x18 交易明细读取完成
     final processRecords = await _readTransitProcessRecords();
+    _report(1); // 过程记录读取完成
 
     final parsed = ParsedCard(
       parserId: CardParserIds.tunion,
@@ -235,6 +245,7 @@ class CommonUnitTu {
   Future<List<TUnionProcessRecord>> _readTransitProcessRecords() async {
     final records = <TUnionProcessRecord>[];
     records.addAll(await _readVarProcessRecords());
+    _report(0.8); // 0x1A 变长记录读取完成
     records.addAll(await _readCycleProcessRecords());
     return records;
   }

@@ -360,6 +360,8 @@ class CardSessionSnapshot {
   static StationMatchConfidence? _conf(Object? v) {
     final name = _str(v);
     if (name == null) return null;
+    // 旧版快照可能存有已取消的 probable（站名推测），按未匹配兼容。
+    if (name == 'probable') return StationMatchConfidence.unmatched;
     for (final value in StationMatchConfidence.values) {
       if (value.name == name) return value;
     }

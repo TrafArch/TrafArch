@@ -89,7 +89,8 @@ class CardsPage extends StatelessWidget {
 }
 
 /// 单张档案卡片（列表项）：左侧三行（名称 / 卡号 / 最近读取时间）、
-/// 右侧余额快照与交易记录条数；点击进入卡片详情页查看读取快照与行程。
+/// 右侧余额快照与交易记录条数；点击进入卡片详情页查看读取快照与行程，
+/// 右侧操作菜单支持删除该档案。
 class _SavedCardTile extends StatelessWidget {
   final SavedCard card;
   final AppState app;
@@ -162,13 +163,82 @@ class _SavedCardTile extends StatelessWidget {
                   ),
                 ],
               ),
+              PopupMenuButton<_SavedCardAction>(
+                tooltip: '卡片操作',
+                icon: Icon(Icons.more_vert, size: 20, color: scheme.outline),
+                padding: EdgeInsets.zero,
+                onSelected: (action) {
+                  if (action == _SavedCardAction.delete) {
+                    _delete(context);
+                  }
+                },
+                itemBuilder: (context) {
+                  final error = Theme.of(context).colorScheme.error;
+                  return [
+                    PopupMenuItem(
+                      value: _SavedCardAction.delete,
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline, color: error),
+                          const SizedBox(width: 12),
+                          Text('删除卡片', style: TextStyle(color: error)),
+                        ],
+                      ),
+                    ),
+                  ];
+                },
+              ),
             ],
           ),
         ),
       ),
     );
   }
+
+  /// 删除确认：删除档案与全部读取批次（含行程快照），不可恢复；
+  /// 删除后列表随数据流自动刷新，成功 / 失败以 SnackBar 反馈。
+  Future<void> _delete(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('删除卡片'),
+        content: Text(
+          '确定要删除「${card.displayName}」吗？\n'
+          '该卡的档案与全部读取记录（含行程快照）将一并删除，且无法恢复。\n'
+          '删除后再次读取该卡可重新加入。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: scheme.error,
+              foregroundColor: scheme.onError,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await app.cardRepository.deleteCard(card.id);
+      messenger.showSnackBar(
+        SnackBar(content: Text('已删除：${card.displayName}')),
+      );
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('删除失败：$e')));
+    }
+  }
 }
+
+/// 卡片列表项的操作菜单项。
+enum _SavedCardAction { delete }
 
 /// 「导出卡片记录」按钮：将全部已保存卡片（含行程快照）导出为文本文件
 /// 到手机下载目录；导出进行中禁用按钮并展示进度，完成后以 SnackBar

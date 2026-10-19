@@ -23,8 +23,14 @@ import '../local_card_models.dart';
 /// 不折算余额差额（不猜测）。逐条 APDU 序列与原 `CityUnionParser.parse()`
 /// 完全一致（零行为漂移）。
 class CommonUnitCu {
-  CommonUnitCu(this._apdu);
+  CommonUnitCu(this._apdu, {this.onProgress});
+
   final ApduExchange _apdu;
+
+  /// 模块内部识读进度（0.0–1.0）：供统一识读流程映射为整体百分比；可空。
+  final void Function(double progress)? onProgress;
+
+  void _report(double progress) => onProgress?.call(progress);
 
   /// 城市一卡通应用 AID（住建部 CPU 交通卡 / 数字城市一卡通）。
   static const List<int> walletAid = [
@@ -71,7 +77,9 @@ class CommonUnitCu {
     if (_selectedAid == null) return null;
 
     final files = await _readFiles();
+    _report(0.9);
     final balance = readBalance ? await _readBalance() : null;
+    _report(1);
     final parsed = ParsedCard(
       parserId: CardParserIds.cityUnion,
       parserName: moduleName,
@@ -113,9 +121,12 @@ class CommonUnitCu {
     if (public != null) {
       out.add(_parseSafely(CityUnionFileIds.publicBasicInfo, public));
     }
+    _report(0.3); // 0x15 公共应用基本信息读取完成
 
     out.addAll(await _readRecords(CityUnionFileIds.walletLocalConsumption));
+    _report(0.65); // 0x18 本地消费交易读取完成
     out.addAll(await _readRecords(CityUnionFileIds.walletRecharge));
+    _report(0.9); // 0x1A 充值交易读取完成
     return out;
   }
 

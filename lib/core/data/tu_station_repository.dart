@@ -67,7 +67,8 @@ class TuStationRecord {
   });
 
   /// 来源编码切分：(线路片段, 站点片段)。
-  /// 12 位取 5-8 / 9-12，8 位取 5-6 / 7-8；其余长度不切分。
+  /// 12 位取 5-8 / 9-12，10 位取 5-6 / 7-10（北京 HEX），
+  /// 8 位取 5-6 / 7-8；其余长度不切分。
   (String?, String?) get segments => tuSourceKeySegments(sourceKey);
 
   /// 交通类型展示名；未收录返回 null（展示层回退原始值，不猜测）。
@@ -103,15 +104,22 @@ class TuStationRecord {
   }
 }
 
-/// `source_key` 片段切分：12 位取 5-8 / 9-12，8 位取 5-6 / 7-8。
-/// 非纯数字或长度不符返回 `(null, null)`，不做猜测。
+/// `source_key` 片段切分（按字符位置，保留 A-F）：
+/// - 12 位：地区 4 + 线路 4 + 站点 4；
+/// - 10 位：地区 4 + 线路 2 + 站点 4（北京，如 `10005E0013`）；
+/// - 8 位：地区 4 + 线路 2 + 站点 2。
+/// 线路 / 站点码可能是十六进制（昌平线 5E、站点 001B），不能剥掉字母，
+/// 否则 `5E` 会被误读成 5、`001B` 误读成 1。
 (String?, String?) tuSourceKeySegments(String sourceKey) {
-  final digits = sourceKey.replaceAll(RegExp(r'[^0-9]'), '');
-  if (digits.length == 12) {
-    return (digits.substring(4, 8), digits.substring(8, 12));
-  }
-  if (digits.length == 8) {
-    return (digits.substring(4, 6), digits.substring(6, 8));
+  final key =
+      sourceKey.trim().toUpperCase().replaceAll(RegExp(r'[^0-9A-F]'), '');
+  switch (key.length) {
+    case 12:
+      return (key.substring(4, 8), key.substring(8, 12));
+    case 10:
+      return (key.substring(4, 6), key.substring(6, 10));
+    case 8:
+      return (key.substring(4, 6), key.substring(6, 8));
   }
   return (null, null);
 }
@@ -418,16 +426,17 @@ CREATE TABLE IF NOT EXISTS tu_unknown_station_reports(
 
   /// 线路片段 + 站点片段联合命中。
   ///
-  /// 片段按「完整值 / 前两位 / 后两位」三口径对齐（12 位码兼容左右补零），
-  /// 与旧的派生索引口径一致，但直接作用在原始表上。
+  /// 片段统一按十六进制文本口径比较（大写、去前导零），线路 / 站点按
+  /// 「完整值 / 前两位 / 后两位」多口径对齐（兼容 12 位码左右补零），
+  /// 同时覆盖 10 位（2 位线路 + 4 位站点）与 8 位（2 + 2）键。
   List<TuStationRecord> fragLineStation(
     String regionCode,
     String lineFragment,
     String stationFragment,
   ) {
-    final line = _asInt(lineFragment);
-    final station = _asInt(stationFragment);
-    if (line == null || station == null) return const [];
+    final line = _normalizeFragment(lineFragment);
+    final station = _normalizeFragment(stationFragment);
+    if (line.isEmpty || station.isEmpty) return const [];
     return _memo('ls|$regionCode|$line|$station', () {
       final region = regionOf(regionCode);
       final col = region == null ? null : _keyColumnOf(region);
@@ -442,8 +451,8 @@ CREATE TABLE IF NOT EXISTS tu_unknown_station_reports(
 
   /// 站点片段单独命中（候选可能跨线路）。
   List<TuStationRecord> fragStation(String regionCode, String stationFragment) {
-    final station = _asInt(stationFragment);
-    if (station == null) return const [];
+    final station = _normalizeFragment(stationFragment);
+    if (station.isEmpty) return const [];
     return _memo('st|$regionCode|$station', () {
       final region = regionOf(regionCode);
       final col = region == null ? null : _keyColumnOf(region);
@@ -458,8 +467,8 @@ CREATE TABLE IF NOT EXISTS tu_unknown_station_reports(
 
   /// 线路片段单独命中。
   List<TuStationRecord> fragLine(String regionCode, String lineFragment) {
-    final line = _asInt(lineFragment);
-    if (line == null) return const [];
+    final line = _normalizeFragment(lineFragment);
+    if (line.isEmpty) return const [];
     return _memo('ln|$regionCode|$line', () {
       final region = regionOf(regionCode);
       final col = region == null ? null : _keyColumnOf(region);
@@ -823,28 +832,35 @@ station_id''';
     );
   }
 
-  /// 线路片段条件：12 位码按完整 / 前两位 / 后两位三口径，
-  /// 8 位码只有 2 位线路，不参与补零对齐。
+  /// 线路片段条件：12 位码按完整 / 前两位 / 后两位三口径；
+  /// 10 / 8 位码的线路固定为 5-6 位。
+  /// 统一用「大写 + 去前导零」文本比较，避免 CAST 把 "5E" 解析成 5。
   String _lineCondition(String col, int index) => '''
 (
   (length(TRIM($col)) >= 12 AND (
-     CAST(substr(TRIM($col), 5, 4) AS INTEGER) = ?$index
-     OR CAST(substr(TRIM($col), 5, 2) AS INTEGER) = ?$index
-     OR CAST(substr(TRIM($col), 7, 2) AS INTEGER) = ?$index))
+     LTRIM(UPPER(substr(TRIM($col), 5, 4)), '0') = ?$index
+     OR LTRIM(UPPER(substr(TRIM($col), 5, 2)), '0') = ?$index
+     OR LTRIM(UPPER(substr(TRIM($col), 7, 2)), '0') = ?$index))
   OR (length(TRIM($col)) BETWEEN 7 AND 11 AND (
-     CAST(substr(TRIM($col), 5, 2) AS INTEGER) = ?$index))
+     LTRIM(UPPER(substr(TRIM($col), 5, 2)), '0') = ?$index))
 )''';
 
-  /// 站点片段条件：12 位码按完整 / 前两位 / 后两位三口径，
-  /// 8 位码取 7-8 位。
+  /// 站点片段条件：
+  /// - 12 位码：9-12 位，完整 / 前两位 / 后两位三口径；
+  /// - 10 位码：7-10 位的 4 位站点（北京 HEX，如 `0013` / `001B`）；
+  /// - 8 位码：7-8 位。
   String _stationCondition(String col, int index) => '''
 (
   (length(TRIM($col)) >= 12 AND (
-     CAST(substr(TRIM($col), 9, 4) AS INTEGER) = ?$index
-     OR CAST(substr(TRIM($col), 9, 2) AS INTEGER) = ?$index
-     OR CAST(substr(TRIM($col), 11, 2) AS INTEGER) = ?$index))
-  OR (length(TRIM($col)) BETWEEN 7 AND 11 AND (
-     CAST(substr(TRIM($col), 7, 2) AS INTEGER) = ?$index))
+     LTRIM(UPPER(substr(TRIM($col), 9, 4)), '0') = ?$index
+     OR LTRIM(UPPER(substr(TRIM($col), 9, 2)), '0') = ?$index
+     OR LTRIM(UPPER(substr(TRIM($col), 11, 2)), '0') = ?$index))
+  OR (length(TRIM($col)) = 10 AND (
+     LTRIM(UPPER(substr(TRIM($col), 7, 4)), '0') = ?$index
+     OR LTRIM(UPPER(substr(TRIM($col), 7, 2)), '0') = ?$index
+     OR LTRIM(UPPER(substr(TRIM($col), 9, 2)), '0') = ?$index))
+  OR ((length(TRIM($col)) BETWEEN 7 AND 9 OR length(TRIM($col)) = 11) AND (
+     LTRIM(UPPER(substr(TRIM($col), 7, 2)), '0') = ?$index))
 )''';
 
   Set<String>? _columnsOf(String table) {
@@ -882,14 +898,6 @@ station_id''';
 
   static String _normalizeField(String? raw) =>
       (raw ?? '').replaceAll(RegExp(r'\s+'), '').trim();
-
-  static int? _asInt(String? raw) {
-    if (raw == null) return null;
-    final digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
-    if (digits.isEmpty) return null;
-    final value = int.tryParse(digits);
-    return value == null || value == 0 ? null : value;
-  }
 
   /// 数值列读取：TEXT 存储的 station_id 不会触发类型转换异常。
   static int _asIntCell(Row row, String name) {
@@ -941,6 +949,13 @@ station_id''';
   static String? _nullable(String raw) {
     final t = raw.trim();
     return t.isEmpty ? null : t;
+  }
+
+  /// 片段归一化：大写、保留 A-F、去前导零；空 / 全零（未写入）返回空串。
+  static String _normalizeFragment(String raw) {
+    final text =
+        raw.trim().toUpperCase().replaceAll(RegExp(r'[^0-9A-F]'), '');
+    return text.replaceFirst(RegExp(r'^0+'), '');
   }
 }
 
