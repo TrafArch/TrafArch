@@ -8,6 +8,7 @@ import '../core/analysis/tunion_analysis_models.dart';
 import '../core/app_info.dart';
 import '../core/card/card_parser.dart';
 import '../core/data/tunion_knowledge_base.dart';
+import '../core/data/tunion_bus_location.dart';
 import '../core/data/city_union_knowledge_base.dart';
 import '../core/data/settings_store.dart';
 import '../core/data/station_codes.dart';
@@ -416,6 +417,20 @@ class AppState extends ChangeNotifier {
     return kb.stationCodes.matchLineStationField(
       field: field,
       cityCode: _lookupCityCode(cityCode),
+    );
+  }
+
+  /// 公交记录（0x1A 分行字段 / 0x1E 线路站点字段）→ 线路 / 站点展示标签：
+  /// 先按「城市 + 线路 + 站点」查表，未命中再应用北京公交编码规则；
+  /// 知识库未加载、城市代码未写入或字段不完整时返回
+  /// [TunionBusLocation.unknown]（展示层回退原始编码，不猜测）。
+  TunionBusLocation resolveBusLocation(String? cityCode, String? field) {
+    final kb = _kb;
+    if (kb == null) return TunionBusLocation.unknown;
+    return resolveTunionBusLocation(
+      stations: kb.stationCodes,
+      cityCode: _lookupCityCode(cityCode),
+      field: field,
     );
   }
 
