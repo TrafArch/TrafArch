@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 
 import '../domain/models/card_application.dart';
@@ -28,6 +27,10 @@ class ApplicationDetailPage extends StatelessWidget {
           _kv('解析规则', app.parserId.toUpperCase()),
           _kv('选择状态', app.application.selected ? '已选择' : '未选择'),
           _kv('读取记录', '${app.records.length} 条'),
+          if (app.summary.pan != null) ...[
+            _kv('卡号 (PAN)', app.summary.pan!),
+            _kv('卡号来源', '应用数据标签 ${app.summary.panSourceTag}'),
+          ],
           const Divider(height: 28),
           _sectionTitle(context, '卡号与交易信息'),
           if (app.summary.isEmpty)
@@ -46,9 +49,8 @@ class ApplicationDetailPage extends StatelessWidget {
             const SizedBox(height: 4),
             SelectableText(
               '响应原始值：${app.gpoHex}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.outline,
-                  ),
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: Theme.of(context).colorScheme.outline),
             ),
             const SizedBox(height: 4),
           ],
@@ -88,15 +90,17 @@ class ApplicationDetailPage extends StatelessWidget {
                   width: 140,
                   child: Text(
                     '${f.label}\n[${f.tag}]${f.sensitive ? ' · 敏感' : ''}',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: theme.colorScheme.outline),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.outline,
+                    ),
                   ),
                 ),
                 Expanded(
                   child: SelectableText(
                     f.value,
-                    style: theme.textTheme.bodyMedium
-                        ?.copyWith(fontWeight: FontWeight.w600),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ],
@@ -117,9 +121,7 @@ class ApplicationDetailPage extends StatelessWidget {
       subtitle: Text(
         record.parseError ??
             '${record.tags.length} 个标签 · ${record.rawHex.length ~/ 2} 字节',
-        style: Theme.of(context)
-            .textTheme
-            .bodySmall
+        style: Theme.of(context).textTheme.bodySmall
             ?.copyWith(color: scheme.outline),
       ),
       children: [
@@ -137,43 +139,39 @@ class ApplicationDetailPage extends StatelessWidget {
   }
 
   Widget _issueRow(BuildContext context, ParseIssue issue) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Text(
-          '[${issue.stage}] ${issue.code}：${issue.message}',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Text(
+      '[${issue.stage}] ${issue.code}：${issue.message}',
+      style: Theme.of(context).textTheme.bodySmall,
+    ),
+  );
 
   Widget _sectionTitle(BuildContext context, String text) => Align(
-        alignment: Alignment.centerLeft,
-        child: Text(
-          text,
-          style: Theme.of(context)
-              .textTheme
-              .titleSmall
-              ?.copyWith(color: Theme.of(context).colorScheme.primary),
-        ),
-      );
+    alignment: Alignment.centerLeft,
+    child: Text(
+      text,
+      style: Theme.of(context).textTheme.titleSmall
+          ?.copyWith(color: Theme.of(context).colorScheme.primary),
+    ),
+  );
 
   Widget _hint(BuildContext context, String text) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Text(
-          text,
-          style: Theme.of(context)
-              .textTheme
-              .bodySmall
-              ?.copyWith(color: Theme.of(context).colorScheme.outline),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: Text(
+      text,
+      style: Theme.of(context).textTheme.bodySmall
+          ?.copyWith(color: Theme.of(context).colorScheme.outline),
+    ),
+  );
 
   Widget _kv(String k, String v) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(width: 84, child: Text(k)),
-            Expanded(child: SelectableText(v)),
-          ],
-        ),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(width: 84, child: Text(k)),
+        Expanded(child: SelectableText(v)),
+      ],
+    ),
+  );
 }

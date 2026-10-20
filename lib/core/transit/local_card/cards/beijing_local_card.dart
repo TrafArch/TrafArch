@@ -11,10 +11,17 @@ class BeijingLocalCard {
   final ApduExchange _apdu;
 
   Future<bool> probe(CardInfo info, List<ApduRecord> records) async {
-    final r0x04 = await _apdu(const [0x00, 0xB0, 0x84, 0x00, 0x3C], '0x04',
-        records: records, strict: true);
-    if (r0x04 == null) return false;
-    if (!(r0x04[0] == 16 && r0x04[1] == 0 && r0x04[24] == 32 && r0x04[28] == 32)) {
+    final r0x04 = await _apdu(
+      const [0x00, 0xB0, 0x84, 0x00, 0x3C],
+      '0x04',
+      records: records,
+      strict: true,
+    );
+    if (r0x04 == null || r0x04.length < 32) return false;
+    if (!(r0x04[0] == 16 &&
+        r0x04[1] == 0 &&
+        r0x04[24] == 32 &&
+        r0x04[28] == 32)) {
       return false;
     }
 
@@ -24,11 +31,19 @@ class BeijingLocalCard {
     info.cityCode = 1000;
     info.expiryDate = _bcdDate(r0x04.sublist(28, 32));
 
-    final r0x05 = await _apdu(const [0x00, 0xB0, 0x85, 0x00, 0x20], '0x05',
-        records: records, strict: true);
+    final r0x05 = await _apdu(
+      const [0x00, 0xB0, 0x85, 0x00, 0x20],
+      '0x05',
+      records: records,
+      strict: true,
+    );
     await _apdu(CardAid.select1001, 'SELECT 1001', records: records);
-    final balance = await _apdu(CardAid.balanceCheck, 'BALANCE CHECK',
-        records: records, strict: true);
+    final balance = await _apdu(
+      CardAid.balanceCheck,
+      'BALANCE CHECK',
+      records: records,
+      strict: true,
+    );
     if (balance == null) return false;
 
     if (!_isAllZero(balance)) {

@@ -63,6 +63,7 @@ class TUnionProcessParser {
   /// 记录过短（< 32 字节）、未写入（首字节 0x00 / 0xFF）或时间非法时
   /// 返回 null（保持未知，不猜测）。
   TUnionTripRecord? parseCycleTrip(List<int> data) {
+    data = _unwrapRecordTemplate(data) ?? data;
     if (data.length < 0x20) return null;
     final typeCode = data[0];
     if (typeCode == 0x00 || typeCode == 0xFF) return null;
@@ -70,11 +71,13 @@ class TUnionProcessParser {
     if (time == null) return null;
     return TUnionTripRecord(
       typeCode: typeCode,
-      terminalId: TUnionCodec.bcdString(data.sublist(0x01, 0x09)) ??
+      terminalId:
+          TUnionCodec.bcdString(data.sublist(0x01, 0x09)) ??
           TUnionCodec.hexBytes(data.sublist(0x01, 0x09)) ??
           '',
       appTypeCode: data[0x09],
-      lineStationCode: TUnionCodec.bcdString(data.sublist(0x0A, 0x11)) ??
+      lineStationCode:
+          TUnionCodec.bcdString(data.sublist(0x0A, 0x11)) ??
           TUnionCodec.hexBytes(data.sublist(0x0A, 0x11)) ??
           '',
       amountFen: TUnionCodec.beInt(data, 0x11, 4),
@@ -181,8 +184,8 @@ class TUnionProcessParser {
   /// 展示层据此不展示该字段。
   static String? _customHexOrNull(List<int> bytes) =>
       bytes.every((b) => b == 0x00 || b == 0xFF)
-          ? null
-          : TUnionCodec.hexBytes(bytes);
+      ? null
+      : TUnionCodec.hexBytes(bytes);
 
   /// 解码 0x1A 记录 2（公共汽电车应用信息记录，标准 88 字节）。
   ///

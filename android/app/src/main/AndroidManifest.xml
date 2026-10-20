@@ -19,7 +19,7 @@
     </queries>
 
     <application
-        android:label="TrafArch"
+        android:label="${appLabel}"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"

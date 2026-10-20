@@ -26,13 +26,52 @@ Future<ParsedCard?> _parseTu(LocalTransceive link) async {
 
 void main() {
   group('交通联合（TU）解析管道', () {
+    test('0x1E 整体读取的连续 70 模板保留两条完整记录', () async {
+      final link = _baseLink();
+      link.enqueue(0xB2, const [0x6A, 0x83]); // 1A record 1
+      link.enqueue(0xB2, const [0x6A, 0x83]); // 1A whole file
+      final first = _cycleProcessRecord();
+      final second = [...first]..[0x1F] = 0x41;
+      link.enqueue(
+        0xB2,
+        _sw9000([0x70, first.length, ...first, 0x70, second.length, ...second]),
+      );
+      final parsed = await _parseTu(link.call);
+      final records = parsed!.transitProcessRecords
+          .where((r) => r.sfi == 0x1E)
+          .toList();
+      expect(records, hasLength(2));
+      expect(records[0].trip!.time.second, 40);
+      expect(records[1].trip!.time.second, 41);
+      expect(records[0].raw, [0x70, first.length, ...first]);
+      expect(records[1].raw, [0x70, second.length, ...second]);
+    });
+
+    test('0x1E 整个记录文件包一层 70 模板仍保留全部记录', () async {
+      final link = _baseLink();
+      link.enqueue(0xB2, const [0x6A, 0x83]);
+      link.enqueue(0xB2, const [0x6A, 0x83]);
+      final first = _cycleProcessRecord();
+      final second = [...first]..[0x1F] = 0x41;
+      link.enqueue(
+        0xB2,
+        _sw9000([0x70, first.length * 2, ...first, ...second]),
+      );
+      final parsed = await _parseTu(link.call);
+      final records = parsed!.transitProcessRecords
+          .where((r) => r.sfi == 0x1E)
+          .toList();
+      expect(records, hasLength(2));
+      expect(records[1].trip!.time.second, 41);
+    });
+
     test('完整读取：标准文件 + 余额 + 交易记录', () async {
       final parsed = await _parseTu(_baseLink().call);
 
       expect(parsed, isNotNull);
       final info = parsed!.info;
       expect(info.issuerId, '1122334455667788');
-      expect(info.applicationSerial, '01020304050607080900');
+      expect(info.applicationSerial, '03100000000000000001');
       expect(info.effectiveDate, DateTime(2024, 1, 1));
       expect(info.expireDate, DateTime(2029, 12, 31));
       expect(info.cityCode, '3910');
@@ -49,9 +88,7 @@ void main() {
     });
 
     test('70 模板包裹的交易记录可解码', () async {
-      final link = _baseLink(
-        b2Response: _sw9000([0x70, 0x17, ..._record()]),
-      );
+      final link = _baseLink(b2Response: _sw9000([0x70, 0x17, ..._record()]));
       final parsed = await _parseTu(link.call);
       expect(parsed, isNotNull);
       expect(parsed!.transactions, hasLength(1));
@@ -60,7 +97,10 @@ void main() {
 
     test('全零记录被跳过', () async {
       final link = _baseLink(
-        b2Response: _sw9000([...List.filled(23, 0), ..._record(seq: 2, day: 2)]),
+        b2Response: _sw9000([
+          ...List.filled(23, 0),
+          ..._record(seq: 2, day: 2),
+        ]),
       );
       final parsed = await _parseTu(link.call);
       expect(parsed!.transactions, hasLength(1));
@@ -147,8 +187,9 @@ void main() {
       final parsed = await _parseTu(link.call);
 
       expect(parsed, isNotNull);
-      final varRecords =
-          parsed!.transitProcessRecords.where((r) => r.sfi == 0x1A).toList();
+      final varRecords = parsed!.transitProcessRecords
+          .where((r) => r.sfi == 0x1A)
+          .toList();
       expect(varRecords, hasLength(2));
       expect(varRecords[0].recordNumber, 1);
       expect(varRecords[0].recordName, '城市轨道应用信息记录');
@@ -179,8 +220,9 @@ void main() {
       final parsed = await _parseTu(link.call);
 
       expect(parsed, isNotNull);
-      final varRecords =
-          parsed!.transitProcessRecords.where((r) => r.sfi == 0x1A).toList();
+      final varRecords = parsed!.transitProcessRecords
+          .where((r) => r.sfi == 0x1A)
+          .toList();
       expect(varRecords, hasLength(2));
       expect(varRecords[0].recordNumber, 1);
       expect(varRecords[0].recordName, '城市轨道应用信息记录');
@@ -231,16 +273,22 @@ void main() {
       final bus = parser.parseCycleTrip(_cycleProcessRecord()..[9] = 0x02)!;
       expect(bus.appTypeName, '公共汽电车');
 
-      final reserved =
-          parser.parseCycleTrip(_cycleProcessRecord()..[9] = 0x10)!;
+      final reserved = parser.parseCycleTrip(
+        _cycleProcessRecord()..[9] = 0x10,
+      )!;
       expect(reserved.appTypeLabel, isNull);
       expect(reserved.appTypeName, '未知(0x10)');
     });
 
     test('行程状态短名：轨道进/出站、公交上/下车与未收录类型', () {
-      expect(parser.parseCycleTrip(_cycleProcessRecord())!.statusShortName, '出站');
       expect(
-        parser.parseCycleTrip(_cycleProcessRecord()..[0] = 0x03)!.statusShortName,
+        parser.parseCycleTrip(_cycleProcessRecord())!.statusShortName,
+        '出站',
+      );
+      expect(
+        parser
+            .parseCycleTrip(_cycleProcessRecord()..[0] = 0x03)!
+            .statusShortName,
         '进站',
       );
       final busEntry = _cycleProcessRecord()
@@ -248,16 +296,22 @@ void main() {
         ..[9] = 0x02;
       expect(parser.parseCycleTrip(busEntry)!.statusShortName, '上车');
       expect(
-        parser.parseCycleTrip(_cycleProcessRecord()..[9] = 0x02)!.statusShortName,
+        parser
+            .parseCycleTrip(_cycleProcessRecord()..[9] = 0x02)!
+            .statusShortName,
         '下车',
       );
       expect(
-        parser.parseCycleTrip(_cycleProcessRecord()..[0] = 0x05)!.statusShortName,
+        parser
+            .parseCycleTrip(_cycleProcessRecord()..[0] = 0x05)!
+            .statusShortName,
         '单次消费',
       );
       // 未收录类型短名保持 null（展示层不替换，不猜测）
       expect(
-        parser.parseCycleTrip(_cycleProcessRecord()..[0] = 0x0B)!.statusShortName,
+        parser
+            .parseCycleTrip(_cycleProcessRecord()..[0] = 0x0B)!
+            .statusShortName,
         isNull,
       );
     });
@@ -337,7 +391,12 @@ void main() {
 
     test('0x1A 记录 1：完整格式被 70 模板包裹时先剥离再解析', () {
       final full = _railFullRecord();
-      final rec = parser.parseRailTransit(1, [0x70, 0x81, full.length, ...full]);
+      final rec = parser.parseRailTransit(1, [
+        0x70,
+        0x81,
+        full.length,
+        ...full,
+      ]);
       expect(rec, isNotNull);
       expect(rec!.entryCityCode, '2900'); // 剥离模板后记录头偏移仍生效
       expect(rec.issuerCustom, List.filled(29, '5A').join());
@@ -493,7 +552,7 @@ void main() {
               'stationCode': [7, 12],
             },
             'note': '测试规则',
-          }
+          },
         ],
       });
       final decoder = TerminalDecoder(rules);
@@ -515,7 +574,12 @@ void main() {
     test('三个匹配条件全空的规则不生效（防空规则误配）', () {
       final rules = TerminalRuleSet.fromJson({
         'rules': [
-          {'id': 'catch-all', 'layout': {'lineCode': [0, 4]}}
+          {
+            'id': 'catch-all',
+            'layout': {
+              'lineCode': [0, 4],
+            },
+          },
         ],
       });
       expect(TerminalDecoder(rules).decode('123456789012'), isNull);
@@ -532,7 +596,11 @@ void main() {
         kind: 'bus',
         codes: {
           '0231': StationCodeEntry(
-              code: '0231', type: '公交', line: '31路', station: '某站'),
+            code: '0231',
+            type: '公交',
+            line: '31路',
+            station: '某站',
+          ),
         },
       ),
       StationDataset(
@@ -543,7 +611,11 @@ void main() {
         codes: {
           '02': StationCodeEntry(code: '02', type: '地铁', line: '2号线'),
           '0231': StationCodeEntry(
-              code: '0231', type: '地铁', line: '2号线', station: '苏洋'),
+            code: '0231',
+            type: '地铁',
+            line: '2号线',
+            station: '苏洋',
+          ),
         },
       ),
       StationDataset(
@@ -600,7 +672,7 @@ void main() {
             'city': '福州市',
             'province': '福建省',
           },
-        ]
+        ],
       }),
       issuerFingerprints: jsonEncode({
         'entries': [
@@ -610,8 +682,8 @@ void main() {
             'cityName': '福州市',
             'operator': '示例运营方',
             'cardFamily': '测试卡',
-          }
-        ]
+          },
+        ],
       }),
       terminalRules: jsonEncode({
         'rules': [
@@ -623,8 +695,8 @@ void main() {
               'lineCode': [4, 6],
               'stationCode': [8, 10],
             },
-          }
-        ]
+          },
+        ],
       }),
       stationCodes: StationCodeTable.fromDatasets(const [
         StationDataset(
@@ -635,7 +707,11 @@ void main() {
           codes: {
             '02': StationCodeEntry(code: '02', type: '地铁', line: '2号线'),
             '0231': StationCodeEntry(
-                code: '0231', type: '地铁', line: '2号线', station: '苏洋'),
+              code: '0231',
+              type: '地铁',
+              line: '2号线',
+              station: '苏洋',
+            ),
           },
         ),
       ]),
@@ -697,13 +773,16 @@ void main() {
       );
       final result = engine.analyze(parsed, now: DateTime(2026, 10, 7));
 
-      expect(result.anomalies.any((a) => a.code == 'identity-conflict'),
-          isTrue);
+      expect(
+        result.anomalies.any((a) => a.code == 'identity-conflict'),
+        isTrue,
+      );
       expect(result.anomalies.any((a) => a.code == 'card-expired'), isTrue);
       expect(result.compliance.scorePercent, inInclusiveRange(0, 100));
       expect(
-        result.compliance.items.any((i) =>
-            i.id == 'not-expired' && i.status == ComplianceStatus.fail),
+        result.compliance.items.any(
+          (i) => i.id == 'not-expired' && i.status == ComplianceStatus.fail,
+        ),
         isTrue,
       );
       expect(result.trips, hasLength(1));
@@ -759,7 +838,7 @@ void main() {
               'city': '香港',
               'currency': 'HKD',
             },
-          ]
+          ],
         }),
       );
       final engine = AnalysisEngine(octopusKb);
@@ -795,7 +874,7 @@ void main() {
               'city': '示例城市',
               'currency': 'HKD',
             },
-          ]
+          ],
         }),
       );
       final engine = AnalysisEngine(foreignKb);
@@ -846,7 +925,9 @@ void main() {
         transactions: [
           _txn(seq: 1, time: DateTime(2024, 5, 1, 8, 30), amountFen: 0),
         ],
-        transitProcessRecords: [_entryRecord(time: DateTime(2024, 5, 1, 8, 30))],
+        transitProcessRecords: [
+          _entryRecord(time: DateTime(2024, 5, 1, 8, 30)),
+        ],
         selectedAidHex: 'A000000632010105',
       );
       final result = engine.analyze(parsed, now: DateTime(2026, 10, 7));
@@ -877,7 +958,9 @@ void main() {
             recordNumber: 1,
             recordName: '循环记录 1',
             raw: const [],
-            trip: const TUnionProcessParser().parseCycleTrip(_cycleProcessRecord()),
+            trip: const TUnionProcessParser().parseCycleTrip(
+              _cycleProcessRecord(),
+            ),
           ),
         ],
         selectedAidHex: 'A000000632010105',
@@ -1121,7 +1204,7 @@ List<int> _publicFile() {
   }
   b[8] = 0x01;
   b[9] = 0x01;
-  const serial = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x00];
+  const serial = [0x03, 0x10, 0, 0, 0, 0, 0, 0, 0, 1];
   for (var i = 0; i < 10; i++) {
     b[10 + i] = serial[i];
   }
@@ -1159,18 +1242,18 @@ List<int> _record({
   int day = 1,
   int rawType = 0x06,
 }) => [
-      (seq >> 8) & 0xFF,
-      seq & 0xFF,
-      0, 0, 0,
-      (amountFen >> 24) & 0xFF,
-      (amountFen >> 16) & 0xFF,
-      (amountFen >> 8) & 0xFF,
-      amountFen & 0xFF,
-      rawType,
-      0x12, 0x34, 0x56, 0x78, 0x90, 0x12, // 终端 123456789012
-      0x20, 0x24, 0x05, day, // 2024050d
-      0x08, 0x30, 0x00, // 08:30:00
-    ];
+  (seq >> 8) & 0xFF,
+  seq & 0xFF,
+  0, 0, 0,
+  (amountFen >> 24) & 0xFF,
+  (amountFen >> 16) & 0xFF,
+  (amountFen >> 8) & 0xFF,
+  amountFen & 0xFF,
+  rawType,
+  0x12, 0x34, 0x56, 0x78, 0x90, 0x12, // 终端 123456789012
+  0x20, 0x24, 0x05, day, // 2024050d
+  0x08, 0x30, 0x00, // 08:30:00
+];
 
 TUnionTransaction _txn({
   required int seq,
@@ -1178,18 +1261,27 @@ TUnionTransaction _txn({
   required int amountFen,
   String terminalId = '999999999999',
   int rawType = 0x06,
-}) =>
-    TUnionTransaction(
-      sequence: seq,
-      overdraftLimitFen: 0,
-      amountFen: amountFen,
-      rawType: rawType,
-      terminalId: terminalId,
-      time: time,
-    );
+}) => TUnionTransaction(
+  sequence: seq,
+  overdraftLimitFen: 0,
+  amountFen: amountFen,
+  rawType: rawType,
+  terminalId: terminalId,
+  time: time,
+);
 
-List<int> _varProcessRecord(int type) =>
-    [type, 0x02, 0x20, 0x24, 0x05, 0x01, 0x00, 0x78, 0x35, 0x09];
+List<int> _varProcessRecord(int type) => [
+  type,
+  0x02,
+  0x20,
+  0x24,
+  0x05,
+  0x01,
+  0x00,
+  0x78,
+  0x35,
+  0x09,
+];
 
 /// 0x1E 入站类记录（EC 0x01 / EP 0x03）模型构造：进站不承载扣费金额
 /// （默认 0 分）；线路和站点代码按福州分段布局 "90020031000000" →
@@ -1198,23 +1290,22 @@ TUnionProcessRecord _entryRecord({
   required DateTime time,
   int amountFen = 0,
   int typeCode = 0x03,
-}) =>
-    TUnionProcessRecord(
-      sfi: 0x1E,
-      recordNumber: 1,
-      recordName: '循环记录 1',
-      raw: const [],
-      trip: TUnionTripRecord(
-        typeCode: typeCode,
-        terminalId: '0000300089000340',
-        appTypeCode: 0x01,
-        lineStationCode: '90020031000000',
-        amountFen: amountFen,
-        balanceFen: 5340,
-        time: time,
-        cityCode: '3910',
-      ),
-    );
+}) => TUnionProcessRecord(
+  sfi: 0x1E,
+  recordNumber: 1,
+  recordName: '循环记录 1',
+  raw: const [],
+  trip: TUnionTripRecord(
+    typeCode: typeCode,
+    terminalId: '0000300089000340',
+    appTypeCode: 0x01,
+    lineStationCode: '90020031000000',
+    amountFen: amountFen,
+    balanceFen: 5340,
+    time: time,
+    cityCode: '3910',
+  ),
+);
 
 /// 0x1A 记录 1（城市轨道应用信息记录）进站模型构造：进闸城市 3910，
 /// 进闸站点 0800190030000123（线路库接入前仅产出原始编码）；进站交易
@@ -1222,20 +1313,19 @@ TUnionProcessRecord _entryRecord({
 TUnionProcessRecord _railEntryRecord({
   required DateTime time,
   int? entryAmountFen = 0,
-}) =>
-    TUnionProcessRecord(
-      sfi: 0x1A,
-      recordNumber: 1,
-      recordName: '城市轨道应用信息记录',
-      raw: const [],
-      railTransit: TransitRecord(
-        statusCode: 0x02,
-        entryCityCode: '3910',
-        entryStationId: '0800190030000123',
-        entryTime: time,
-        entryAmountFen: entryAmountFen,
-      ),
-    );
+}) => TUnionProcessRecord(
+  sfi: 0x1A,
+  recordNumber: 1,
+  recordName: '城市轨道应用信息记录',
+  raw: const [],
+  railTransit: TransitRecord(
+    statusCode: 0x02,
+    entryCityCode: '3910',
+    entryStationId: '0800190030000123',
+    entryTime: time,
+    entryAmountFen: entryAmountFen,
+  ),
+);
 
 /// 0x1A 记录 2（公共汽电车应用信息记录）上车模型构造：上车城市 3910，
 /// 上车站点原始编码 02。
@@ -1257,74 +1347,74 @@ TUnionProcessRecord _busEntryRecord({required DateTime time}) =>
 /// 出站；进/出闸城市码 2900；2026-08-08 09:06:02 进站 / 09:12:31 出站；
 /// 出站交易金额 300 分。
 List<int> _railTransitRecord() => [
-      0x02, // 交易状态：出站
-      0x29, 0x00, 0x29, 0x00, // 进/出闸城市代码 2900
-      ...List.filled(7, 0), 0x10, // 进闸机构标识
-      ...List.filled(7, 0), 0x08, // 出闸机构标识
-      ...List.filled(7, 0), 0x57, // 进闸站点
-      ...List.filled(7, 0), 0x36, // 出闸站点
-      ...List.filled(6, 0), 0x1A, 0x23, // 进闸终端编号
-      ...List.filled(6, 0), 0x15, 0x68, // 出闸终端编号
-      0x20, 0x26, 0x08, 0x08, 0x09, 0x06, 0x02, // 进站时间
-      0x20, 0x26, 0x08, 0x08, 0x09, 0x12, 0x31, // 出站时间
-      0x00, 0x00, 0x00, 0x00, // 标注金额
-      0x00, 0x00, // 入/出站线路号
-      0x00, 0x00, 0x00, 0x00, // 进站交易金额
-      0x00, 0x00, 0x00, 0x00, // 进站钱包余额
-      0x00, 0x00, 0x01, 0x2C, // 出站交易金额 300 分
-    ];
+  0x02, // 交易状态：出站
+  0x29, 0x00, 0x29, 0x00, // 进/出闸城市代码 2900
+  ...List.filled(7, 0), 0x10, // 进闸机构标识
+  ...List.filled(7, 0), 0x08, // 出闸机构标识
+  ...List.filled(7, 0), 0x57, // 进闸站点
+  ...List.filled(7, 0), 0x36, // 出闸站点
+  ...List.filled(6, 0), 0x1A, 0x23, // 进闸终端编号
+  ...List.filled(6, 0), 0x15, 0x68, // 出闸终端编号
+  0x20, 0x26, 0x08, 0x08, 0x09, 0x06, 0x02, // 进站时间
+  0x20, 0x26, 0x08, 0x08, 0x09, 0x12, 0x31, // 出站时间
+  0x00, 0x00, 0x00, 0x00, // 标注金额
+  0x00, 0x00, // 入/出站线路号
+  0x00, 0x00, 0x00, 0x00, // 进站交易金额
+  0x00, 0x00, 0x00, 0x00, // 进站钱包余额
+  0x00, 0x00, 0x01, 0x2C, // 出站交易金额 300 分
+];
 
 /// 0x1A 记录 1 完整格式示例数据（128 字节）：27 记录头（14 字节）+
 /// 85 字节字段体 + 29 字节发卡机构自定义。记录头：应用有效标识 01、
 /// 互联互通交易标识 01、应用锁定标志 00、交易流水号 0000000000000001。
 List<int> _railFullRecord() => [
-      0x27, 0x01, 0x7D, // 记录 ID / 记录号 / 记录长度（125 = 128 − 3）
-      0x01, 0x01, 0x00, // 应用有效标识 / 互联互通交易标识 / 应用锁定标志
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, // 交易流水号（BCD）
-      ..._railTransitRecord(), // 字段体 85 字节
-      ...List.filled(29, 0x5A), // 发卡机构自定义
-    ];
+  0x27, 0x01, 0x7D, // 记录 ID / 记录号 / 记录长度（125 = 128 − 3）
+  0x01, 0x01, 0x00, // 应用有效标识 / 互联互通交易标识 / 应用锁定标志
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, // 交易流水号（BCD）
+  ..._railTransitRecord(), // 字段体 85 字节
+  ...List.filled(29, 0x5A), // 发卡机构自定义
+];
 
 /// 0x1A 记录 2 示例数据（88 字节，全初始值：公共汽电车应用未写入）。
 List<int> _busTransitRecord() => List.filled(88, 0x00);
 
 /// 0x1A 记录 2 示例数据（88 字节，按公共汽电车记录体布局构造的非零记录体）。
 List<int> _busTransitRecordFilled() => [
-      0x02, // [00] 交易状态
-      0x29, 0x00, // [01-02] 上车城市代码 2900
-      ...List.filled(7, 0), 0x10, // [03-0A] 上车机构标识
-      0x00, 0x01, // [0B-0C] 上车运营商代码
-      0x00, 0x08, // [0D-0E] 上车线路号
-      0x02, // [0F] 上车站点
-      ...List.filled(7, 0), 0x23, // [10-17] 上车车辆号
-      ...List.filled(6, 0), 0x1A, 0x5A, // [18-1F] 上车终端编号
-      0x20, 0x26, 0x08, 0x08, 0x09, 0x06, 0x02, // [20-26] 上车时间
-      0x00, 0x00, 0x01, 0x2C, // [27-2A] 标注金额 300 分
-      0x00, // [2B] 方向标识
-      0x29, 0x00, // [2C-2D] 下车城市代码 2900
-      ...List.filled(7, 0), 0x08, // [2E-35] 下车机构标识
-      0x00, 0x01, // [36-37] 下车运营商代码
-      0x00, 0x08, // [38-39] 下车线路号
-      0x03, // [3A] 下车站点
-      ...List.filled(7, 0), 0x36, // [3B-42] 下车车辆号
-      ...List.filled(6, 0), 0x15, 0x68, // [43-4A] 下车终端编号
-      0x20, 0x26, 0x08, 0x08, 0x09, 0x12, 0x31, // [4B-51] 下车时间
-      0x00, 0x00, 0x01, 0x2C, // [52-55] 交易金额 300 分
-      0x00, 0x05, // [56-57] 乘车里程 5
-    ];
+  0x02, // [00] 交易状态
+  0x29, 0x00, // [01-02] 上车城市代码 2900
+  ...List.filled(7, 0), 0x10, // [03-0A] 上车机构标识
+  0x00, 0x01, // [0B-0C] 上车运营商代码
+  0x00, 0x08, // [0D-0E] 上车线路号
+  0x02, // [0F] 上车站点
+  ...List.filled(7, 0), 0x23, // [10-17] 上车车辆号
+  ...List.filled(6, 0), 0x1A, 0x5A, // [18-1F] 上车终端编号
+  0x20, 0x26, 0x08, 0x08, 0x09, 0x06, 0x02, // [20-26] 上车时间
+  0x00, 0x00, 0x01, 0x2C, // [27-2A] 标注金额 300 分
+  0x00, // [2B] 方向标识
+  0x29, 0x00, // [2C-2D] 下车城市代码 2900
+  ...List.filled(7, 0), 0x08, // [2E-35] 下车机构标识
+  0x00, 0x01, // [36-37] 下车运营商代码
+  0x00, 0x08, // [38-39] 下车线路号
+  0x03, // [3A] 下车站点
+  ...List.filled(7, 0), 0x36, // [3B-42] 下车车辆号
+  ...List.filled(6, 0), 0x15, 0x68, // [43-4A] 下车终端编号
+  0x20, 0x26, 0x08, 0x08, 0x09, 0x12, 0x31, // [4B-51] 下车时间
+  0x00, 0x00, 0x01, 0x2C, // [52-55] 交易金额 300 分
+  0x00, 0x05, // [56-57] 乘车里程 5
+];
 
 /// 0x1E 循环记录示例数据（48 字节）：出站 · 城市轨道交通 · 交易金额 500 分 ·
 /// 交易后余额 3585 分 · 2024-12-29 14:17:40 · 城市码 1000。
 /// 仅用于验证字段布局，为构造示例数据。
 List<int> _cycleProcessRecord() => [
-      0x04, // 交易类型
-      0x00, 0x00, 0x30, 0x00, 0x89, 0x00, 0x03, 0x40, // 终端编号
-      0x01, // 应用分类码：城市轨道交通
-      0x08, 0x00, 0x19, 0x00, 0x30, 0x00, 0x00, // 线路和站点代码
-      0x00, 0x00, 0x01, 0xF4, // 交易金额 500 分
-      0x00, 0x00, 0x0E, 0x01, // 交易后余额 3585 分
-      0x20, 0x24, 0x12, 0x29, 0x14, 0x17, 0x40, // 交易时间 2024-12-29 14:17:40
-      0x10, 0x00, // 城市代码
-      0x01, 0x01, 0x10, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, // 收单机构代码
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 保留
-    ];
+  0x04, // 交易类型
+  0x00, 0x00, 0x30, 0x00, 0x89, 0x00, 0x03, 0x40, // 终端编号
+  0x01, // 应用分类码：城市轨道交通
+  0x08, 0x00, 0x19, 0x00, 0x30, 0x00, 0x00, // 线路和站点代码
+  0x00, 0x00, 0x01, 0xF4, // 交易金额 500 分
+  0x00, 0x00, 0x0E, 0x01, // 交易后余额 3585 分
+  0x20, 0x24, 0x12, 0x29, 0x14, 0x17, 0x40, // 交易时间 2024-12-29 14:17:40
+  0x10, 0x00, // 城市代码
+  0x01, 0x01, 0x10, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, // 收单机构代码
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 保留
+];

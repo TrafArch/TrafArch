@@ -1,8 +1,9 @@
 // 新建文件：lib/features/trips/trip_stream_view.dart
 import 'package:flutter/material.dart';
+
 import '../../core/analysis/tunion_analysis_models.dart';
 import '../../core/data/station_codes.dart';
-import '../../core/transit/tunion/tunion_models.dart';
+import '../../core/data/tunion_bus_location.dart';
 import '../../state/app_state.dart';
 
 /// 行程流统一展示组件（行程页 / 卡片详情页共用）：
@@ -50,23 +51,25 @@ class _TripStreamViewState extends State<TripStreamView> {
   };
 
   _SourceFilter _sourceOf(TripEntry entry) => switch (entry) {
-        TransactionTripEntry() => _SourceFilter.transaction,
-        ProcessTripEntry() => _SourceFilter.cycle,
-        RailRecordEntry() || BusRecordEntry() => _SourceFilter.record,
-      };
+    TransactionTripEntry() => _SourceFilter.transaction,
+    ProcessTripEntry() => _SourceFilter.cycle,
+    RailRecordEntry() || BusRecordEntry() => _SourceFilter.record,
+  };
 
   _ModeFilter _modeOf(TripEntry entry) => switch (entry) {
-        RailRecordEntry() => _ModeFilter.rail,
-        BusRecordEntry() => _ModeFilter.bus,
-        ProcessTripEntry(:final record) => record.isBus
-            ? _ModeFilter.bus
-            : (record.isCityRail ? _ModeFilter.rail : _ModeFilter.other),
-        TransactionTripEntry(:final trip) => trip.appTypeName == '公共汽电车'
-            ? _ModeFilter.bus
-            : (trip.appTypeName == '城市轨道交通'
+    RailRecordEntry() => _ModeFilter.rail,
+    BusRecordEntry() => _ModeFilter.bus,
+    ProcessTripEntry(:final record) =>
+      record.isBus
+          ? _ModeFilter.bus
+          : (record.isCityRail ? _ModeFilter.rail : _ModeFilter.other),
+    TransactionTripEntry(:final trip) =>
+      trip.appTypeName == '公共汽电车'
+          ? _ModeFilter.bus
+          : (trip.appTypeName == '城市轨道交通'
                 ? _ModeFilter.rail
                 : _ModeFilter.other),
-      };
+  };
 
   /// 单条行程卡片：异地判定（按本卡发卡地城市代码）与展示数据一次算好，
   /// 避免同一入口在卡片与详情弹层间口径不一致。
@@ -84,9 +87,11 @@ class _TripStreamViewState extends State<TripStreamView> {
     final theme = Theme.of(context);
     final stats = summarizeTripStream(widget.stream);
     final filtered = widget.stream
-        .where((e) =>
-            (_sources.isEmpty || _sources.contains(_sourceOf(e))) &&
-            (_modes.isEmpty || _modes.contains(_modeOf(e))))
+        .where(
+          (e) =>
+              (_sources.isEmpty || _sources.contains(_sourceOf(e))) &&
+              (_modes.isEmpty || _modes.contains(_modeOf(e))),
+        )
         .toList();
     final groups = groupTripsByDate(filtered);
     return Column(
@@ -94,8 +99,9 @@ class _TripStreamViewState extends State<TripStreamView> {
       children: [
         Text(
           stats.summaryText,
-          style: theme.textTheme.bodySmall
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
         ),
         const SizedBox(height: 8),
         Wrap(
@@ -151,8 +157,9 @@ class _TripStreamViewState extends State<TripStreamView> {
             padding: const EdgeInsets.symmetric(vertical: 16),
             child: Text(
               widget.stream.isEmpty ? '暂无记录' : '当前筛选条件下没有记录',
-              style: theme.textTheme.bodyMedium
-                  ?.copyWith(color: theme.colorScheme.outline),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.outline,
+              ),
             ),
           )
         else
@@ -188,41 +195,42 @@ class _TripStreamViewState extends State<TripStreamView> {
           controller: controller,
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
           children: [
-            Text(info.title,
-                style: Theme.of(sheetContext)
-                    .textTheme
-                    .titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w600)),
+            Text(
+              info.title,
+              style: Theme.of(sheetContext).textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w600),
+            ),
             const SizedBox(height: 6),
-            Text('记录来源：${info.sourceLabel}',
-                style: Theme.of(sheetContext)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: Theme.of(sheetContext).colorScheme.outline)),
+            Text(
+              '记录来源：${info.sourceLabel}',
+              style: Theme.of(sheetContext).textTheme.bodySmall
+                  ?.copyWith(color: Theme.of(sheetContext).colorScheme.outline),
+            ),
             if (info.remoteCityText != null) ...[
               const SizedBox(height: 4),
               Text(
                 '异地用卡 · 受理城市：${info.remoteCityText}',
-                style: Theme.of(sheetContext)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: Theme.of(sheetContext).colorScheme.tertiary),
+                style: Theme.of(sheetContext).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(sheetContext).colorScheme.tertiary,
+                ),
               ),
             ],
             if (info.related != null) ...[
               const SizedBox(height: 4),
-              Text('关联来源：${info.related}',
-                  style: Theme.of(sheetContext).textTheme.bodySmall),
+              Text(
+                '关联来源：${info.related}',
+                style: Theme.of(sheetContext).textTheme.bodySmall,
+              ),
             ],
             const SizedBox(height: 10),
             for (final field in info.fields)
               _DetailRow(label: field.$1, value: field.$2),
             const SizedBox(height: 14),
-            Text('原始数据（HEX）',
-                style: Theme.of(sheetContext)
-                    .textTheme
-                    .titleSmall
-                    ?.copyWith(fontWeight: FontWeight.w600)),
+            Text(
+              '原始数据（HEX）',
+              style: Theme.of(sheetContext).textTheme.titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w600),
+            ),
             const SizedBox(height: 4),
             SelectableText(
               info.rawHex == null ? '未保留原始字节' : _groupHex(info.rawHex!),
@@ -271,32 +279,32 @@ class _EntryInfo {
 
   /// 附加受理城市文本（不改其余字段，供 [_describe] 统一包装）。
   _EntryInfo withRemoteCity(String city) => _EntryInfo(
-        sourceLabel: sourceLabel,
-        title: title,
-        line: line,
-        timeText: timeText,
-        amountText: amountText,
-        isConsume: isConsume,
-        subText: subText,
-        category: category,
-        badges: badges,
-        related: related,
-        rawHex: rawHex,
-        fields: fields,
-        remoteCityText: city,
-      );
+    sourceLabel: sourceLabel,
+    title: title,
+    line: line,
+    timeText: timeText,
+    amountText: amountText,
+    isConsume: isConsume,
+    subText: subText,
+    category: category,
+    badges: badges,
+    related: related,
+    rawHex: rawHex,
+    fields: fields,
+    remoteCityText: city,
+  );
 }
 
 /// 条目发生地的城市代码（0x1A 按进 / 出侧取对应城市；异地判定与城市名
 /// 解析共用同一口径）。
 String? _tripCityCode(TripEntry entry) => switch (entry) {
-      TransactionTripEntry(:final trip) => trip.cityCode,
-      ProcessTripEntry(:final record) => record.cityCode,
-      RailRecordEntry(:final record, :final isEntry) =>
-        isEntry ? record.entryCityCode : record.exitCityCode,
-      BusRecordEntry(:final record, :final isEntry) =>
-        isEntry ? record.entryCityCode : record.exitCityCode,
-    };
+  TransactionTripEntry(:final trip) => trip.cityCode,
+  ProcessTripEntry(:final record) => record.cityCode,
+  RailRecordEntry(:final record, :final isEntry) =>
+    isEntry ? record.entryCityCode : record.exitCityCode,
+  BusRecordEntry(:final record, :final isEntry) =>
+    isEntry ? record.entryCityCode : record.exitCityCode,
+};
 
 /// 行程展示数据：非异地直接返回基础视图；异地时补「城市名（城市代码）」
 /// 文本（城市名按当前知识库实时解析，未收录显式「未知城市」，不猜测）。
@@ -359,18 +367,24 @@ _EntryInfo _describeEntry(TripEntry entry, AppState app) {
     case RailRecordEntry(:final record, :final isEntry):
       final cityCode = isEntry ? record.entryCityCode : record.exitCityCode;
       final rawStation = isEntry ? record.entryStationId : record.exitStationId;
-      final rawLineValue =
-          isEntry ? record.entryLineCode : record.exitLineCode;
+      final rawLineValue = isEntry ? record.entryLineCode : record.exitLineCode;
       final rawLine = rawLineValue?.toString();
-      final match =
-          app.resolveStationMatch(cityCode, rawStation, lineValue: rawLineValue);
+      final match = app.resolveStationMatch(
+        cityCode,
+        rawStation,
+        lineValue: rawLineValue,
+      );
       final station = match.stationName ?? rawStation;
-      final line = rawLineValue == null
-          ? app.resolveLineName(cityCode, rawLine)
-          : (app.resolveLineName(cityCode, rawLineValue.toString()) ??
-              app.resolveLineName(cityCode,
-                  rawLineValue.toRadixString(16).toUpperCase()) ??
-              rawLine);
+      final line =
+          match.lineName ??
+          (rawLineValue == null
+              ? app.resolveLineName(cityCode, rawLine)
+              : (app.resolveLineName(
+                      cityCode,
+                      rawLineValue.toRadixString(16).toUpperCase(),
+                    ) ??
+                    app.resolveLineName(cityCode, rawLineValue.toString()) ??
+                    rawLine));
       final symbol = app.cardCurrency.symbol;
       final amountFen = isEntry ? record.entryAmountFen : record.exitAmountFen;
       final balanceFen = isEntry ? record.entryBalanceFen : null;
@@ -391,8 +405,10 @@ _EntryInfo _describeEntry(TripEntry entry, AppState app) {
             ? null
             : '余额 $symbol${(balanceFen / 100).toStringAsFixed(2)}',
         category: '城市轨道交通',
-        badges: _confidenceBadges(match,
-            hasRawCode: rawStation != null && rawStation.isNotEmpty),
+        badges: _confidenceBadges(
+          match,
+          hasRawCode: rawStation != null && rawStation.isNotEmpty,
+        ),
         related: '过程记录（未与交易确认重复，独立保留）',
         rawHex: record.rawHex,
         fields: [
@@ -410,11 +426,20 @@ _EntryInfo _describeEntry(TripEntry entry, AppState app) {
         ],
       );
     case BusRecordEntry(:final record, :final isEntry):
-      // 公共汽电车：屏蔽线路与站点匹配——公交线网 / 站点库未建立，
-      // 套用城市轨道数据会错配；线路与站点直接展示卡片上报的原始编码。
-      final rawStation =
-          isEntry ? record.entryStationCode : record.exitStationCode;
+      // 公交独立查完整编码和城市规则，原始字段在详情中保持不变。
+      final rawStation = isEntry
+          ? record.entryStationCode
+          : record.exitStationCode;
       final rawLine = isEntry ? record.entryLineCode : record.exitLineCode;
+      final location = app.resolveBusLocation(
+        isEntry ? record.entryCityCode : record.exitCityCode,
+        busRecordLocationField(
+          rawLine,
+          rawStation,
+          isEntry ? record.entryOperatorCode : record.exitOperatorCode,
+        ),
+      );
+      final station = location.stationLabel ?? rawStation;
       final symbol = app.cardCurrency.symbol;
       final amountFen = isEntry ? null : record.transactionAmountFen;
       final mileage = isEntry ? null : record.mileage;
@@ -423,9 +448,9 @@ _EntryInfo _describeEntry(TripEntry entry, AppState app) {
         sourceLabel: '0x1A 公交记录',
         title: <String>[
           isEntry ? '上车' : '下车',
-          if (rawStation != null) rawStation,
+          if (station != null) station,
         ].join(' · '),
-        line: rawLine,
+        line: location.lineLabel ?? rawLine,
         timeText: time == null ? null : _fmtTime(time),
         amountText: amountFen == null || amountFen <= 0
             ? null
@@ -444,21 +469,27 @@ _EntryInfo _describeEntry(TripEntry entry, AppState app) {
           ('下车城市', _fmtOptText(record.exitCityCode)),
           ('上车站（原始）', _fmtOptText(record.entryStationCode)),
           ('下车站（原始）', _fmtOptText(record.exitStationCode)),
+          ('上车线路（原始）', _fmtOptText(record.entryLineCode)),
+          ('下车线路（原始）', _fmtOptText(record.exitLineCode)),
           ('上车终端', _fmtOptText(record.entryTerminalId)),
           ('下车终端', _fmtOptText(record.exitTerminalId)),
           ('方向', record.directionName),
         ],
       );
     case ProcessTripEntry(:final record):
-      // 公共汽电车：屏蔽站点与线路匹配——公交线网 / 站点库未建立，
-      // 套用城市轨道站点表会造成错配；不产出线路名 / 站名 / 置信徽章。
+      final busLocation = record.isBus
+          ? app.resolveBusLocation(record.cityCode, record.lineStationCode)
+          : null;
       final match = record.isBus
-          ? StationMatch.unmatched
+          ? busLocation!.match
           : app.resolveCycleStationMatch(
               record.cityCode,
               record.lineStationCode,
             );
-      final station = match.stationName;
+      final station =
+          busLocation?.stationLabel ??
+          match.stationName ??
+          (record.isBus ? record.stationCode : null);
       final symbol = app.cardCurrency.symbol;
       return _EntryInfo(
         sourceLabel: '0x1E 过程记录',
@@ -466,7 +497,10 @@ _EntryInfo _describeEntry(TripEntry entry, AppState app) {
           record.statusShortName ?? record.typeName,
           if (station != null) station,
         ].join(' · '),
-        line: match.lineName,
+        line:
+            busLocation?.lineLabel ??
+            match.lineName ??
+            (record.isBus ? record.lineCode : null),
         timeText: _fmtTime(record.time),
         amountText: record.amountFen <= 0
             ? null
@@ -493,7 +527,8 @@ _EntryInfo _describeEntry(TripEntry entry, AppState app) {
   }
 }
 
-List<String> _confidenceBadges(StationMatch match, {bool hasRawCode = true}) => [
+List<String> _confidenceBadges(StationMatch match, {bool hasRawCode = true}) =>
+    [
       if (hasRawCode)
         switch (match.confidence) {
           StationMatchConfidence.ambiguous => '站名歧义',
@@ -503,10 +538,10 @@ List<String> _confidenceBadges(StationMatch match, {bool hasRawCode = true}) => 
     ].where((b) => b.isNotEmpty).toList();
 
 String _stationConfidenceLabel(StationMatchConfidence c) => switch (c) {
-      StationMatchConfidence.exact => '精确匹配',
-      StationMatchConfidence.ambiguous => '歧义',
-      StationMatchConfidence.unmatched => '未匹配',
-    };
+  StationMatchConfidence.exact => '精确匹配',
+  StationMatchConfidence.ambiguous => '歧义',
+  StationMatchConfidence.unmatched => '未匹配',
+};
 
 class _EntryCard extends StatelessWidget {
   final _EntryInfo info;
@@ -537,28 +572,35 @@ class _EntryCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       info.title,
-                      style: theme.textTheme.titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w600),
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                   for (final badge in info.badges) ...[
                     _TagBadge(text: badge, scheme: scheme),
                     const SizedBox(width: 4),
                   ],
-                  if (remote) _TagBadge(text: '异地用卡', tertiary: true, scheme: scheme),
+                  if (remote)
+                    _TagBadge(text: '异地用卡', tertiary: true, scheme: scheme),
                 ],
               ),
               if (info.remoteCityText != null) ...[
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    Icon(Icons.place_outlined, size: 14, color: scheme.tertiary),
+                    Icon(
+                      Icons.place_outlined,
+                      size: 14,
+                      color: scheme.tertiary,
+                    ),
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
                         '受理城市：${info.remoteCityText}',
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: scheme.onSurfaceVariant),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -569,15 +611,18 @@ class _EntryCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   info.line!,
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: scheme.onSurfaceVariant),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
               ],
               if (info.timeText != null) ...[
                 const SizedBox(height: 6),
                 Text(
                   info.timeText!,
-                  style: theme.textTheme.bodySmall?.copyWith(color: scheme.outline),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.outline,
+                  ),
                 ),
               ],
               const SizedBox(height: 6),
@@ -595,16 +640,18 @@ class _EntryCard extends StatelessWidget {
                     const SizedBox(width: 12),
                     Text(
                       info.subText!,
-                      style:
-                          theme.textTheme.bodySmall?.copyWith(color: scheme.outline),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.outline,
+                      ),
                     ),
                   ],
                   const Spacer(),
                   if (info.category != null)
                     Text(
                       info.category!,
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: scheme.onSurfaceVariant),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
                     ),
                 ],
               ),
@@ -620,22 +667,29 @@ class _TagBadge extends StatelessWidget {
   final String text;
   final bool tertiary;
   final ColorScheme scheme;
-  const _TagBadge({required this.text, required this.scheme, this.tertiary = false});
+  const _TagBadge({
+    required this.text,
+    required this.scheme,
+    this.tertiary = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: tertiary ? scheme.tertiaryContainer : scheme.surfaceContainerHighest,
+        color: tertiary
+            ? scheme.tertiaryContainer
+            : scheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
         text,
         style: TextStyle(
           fontSize: 11,
-          color:
-              tertiary ? scheme.onTertiaryContainer : scheme.onSurfaceVariant,
+          color: tertiary
+              ? scheme.onTertiaryContainer
+              : scheme.onSurfaceVariant,
           fontWeight: FontWeight.w500,
         ),
       ),
@@ -660,15 +714,13 @@ class _DetailRow extends StatelessWidget {
             width: 120,
             child: Text(
               label,
-              style: theme.textTheme.bodyMedium
-                  ?.copyWith(color: theme.colorScheme.outline),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.outline,
+              ),
             ),
           ),
           Expanded(
-            child: SelectableText(
-              value,
-              style: theme.textTheme.bodyMedium,
-            ),
+            child: SelectableText(value, style: theme.textTheme.bodyMedium),
           ),
         ],
       ),

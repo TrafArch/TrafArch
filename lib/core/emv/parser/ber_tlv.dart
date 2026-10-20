@@ -15,8 +15,9 @@ class EmvTlv {
 
   /// 可打印 ASCII 文本（不可打印字符以空格代替），用于标签名等。
   String get ascii {
-    final decoded =
-        String.fromCharCodes(value.map((b) => b >= 0x20 && b <= 0x7E ? b : 0x20));
+    final decoded = String.fromCharCodes(
+      value.map((b) => b >= 0x20 && b <= 0x7E ? b : 0x20),
+    );
     return decoded.trim();
   }
 }
@@ -27,6 +28,10 @@ class EmvTlvParser {
     final result = <EmvTlv>[];
     var offset = 0;
     while (offset < bytes.length) {
+      if (bytes[offset] == 0x00 || bytes[offset] == 0xFF) {
+        offset++;
+        continue;
+      }
       final parsed = _readOne(bytes, offset, bytes.length);
       result.add(parsed.item);
       if (parsed.nextOffset <= offset) {
@@ -38,7 +43,10 @@ class EmvTlvParser {
   }
 
   static ({EmvTlv item, int nextOffset}) _readOne(
-      List<int> bytes, int start, int limit) {
+    List<int> bytes,
+    int start,
+    int limit,
+  ) {
     var i = start;
     if (i >= limit) throw const FormatException('缺少 TLV 标签');
     final tagBytes = <int>[bytes[i++]];
@@ -102,7 +110,7 @@ class EmvTlvParser {
     }
     return [
       for (var i = 0; i < cleaned.length; i += 2)
-        int.parse(cleaned.substring(i, i + 2), radix: 16)
+        int.parse(cleaned.substring(i, i + 2), radix: 16),
     ];
   }
 }

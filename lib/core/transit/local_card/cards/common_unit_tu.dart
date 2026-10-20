@@ -31,12 +31,26 @@ class CommonUnitTu {
 
   /// 交通部电子钱包应用 AID。
   static const List<int> walletAid = [
-    0xA0, 0x00, 0x00, 0x06, 0x32, 0x01, 0x01, 0x05,
+    0xA0,
+    0x00,
+    0x00,
+    0x06,
+    0x32,
+    0x01,
+    0x01,
+    0x05,
   ];
 
   /// 交通部电子现金应用 AID。
   static const List<int> cashAid = [
-    0xA0, 0x00, 0x00, 0x06, 0x32, 0x01, 0x01, 0x06,
+    0xA0,
+    0x00,
+    0x00,
+    0x06,
+    0x32,
+    0x01,
+    0x01,
+    0x06,
   ];
 
   /// 电子钱包应用标准文件 SFI。
@@ -136,8 +150,9 @@ class CommonUnitTu {
     _report(0.25); // 卡信息文件读取完成
     final balance = await _readBalance();
     _report(0.4); // 余额读取完成
-    final merged = (cardInfo ?? const TUnionCardInfo())
-        .withBalance(balance ?? cardInfo?.balanceFen);
+    final merged = (cardInfo ?? const TUnionCardInfo()).withBalance(
+      balance ?? cardInfo?.balanceFen,
+    );
     final transactions = await _readTransactions();
     _report(0.6); // 0x18 交易明细读取完成
     final processRecords = await _readTransitProcessRecords();
@@ -200,7 +215,7 @@ class CommonUnitTu {
   Future<TUnionCardInfo?> _readCardInfo() async {
     final public =
         await _readTransparentFile(_publicFileSfi, _publicFileSize) ??
-            _publicInfoFromFci();
+        _publicInfoFromFci();
     final holder = await _readTransparentFile(_holderFileSfi, _holderFileSize);
     final management = await _readManagementFile();
     if (public == null && holder == null && management == null) return null;
@@ -208,10 +223,11 @@ class CommonUnitTu {
   }
 
   Future<int?> _readBalance() async {
-    // 修正语义：P1=00 才是电子钱包余额（JT/T 978.2），优先采用；
-    // P1=03 为透支限额/已透支数据，仅在 P1=00 读不到时作兜底参考。
+    // 优先使用标准电子钱包查询。P1=03 保留为原有兼容回退；
+    // 它不能替代成功的 P1=00 响应，也不能与该响应相加。
     final standard = await _queryBalance(0x00);
-    if (standard != null && standard != 0) return standard;
+    // Zero is a successful reading too; another response must not replace it.
+    if (standard != null) return standard;
     final wallet = await _queryBalance(0x03);
     if (wallet != null && wallet != 0) return wallet;
     return standard ?? wallet;
@@ -264,7 +280,9 @@ class CommonUnitTu {
     final out = <TUnionProcessRecord>[];
     List<int>? firstData;
     for (var i = 1; i <= _maxVarProcessRecords; i++) {
-      final resp = await _exchange(TUnionApdu.readRecord(_processVarFileSfi, i));
+      final resp = await _exchange(
+        TUnionApdu.readRecord(_processVarFileSfi, i),
+      );
       if (!_isSuccess(resp)) break;
       final data = _stripSw(resp);
       if (data.isEmpty) break;
@@ -282,17 +300,19 @@ class CommonUnitTu {
     return out;
   }
 
-  static TUnionProcessRecord _buildVarProcessRecord(int number, List<int> data) =>
-      TUnionProcessRecord(
-        sfi: _processVarFileSfi,
-        recordNumber: number,
-        recordName: number <= _varRecordNames.length
-            ? _varRecordNames[number - 1]
-            : '记录 $number',
-        raw: data,
-        railTransit: _processParser.parseRailTransit(number, data),
-        busTransit: _processParser.parseBusTransit(number, data),
-      );
+  static TUnionProcessRecord _buildVarProcessRecord(
+    int number,
+    List<int> data,
+  ) => TUnionProcessRecord(
+    sfi: _processVarFileSfi,
+    recordNumber: number,
+    recordName: number <= _varRecordNames.length
+        ? _varRecordNames[number - 1]
+        : '记录 $number',
+    raw: data,
+    railTransit: _processParser.parseRailTransit(number, data),
+    busTransit: _processParser.parseBusTransit(number, data),
+  );
 
   static List<TUnionProcessRecord>? _splitVarProcessBlob(List<int> blob) {
     if (blob.isNotEmpty && blob[0] == 0x27) {
@@ -322,12 +342,14 @@ class CommonUnitTu {
       final end = pos + 3 + contentLength;
       if (end > blob.length) break;
       final number = blob[pos + 1];
-      out.add(_buildVarProcessRecord(
-        number >= 1 && number <= _maxVarProcessRecords
-            ? number
-            : out.length + 1,
-        blob.sublist(pos, end),
-      ));
+      out.add(
+        _buildVarProcessRecord(
+          number >= 1 && number <= _maxVarProcessRecords
+              ? number
+              : out.length + 1,
+          blob.sublist(pos, end),
+        ),
+      );
       pos = end;
     }
     return out.isEmpty ? null : out;
@@ -361,32 +383,73 @@ class CommonUnitTu {
     final out = <TUnionProcessRecord>[];
     List<int>? firstData;
     for (var i = 1; i <= _maxCycleRecordNumber; i++) {
-      final resp = await _exchange(TUnionApdu.readRecord(_processCycleFileSfi, i));
+      final resp = await _exchange(
+        TUnionApdu.readRecord(_processCycleFileSfi, i),
+      );
       if (!_isSuccess(resp)) break;
       final data = _stripSw(resp);
       if (data.isEmpty) break;
       if (_isBlankRecord(data)) continue;
       if (firstData != null && _listEquals(data, firstData)) break;
       firstData ??= data;
-      out.add(TUnionProcessRecord(
-        sfi: _processCycleFileSfi,
-        recordNumber: i,
-        recordName: '循环记录 $i',
-        raw: data,
-        trip: _processParser.parseCycleTrip(data),
-      ));
+      out.add(
+        TUnionProcessRecord(
+          sfi: _processCycleFileSfi,
+          recordNumber: i,
+          recordName: '循环记录 $i',
+          raw: data,
+          trip: _processParser.parseCycleTrip(data),
+        ),
+      );
     }
     if (out.isEmpty && blob != null) out.add(blob);
     return out;
   }
 
-  List<TUnionProcessRecord>? _splitCycleRecords(List<int> blob) {
-    if (blob.length < _cycleRecordSize) return null;
+  List<TUnionProcessRecord>? _splitCycleRecords(
+    List<int> blob, [
+    int depth = 0,
+  ]) {
+    if (depth > 3 || blob.length < _cycleRecordSize) return null;
+    // Some cards wrap each record, others wrap the complete cyclic file.
+    // Respect TLV boundaries before applying the 48-byte record stride.
+    if (blob[0] == 0x70) {
+      final out = <TUnionProcessRecord>[];
+      var pos = 0;
+      while (pos < blob.length) {
+        final info = _templateLengthInfo(blob, pos);
+        if (info == null) return null;
+        final (header, length) = info;
+        final end = pos + header + length;
+        if (end > blob.length) return null;
+        final body = blob.sublist(pos + header, end);
+        final records = _splitCycleRecords(body, depth + 1);
+        if (records == null) return null;
+        for (final record in records) {
+          out.add(
+            TUnionProcessRecord(
+              sfi: _processCycleFileSfi,
+              recordNumber: out.length + 1,
+              recordName: '循环记录 ${out.length + 1}',
+              raw: length == _cycleRecordSize
+                  ? blob.sublist(pos, end)
+                  : record.raw,
+              trip: record.trip,
+            ),
+          );
+        }
+        pos = end;
+      }
+      return out;
+    }
+    if (blob.length % _cycleRecordSize != 0) return null;
     final out = <TUnionProcessRecord>[];
     var validated = false;
-    for (var offset = 0;
-        offset + _cycleRecordSize <= blob.length;
-        offset += _cycleRecordSize) {
+    for (
+      var offset = 0;
+      offset + _cycleRecordSize <= blob.length;
+      offset += _cycleRecordSize
+    ) {
       final data = blob.sublist(offset, offset + _cycleRecordSize);
       if (_isBlankRecord(data)) continue;
       final trip = _processParser.parseCycleTrip(data);
@@ -394,13 +457,15 @@ class CommonUnitTu {
         if (trip == null) return null;
         validated = true;
       }
-      out.add(TUnionProcessRecord(
-        sfi: _processCycleFileSfi,
-        recordNumber: offset ~/ _cycleRecordSize + 1,
-        recordName: '循环记录 ${offset ~/ _cycleRecordSize + 1}',
-        raw: data,
-        trip: trip,
-      ));
+      out.add(
+        TUnionProcessRecord(
+          sfi: _processCycleFileSfi,
+          recordNumber: offset ~/ _cycleRecordSize + 1,
+          recordName: '循环记录 ${offset ~/ _cycleRecordSize + 1}',
+          raw: data,
+          trip: trip,
+        ),
+      );
     }
     return out;
   }
@@ -424,11 +489,14 @@ class CommonUnitTu {
     if (data.isEmpty) return const [];
     final payload = _unwrapRecordTemplate(data) ?? data;
     final out = <TUnionTransaction>[];
-    for (var s = 0;
-        s + _transactionRecordSize <= payload.length;
-        s += _transactionRecordSize) {
-      final record =
-          _decodeTransaction(payload.sublist(s, s + _transactionRecordSize));
+    for (
+      var s = 0;
+      s + _transactionRecordSize <= payload.length;
+      s += _transactionRecordSize
+    ) {
+      final record = _decodeTransaction(
+        payload.sublist(s, s + _transactionRecordSize),
+      );
       if (record != null) out.add(record);
     }
     return out;
@@ -466,12 +534,16 @@ class CommonUnitTu {
   }
 
   Future<List<int>?> _readManagementFile() async {
-    final binary =
-        await _readTransparentFile(_managementFileSfi, _managementFileSize);
+    final binary = await _readTransparentFile(
+      _managementFileSfi,
+      _managementFileSize,
+    );
     if (binary != null) return binary;
 
     for (var i = 1; i <= 10; i++) {
-      final resp = await _exchange(TUnionApdu.readRecord(_managementFileSfi, i));
+      final resp = await _exchange(
+        TUnionApdu.readRecord(_managementFileSfi, i),
+      );
       if (!_isSuccess(resp)) break;
       final data = _stripSw(resp);
       if (data.length >= 11 && data.any((b) => b != 0x00 && b != 0xFF)) {
@@ -484,8 +556,9 @@ class CommonUnitTu {
   List<int>? _publicInfoFromFci() {
     final data = _fciDiscretionary;
     if (data == null || data.length < 12) return null;
-    final info =
-        data.length >= _publicFileSize ? data.sublist(0, _publicFileSize) : data;
+    final info = data.length >= _publicFileSize
+        ? data.sublist(0, _publicFileSize)
+        : data;
     if (info.every((b) => b == 0x00 || b == 0xFF)) return null;
     return info;
   }
@@ -535,7 +608,10 @@ class CommonUnitTu {
   }
 
   TUnionCardInfo _decodeCardInfo(
-      List<int>? public, List<int>? holder, List<int>? management) {
+    List<int>? public,
+    List<int>? holder,
+    List<int>? management,
+  ) {
     String? issuerId, appTypeId, appVersion, applicationSerial, issuerFci;
     DateTime? effectiveDate, expireDate;
     if (public != null) {
@@ -563,8 +639,9 @@ class CommonUnitTu {
       provinceCode = TUnionCodec.hexBytes(_sub(management, 4, 2));
       cityCode = TUnionCodec.hexBytes(_sub(management, 6, 2));
       interopCardType = TUnionCodec.hexBytes(_sub(management, 8, 2));
-      cardKind =
-          management.length > 10 ? TUnionCodec.hexByte(management[10]) : null;
+      cardKind = management.length > 10
+          ? TUnionCodec.hexByte(management[10])
+          : null;
     }
 
     return TUnionCardInfo(
@@ -610,12 +687,14 @@ class CommonUnitTu {
     return TUnionTransaction(
       sequence: (payload[0] << 8) | payload[1],
       overdraftLimitFen: (payload[2] << 16) | (payload[3] << 8) | payload[4],
-      amountFen: (payload[5] << 24) |
+      amountFen:
+          (payload[5] << 24) |
           (payload[6] << 16) |
           (payload[7] << 8) |
           payload[8],
       rawType: payload[9],
-      terminalId: TUnionCodec.bcdString(payload.sublist(10, 16)) ??
+      terminalId:
+          TUnionCodec.bcdString(payload.sublist(10, 16)) ??
           TUnionCodec.hexBytes(payload.sublist(10, 16)) ??
           '',
       time: DateTime(date.year, date.month, date.day, hour, minute, second),
@@ -644,9 +723,10 @@ class CommonUnitTu {
         resp.length >= 2 &&
         resp[resp.length - 2] == 0x6C &&
         resp.last != 0) {
-      resp = await _apdu.transceive(
-        [...apdu.sublist(0, apdu.length - 1), resp.last],
-      );
+      resp = await _apdu.transceive([
+        ...apdu.sublist(0, apdu.length - 1),
+        resp.last,
+      ]);
     }
     var guard = 0;
     while (resp.length >= 2 &&
@@ -655,8 +735,9 @@ class CommonUnitTu {
         guard++ < 32) {
       final cla = apdu.isNotEmpty ? apdu[0] : 0x00;
       final data = resp.sublist(0, resp.length - 2);
-      final chain =
-          await _apdu.transceive(TUnionApdu.getResponse(cla, resp.last));
+      final chain = await _apdu.transceive(
+        TUnionApdu.getResponse(cla, resp.last),
+      );
       resp = [...data, ...chain];
       if (chain.isEmpty) break;
     }
@@ -714,15 +795,17 @@ class CommonUnitTu {
     List<TUnionTransaction> transactions,
   ) {
     for (final t in transactions) {
-      records.add(ApduRecord()
-        ..type = 2
-        ..label = 'TU 0x18#${t.sequence}'
-        ..timestamp = t.time
-        ..terminalHex = t.terminalId
-        ..cityCode = info.cityCode
-        ..balanceDelta = t.isConsume
-            ? -t.amountFen
-            : (t.isRecharge ? t.amountFen : 0));
+      records.add(
+        ApduRecord()
+          ..type = 2
+          ..label = 'TU 0x18#${t.sequence}'
+          ..timestamp = t.time
+          ..terminalHex = t.terminalId
+          ..cityCode = info.cityCode
+          ..balanceDelta = t.isConsume
+              ? -t.amountFen
+              : (t.isRecharge ? t.amountFen : 0),
+      );
     }
   }
 

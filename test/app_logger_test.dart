@@ -5,6 +5,7 @@ import 'package:transit_card_analyzer/core/data/settings_store.dart';
 import 'package:transit_card_analyzer/core/logging/app_logger.dart';
 import 'package:transit_card_analyzer/core/logging/log_exporter.dart';
 import 'package:transit_card_analyzer/state/app_state.dart';
+import 'support/test_database.dart';
 
 void main() {
   group('AppLogger 运行日志', () {
@@ -34,6 +35,7 @@ void main() {
     test('exportLog 拼接头部并调用导出通道，文件名带时间戳', () async {
       final exporter = _RecordingExporter();
       final app = AppState(
+        database: testDatabase(),
         settingsStore: MemorySettingsStore(),
         logger: AppLogger(store: MemoryLogStore()),
         logExporter: exporter,
@@ -54,6 +56,7 @@ void main() {
     test('导出被拒（权限）时记录失败信息', () async {
       final exporter = _RecordingExporter()..fail = true;
       final app = AppState(
+        database: testDatabase(),
         settingsStore: MemorySettingsStore(),
         logger: AppLogger(store: MemoryLogStore()),
         logExporter: exporter,
@@ -69,6 +72,7 @@ void main() {
       final settings = MemorySettingsStore();
       final store = MemoryLogStore();
       final app = AppState(
+        database: testDatabase(),
         settingsStore: settings,
         logger: AppLogger(store: store),
         logExporter: _RecordingExporter(),

@@ -12,7 +12,10 @@ import 'features/trips/trips_page.dart';
 import 'features/expert/expert_page.dart';
 
 class TransitCardAnalyzerApp extends StatefulWidget {
-  const TransitCardAnalyzerApp({super.key});
+  const TransitCardAnalyzerApp({super.key, this.createAppState});
+
+  /// The root widget owns the returned state's initialization and disposal.
+  final AppState Function()? createAppState;
 
   @override
   State<TransitCardAnalyzerApp> createState() =>
@@ -70,7 +73,7 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp> {
   @override
   void initState() {
     super.initState();
-    _app = AppState();
+    _app = widget.createAppState?.call() ?? AppState();
     _monetEnabled.value = _app.monetEnabled;
     _app.addListener(_syncMonetFromAppState);
     // 启动即加载知识库（assets/data/*.json）与设置，失败自动降级

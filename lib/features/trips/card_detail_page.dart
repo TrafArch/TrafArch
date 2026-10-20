@@ -1,5 +1,6 @@
 // 新建文件：lib/features/trips/card_detail_page.dart
 import 'package:flutter/material.dart';
+
 import '../../core/analysis/tunion_analysis_models.dart';
 import '../../core/transit/tunion/tunion_models.dart';
 import '../../database/app_database.dart';
@@ -111,8 +112,9 @@ class _CardDetailBody extends StatelessWidget {
               isCurrentSession
                   ? '行程记录 · ${batches.length + (histories.length > batches.length ? 1 : 0)} 次读取'
                   : '行程记录 · ${batches.length} 次读取',
-              style: theme.textTheme.titleSmall
-                  ?.copyWith(fontWeight: FontWeight.w600),
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const SizedBox(height: 8),
             if (isCurrentSession && app.parsing)
@@ -165,14 +167,16 @@ class _ArchiveHeader extends StatelessWidget {
                     children: [
                       Text(
                         card.displayName,
-                        style: theme.textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w600),
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         card.subtitle,
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: scheme.onSurfaceVariant),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
                       ),
                     ],
                   ),
@@ -206,15 +210,13 @@ class _ArchiveHeader extends StatelessWidget {
             width: 88,
             child: Text(
               label,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.outline),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.outline,
+              ),
             ),
           ),
           Expanded(
-            child: SelectableText(
-              value,
-              style: theme.textTheme.bodyMedium,
-            ),
+            child: SelectableText(value, style: theme.textTheme.bodyMedium),
           ),
         ],
       ),
@@ -223,38 +225,39 @@ class _ArchiveHeader extends StatelessWidget {
 
   /// 改名对话框：留空即清除自定义名称（回退展示正式卡名）。
   Future<void> _rename(BuildContext context) async {
-    final controller = TextEditingController(text: card.customName ?? '');
+    var editedName = card.customName ?? '';
     final messenger = ScaffoldMessenger.of(context);
-    try {
-      final name = await showDialog<String>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('自定义卡片名称'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            maxLength: 24,
-            textInputAction: TextInputAction.done,
-            decoration: const InputDecoration(hintText: '留空则恢复正式卡名'),
-            onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(controller.text),
-              child: const Text('保存'),
-            ),
-          ],
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('自定义卡片名称'),
+        // The form field owns its controller for the complete route lifetime,
+        // including the dismissal animation after showDialog has returned.
+        content: TextFormField(
+          initialValue: editedName,
+          onChanged: (value) => editedName = value,
+          autofocus: true,
+          maxLength: 24,
+          textInputAction: TextInputAction.done,
+          decoration: const InputDecoration(hintText: '留空则恢复正式卡名'),
+          onFieldSubmitted: (value) => Navigator.of(dialogContext).pop(value),
         ),
-      );
-      if (name == null) return;
-      await repository.renameCard(card.id, name);
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(editedName),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    if (name == null) return;
+    await repository.renameCard(card.id, name);
+    if (messenger.mounted) {
       messenger.showSnackBar(const SnackBar(content: Text('已更新卡片名称')));
-    } finally {
-      controller.dispose();
     }
   }
 }

@@ -15,6 +15,28 @@ void main() {
       expect(decoded!.payload, utf8.encode(text));
     });
 
+    test('二进制载荷保留零字节和高位字节，不包含 QR 模式和填充码字', () {
+      final payload = Uint8List.fromList([0, 0x80, 0xFF, 0x54, 0, 0x7F]);
+      final image = _renderPayload(QrPayload.fromTypedData(payload));
+      final decoded = decodeQrFromRgba(image.rgba, image.side, image.side);
+      expect(decoded?.payload, [0, 0x80, 0xFF, 0x54, 0, 0x7F]);
+    });
+
+    test('多个 byte 段按原顺序拼接', () {
+      final payload = QrPayload()
+        ..addTypedData(Uint8List.fromList([0x80, 0, 0xFF]))
+        ..addTypedData(Uint8List.fromList([1, 2, 3]));
+      final image = _renderPayload(payload);
+      final decoded = decodeQrFromRgba(image.rgba, image.side, image.side);
+      expect(decoded?.payload, [0x80, 0, 0xFF, 1, 2, 3]);
+    });
+
+    test('纯数字模式使用解码文本恢复载荷', () {
+      final image = _renderPayload(QrPayload()..addNumeric('001234567890'));
+      final decoded = decodeQrFromRgba(image.rgba, image.side, image.side);
+      expect(decoded?.payload, utf8.encode('001234567890'));
+    });
+
     test('纯色图片返回 null', () {
       const side = 200;
       final rgba = Uint8List(side * side * 4)
@@ -34,12 +56,19 @@ void main() {
   String text, {
   int scale = 8,
   int quietZone = 4,
+}) => _renderPayload(
+  QrPayload.fromString(text),
+  scale: scale,
+  quietZone: quietZone,
+);
+
+({Uint8List rgba, int side}) _renderPayload(
+  QrPayload payload, {
+  int scale = 8,
+  int quietZone = 4,
 }) {
   final qrImage = QrImage(
-    QrCode(
-      payload: QrPayload.fromString(text),
-      errorCorrectLevel: QrErrorCorrectLevel.low,
-    ),
+    QrCode(payload: payload, errorCorrectLevel: QrErrorCorrectLevel.low),
   );
   final modules = qrImage.moduleCount;
   final side = (modules + quietZone * 2) * scale;

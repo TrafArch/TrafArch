@@ -80,14 +80,20 @@ abstract class LiveStationSource {
   StationCodeEntry? lookupEntry(String cityKey, String key);
   String? lookupLineNameDigits(String cityKey, String digits);
   List<StationCodeEntry> fragLineStation(
-      String cityKey, String lineNum, String stationNum);
+    String cityKey,
+    String lineNum,
+    String stationNum,
+  );
   List<StationCodeEntry> fragStation(String cityKey, String stationNum);
   List<StationCodeEntry> fragLine(String cityKey, String lineNum);
   Iterable<StationCodeEntry> lineNameEntryCandidates(String cityKey);
 
   /// 线路号数字 + 编码末两位直查（避免整城扫描）；默认按候选流过滤。
   List<StationCodeEntry> lookupLineStationTail(
-      String cityKey, String lineDigits, String stationTail) {
+    String cityKey,
+    String lineDigits,
+    String stationTail,
+  ) {
     final out = <StationCodeEntry>[];
     for (final e in lineNameEntryCandidates(cityKey)) {
       if (StationCodeTable.lineNameDigitsOf(e.line) != lineDigits) continue;
@@ -237,8 +243,7 @@ class StationCodeTable {
   );
 
   /// 空表（无站点数据时的降级值）。
-  static const empty =
-      StationCodeTable._({}, {}, {}, {}, {}, 0, const []);
+  static const empty = StationCodeTable._({}, {}, {}, {}, {}, 0, const []);
 
   /// 首个 live 源（兼容旧字段语义）。
   LiveStationSource? get live =>
@@ -306,7 +311,19 @@ class StationCodeTable {
       if (cityCode == null || cityCode.isEmpty) continue;
       datasetCount++;
       final cityKey = _normalizeCity(cityCode);
-      dataset.codes.forEach((code, entry) {
+      dataset.codes.forEach((code, source) {
+        // Dataset metadata applies when a row does not override it.
+        final entry = StationCodeEntry(
+          code: source.code,
+          type: source.type,
+          line: source.line,
+          station: source.station,
+          system: source.system ?? dataset.system,
+          kind: source.kind ?? dataset.kind,
+          datasetFile: source.datasetFile ?? dataset.file,
+          lineCode: source.lineCode,
+          stationCode: source.stationCode,
+        );
         final indexKey = '$cityKey|$code';
         final existing = entries[indexKey];
         if (existing == null ||
@@ -336,8 +353,9 @@ class StationCodeTable {
               }
             }
             for (final stationKey in _tuFragmentKeys(stationCode)) {
-              (byStation['$cityKey|$stationKey'] ??= <StationCodeEntry>[])
-                  .add(entry);
+              (byStation['$cityKey|$stationKey'] ??= <StationCodeEntry>[]).add(
+                entry,
+              );
             }
           }
         }
@@ -356,12 +374,12 @@ class StationCodeTable {
 
   /// 类别优先级（数值越小越优先）：地铁 > BRT > 公交 > 自行车 > 其它。
   static int kindPriority(String? kind) => switch (kind) {
-        'metro' => 0,
-        'brt' => 1,
-        'bus' => 2,
-        'bike' => 3,
-        _ => 4,
-      };
+    'metro' => 0,
+    'brt' => 1,
+    'bus' => 2,
+    'bike' => 3,
+    _ => 4,
+  };
 
   static int _kindPriority(String? kind) => kindPriority(kind);
 
@@ -429,10 +447,7 @@ class StationCodeTable {
   /// 站点查询（兼容卡片侧多种编码形态）：先按完整编码精确命中，未命中
   /// 再依次按「后四位」候选键（含 HEX→十进制转译）命中（数据库站点即以
   /// 末四位登记）；均未命中返回 null（保持未知，不猜测）。
-  StationCodeEntry? lookupStation({
-    required String rawCode,
-    String? cityCode,
-  }) {
+  StationCodeEntry? lookupStation({required String rawCode, String? cityCode}) {
     if (rawCode.isEmpty) return null;
     final full = lookup(code: rawCode, cityCode: cityCode);
     if (full != null) return full;
@@ -463,7 +478,7 @@ class StationCodeTable {
   }
 
   /// 组合查询：候选编码按"最具体优先"依次精确匹配
-  /// （线路+站点拼接 → 站点 → 线路）；全部未收录返回 null（不猜测）。
+  /// （城市+线路+站点完整键 → 线路+站点 → 站点 → 线路）；未收录返回 null。
   StationCodeEntry? lookupLineStation({
     String? lineCode,
     String? stationCode,
@@ -472,6 +487,12 @@ class StationCodeTable {
     final line = lineCode ?? '';
     final station = stationCode ?? '';
     final candidates = <String>[
+      // TU databases retain the complete source_key, including the city prefix.
+      if (cityCode != null &&
+          cityCode.isNotEmpty &&
+          line.isNotEmpty &&
+          station.isNotEmpty)
+        '${_normalizeCity(cityCode)}$line$station',
       if (line.isNotEmpty && station.isNotEmpty) '$line$station',
       if (station.isNotEmpty) station,
       if (line.isNotEmpty) line,
@@ -490,8 +511,10 @@ class StationCodeTable {
   StationCodeEntry? lookupTuStationByCardId({
     required String rawStationId,
     String? cityCode,
-  }) =>
-      matchTuStationByCardId(rawStationId: rawStationId, cityCode: cityCode).entry;
+  }) => matchTuStationByCardId(
+    rawStationId: rawStationId,
+    cityCode: cityCode,
+  ).entry;
 
   /// 0x1A 站点匹配置信版：给定线路号字节时优先「城市+线路+站点」三键组合
   /// （精确）；无线路号时只按站点末 4 位单维查表（精确）；候选站名不唯一
@@ -507,18 +530,22 @@ class StationCodeTable {
     // 站点码为 BCD / HEX 文本：末尾片段按 HEX 口径归一化（去前导零、
     // 保留 A-F）；按纯数字提取会把 001B 截成 1，与库内口径失配。
     final stationHex = _normalizeHexSegment(rawStationId);
-    if (stationHex == null || stationHex.length < 2) {
+    if (stationHex == null) {
       return StationMatch.unmatched;
     }
-    final stationNum2 = stationHex.length > 2
-        ? stationHex.substring(stationHex.length - 2)
-        : stationHex;
-    final stationNum4 = stationHex.length > 4
-        ? stationHex.substring(stationHex.length - 4)
-        : stationHex;
+    final stationNum2 = _normalizeHexSegment(
+      stationHex.length > 2
+          ? stationHex.substring(stationHex.length - 2)
+          : stationHex,
+    );
+    final stationNum4 = _normalizeHexSegment(
+      stationHex.length > 4
+          ? stationHex.substring(stationHex.length - 4)
+          : stationHex,
+    );
     final cityKey = _normalizeCity(cityCode);
     final tuSource = _sourceOf('tu');
-    if (lineValue != null) {
+    if (lineValue != null && stationNum2 != null) {
       for (final candidate in _lineValueCandidates(lineValue)) {
         final lineNum = _normalizeHexSegment(candidate);
         if (lineNum == null) continue;
@@ -533,6 +560,7 @@ class StationCodeTable {
     }
     // 无线路号（或三键未命中）时只按站点片段单维查表；查不到表直接
     // 未匹配（末 2 位推测通道已取消）。
+    if (stationNum4 == null) return StationMatch.unmatched;
     var rows = _tuByStation['$cityKey|$stationNum4'];
     if ((rows == null || rows.isEmpty) && tuSource != null) {
       rows = tuSource.fragStation(cityKey, stationNum4);
@@ -556,8 +584,10 @@ class StationCodeTable {
   StationCodeEntry? lookupTuLineByCardValue({
     required String rawLineCode,
     String? cityCode,
-  }) =>
-      matchTuLineByCardValue(rawLineCode: rawLineCode, cityCode: cityCode).entry;
+  }) => matchTuLineByCardValue(
+    rawLineCode: rawLineCode,
+    cityCode: cityCode,
+  ).entry;
 
   /// 0x1A 线路匹配置信版：线路号单维查表命中（精确）；候选线路名不唯一
   /// 记歧义。
@@ -595,8 +625,7 @@ class StationCodeTable {
   StationCodeEntry? lookupLineStationField({
     required String field,
     String? cityCode,
-  }) =>
-      matchLineStationField(field: field, cityCode: cityCode).entry;
+  }) => matchLineStationField(field: field, cityCode: cityCode).entry;
 
   /// 0x1E 线路+站点字段匹配置信版：前两位（线路代码高字节）非 0 且
   /// 通用站点段（第 5-6 位）已写入时，优先且只按「前 2 位线路 + 第 5-6
@@ -614,8 +643,7 @@ class StationCodeTable {
     // 布局，不再尝试错位布局；前两位为 0、或通用站点段未写入（"00"，
     // 福州分段布局的形态）时沿用现有双布局探测。
     final hasFrontLine = _normalizeHexSegment(field.substring(0, 2)) != null;
-    final hasFrontStation =
-        _normalizeHexSegment(field.substring(4, 6)) != null;
+    final hasFrontStation = _normalizeHexSegment(field.substring(4, 6)) != null;
     final layouts = hasFrontLine && hasFrontStation
         ? const <(int, int)>[(0, 4)]
         : const <(int, int)>[(0, 4), (2, 6)];
@@ -628,10 +656,12 @@ class StationCodeTable {
     // 转译兜底——避免 0x1B 的十进制 27 与库中真实站码 0x27 撞码。
     for (final round in const [0, 1]) {
       for (final layout in layouts) {
-        final lineHex =
-            _normalizeHexSegment(field.substring(layout.$1, layout.$1 + 2));
-        final stationHex =
-            _normalizeHexSegment(field.substring(layout.$2, layout.$2 + 2));
+        final lineHex = _normalizeHexSegment(
+          field.substring(layout.$1, layout.$1 + 2),
+        );
+        final stationHex = _normalizeHexSegment(
+          field.substring(layout.$2, layout.$2 + 2),
+        );
         if (lineHex == null || stationHex == null) continue;
         final lineNum = round == 0 ? lineHex : _hexToDec(lineHex);
         final stationNum = round == 0 ? stationHex : _hexToDec(stationHex);
@@ -648,11 +678,43 @@ class StationCodeTable {
     return StationMatch.unmatched;
   }
 
+  /// 公交/BRT 的 1E 字段只按完整的两字节线路、两字节站点查 TU 库。
+  /// 不复用地铁的单字节片段或十进制兜底，防止公交码撞到地铁站。
+  StationMatch matchBusLineStationField({
+    required String field,
+    required String cityCode,
+  }) {
+    final hex = field.toUpperCase();
+    if (!RegExp(r'^[0-9A-F]{14}$').hasMatch(hex)) return StationMatch.unmatched;
+    final city = _normalizeCity(cityCode);
+    final line = hex.substring(0, 4);
+    final station = hex.substring(4, 8);
+    if (line == '0000' ||
+        line == 'FFFF' ||
+        station == '0000' ||
+        station == 'FFFF') {
+      return StationMatch.unmatched;
+    }
+    final key = '$city$line$station';
+    final entry =
+        _sourceOf('tu')?.lookupEntry(city, key) ?? _entries['$city|$key'];
+    if (entry == null ||
+        (entry.system != null && entry.system != 'tu') ||
+        !(entry.kind == 'brt' ||
+            entry.kind == 'bus' ||
+            entry.type == 'BRT' ||
+            entry.type == '公交')) {
+      return StationMatch.unmatched;
+    }
+    return StationMatch(entry, StationMatchConfidence.exact);
+  }
+
   /// TU 候选集置信判定：站名唯一 → 精确；站名不唯一 → 歧义；候选全部
   /// 无站名时仍记精确（查表命中，仅缺站名，展示层回退原始编码）。
   static StationMatch _classifyTu(List<StationCodeEntry> rows) {
     final best = _pickBestTu(rows);
     final names = rows
+        .where((e) => _kindPriority(e.kind) == _kindPriority(best?.kind))
         .map((e) => e.station)
         .whereType<String>()
         .where((s) => s.isNotEmpty)
@@ -708,8 +770,10 @@ class StationCodeTable {
   /// 库内原始编码同口径；HEX→十进制转译只在查询侧分轮兜底，否则
   /// `0x1B`（北邵洼）会以十进制 `27` 混入 `0x27`（生命科学园）的索引。
   static Set<String> _tuFragmentKeys(String? fragment) {
-    final text =
-        (fragment ?? '').trim().toUpperCase().replaceAll(RegExp(r'[^0-9A-F]'), '');
+    final text = (fragment ?? '').trim().toUpperCase().replaceAll(
+      RegExp(r'[^0-9A-F]'),
+      '',
+    );
     if (text.isEmpty) return const {};
     final keys = <String>{};
     void add(String part) {
@@ -732,9 +796,12 @@ class StationCodeTable {
     final line = entry.lineCode;
     final station = entry.stationCode;
     if (line != null && station != null) return (line, station);
-    final key =
-        entry.code.trim().toUpperCase().replaceAll(RegExp(r'[^0-9A-F]'), '');
+    final key = entry.code.trim().toUpperCase().replaceAll(
+      RegExp(r'[^0-9A-F]'),
+      '',
+    );
     return switch (key.length) {
+      4 => (key.substring(0, 2), key.substring(2, 4)), // city-relative CSV code
       12 => (key.substring(4, 8), key.substring(8, 12)),
       10 => (key.substring(4, 6), key.substring(6, 10)),
       8 => (key.substring(4, 6), key.substring(6, 8)),

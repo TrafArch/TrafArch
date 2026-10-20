@@ -9,10 +9,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:transit_card_analyzer/app.dart';
+import 'package:transit_card_analyzer/state/app_state.dart';
+import 'package:transit_card_analyzer/core/data/settings_store.dart';
+
+import 'support/test_database.dart';
 
 void main() {
   testWidgets('App 启动冒烟测试', (WidgetTester tester) async {
-    await tester.pumpWidget(const TransitCardAnalyzerApp());
+    final database = testDatabase();
+    final app = AppState(
+      database: database,
+      settingsStore: MemorySettingsStore(),
+      bundle: MissingTestAssets(),
+    );
+    await tester.runAsync(app.init);
+    await tester.pumpWidget(TransitCardAnalyzerApp(createAppState: () => app));
     await tester.pump();
 
     expect(find.text('TrafArch'), findsOneWidget);

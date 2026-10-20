@@ -39,11 +39,21 @@ class PdolDataBuilder {
     var i = 0;
     while (i < pdol.length) {
       final tagBytes = <int>[pdol[i++]];
-      while ((tagBytes.last & 0x1F) == 0x1F && i < pdol.length) {
-        tagBytes.add(pdol[i++]);
+      if ((tagBytes.first & 0x1F) == 0x1F) {
+        do {
+          if (i >= pdol.length || tagBytes.length >= 4) {
+            throw const FormatException('PDOL 标签不完整或过长');
+          }
+          tagBytes.add(pdol[i++]);
+        } while ((tagBytes.last & 0x80) != 0);
       }
-      if (i >= pdol.length) break;
+      if (i >= pdol.length) {
+        throw const FormatException('PDOL 条目缺少长度');
+      }
       final len = pdol[i++];
+      if (out.length + len > 252) {
+        throw const FormatException('PDOL 数据超过短 APDU 容量');
+      }
       final tag = tagBytes
           .map((b) => b.toRadixString(16).padLeft(2, '0'))
           .join()
@@ -59,7 +69,10 @@ class PdolDataBuilder {
         '9A' => [_bcd(now.year % 100), _bcd(now.month), _bcd(now.day)],
         '9F21' => [_bcd(now.hour), _bcd(now.minute), _bcd(now.second)],
         // 不可预知数：按声明长度取随机字节。
-        '9F37' => List<int>.generate(len > 0 ? len : 0, (_) => rng.nextInt(256)),
+        '9F37' => List<int>.generate(
+          len > 0 ? len : 0,
+          (_) => rng.nextInt(256),
+        ),
         _ => _defaults[tag] ?? const [0x00],
       };
 

@@ -6,7 +6,17 @@ import java.util.Properties
 plugins {
     id("com.android.application")
     id("dev.flutter.flutter-gradle-plugin")
-    id("com.google.gms.google-services")
+    id("com.google.gms.google-services") apply false
+}
+
+// Public source checkouts do not include the private Firebase configuration.
+// A repair APK is independent of the production Firebase application.
+val repairBuild = providers.gradleProperty("repairBuild").orNull == "true"
+val hasGoogleServicesConfig = fileTree(projectDir) {
+    include("google-services.json", "src/**/google-services.json")
+}.files.isNotEmpty()
+if (hasGoogleServicesConfig && !repairBuild) {
+    apply(plugin = "com.google.gms.google-services")
 }
 
 // ===================== 版本号自动递增 =====================
@@ -163,9 +173,16 @@ android {
         targetSdk = 37
         versionCode = appVersionCode
         versionName = appVersionName
+        manifestPlaceholders["appLabel"] = if (repairBuild) "TrafArch 修复验证版" else "TrafArch"
     }
 
     buildTypes {
+        debug {
+            if (repairBuild) {
+                applicationIdSuffix = ".repair"
+                versionNameSuffix = "-repair"
+            }
+        }
         release {
             signingConfig = if (keystorePropertiesFile.exists()) {
                 signingConfigs.getByName("release")

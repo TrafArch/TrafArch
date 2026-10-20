@@ -2,13 +2,15 @@
 // （scanOnce → TUnionParser → AnalysisEngine 的解析结果直接断言）；
 // 新增卡片列表、卡片详情与首页保存确认对话框的组件测试。
 import 'dart:convert';
-import 'dart:typed_data';
+import 'dart:io';
 
 import 'package:drift/drift.dart' show DatabaseConnection, driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sqlite3/sqlite3.dart' as sqlite;
+import 'package:transit_card_analyzer/core/data/tu_database.dart';
 import 'package:transit_card_analyzer/core/data/settings_store.dart';
 import 'package:transit_card_analyzer/core/nfc/nfc_models.dart';
 import 'package:transit_card_analyzer/core/nfc/nfc_service.dart';
@@ -17,14 +19,52 @@ import 'package:transit_card_analyzer/features/card_archive/models/card_archive_
 import 'package:transit_card_analyzer/features/card_archive/models/card_types.dart';
 import 'package:transit_card_analyzer/features/home/home_page.dart';
 import 'package:transit_card_analyzer/features/cards/cards_page.dart';
-import 'package:transit_card_analyzer/features/trips/trips_page.dart';
 import 'package:transit_card_analyzer/state/app_state.dart';
+import 'package:transit_card_analyzer/core/qr/gms_qr_scanner.dart';
 
 /// 行程模块链路测试：
 /// - 模型级：假 NFC 通道 + 假资产包驱动完整管道（scanOnce → TUnionParser
 ///   → AnalysisEngine），断言终端解码 / 0x1A / 0x1E 配对与八达通货币口径；
 /// - 组件级：卡片列表展示、详情页、首页保存确认对话框与落库快照。
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  late Directory fixtureDirectory;
+  const pathProvider = MethodChannel('plugins.flutter.io/path_provider');
+  setUpAll(() {
+    fixtureDirectory = Directory.systemTemp.createTempSync('trafarch-trips-');
+    _stationDatabaseBytes = _stationDatabaseFixture(fixtureDirectory);
+  });
+  tearDownAll(() {
+    TuDatabase.reset();
+    fixtureDirectory.deleteSync(recursive: true);
+  });
+  setUp(() async {
+    TuDatabase.reset();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(pathProvider, (call) async {
+          if (call.method == 'getApplicationSupportDirectory') {
+            return fixtureDirectory.path;
+          }
+          throw MissingPluginException(call.method);
+        });
+    // 在 widget 测试的 fakeAsync 之外预热真实 SQLite 加载链路。
+    // 每例重置单例，避免前一例的知识库掩盖缺失 / 错误夹具。
+    final stations = await TuDatabase.open(bundle: _FakeBundle(_assets));
+    expect(stations, isNotNull);
+    expect(
+      stations!.repository.findByKey('3910', '39100231').single.stationName,
+      '苏洋',
+    );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(gmsQrScannerChannel, (_) async => false);
+  });
+  tearDown(() {
+    TuDatabase.reset();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(pathProvider, null);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(gmsQrScannerChannel, null);
+  });
   // 每个测试各开一个内存数据库：关闭多数据库调试警告。
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
 
@@ -35,6 +75,12 @@ void main() {
           ..enqueueWalletScript(record: _record(terminal: '391002003100')),
       );
       final trip = app.analysis!.trips.single;
+      expect(
+        app.knowledgeBase!.stationCodes
+            .lookup(code: '39100231', cityCode: '3910')
+            ?.station,
+        '苏洋',
+      );
       expect(trip.cityName, '福州市');
       expect(trip.lineLabel, '2号线');
       expect(trip.stationLabel, '苏洋');
@@ -56,10 +102,9 @@ void main() {
 
     test('充值交易（0x02）：类型与 + 金额', () async {
       final app = await _scan(
-        _FakeNfcChannel()
-          ..enqueueWalletScript(
-            record: _record(terminal: '123456789012', rawType: 0x02),
-          ),
+        _FakeNfcChannel()..enqueueWalletScript(
+          record: _record(terminal: '123456789012', rawType: 0x02),
+        ),
       );
       final trip = app.analysis!.trips.single;
       expect(trip.typeName, '充值');
@@ -70,11 +115,10 @@ void main() {
 
     test('充值交易配对 0x1E：补充交易后余额与行业', () async {
       final app = await _scan(
-        _FakeNfcChannel()
-          ..enqueueWalletScript(
-            record: _record(terminal: '123456789012', rawType: 0x02),
-            cycleRecord: _cycleRecord(typeCode: 0x09),
-          ),
+        _FakeNfcChannel()..enqueueWalletScript(
+          record: _record(terminal: '123456789012', rawType: 0x02),
+          cycleRecord: _cycleRecord(typeCode: 0x09),
+        ),
       );
       final trip = app.analysis!.trips.single;
       expect(trip.typeName, '充值');
@@ -89,18 +133,23 @@ void main() {
           ..enqueueWalletScript(record: _record(terminal: '391002999999')),
       );
       final trip = app.analysis!.trips.single;
+      expect(
+        app.knowledgeBase!.stationCodes.lookupLineName(
+          rawLineCode: '02',
+          cityCode: '3910',
+        ),
+        '2号线',
+      );
       expect(trip.lineLabel, '2号线');
       expect(trip.stationLabel, '99');
     });
 
-    test('终端未命中：0x1E 出站记录按时间 + 金额配对补齐位置 / 分类 / 余额',
-        () async {
+    test('终端未命中：0x1E 出站记录按时间 + 金额配对补齐位置 / 分类 / 余额', () async {
       final app = await _scan(
-        _FakeNfcChannel()
-          ..enqueueWalletScript(
-            record: _record(terminal: '123456789012'),
-            cycleRecord: _cycleRecord(),
-          ),
+        _FakeNfcChannel()..enqueueWalletScript(
+          record: _record(terminal: '123456789012'),
+          cycleRecord: _cycleRecord(),
+        ),
       );
       final trip = app.analysis!.trips.single;
       expect(trip.cityName, '福州市');
@@ -113,11 +162,10 @@ void main() {
 
     test('复合消费（0x09）配对 0x1E 出站：状态短名与站点', () async {
       final app = await _scan(
-        _FakeNfcChannel()
-          ..enqueueWalletScript(
-            record: _record(terminal: '123456789012', rawType: 0x09),
-            cycleRecord: _cycleRecord(),
-          ),
+        _FakeNfcChannel()..enqueueWalletScript(
+          record: _record(terminal: '123456789012', rawType: 0x09),
+          cycleRecord: _cycleRecord(),
+        ),
       );
       final trip = app.analysis!.trips.single;
       expect(trip.rideStatusName, '出站');
@@ -127,10 +175,9 @@ void main() {
 
     test('复合消费（0x09）未配对 0x1E：无状态短名（不猜测）', () async {
       final app = await _scan(
-        _FakeNfcChannel()
-          ..enqueueWalletScript(
-            record: _record(terminal: '123456789012', rawType: 0x09),
-          ),
+        _FakeNfcChannel()..enqueueWalletScript(
+          record: _record(terminal: '123456789012', rawType: 0x09),
+        ),
       );
       final trip = app.analysis!.trips.single;
       expect(trip.typeName, '复合消费');
@@ -139,33 +186,30 @@ void main() {
 
     test('异地用卡：0x1E 交易城市与卡片城市不同', () async {
       final app = await _scan(
-        _FakeNfcChannel()
-          ..enqueueWalletScript(
-            record: _record(terminal: '123456789012'),
-            cycleRecord: _cycleRecord(cityCode: '1100'),
-          ),
+        _FakeNfcChannel()..enqueueWalletScript(
+          record: _record(terminal: '123456789012'),
+          cycleRecord: _cycleRecord(cityCode: '1100'),
+        ),
       );
       expect(app.isRemoteUse(app.analysis!.trips.single.cityCode), isTrue);
     });
 
     test('异地用卡：0x1A 进出站记录按出闸城市判定', () async {
       final app = await _scan(
-        _FakeNfcChannel()
-          ..enqueueWalletScript(
-            record: _record(terminal: '123456789012'),
-            varRecord: _railRecord(),
-          ),
+        _FakeNfcChannel()..enqueueWalletScript(
+          record: _record(terminal: '123456789012'),
+          varRecord: _railRecord(),
+        ),
       );
       expect(app.isRemoteUse(app.railTransitRecord?.exitCityCode), isTrue);
     });
 
     test('0 元交易配对 0x1E 进站：进入进站态', () async {
       final app = await _scan(
-        _FakeNfcChannel()
-          ..enqueueWalletScript(
-            record: _record(terminal: '123456789012', amountFen: 0),
-            cycleRecord: _cycleRecord(typeCode: 0x01, amountFen: 0),
-          ),
+        _FakeNfcChannel()..enqueueWalletScript(
+          record: _record(terminal: '123456789012', amountFen: 0),
+          cycleRecord: _cycleRecord(typeCode: 0x01, amountFen: 0),
+        ),
       );
       final trip = app.analysis!.trips.single;
       expect(trip.isEntry, isTrue);
@@ -177,21 +221,19 @@ void main() {
 
     test('0 元交易未配对进站记录：保持普通行程（不猜测）', () async {
       final app = await _scan(
-        _FakeNfcChannel()
-          ..enqueueWalletScript(
-            record: _record(terminal: '123456789012', amountFen: 0),
-          ),
+        _FakeNfcChannel()..enqueueWalletScript(
+          record: _record(terminal: '123456789012', amountFen: 0),
+        ),
       );
       expect(app.analysis!.trips.single.isEntry, isFalse);
     });
 
     test('0 元交易配对 0x1E 出站：不误判为进站', () async {
       final app = await _scan(
-        _FakeNfcChannel()
-          ..enqueueWalletScript(
-            record: _record(terminal: '123456789012', amountFen: 0),
-            cycleRecord: _cycleRecord(typeCode: 0x04, amountFen: 0),
-          ),
+        _FakeNfcChannel()..enqueueWalletScript(
+          record: _record(terminal: '123456789012', amountFen: 0),
+          cycleRecord: _cycleRecord(typeCode: 0x04, amountFen: 0),
+        ),
       );
       final trip = app.analysis!.trips.single;
       expect(trip.isEntry, isFalse);
@@ -200,11 +242,10 @@ void main() {
 
     test('0 元交易配对 0x1A 记录 1 进站：补齐进站城市与站点', () async {
       final app = await _scan(
-        _FakeNfcChannel()
-          ..enqueueWalletScript(
-            record: _record(terminal: '123456789012', amountFen: 0),
-            varRecord: _railRecord(entryTime: DateTime(2024, 5, 1, 8, 30)),
-          ),
+        _FakeNfcChannel()..enqueueWalletScript(
+          record: _record(terminal: '123456789012', amountFen: 0),
+          varRecord: _railRecord(entryTime: DateTime(2024, 5, 1, 8, 30)),
+        ),
       );
       final trip = app.analysis!.trips.single;
       expect(trip.isEntry, isTrue);
@@ -215,11 +256,10 @@ void main() {
 
     test('0 元交易未配对上 0x1A：不补齐（不猜测）', () async {
       final app = await _scan(
-        _FakeNfcChannel()
-          ..enqueueWalletScript(
-            record: _record(terminal: '123456789012', amountFen: 0),
-            varRecord: _railRecord(), // 进站 2026-08-08 09:06:02，与交易不同分钟
-          ),
+        _FakeNfcChannel()..enqueueWalletScript(
+          record: _record(terminal: '123456789012', amountFen: 0),
+          varRecord: _railRecord(), // 进站 2026-08-08 09:06:02，与交易不同分钟
+        ),
       );
       final trip = app.analysis!.trips.single;
       expect(trip.isEntry, isFalse);
@@ -229,11 +269,10 @@ void main() {
 
     test('0x1A 记录 1：解析出城市轨道进出站记录', () async {
       final app = await _scan(
-        _FakeNfcChannel()
-          ..enqueueWalletScript(
-            record: _record(terminal: '123456789012'),
-            varRecord: _railRecord(),
-          ),
+        _FakeNfcChannel()..enqueueWalletScript(
+          record: _record(terminal: '123456789012'),
+          varRecord: _railRecord(),
+        ),
       );
       final rec = app.railTransitRecord!;
       expect(rec.statusName, '出闸');
@@ -249,11 +288,10 @@ void main() {
 
     test('0x1A 记录 1 未写入：不产出进出站记录', () async {
       final app = await _scan(
-        _FakeNfcChannel()
-          ..enqueueWalletScript(
-            record: _record(terminal: '123456789012'),
-            varRecord: List.filled(85, 0x00), // 初始值（全 0）
-          ),
+        _FakeNfcChannel()..enqueueWalletScript(
+          record: _record(terminal: '123456789012'),
+          varRecord: List.filled(85, 0x00), // 初始值（全 0）
+        ),
       );
       expect(app.railTransitRecord, isNull);
       expect(app.analysis!.trips.single.hasLocation, isFalse);
@@ -261,11 +299,10 @@ void main() {
 
     test('0x1A 逐条读取不可用：按整体数据前缀解析', () async {
       final app = await _scan(
-        _FakeNfcChannel()
-          ..enqueueWalletScript(
-            record: _record(terminal: '123456789012'),
-            varBlob: _railRecord(), // 整体读取兜底：85 字节裸字段体
-          ),
+        _FakeNfcChannel()..enqueueWalletScript(
+          record: _record(terminal: '123456789012'),
+          varBlob: _railRecord(), // 整体读取兜底：85 字节裸字段体
+        ),
       );
       final rec = app.railTransitRecord!;
       expect(rec.entryTime, DateTime(2026, 8, 8, 9, 6, 2));
@@ -276,12 +313,11 @@ void main() {
 
     test('0x1A 与 0x1E 同时出现（城市轨道）：以 0x1E 为准', () async {
       final app = await _scan(
-        _FakeNfcChannel()
-          ..enqueueWalletScript(
-            record: _record(terminal: '123456789012'),
-            varRecord: _railRecord(),
-            cycleRecord: _cycleRecord(), // 0x1E：城市轨道交通行业
-          ),
+        _FakeNfcChannel()..enqueueWalletScript(
+          record: _record(terminal: '123456789012'),
+          varRecord: _railRecord(),
+          cycleRecord: _cycleRecord(), // 0x1E：城市轨道交通行业
+        ),
       );
       expect(app.railTransitRecord, isNull); // 0x1A 记录被抑制
       final trip = app.analysis!.trips.single;
@@ -293,12 +329,11 @@ void main() {
 
     test('0x1A 与 0x1E 同时出现（公共汽电车）：不抑制 0x1A', () async {
       final app = await _scan(
-        _FakeNfcChannel()
-          ..enqueueWalletScript(
-            record: _record(terminal: '123456789012'),
-            varRecord: _railRecord(),
-            cycleRecord: _cycleRecord(appTypeCode: 0x02), // 0x1E：公共汽电车行业
-          ),
+        _FakeNfcChannel()..enqueueWalletScript(
+          record: _record(terminal: '123456789012'),
+          varRecord: _railRecord(),
+          cycleRecord: _cycleRecord(appTypeCode: 0x02), // 0x1E：公共汽电车行业
+        ),
       );
       expect(app.railTransitRecord, isNotNull); // 行业不匹配不抑制
       expect(app.railTransitRecord!.entryBalanceFen, 2500);
@@ -307,11 +342,10 @@ void main() {
 
     test('0x1A 记录 2：解析出公共汽电车上下车记录', () async {
       final app = await _scan(
-        _FakeNfcChannel()
-          ..enqueueWalletScript(
-            record: _record(terminal: '123456789012'),
-            busRecord: _busRecord(), // 记录 1 缺省为初始值
-          ),
+        _FakeNfcChannel()..enqueueWalletScript(
+          record: _record(terminal: '123456789012'),
+          busRecord: _busRecord(), // 记录 1 缺省为初始值
+        ),
       );
       final rec = app.busTransitRecord!;
       expect(rec.statusName, '未知(0x02)'); // 实测取值未收录，显式未知
@@ -327,12 +361,11 @@ void main() {
 
     test('0x1A 记录 2 未写入：不产出上下车记录', () async {
       final app = await _scan(
-        _FakeNfcChannel()
-          ..enqueueWalletScript(
-            record: _record(terminal: '123456789012'),
-            varRecord: _railRecord(),
-            busRecord: List.filled(88, 0x00), // 记录 2 初始值（全 0）
-          ),
+        _FakeNfcChannel()..enqueueWalletScript(
+          record: _record(terminal: '123456789012'),
+          varRecord: _railRecord(),
+          busRecord: List.filled(88, 0x00), // 记录 2 初始值（全 0）
+        ),
       );
       expect(app.busTransitRecord, isNull);
       expect(app.railTransitRecord, isNotNull);
@@ -340,12 +373,11 @@ void main() {
 
     test('0x1A 记录 2 与 0x1E（公共汽电车）：以 0x1E 为准', () async {
       final app = await _scan(
-        _FakeNfcChannel()
-          ..enqueueWalletScript(
-            record: _record(terminal: '123456789012'),
-            busRecord: _busRecord(),
-            cycleRecord: _cycleRecord(appTypeCode: 0x02), // 0x1E：公共汽电车行业
-          ),
+        _FakeNfcChannel()..enqueueWalletScript(
+          record: _record(terminal: '123456789012'),
+          busRecord: _busRecord(),
+          cycleRecord: _cycleRecord(appTypeCode: 0x02), // 0x1E：公共汽电车行业
+        ),
       );
       expect(app.busTransitRecord, isNull); // 0x1A 记录 2 被抑制
       final trip = app.analysis!.trips.single;
@@ -355,12 +387,11 @@ void main() {
 
     test('0x1A 记录 2 与 0x1E（城市轨道）：不抑制公交记录', () async {
       final app = await _scan(
-        _FakeNfcChannel()
-          ..enqueueWalletScript(
-            record: _record(terminal: '123456789012'),
-            busRecord: _busRecord(),
-            cycleRecord: _cycleRecord(), // 0x1E：城市轨道交通行业
-          ),
+        _FakeNfcChannel()..enqueueWalletScript(
+          record: _record(terminal: '123456789012'),
+          busRecord: _busRecord(),
+          cycleRecord: _cycleRecord(), // 0x1E：城市轨道交通行业
+        ),
       );
       expect(app.busTransitRecord, isNotNull); // 行业不匹配不抑制
       expect(app.busTransitRecord!.transactionAmountFen, 300);
@@ -369,11 +400,10 @@ void main() {
 
     test('0x1A 仅有整体数据：轨道按记录 1 前缀解析，公交不猜测', () async {
       final app = await _scan(
-        _FakeNfcChannel()
-          ..enqueueWalletScript(
-            record: _record(terminal: '123456789012'),
-            varBlob: [..._railRecord(), ..._busRecord()], // 85 + 88 字节拼接
-          ),
+        _FakeNfcChannel()..enqueueWalletScript(
+          record: _record(terminal: '123456789012'),
+          varBlob: [..._railRecord(), ..._busRecord()], // 85 + 88 字节拼接
+        ),
       );
       expect(app.railTransitRecord, isNotNull); // 前缀按记录 1 解析
       expect(app.busTransitRecord, isNull); // 记录 2 起始位置不可定位
@@ -381,42 +411,45 @@ void main() {
 
     test('八达通-全国通卡：金额按人民币缺省口径（屏蔽单独适配）', () async {
       final app = await _scan(
-        _FakeNfcChannel()
-          ..enqueueWalletScript(
-            record: _record(terminal: '123456789012'),
-            varRecord: _railRecord(),
-            publicFile: _octopusPublicFile(),
-          ),
+        _FakeNfcChannel()..enqueueWalletScript(
+          record: _record(terminal: '123456789012'),
+          varRecord: _railRecord(),
+          publicFile: _octopusPublicFile(),
+        ),
         assets: _octopusAssets,
       );
       final trip = app.analysis!.trips.single;
       expect(trip.amountText, '-¥46.60');
       expect(app.cardCurrency.code, 'CNY');
       expect(app.cardCurrency.symbol, '¥');
-      expect(app.railTransitRecord!.entryBalanceFen, 300);
+      expect(app.railTransitRecord!.entryBalanceFen, 2500);
     });
 
-    test('八达通-全国通卡：金额按港币（HK\$）口径', () async {
+    test('前缀元数据显式声明 HKD：金额按港币（HK\$）口径', () async {
       final app = await _scan(
-        _FakeNfcChannel()
-          ..enqueueWalletScript(
-            record: _record(terminal: '123456789012'),
-            varRecord: _railRecord(),
-            publicFile: _octopusPublicFile(),
-          ),
-        assets: _octopusAssets,
+        _FakeNfcChannel()..enqueueWalletScript(
+          record: _record(terminal: '123456789012'),
+          varRecord: _railRecord(),
+          publicFile: _octopusPublicFile(),
+        ),
+        assets: {
+          ..._octopusAssets,
+          // 外币来自显式元数据；不能只凭八达通卡名推断币种。
+          'assets/data/tunion_card_meta.json': jsonEncode({
+            'currencyByPrefix': {'31048500': 'HKD'},
+          }),
+        },
       );
       final trip = app.analysis!.trips.single;
       expect(trip.amountText, '-HK\$46.60');
       expect(app.cardCurrency.code, 'HKD');
       expect(app.cardCurrency.symbol, 'HK\$');
-      expect(app.railTransitRecord!.entryBalanceFen, 300);
+      expect(app.railTransitRecord!.entryBalanceFen, 2500);
     });
   });
 
   group('卡片列表与保存流程', () {
-    testWidgets('首页：解析完成弹出保存确认框（名称 + 卡号），不保存不落库',
-        (tester) async {
+    testWidgets('首页：解析完成弹出保存确认框（名称 + 卡号），不保存不落库', (tester) async {
       final channel = _FakeNfcChannel()
         ..enqueueWalletScript(record: _record(terminal: '391002003100'));
       final database = _memoryDatabase();
@@ -430,7 +463,9 @@ void main() {
       await app.scanOnce(); // 解析完成 → 产生待保存结果
 
       await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: HomePage(app: app, active: true))),
+        MaterialApp(
+          home: Scaffold(body: HomePage(app: app, active: true)),
+        ),
       );
       await tester.pumpAndSettle();
 
@@ -479,8 +514,7 @@ void main() {
       await tester.pump();
     });
 
-    testWidgets('重复读取：快照更新、自定义名称保留、不重复建档',
-        (tester) async {
+    testWidgets('重复读取：快照更新、自定义名称保留、不重复建档', (tester) async {
       final channel = _FakeNfcChannel()
         ..enqueueWalletScript(record: _record(terminal: '391002003100'));
       final database = _memoryDatabase();
@@ -504,13 +538,9 @@ void main() {
       expect(rows.single.balanceFen, 10000);
     });
 
-    testWidgets('读取新卡片后：老卡片详情仍展示已保存的行程记录',
-        (tester) async {
+    testWidgets('读取新卡片后：老卡片详情仍展示已保存的行程记录', (tester) async {
       final channel = _FakeNfcChannel()
-        ..enqueueWalletScript(
-          record: _record(terminal: '391002003100'),
-          varRecord: _railRecord(),
-        );
+        ..enqueueWalletScript(record: _record(), cycleRecord: _cycleRecord());
       final database = _memoryDatabase();
       final app = await _scan(channel, database: database);
 
@@ -524,8 +554,8 @@ void main() {
       channel
         ..reset()
         ..enqueueWalletScript(
-          record: _record(terminal: '391002003100'),
-          varRecord: _railRecord(),
+          record: _record(seq: 2, amountFen: 200, day: 2),
+          cycleRecord: _cycleRecord(amountFen: 200, day: 2),
           publicFile: _secondPublicFile(),
         );
       await app.scanOnce();
@@ -533,21 +563,27 @@ void main() {
       expect(app.lastCardFingerprint, isNot(first.cardFingerprint));
 
       // 打开老卡片详情：回退档案快照展示，记录不因读取新卡片消失
-      await tester.pumpWidget(MaterialApp(home: CardsPage(app: app)));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: CardsPage(app: app)),
+        ),
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.text('老卡片'));
       await tester.pumpAndSettle();
 
-      expect(find.text('最近读取记录'), findsOneWidget);
+      expect(find.text('行程记录 · 1 次读取'), findsOneWidget);
       expect(find.text('消费 · 苏洋 · 序号 1'), findsOneWidget);
+      expect(find.text('-¥46.60'), findsOneWidget);
+      expect(find.text('消费 · 苏洋 · 序号 2'), findsNothing);
+      expect(find.text('-¥2.00'), findsNothing);
       expect(find.text('城市轨道交通'), findsWidgets);
 
       await tester.pumpWidget(const SizedBox());
       await tester.pump();
     });
 
-    testWidgets('卡片列表：展示名称 / 卡号 / 最近读取时间 / 余额 / 记录条数',
-        (tester) async {
+    testWidgets('卡片列表：展示名称 / 卡号 / 最近读取时间 / 余额 / 记录条数', (tester) async {
       final database = _memoryDatabase();
       final app = AppState(database: database);
       await app.cardRepository.saveIdentity(
@@ -566,7 +602,11 @@ void main() {
         readAt: DateTime(2026, 10, 14, 21, 40),
       );
 
-      await tester.pumpWidget(MaterialApp(home: CardsPage(app: app)));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: CardsPage(app: app)),
+        ),
+      );
       await tester.pumpAndSettle();
 
       expect(find.text('卡片列表'), findsOneWidget);
@@ -582,7 +622,11 @@ void main() {
 
     testWidgets('卡片列表：空状态提示', (tester) async {
       final app = AppState(database: _memoryDatabase());
-      await tester.pumpWidget(MaterialApp(home: CardsPage(app: app)));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: CardsPage(app: app)),
+        ),
+      );
       await tester.pumpAndSettle();
 
       expect(find.text('还没有保存的卡片'), findsOneWidget);
@@ -611,7 +655,11 @@ void main() {
         readAt: DateTime(2026, 10, 14, 21, 40),
       );
 
-      await tester.pumpWidget(MaterialApp(home: CardsPage(app: app)));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: CardsPage(app: app)),
+        ),
+      );
       await tester.pumpAndSettle();
 
       final newerY = tester.getTopLeft(find.text('新卡')).dy;
@@ -622,8 +670,7 @@ void main() {
       await tester.pump();
     });
 
-    testWidgets('点击卡片进入详情：展示读取快照，编辑名称同步到列表',
-        (tester) async {
+    testWidgets('点击卡片进入详情：展示读取快照，编辑名称同步到列表', (tester) async {
       final database = _memoryDatabase();
       final app = AppState(database: database);
       await app.cardRepository.saveIdentity(
@@ -642,7 +689,11 @@ void main() {
         readAt: DateTime(2026, 10, 14, 21, 40),
       );
 
-      await tester.pumpWidget(MaterialApp(home: CardsPage(app: app)));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: CardsPage(app: app)),
+        ),
+      );
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('福路通·榕城通'));
@@ -660,7 +711,7 @@ void main() {
       expect(find.text('2026-10-14 21:40:00'), findsOneWidget);
 
       // 编辑自定义名称
-      await tester.tap(find.text('编辑卡片名称'));
+      await tester.tap(find.byTooltip('自定义名称'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), '上学用的卡');
       await tester.tap(find.text('保存'));
@@ -677,8 +728,7 @@ void main() {
       await tester.pump();
     });
 
-    testWidgets('卡片列表：删除需确认，确认后档案与读取记录一并移除',
-        (tester) async {
+    testWidgets('卡片列表：删除需确认，确认后档案与读取记录一并移除', (tester) async {
       final database = _memoryDatabase();
       final app = AppState(database: database);
       await app.cardRepository.saveIdentity(
@@ -691,7 +741,11 @@ void main() {
         readAt: DateTime(2026, 10, 14, 21, 40),
       );
 
-      await tester.pumpWidget(MaterialApp(home: CardsPage(app: app)));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: CardsPage(app: app)),
+        ),
+      );
       await tester.pumpAndSettle();
 
       // 打开操作菜单 → 删除卡片 → 取消：档案保留
@@ -743,11 +797,8 @@ Future<AppState> _scan(
 
 /// 内存数据库：挂件测试需 closeStreamsSynchronously 避免流取消定时器残留。
 AppDatabase _memoryDatabase() => AppDatabase(
-      DatabaseConnection(
-        NativeDatabase.memory(),
-        closeStreamsSynchronously: true,
-      ),
-    );
+  DatabaseConnection(NativeDatabase.memory(), closeStreamsSynchronously: true),
+);
 
 /// 最小知识库资产：卡前缀库条目（发卡机构代码 01283910 后 4 位即城市
 /// 代码 3910 → 福州市）+ 指纹与终端规则。
@@ -760,8 +811,8 @@ final Map<String, String> _assets = {
         'cityName': '福州市',
         'operator': '示例运营方',
         'cardFamily': '测试卡',
-      }
-    ]
+      },
+    ],
   }),
   'assets/data/tunion_terminal_rules.json': jsonEncode({
     'rules': [
@@ -773,8 +824,8 @@ final Map<String, String> _assets = {
           'lineCode': [4, 6],
           'stationCode': [8, 10],
         },
-      }
-    ]
+      },
+    ],
   }),
   'assets/data/tunion_card_prefixes.json': jsonEncode({
     'entries': [
@@ -783,8 +834,8 @@ final Map<String, String> _assets = {
         'issuer': '01283910',
         'cardName': '福路通·榕城通',
         'city': '福州市',
-      }
-    ]
+      },
+    ],
   }),
 };
 
@@ -793,12 +844,8 @@ final Map<String, String> _octopusAssets = {
   ..._assets,
   'assets/data/tunion_card_prefixes.json': jsonEncode({
     'entries': [
-      {
-        'prefix': '31048500',
-        'cardName': '八达通-全国通卡',
-        'city': '香港',
-      }
-    ]
+      {'prefix': '31048500', 'cardName': '八达通-全国通卡', 'city': '香港'},
+    ],
   }),
 };
 
@@ -856,11 +903,11 @@ class _FakeNfcChannel implements NfcChannel {
 
   @override
   Future<NfcScanResult?> scanOnce() async => NfcScanResult(
-        uid: '04A1B2C3',
-        technologies: const ['IsoDep'],
-        isoDepConnected: true,
-        timestamp: DateTime(2026, 10, 8),
-      );
+    uid: '04A1B2C3',
+    technologies: const ['IsoDep'],
+    isoDepConnected: true,
+    timestamp: DateTime(2026, 10, 8),
+  );
 
   @override
   Future<void> stopScan() async {}
@@ -874,13 +921,58 @@ class _FakeNfcChannel implements NfcChannel {
   }
 }
 
-/// 内存资产包：按 Key 返回预置 JSON 字符串。
+late Uint8List _stationDatabaseBytes;
+
+/// 最小 TU SQLite 夹具：完整 source_key 与随包资产的福州苏洋条目一致。
+/// 不添加旧版短键 0231 / 02 别名，否则会掩盖终端查询未迁移的问题。
+Uint8List _stationDatabaseFixture(Directory directory) {
+  final file = File('${directory.path}/fixture.sqlite');
+  final db = sqlite.sqlite3.open(file.path);
+  try {
+    db.execute('''
+CREATE TABLE regions(
+  region_id INTEGER PRIMARY KEY,
+  region_code TEXT NOT NULL,
+  region_name TEXT NOT NULL,
+  province TEXT,
+  table_name TEXT NOT NULL,
+  code_source TEXT
+);
+CREATE TABLE region_fuzhou(
+  station_id INTEGER PRIMARY KEY,
+  transport_type TEXT,
+  line_name TEXT,
+  station_name TEXT,
+  system_name TEXT,
+  source_field TEXT,
+  source_key TEXT,
+  source_region_code TEXT,
+  source_region_name TEXT,
+  raw_value_json TEXT,
+  confidence TEXT
+);
+INSERT INTO regions VALUES(1, '3910', '福州市', '福建省', 'region_fuzhou', 'test');
+INSERT INTO region_fuzhou VALUES(
+  1, 'metro', '2号线', '苏洋', '福州地铁', 'test.fuzhou.station',
+  '39100231', '3910', '福州市', NULL, 'high'
+);
+''');
+  } finally {
+    db.close();
+  }
+  return file.readAsBytesSync();
+}
+
+/// 内存资产包：按 Key 返回预置 JSON 或最小站点数据库。
 class _FakeBundle extends CachingAssetBundle {
   final Map<String, String> _texts;
   _FakeBundle(this._texts);
 
   @override
   Future<ByteData> load(String key) async {
+    if (key == TuDatabase.assetPath) {
+      return ByteData.sublistView(_stationDatabaseBytes);
+    }
     final text = _texts[key];
     if (text == null) throw FlutterError('资产不存在：$key');
     return ByteData.view(Uint8List.fromList(utf8.encode(text)).buffer);
@@ -948,43 +1040,42 @@ List<int> _record({
   int day = 1,
   String terminal = '123456789012',
   int rawType = 0x06,
-}) =>
-    [
-      (seq >> 8) & 0xFF,
-      seq & 0xFF,
-      0,
-      0,
-      0,
-      (amountFen >> 24) & 0xFF,
-      (amountFen >> 16) & 0xFF,
-      (amountFen >> 8) & 0xFF,
-      amountFen & 0xFF,
-      rawType,
-      ..._bcd(terminal),
-      0x20,
-      0x24,
-      0x05,
-      day, // 2024050d
-      0x08,
-      0x30,
-      0x00, // 08:30:00
-    ];
+}) => [
+  (seq >> 8) & 0xFF,
+  seq & 0xFF,
+  0,
+  0,
+  0,
+  (amountFen >> 24) & 0xFF,
+  (amountFen >> 16) & 0xFF,
+  (amountFen >> 8) & 0xFF,
+  amountFen & 0xFF,
+  rawType,
+  ..._bcd(terminal),
+  0x20,
+  0x24,
+  0x05,
+  day, // 2024050d
+  0x08,
+  0x30,
+  0x00, // 08:30:00
+];
 
 List<int> _bcd(String digits) => [
-      for (var i = 0; i < digits.length; i += 2)
-        int.parse(digits.substring(i, i + 2), radix: 16),
-    ];
+  for (var i = 0; i < digits.length; i += 2)
+    int.parse(digits.substring(i, i + 2), radix: 16),
+];
 
 /// 7 字节 BCD 时间戳（YYYYMMDDhhmmss，如 0x20 0x26 … 即 2026 年）。
 List<int> _bcdTime(DateTime t) => [
-      0x20,
-      _bcd2(t.year % 100),
-      _bcd2(t.month),
-      _bcd2(t.day),
-      _bcd2(t.hour),
-      _bcd2(t.minute),
-      _bcd2(t.second),
-    ];
+  0x20,
+  _bcd2(t.year % 100),
+  _bcd2(t.month),
+  _bcd2(t.day),
+  _bcd2(t.hour),
+  _bcd2(t.minute),
+  _bcd2(t.second),
+];
 
 int _bcd2(int v) => ((v ~/ 10) << 4) | (v % 10);
 
@@ -993,51 +1084,51 @@ int _bcd2(int v) => ((v ~/ 10) << 4) | (v % 10);
 /// 2026-08-08 09:06:02 进站 / 09:12:31 出站 ·
 /// 进站钱包余额 2500 分 · 出闸交易金额 300 分。
 List<int> _railRecord({DateTime? entryTime}) => [
-      0x02, // [00] 交易状态：出闸
-      0x39, 0x10, // [01-02] 进闸城市代码 3910
-      0x35, 0x01, // [03-04] 出闸城市代码 3501
-      ...List.filled(7, 0), 0x10, // [05-0C] 进闸机构标识
-      ...List.filled(7, 0), 0x08, // [0D-14] 出闸机构标识
-      0x08, 0x00, 0x19, 0x00, 0x30, 0x00, 0x01, 0x23, // [15-1C] 进闸站点
-      0x08, 0x00, 0x19, 0x00, 0x30, 0x00, 0x04, 0x56, // [1D-24] 出闸站点
-      ...List.filled(7, 0), 0x0A, // [25-2C] 进闸终端编号
-      ...List.filled(7, 0), 0x0B, // [2D-34] 出闸终端编号
-      ..._bcdTime(entryTime ?? DateTime(2026, 8, 8, 9, 6, 2)), // [35-3B] 进站时间
-      0x20, 0x26, 0x08, 0x08, 0x09, 0x12, 0x31, // [3C-42] 出站时间
-      0x00, 0x00, 0x01, 0x2C, // [43-46] 标注金额 300 分
-      0x02, // [47] 入站线路号
-      0x02, // [48] 出站线路号
-      0x00, 0x00, 0x00, 0x00, // [49-4C] 进站交易金额
-      0x00, 0x00, 0x01, 0x2C, // [4D-50] 进站钱包余额 2500 分
-      0x00, 0x00, 0x01, 0x2C, // [51-54] 出闸交易金额 300 分
-    ];
+  0x02, // [00] 交易状态：出闸
+  0x39, 0x10, // [01-02] 进闸城市代码 3910
+  0x35, 0x01, // [03-04] 出闸城市代码 3501
+  ...List.filled(7, 0), 0x10, // [05-0C] 进闸机构标识
+  ...List.filled(7, 0), 0x08, // [0D-14] 出闸机构标识
+  0x08, 0x00, 0x19, 0x00, 0x30, 0x00, 0x01, 0x23, // [15-1C] 进闸站点
+  0x08, 0x00, 0x19, 0x00, 0x30, 0x00, 0x04, 0x56, // [1D-24] 出闸站点
+  ...List.filled(7, 0), 0x0A, // [25-2C] 进闸终端编号
+  ...List.filled(7, 0), 0x0B, // [2D-34] 出闸终端编号
+  ..._bcdTime(entryTime ?? DateTime(2026, 8, 8, 9, 6, 2)), // [35-3B] 进站时间
+  0x20, 0x26, 0x08, 0x08, 0x09, 0x12, 0x31, // [3C-42] 出站时间
+  0x00, 0x00, 0x01, 0x2C, // [43-46] 标注金额 300 分
+  0x02, // [47] 入站线路号
+  0x02, // [48] 出站线路号
+  0x00, 0x00, 0x00, 0x00, // [49-4C] 进站交易金额
+  0x00, 0x00, 0x09, 0xC4, // [4D-50] 进站钱包余额 2500 分
+  0x00, 0x00, 0x01, 0x2C, // [51-54] 出闸交易金额 300 分
+];
 
 /// 0x1A 记录 2（公共汽电车应用信息记录，88 字节裸记录体）：
 /// 交易状态 0x02（未收录，显式未知）· 上车城市 3910 · 下车城市 3501（未收录）·
 /// 2026-08-08 09:06:02 上车 / 09:12:31 下车 · 交易金额 300 分 · 乘车里程 5。
 List<int> _busRecord() => [
-      0x02, // [00] 交易状态
-      0x39, 0x10, // [01-02] 上车城市代码 3910
-      ...List.filled(7, 0), 0x10, // [03-0A] 上车机构标识
-      0x00, 0x01, // [0B-0C] 上车运营商代码
-      0x00, 0x08, // [0D-0E] 上车线路号
-      0x02, // [0F] 上车站点
-      ...List.filled(7, 0), 0x23, // [10-17] 上车车辆号
-      ...List.filled(6, 0), 0x1A, 0x5A, // [18-1F] 上车终端编号
-      0x20, 0x26, 0x08, 0x08, 0x09, 0x06, 0x02, // [20-26] 上车时间
-      0x00, 0x00, 0x01, 0x2C, // [27-2A] 标注金额 300 分
-      0x00, // [2B] 方向标识
-      0x35, 0x01, // [2C-2D] 下车城市代码 3501
-      ...List.filled(7, 0), 0x08, // [2E-35] 下车机构标识
-      0x00, 0x01, // [36-37] 下车运营商代码
-      0x00, 0x08, // [38-39] 下车线路号
-      0x03, // [3A] 下车站点
-      ...List.filled(7, 0), 0x36, // [3B-42] 下车车辆号
-      ...List.filled(6, 0), 0x15, 0x68, // [43-4A] 下车终端编号
-      0x20, 0x26, 0x08, 0x08, 0x09, 0x12, 0x31, // [4B-51] 下车时间
-      0x00, 0x00, 0x01, 0x2C, // [52-55] 交易金额 300 分
-      0x00, 0x05, // [56-57] 乘车里程 5
-    ];
+  0x02, // [00] 交易状态
+  0x39, 0x10, // [01-02] 上车城市代码 3910
+  ...List.filled(7, 0), 0x10, // [03-0A] 上车机构标识
+  0x00, 0x01, // [0B-0C] 上车运营商代码
+  0x00, 0x08, // [0D-0E] 上车线路号
+  0x02, // [0F] 上车站点
+  ...List.filled(7, 0), 0x23, // [10-17] 上车车辆号
+  ...List.filled(6, 0), 0x1A, 0x5A, // [18-1F] 上车终端编号
+  0x20, 0x26, 0x08, 0x08, 0x09, 0x06, 0x02, // [20-26] 上车时间
+  0x00, 0x00, 0x01, 0x2C, // [27-2A] 标注金额 300 分
+  0x00, // [2B] 方向标识
+  0x35, 0x01, // [2C-2D] 下车城市代码 3501
+  ...List.filled(7, 0), 0x08, // [2E-35] 下车机构标识
+  0x00, 0x01, // [36-37] 下车运营商代码
+  0x00, 0x08, // [38-39] 下车线路号
+  0x03, // [3A] 下车站点
+  ...List.filled(7, 0), 0x36, // [3B-42] 下车车辆号
+  ...List.filled(6, 0), 0x15, 0x68, // [43-4A] 下车终端编号
+  0x20, 0x26, 0x08, 0x08, 0x09, 0x12, 0x31, // [4B-51] 下车时间
+  0x00, 0x00, 0x01, 0x2C, // [52-55] 交易金额 300 分
+  0x00, 0x05, // [56-57] 乘车里程 5
+];
 
 /// 0x1E 循环记录（48 字节）：出站 · 2024-05-01 08:30:00 · 4660 分 ·
 /// 应用分类码 [appTypeCode]（默认 0x01 城市轨道交通）。线路站点字段

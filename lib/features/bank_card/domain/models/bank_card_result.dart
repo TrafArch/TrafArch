@@ -7,6 +7,7 @@ import 'parse_issue.dart';
 abstract final class BankCardProtocolFamily {
   static const String emv = 'emv';
   static const String pboc = 'pboc';
+  static const String mixed = 'mixed';
 }
 
 /// 读取整体状态。
@@ -46,13 +47,13 @@ class BankCardResult implements BankCardOutcome {
   });
 
   Map<String, dynamic> toJson() => {
-        'protocolFamily': protocolFamily,
-        'analyzedAt': analyzedAt.toIso8601String(),
-        'parserVersion': parserVersion,
-        'status': status.name,
-        'issues': issues.map((e) => e.toJson()).toList(),
-        'traces': traces.map((e) => e.toJson()).toList(),
-        // 记录与标签含原始值，序列化仅用于本地展示 / 后续受控存储，
-        // 不写入普通运行日志。
-      };
+    'protocolFamily': protocolFamily,
+    'analyzedAt': analyzedAt.toIso8601String(),
+    'parserVersion': parserVersion,
+    'status': status.name,
+    'issues': issues.map((e) => e.toJson()).toList(),
+    'traces': traces.map((e) => e.toJson()).toList(),
+    // 记录与标签含原始值，序列化仅用于本地展示 / 后续受控存储，
+    // 不写入普通运行日志。
+  };
 }

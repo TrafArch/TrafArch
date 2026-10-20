@@ -29,7 +29,8 @@ QrDartDecode? decodeQrFromRgba(Uint8List rgba, int width, int height) {
     final pixels = Int32List(width * height);
     for (var i = 0; i < pixels.length; i++) {
       final offset = i * 4;
-      pixels[i] = 0xFF000000 |
+      pixels[i] =
+          0xFF000000 |
           (rgba[offset] << 16) |
           (rgba[offset + 1] << 8) |
           rgba[offset + 2];
@@ -38,15 +39,18 @@ QrDartDecode? decodeQrFromRgba(Uint8List rgba, int width, int height) {
     final result = _tryDecode(source) ?? _tryDecode(source.invert());
     if (result == null) return null;
 
-    final rawBytes = result.rawBytes;
-    if (rawBytes != null && rawBytes.isNotEmpty) {
-      return QrDartDecode(
-        List<int>.generate(rawBytes.length, (i) => rawBytes[i] & 0xff),
-      );
+    // ZXing rawBytes contains QR codewords (mode/length/padding included).
+    // Transit payloads live in the decoded byte segments instead.
+    final byteSegments = result.resultMetadata[ResultMetadataType.byteSegments];
+    if (byteSegments is List<Int8List> && byteSegments.isNotEmpty) {
+      return QrDartDecode([
+        for (final segment in byteSegments)
+          for (final byte in segment) byte & 0xff,
+      ]);
     }
     final text = result.text;
     if (text.isEmpty) return null;
-    return QrDartDecode(latin1.encode(text));
+    return QrDartDecode(utf8.encode(text));
   } catch (_) {
     return null;
   }
@@ -72,10 +76,10 @@ Future<List<int>?> decodeQrFromImageFile(String path) async {
   try {
     final fileBytes = await File(path).readAsBytes();
     buffer = await ui.ImmutableBuffer.fromUint8List(fileBytes);
-    descriptor = await ui.ImageDescriptor.encoded(buffer!);
+    descriptor = await ui.ImageDescriptor.encoded(buffer);
 
-    var targetWidth = descriptor!.width;
-    var targetHeight = descriptor!.height;
+    var targetWidth = descriptor.width;
+    var targetHeight = descriptor.height;
     const maxSide = 1800;
     final longest = targetWidth > targetHeight ? targetWidth : targetHeight;
     if (longest > maxSide) {
@@ -84,17 +88,23 @@ Future<List<int>?> decodeQrFromImageFile(String path) async {
       targetHeight = (targetHeight * scale).round();
     }
 
-    codec = await descriptor!.instantiateCodec(
+    codec = await descriptor.instantiateCodec(
       targetWidth: targetWidth,
       targetHeight: targetHeight,
     );
-    final frame = await codec!.getNextFrame();
+    final frame = await codec.getNextFrame();
     image = frame.image;
-    final byteData = await image!.toByteData(format: ui.ImageByteFormat.rawRgba);
+    final byteData = await image.toByteData(
+      format: ui.ImageByteFormat.rawRgba,
+    );
 
     if (byteData == null) return null;
-    final rgba = Uint8List.fromList(byteData.buffer
-        .asUint8List(byteData.offsetInBytes, byteData.lengthInBytes));
+    final rgba = Uint8List.fromList(
+      byteData.buffer.asUint8List(
+        byteData.offsetInBytes,
+        byteData.lengthInBytes,
+      ),
+    );
     final decode = await Isolate.run(
       () => decodeQrFromRgba(rgba, targetWidth, targetHeight),
     );

@@ -5,6 +5,7 @@ import '../models/emv_discovery_result.dart';
 import '../parser/ber_tlv.dart';
 import '../parser/fci_parser.dart';
 import '../protocol/emv_apdu.dart';
+import '../protocol/read_only_exchange.dart';
 import '../transport.dart';
 
 /// EMV 应用发现枚举器：PPSE 目录 → 候选 AID 回退 → 逐个 SELECT 解析 FCI。
@@ -56,15 +57,18 @@ class EmvApplicationEnumerator {
     // 3) 逐个 SELECT 已知 / 目录 AID，解析 FCI
     for (final aid in candidates) {
       try {
-        final response =
-            await _exchange(EmvApdu.selectByName(EmvTlvParser.fromHex(aid)));
+        final response = await _exchange(
+          EmvApdu.selectByName(EmvTlvParser.fromHex(aid)),
+        );
         if (!response.isSuccess) {
-          failures.add(EmvCandidateFailure(
-            aidHex: aid,
-            statusHex: response.statusHex,
-            reason: 'select_rejected',
-            message: 'AID $aid 选择失败，SW=${response.statusHex}',
-          ));
+          failures.add(
+            EmvCandidateFailure(
+              aidHex: aid,
+              statusHex: response.statusHex,
+              reason: 'select_rejected',
+              message: 'AID $aid 选择失败，SW=${response.statusHex}',
+            ),
+          );
           continue;
         }
         try {
@@ -72,18 +76,27 @@ class EmvApplicationEnumerator {
           if (!apps.any((a) => a.aidHex == app.aidHex)) apps.add(app);
           diagnostics.add('AID $aid 选择成功');
         } catch (e) {
-          failures.add(EmvCandidateFailure(
-            aidHex: aid,
-            reason: 'fci_error',
-            message: 'AID $aid 已选择，但 FCI 解析失败：$e',
-          ));
+          // SELECT succeeded. Optional/malformed FCI must not hide this AID;
+          // the application reader will reselect it and retain its own evidence.
+          if (!apps.any((a) => a.aidHex == aid)) {
+            apps.add(EmvApplication(aidHex: aid));
+          }
+          failures.add(
+            EmvCandidateFailure(
+              aidHex: aid,
+              reason: 'fci_error',
+              message: 'AID $aid 已选择，但 FCI 解析失败：$e',
+            ),
+          );
         }
       } catch (e) {
-        failures.add(EmvCandidateFailure(
-          aidHex: aid,
-          reason: 'io_error',
-          message: 'AID $aid 通信失败：$e',
-        ));
+        failures.add(
+          EmvCandidateFailure(
+            aidHex: aid,
+            reason: 'io_error',
+            message: 'AID $aid 通信失败：$e',
+          ),
+        );
       }
     }
 
@@ -95,27 +108,6 @@ class EmvApplicationEnumerator {
     );
   }
 
-  /// 单条 APDU 收发：6C（错误 Le 重发）+ 61XX（GET RESPONSE 链式，上限 8）。
-  Future<EmvApduResponse> _exchange(List<int> command) async {
-    var response = EmvApduResponse.parse(await _transceive(command));
-    if (response.wrongLe) {
-      final corrected = List<int>.from(command);
-      if (corrected.isNotEmpty) corrected[corrected.length - 1] = response.sw2;
-      response = EmvApduResponse.parse(await _transceive(corrected));
-    }
-
-    final data = <int>[...response.data];
-    var current = response;
-    var loops = 0;
-    while (current.hasMoreData && loops++ < 8) {
-      current = EmvApduResponse.parse(
-        await _transceive(EmvApdu.getResponse(current.sw2)),
-      );
-      data.addAll(current.data);
-    }
-    if (current.hasMoreData) {
-      throw StateError('GET RESPONSE 次数超过限制');
-    }
-    return EmvApduResponse(data, current.sw1, current.sw2);
-  }
+  Future<EmvApduResponse> _exchange(List<int> command) =>
+      exchangeReadOnly(_transceive, command);
 }

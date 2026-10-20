@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,6 +12,8 @@ import 'package:transit_card_analyzer/features/expert/expert_page.dart';
 import 'package:transit_card_analyzer/features/home/home_page.dart';
 import 'package:transit_card_analyzer/features/qr/qr_image_picker.dart';
 import 'package:transit_card_analyzer/state/app_state.dart';
+
+import 'support/test_database.dart';
 
 void main() {
   group('JT/T 1179 二维码解析与展示扩展', () {
@@ -116,9 +117,11 @@ void main() {
       addTearDown(tester.view.reset);
 
       final app = _newApp();
-      await app.init();
+      await tester.runAsync(app.init);
       await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: HomePage(app: app, active: false))),
+        MaterialApp(
+          home: Scaffold(body: HomePage(app: app, active: false)),
+        ),
       );
       await tester.pump();
 
@@ -130,17 +133,18 @@ void main() {
       expect(find.text('最近扫描'), findsNothing);
     });
 
-    testWidgets('最近扫描：读取卡片展示卡片信息，乘车码内嵌展示并支持手动切换',
-        (tester) async {
+    testWidgets('最近扫描：读取卡片展示卡片信息，乘车码内嵌展示并支持手动切换', (tester) async {
       tester.view.physicalSize = const Size(1200, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
 
       final app = _newApp(channel: _CardNfcChannel());
-      await app.init();
+      await tester.runAsync(app.init);
       await app.scanOnce();
       await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: HomePage(app: app, active: false))),
+        MaterialApp(
+          home: Scaffold(body: HomePage(app: app, active: false)),
+        ),
       );
       await tester.pump();
 
@@ -172,23 +176,26 @@ void main() {
     });
 
     testWidgets('从相册导入：用户取消选图后无副作用', (tester) async {
-      final messenger = TestDefaultBinaryMessengerBinding
-          .instance.defaultBinaryMessenger;
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
       messenger.setMockMethodCallHandler(qrImagePickerChannel, (call) async {
         expect(call.method, 'pickImage');
         return null;
       });
-      addTearDown(() =>
-          messenger.setMockMethodCallHandler(qrImagePickerChannel, null));
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(qrImagePickerChannel, null),
+      );
 
       tester.view.physicalSize = const Size(1200, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
 
       final app = _newApp();
-      await app.init();
+      await tester.runAsync(app.init);
       await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: HomePage(app: app, active: false))),
+        MaterialApp(
+          home: Scaffold(body: HomePage(app: app, active: false)),
+        ),
       );
       await tester.pump();
 
@@ -206,10 +213,12 @@ void main() {
       addTearDown(tester.view.reset);
 
       final app = _newApp();
-      await app.init();
+      await tester.runAsync(app.init);
       app.parseQrBytes(const [0x80, 0x00, 0x01]);
       await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: HomePage(app: app, active: false))),
+        MaterialApp(
+          home: Scaffold(body: HomePage(app: app, active: false)),
+        ),
       );
       await tester.pump();
 
@@ -231,9 +240,11 @@ void main() {
       addTearDown(tester.view.reset);
 
       final app = _newApp();
-      await app.init();
+      await tester.runAsync(app.init);
       await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: ExpertPage(app: app))),
+        MaterialApp(
+          home: Scaffold(body: ExpertPage(app: app)),
+        ),
       );
       await tester.pump();
 
@@ -263,49 +274,73 @@ void main() {
     });
   });
 
-  group('专家页二维码页签', () {
-    testWidgets('页签常驻：空态引导去首页 → 解析后展示字段与证书', (tester) async {
+  group('专家页卡片与二维码切换', () {
+    testWidgets('信息获取保留两类数据，自动跟随新数据并允许手动切换', (tester) async {
       tester.view.physicalSize = const Size(1200, 2000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
 
-      final app = _newApp();
-      await app.init();
+      final app = _newApp(channel: _CardNfcChannel());
+      await tester.runAsync(app.init);
+      await app.scanOnce();
       await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: ExpertPage(app: app))),
+        MaterialApp(
+          home: Scaffold(body: ExpertPage(app: app)),
+        ),
       );
-      await tester.pump();
-
-      final qrTab = find.text('二维码');
-      expect(qrTab, findsOneWidget);
-      await tester.tap(qrTab);
       await tester.pumpAndSettle();
 
-      // 空态：引导去首页获取，不展示 NFC 未读取提示横幅与获取按钮
-      expect(find.text('尚未获取乘车码，请先在首页扫描二维码或从相册导入'), findsOneWidget);
-      expect(find.text('尚未读取，请先在首页放置票卡完成读取'), findsNothing);
+      // 获取入口集中在首页；专家页只有常驻的信息获取页签。
+      expect(find.widgetWithText(Tab, '信息获取'), findsOneWidget);
+      expect(find.widgetWithText(Tab, '二维码'), findsNothing);
+      expect(find.text('解析器'), findsOneWidget);
       expect(find.text('扫描二维码'), findsNothing);
       expect(find.text('手动输入'), findsNothing);
 
       app.parseQrBytes(_sampleQr());
       await tester.pumpAndSettle();
 
-      expect(find.text('6225880123456789'), findsOneWidget); // 支付账户号
-      expect(find.text('1380013800'), findsOneWidget); // 用户账户号（ASCII）
-      expect(find.text('福路通·榕城通'), findsOneWidget); // 前缀库发卡机构
-      expect(find.text('0x80'), findsOneWidget); // 版本
+      // 已有卡片时新二维码仍自动展示，且卡片信息可随时切回。
+      expect(find.text('卡片识别'), findsOneWidget);
+      expect(find.text('二维码'), findsOneWidget);
+      expect(find.text('6225880123456789'), findsOneWidget);
+      expect(find.text('1380013800'), findsOneWidget);
+      expect(find.text('福路通·榕城通'), findsOneWidget);
+      expect(find.text('0x80'), findsOneWidget);
       expect(find.text('发卡机构公钥证书（117 字节）'), findsOneWidget);
       expect(find.text('二维码原始数据'), findsOneWidget);
-      expect(find.textContaining('已超出生成时间'), findsOneWidget); // 状态
+      expect(find.textContaining('已超出生成时间'), findsOneWidget);
+      expect(find.text('解析器'), findsNothing);
+
+      await tester.tap(find.text('卡片识别'));
+      await tester.pumpAndSettle();
+      expect(find.text('解析器'), findsOneWidget);
+      expect(find.text('6225880123456789'), findsNothing);
+      expect(app.qrData!.paymentAccountDigits, '6225880123456789');
+
+      await tester.tap(find.text('二维码'));
+      await tester.pumpAndSettle();
+      expect(find.text('6225880123456789'), findsOneWidget);
+      expect(find.text('发卡机构公钥证书（117 字节）'), findsOneWidget);
+      expect(app.lastResult!.uid, '04A1B2C3D4');
+
+      await app.scanOnce();
+      await tester.pumpAndSettle();
+      expect(find.text('解析器'), findsOneWidget);
+      expect(find.text('6225880123456789'), findsNothing);
+      await tester.tap(find.text('二维码'));
+      await tester.pumpAndSettle();
+      expect(find.text('6225880123456789'), findsOneWidget);
     });
   });
 }
 
 AppState _newApp({NfcChannel? channel}) => AppState(
-      channel: channel ?? _NoopNfcChannel(),
-      bundle: _FakeBundle(_assets),
-      settingsStore: MemorySettingsStore(),
-    );
+  database: testDatabase(),
+  channel: channel ?? _NoopNfcChannel(),
+  bundle: _FakeBundle(_assets),
+  settingsStore: MemorySettingsStore(),
+);
 
 String _hexOf(List<int> bytes) =>
     bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
@@ -313,20 +348,20 @@ String _hexOf(List<int> bytes) =>
 /// JT/T 1179 表 18 证书样例（117 字节）：发卡机构 cn8 '01283910' ·
 /// 失效 2030-12 · 序列号 010203 · SM2 公钥与签名字节占位（不解析）。
 List<int> _sampleCertificate() => [
-      0x24, // 记录头
-      0x01, 0x01, 0x00, 0x00, // 服务标识（交通电子现金）
-      0x01, // 中心 CA 公钥索引
-      0x12, // 证书格式
-      0x01, 0x28, 0x39, 0x10, // 发卡机构标识 BCD '01283910'
-      0x12, 0x30, // 失效日期 MMYY：2030-12
-      0x01, 0x02, 0x03, // 证书序列号
-      0x04, // 公钥签名算法（SM2）
-      0x04, // 公钥加密算法（保留）
-      0x00, // 公钥参数标识
-      0x21, // 公钥长度（33 字节）
-      0x02, ...List.filled(32, 0x22), // 发卡机构公钥
-      ...List.filled(64, 0x33), // 数字签名
-    ];
+  0x24, // 记录头
+  0x01, 0x01, 0x00, 0x00, // 服务标识（交通电子现金）
+  0x01, // 中心 CA 公钥索引
+  0x12, // 证书格式
+  0x01, 0x28, 0x39, 0x10, // 发卡机构标识 BCD '01283910'
+  0x12, 0x30, // 失效日期 MMYY：2030-12
+  0x01, 0x02, 0x03, // 证书序列号
+  0x04, // 公钥签名算法（SM2）
+  0x04, // 公钥加密算法（保留）
+  0x00, // 公钥参数标识
+  0x21, // 公钥长度（33 字节）
+  0x02, ...List.filled(32, 0x22), // 发卡机构公钥
+  ...List.filled(64, 0x33), // 数字签名
+];
 
 /// JT/T 1179 表 2 二维码样例（335 字节）：
 /// 支付账户号 Cn '6225880123456789'（右补 FF）· 用户账户号 ASCII
@@ -363,8 +398,8 @@ final Map<String, String> _assets = {
         'cityName': '福州市',
         'operator': '示例运营方',
         'cardFamily': '测试卡',
-      }
-    ]
+      },
+    ],
   }),
   'assets/data/tunion_terminal_rules.json': jsonEncode({'rules': []}),
   'assets/data/tunion_card_prefixes.json': jsonEncode({
@@ -374,8 +409,8 @@ final Map<String, String> _assets = {
         'issuer': '01283910',
         'cardName': '福路通·榕城通',
         'city': '福州市',
-      }
-    ]
+      },
+    ],
   }),
 };
 
@@ -408,10 +443,10 @@ class _NoopNfcChannel implements NfcChannel {
 class _CardNfcChannel extends _NoopNfcChannel {
   @override
   Future<NfcScanResult?> scanOnce() async => NfcScanResult(
-        uid: '04A1B2C3D4',
-        technologies: const ['IsoDep'],
-        cardType: 'Mifare Classic',
-        isoDepConnected: false,
-        timestamp: DateTime(2026, 1, 1),
-      );
+    uid: '04A1B2C3D4',
+    technologies: const ['IsoDep'],
+    cardType: 'Mifare Classic',
+    isoDepConnected: false,
+    timestamp: DateTime(2026, 1, 1),
+  );
 }

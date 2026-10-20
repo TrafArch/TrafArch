@@ -40,13 +40,15 @@ class BankCardResultView extends StatelessWidget {
     );
   }
 
-  String get _familyText => result.protocolFamily == BankCardProtocolFamily.pboc
-      ? 'PBOC（JR/T 0025 系列规则）'
-      : 'EMV（通用规范规则）';
+  String get _familyText => switch (result.protocolFamily) {
+    BankCardProtocolFamily.mixed => 'EMV + PBOC（按应用分别解析）',
+    BankCardProtocolFamily.pboc => 'PBOC（JR/T 0025 系列规则）',
+    _ => 'EMV（通用规范规则）',
+  };
 
   String get _statusText {
     if (result.status == BankCardStatus.enumerationFailed) {
-      return '应用枚举未完成${_enumerationDetail}';
+      return '应用枚举未完成$_enumerationDetail';
     }
     return switch (result.status) {
       BankCardStatus.noCard => '未读到应用数据',
@@ -104,53 +106,41 @@ class BankCardResultView extends StatelessWidget {
   }
 
   Widget _issueRow(BuildContext context, ParseIssue issue) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Text(
-          '[${issue.stage}] ${issue.code}：${issue.message}',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Text(
+      '[${issue.stage}] ${issue.code}：${issue.message}',
+      style: Theme.of(context).textTheme.bodySmall,
+    ),
+  );
 
   Widget _sectionTitle(BuildContext context, String text) => Align(
-        alignment: Alignment.centerLeft,
-        child: Text(
-          text,
-          style: Theme.of(context)
-              .textTheme
-              .titleSmall
-              ?.copyWith(color: Theme.of(context).colorScheme.primary),
-        ),
-      );
+    alignment: Alignment.centerLeft,
+    child: Text(
+      text,
+      style: Theme.of(context).textTheme.titleSmall
+          ?.copyWith(color: Theme.of(context).colorScheme.primary),
+    ),
+  );
 
   Widget _hint(BuildContext context, String text) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Text(
-          text,
-          style: Theme.of(context)
-              .textTheme
-              .bodySmall
-              ?.copyWith(color: Theme.of(context).colorScheme.outline),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: Text(
+      text,
+      style: Theme.of(context).textTheme.bodySmall
+          ?.copyWith(color: Theme.of(context).colorScheme.outline),
+    ),
+  );
 
   Widget _kv(String k, String v) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(width: 84, child: Text(k)),
-            Expanded(child: SelectableText(v)),
-          ],
-        ),
-      );
-
-  /// 卡号尾号提示行（读到 PAN 才显示）。
-  String _panLine(ParsedApplication app) {
-    final tail = app.summary.panTail;
-    return tail == null ? '' : '•••• $tail  $_sep';
-  }
-
-  static const String _sep = '';
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(width: 84, child: Text(k)),
+        Expanded(child: SelectableText(v)),
+      ],
+    ),
+  );
 
   static String _fmtTime(DateTime t) {
     final m = t.month.toString().padLeft(2, '0');
