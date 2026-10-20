@@ -33,7 +33,7 @@ class RegionDatabaseStore {
           File(f).deleteSync();
         } catch (_) {}
       }
-      return _openOnce(assetPath, fileName, bundle);
+      return await _openOnce(assetPath, fileName, bundle);
     } catch (_) {
       return null;
     }
@@ -671,6 +671,7 @@ abstract class RegionKnowledgeDb implements LiveStationSource, LiveRegionLines {
       int.tryParse(RegionDatabaseStore.metaValue(db, 'datasets.$system')) ?? 0;
 
   /// 地区覆盖概况（按地区编码升序）。
+  @override
   List<RegionOverview> queryOverviews() {
     final out = <RegionOverview>[];
     try {
@@ -697,9 +698,6 @@ abstract class RegionKnowledgeDb implements LiveStationSource, LiveRegionLines {
     } catch (_) {}
     return out;
   }
-
-  @override
-  Future<List<RegionOverview>> regionsOverview() async => queryOverviews();
 
   @override
   Future<List<RegionLineCoverage>> linesForRegion(

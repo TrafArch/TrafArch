@@ -201,6 +201,9 @@ class FelicaTransaction {
   /// 金额币种；记录解析器确认后填写，未确认保持 null。
   final String? currency;
 
+  /// 金额字段是否为交易后残高（Suica 历史记录即此口径），展示时需标注。
+  final bool amountIsBalance;
+
   /// 是否为单钱包产品的跨境折算交易（如全国通卡内地消费）。
   /// 只有记录解析器能可靠确认时才置 true。
   final bool crossBorder;
@@ -216,6 +219,7 @@ class FelicaTransaction {
     this.note,
     this.walletKind = FelicaWalletKind.unknown,
     this.currency,
+    this.amountIsBalance = false,
     this.crossBorder = false,
   });
 }

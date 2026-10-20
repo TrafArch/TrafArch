@@ -4,7 +4,6 @@ import '../../core/ui_constants.dart';
 import '../../database/app_database.dart';
 import '../../state/app_state.dart';
 import '../card_archive/models/card_name_extension.dart';
-import '../card_archive/repositories/card_repository.dart';
 import '../settings/settings_action_button.dart';
 import '../trips/card_detail_page.dart';
 

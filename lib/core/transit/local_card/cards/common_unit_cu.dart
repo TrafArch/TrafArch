@@ -43,9 +43,6 @@ class CommonUnitCu {
   /// 记录号物理上限（READ RECORD 的 P1 为单字节，协议边界）。
   static const _maxRecordNumber = 0xFE;
 
-  /// 单次 READ BINARY 补读的最大长度。
-  static const _readBinaryChunk = 64;
-
   /// 展示 / 日志用的模块名（与原解析器同名，保持日志连续性）。
   static const String moduleName = '城市一卡通（CJ/T 331-2016）';
 
@@ -205,14 +202,6 @@ class CommonUnitCu {
 
   static bool _isBlankRecord(List<int> d) =>
       d.every((b) => b == 0x00 || b == 0xFF);
-
-  static bool _matchesFromStart(List<int> data, List<int> chunk) {
-    if (data.length < chunk.length) return false;
-    for (var i = 0; i < chunk.length; i++) {
-      if (data[i] != chunk[i]) return false;
-    }
-    return true;
-  }
 
   static bool _listEquals(List<int> a, List<int> b) {
     if (a.length != b.length) return false;

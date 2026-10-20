@@ -68,7 +68,11 @@ ShanghaiTransitApplication _application({
       dataComplete: dataComplete,
       card: card,
       identity: identity,
-      cardInfo: CardInfo(),
+      // 读取层会把解析出的卡号回填到 CardInfo；测试按同一约定构造，
+      // 避免用空 CardInfo 模拟真实读取结果。
+      cardInfo: CardInfo()
+        ..cardNumber =
+            card?.info.applicationSerial ?? identity?.applicationSerial ?? '',
       records: List<ApduRecord>.of(records),
     );
 

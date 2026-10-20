@@ -12,9 +12,6 @@ class TripDeduper {
     if (records.isEmpty) return;
 
     var prevMetro = _blank();
-    var prevBus = _blank();
-    var prevFerry = _blank();
-    var prevOther = _blank();
 
     for (var i = records.length - 1; i >= 0; i--) {
       final r = records[i];
@@ -31,9 +28,6 @@ class TripDeduper {
       }
 
       if (r.isMetro) prevMetro = r;
-      if (r.isBus) prevBus = r;
-      if (r.isFerry) prevFerry = r;
-      if (r.isOtherA || r.isOtherB) prevOther = r;
     }
   }
 

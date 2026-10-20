@@ -725,15 +725,6 @@ class StationCodeTable {
     return StationMatch(best, StationMatchConfidence.exact);
   }
 
-  /// 数字段归一化：去非数字、去前导零；空或全零视为未写入（返回 null）。
-  static String? _normalizeNumericSegment(String? s) {
-    if (s == null) return null;
-    final text = s.trim().replaceAll(RegExp(r'[^0-9]'), '');
-    if (text.isEmpty) return null;
-    final stripped = text.replaceFirst(RegExp(r'^0+'), '');
-    return stripped.isEmpty ? null : stripped;
-  }
-
   /// TU 候选去重（同一行可能被多个候选组合命中）。
   static List<StationCodeEntry> _dedupeTu(Iterable<StationCodeEntry> rows) {
     final seen = <String>{};

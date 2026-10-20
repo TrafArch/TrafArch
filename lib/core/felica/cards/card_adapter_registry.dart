@@ -1,6 +1,5 @@
 library;
 
-import '../models/felica_models.dart';
 import 'felica_card_adapter.dart';
 import 'generic_adapter.dart';
 import 'octopus_adapter.dart';

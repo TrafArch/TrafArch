@@ -1,7 +1,6 @@
 library;
 
 import '../cards/felica_card_profiles.dart';
-import '../models/felica_card_type.dart';
 
 /// 八达通产品识别的协议层证据。
 ///

@@ -17,10 +17,12 @@ List<int> _suicaBalanceBlock({int balance = 1000}) {
 
 List<int> _suicaRecord({int balance = 1000}) {
   final record = List<int>.filled(16, 0);
-  record[0] = 0x03;              // 端末種：清算機
-  record[1] = 0x01;              // 処理：運賃支払
-  record[4] = 0x7B;              // 日付：2025-10-20 打包（7 位年 | 4 位月 | 5 位日）
+  record[0] = 0xC8;              // 端末種：自販機（写入时刻）
+  record[1] = 0x0B;              // 処理：物販
+  record[4] = 0x33;              // 日付：2025-10-20 打包（7 位年 | 4 位月 | 5 位日）
   record[5] = 0x54;
+  record[6] = 0x43;              // 時刻：08:30（高 5 位时 | 中 6 位分）
+  record[7] = 0xC0;
   record[10] = balance & 0xFF;   // 交易后残高
   record[11] = (balance >> 8) & 0xFF;
   return record;
@@ -28,19 +30,15 @@ List<int> _suicaRecord({int balance = 1000}) {
 
 class _ScriptedTag {
   _ScriptedTag({
-    this.balanceBlock,
     this.historyBlock1,
-    this.respond = true,
     this.serviceAvailable = true,
   });
 
-  final List<int>? balanceBlock;
   final List<int>? historyBlock1;
-  final bool respond;
   final bool serviceAvailable;
 
   Future<List<int>> transceive(List<int> frame) async {
-    if (!respond || frame.length < 2) return const [];
+    if (frame.length < 2) return const [];
     switch (frame[1] & 0xFF) {
       case 0x00:
         return _packet([0x01, ..._idm, ..._pmm]);
@@ -70,8 +68,7 @@ class _ScriptedTag {
       index += 2;
       final blockNumber = element & 0x0FFF;
       if (blockNumber == 0) {
-        blocks.add(balanceBlock ??
-            [0xE8, 0x03, ...List<int>.filled(14, 0)]);
+        blocks.add(_suicaBalanceBlock());
       } else if (blockNumber == 1 && historyBlock1 != null) {
         blocks.add(historyBlock1!);
       } else {
@@ -262,36 +259,32 @@ void main() {
   test('SuicaDetector：余额块格式校验', () {
     const detector = SuicaDetector();
     expect(detector.verifiedBalanceYen(const [0xE8, 0x03]), isNull);
-    expect(
-      detector.verifiedBalanceYen(
-        [0xFF, 0x7F, ...List<int>.filled(14, 0)],
-      ),
-      isNull,
-    );
-    expect(
-      detector.verifiedBalanceYen(
-        [0xE8, 0x03, ...List<int>.filled(14, 0)],
-      ),
-      1000,
-    );
+    final tooLarge = List<int>.filled(16, 0);
+    tooLarge[10] = 0xFF;
+    tooLarge[11] = 0x7F; // 32767 日元，超出合理范围
+    expect(detector.verifiedBalanceYen(tooLarge), isNull);
+    expect(detector.verifiedBalanceYen(_suicaBalanceBlock()), 1000);
   });
 
-  test('Suica 余额：小端有符号日元，超范围视为无效', () {
+  test('Suica 余额：小端无符号日元，超范围视为无效', () {
     const parser = SuicaRecordParser();
-    expect(parser.parseBalanceYen(const [0xE8, 0x03]), 1000);
-    expect(parser.parseBalanceYen(const [0x18, 0xFC]), -1000);
-    expect(parser.parseBalanceYen(const [0xFF, 0x7F]), isNull);
+    expect(parser.parseBalanceYen(_suicaBalanceBlock()), 1000);
+    expect(parser.parseBalanceYen(_suicaBalanceBlock(balance: 20000)), 20000);
+    expect(parser.parseBalanceYen(_suicaBalanceBlock(balance: 20001)), isNull);
+    expect(parser.parseBalanceYen(const [0xE8, 0x03]), isNull);
     expect(parser.parseBalanceYen(const [0x00]), isNull);
   });
 
-  test('Suica 历史记录：金额 / BCD 时间 / 类型 / 终端', () {
+  test('Suica 历史记录：残高 / 打包日期与时刻 / 类型 / 终端', () {
     const parser = SuicaRecordParser();
     final record = parser.parseBlock(blockNumber: 1, bytes: _suicaRecord());
     expect(record.decoded, isTrue);
-    expect(record.amountYen, -1000);
+    expect(record.amountYen, 1000);
     expect(record.time, DateTime(2025, 10, 20, 8, 30));
     expect(record.type, '0x0B');
-    expect(record.terminal, '0x1234');
+    expect(record.terminal, '0xC8');
+    expect(record.note, contains('交易后残高'));
+    expect(record.toTransaction().amountIsBalance, isTrue);
   });
 
   test('Suica 空块不产出交易记录', () {
@@ -337,7 +330,7 @@ void main() {
     expect(result.wallets.single.balanceText, '¥1,000');
     expect(result.transactions, hasLength(1));
     final tx = result.transactions.single;
-    expect(tx.amountMinorUnits, -1000);
+    expect(tx.amountMinorUnits, 1000);
     expect(tx.time, DateTime(2025, 10, 20, 8, 30));
     expect(tx.decoded, isTrue);
     expect(result.rawBlocks.length, 21);
@@ -348,7 +341,7 @@ void main() {
     final reader = FelicaReader((_) async => const []);
     final result = await reader.read();
     expect(result.state, FelicaReadState.tagLost);
-    expect(result.statuses.single.stage, 'FeliCa 協議探测');
+    expect(result.statuses.single.stage, 'Polling');
   });
 
   group('八达通产品模型', () {

@@ -614,8 +614,11 @@ class _RecentScanSectionState extends State<RecentScanSection> {
     final amount = tx.amountMinorUnits;
     if (amount == null) return '金额未解析';
     final wallet = _walletForTransaction(tx, wallets);
-    if (wallet == null) return '$amount（币种未知）';
-    return wallet.formatAmount(amount);
+    final text = wallet == null
+        ? '$amount（币种未知）'
+        : wallet.formatAmount(amount);
+    // Suica 历史记录的金额字段是交易后残高，不能当作单笔交易额展示。
+    return tx.amountIsBalance ? '$text（残高）' : text;
   }
 
   static FelicaWallet? _walletForTransaction(

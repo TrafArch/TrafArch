@@ -70,14 +70,18 @@ class SuicaHistoryRecord {
         decoded: decoded,
         sequence: blockNumber,
         note: note,
+        amountIsBalance: true,
       );
 }
 
 /// Suica 记录解析器。
 ///
-/// 已验证：余额块（块 0）前 2 字节为有符号小端日元金额。
-/// 历史记录：类型 1、金额 4-5（有符号小端）、BCD 时间 6-11、
-/// 终端 / 站点码 12-13（小端）；任一关键字段不合法即不解析该条。
+/// 字段布局见 [SuicaRecordLayout]（真实卡片格式）：
+/// - 余额块（块 0）与历史块同构，残高在 bytes 10-11（小端无符号）；
+/// - 日付在 bytes 4-5（16 位打包），物販 / 自販機记录另有时刻 bytes 6-7；
+/// - bytes 6-9 在乘车记录中为入出場情報，不按时间解释。
+/// 历史记录的金额字段是交易后残高，不是单笔交易额；残高或日期不合法时
+/// 保留原始字节并将相关字段置空（不猜测）。
 class SuicaRecordParser {
   const SuicaRecordParser({this.layout = SuicaRecordLayout.standard});
 
@@ -154,8 +158,6 @@ class SuicaRecordParser {
   /// 日付：16 位打包，高 7 位年（2000+）、中间 4 位月、低 5 位日。
   static DateTime? _packedDate(List<int> bytes, int offset) {
     if (offset + 2 > bytes.length) return null;
-    final packed = FelicaHex.readLe16(bytes, offset - 1) & 0xFFFF;
-    // 直接按大端组合：data[offset] << 8 | data[offset + 1]
     final value = ((bytes[offset] & 0xFF) << 8) | (bytes[offset + 1] & 0xFF);
     final year = 2000 + (value >> 9);
     final month = (value >> 5) & 0x0F;

@@ -76,10 +76,11 @@ class _SurveyPageState extends State<SurveyPage> {
       canPop: false,
       onPopInvokedWithResult: (bool didPop, Object? result) async {
         if (didPop) return;
+        final navigator = Navigator.of(context);
         if (await _controller.canGoBack()) {
           await _controller.goBack();
         } else if (mounted) {
-          Navigator.of(context).pop();
+          navigator.pop();
         }
       },
       child: Scaffold(

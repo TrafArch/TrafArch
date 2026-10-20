@@ -35,22 +35,6 @@ class CjT331PublicInfoParser {
     }
     final data = _validate(input);
 
-    // 布局自检：日期字段必须是合法 BCD YYYYMMDD。
-    // 错位（整体偏移）最典型的特征是启动日期/有效期同时非法或完全相等，
-    // 此时不猜测字段，交由读取层保留原始数据。
-    final startRaw = CityUnionCodec.bcdString(data.sublist(20, 24));
-    final expiryRaw = CityUnionCodec.bcdString(data.sublist(24, 28));
-    final layoutSane = startRaw != null &&
-        expiryRaw != null &&
-        CityUnionCodec.isValidDateDigits(startRaw) &&
-        CityUnionCodec.isValidDateDigits(expiryRaw) &&
-        startRaw != expiryRaw;
-    if (!layoutSane) {
-      throw const FormatException(
-        '0x15 布局校验失败（日期字段非法或重复），疑似数据偏移，保留原始数据',
-      );
-    }
-
     // 01-02 发卡方代码（BCD，保留前导零）
     final issuer = _bcdField(data, 0, 2, 'issuerCode', '发卡方代码');
 
