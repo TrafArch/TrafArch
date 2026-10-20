@@ -46,7 +46,8 @@ class ApduExchange {
     }
 
     final enoughData = !strict || (response.length - 2 >= le);
-    final effectiveSw = enoughData ? sw : _tail(response)!;
+    // 数据不足时按“长度错误”判失败（原先两个分支取值相同，strict 实际失效）
+    final effectiveSw = enoughData ? sw : const [0x67, 0x00];
 
     if (verbose && (skipSwCheck || _eq(okSw, effectiveSw))) {
       records?.add(ApduRecord()

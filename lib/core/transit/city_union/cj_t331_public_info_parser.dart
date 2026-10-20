@@ -35,6 +35,22 @@ class CjT331PublicInfoParser {
     }
     final data = _validate(input);
 
+    // 布局自检：日期字段必须是合法 BCD YYYYMMDD。
+    // 错位（整体偏移）最典型的特征是启动日期/有效期同时非法或完全相等，
+    // 此时不猜测字段，交由读取层保留原始数据。
+    final startRaw = CityUnionCodec.bcdString(data.sublist(20, 24));
+    final expiryRaw = CityUnionCodec.bcdString(data.sublist(24, 28));
+    final layoutSane = startRaw != null &&
+        expiryRaw != null &&
+        CityUnionCodec.isValidDateDigits(startRaw) &&
+        CityUnionCodec.isValidDateDigits(expiryRaw) &&
+        startRaw != expiryRaw;
+    if (!layoutSane) {
+      throw const FormatException(
+        '0x15 布局校验失败（日期字段非法或重复），疑似数据偏移，保留原始数据',
+      );
+    }
+
     // 01-02 发卡方代码（BCD，保留前导零）
     final issuer = _bcdField(data, 0, 2, 'issuerCode', '发卡方代码');
 
@@ -86,9 +102,9 @@ class CjT331PublicInfoParser {
           : '与城市代码不一致（城市代码 $cityDecoded）',
     );
 
-    // 13-20 用户卡应用序列号（8 字节原样保留）
-    final serial =
-        _hexField(data, 12, 8, 'applicationSerialNumber', '用户卡应用序列号');
+    // 13-20 用户卡应用序列号（8 字节，按发卡方实际编码自适应解码为纯数字）
+    final serial = _cardNumberField(
+        data, 12, 8, 'applicationSerialNumber', '用户卡应用序列号');
 
     // 21-24 应用启动日期（BCD YYYYMMDD）
     final startDate =
@@ -225,6 +241,31 @@ class CjT331PublicInfoParser {
       rawHex: CityUnionCodec.hexSpaced(segment),
       decoded: valid ? CityUnionCodec.formatDateDigits(digits) : digits,
       error: valid ? null : '日期非法',
+    );
+  }
+
+  /// 卡号类字段：BCD 优先自适应解码为纯数字，原始字节保留在 rawHex。
+  /// 无法判定为数字时不把 HEX 当卡号（decoded 为 null 并标记异常），
+  /// 避免非纯数字串进入档案卡号。
+  static CjField _cardNumberField(
+    List<int> data,
+    int offset,
+    int length,
+    String key,
+    String name,
+  ) {
+    final segment = data.sublist(offset, offset + length);
+    final result = CityUnionCodec.decodeCardNumber(segment);
+    return CjField(
+      key: key,
+      name: name,
+      offset: offset,
+      length: length,
+      format: CjFieldFormat.auto,
+      rawHex: CityUnionCodec.hexSpaced(segment),
+      decoded: result.digits,
+      note: result.note,
+      error: result.error,
     );
   }
 }

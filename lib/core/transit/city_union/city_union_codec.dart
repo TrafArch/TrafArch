@@ -27,6 +27,60 @@ class CityUnionCodec {
     return sb.toString();
   }
 
+  /// 卡号类字段（用户卡应用序列号，通常 8 字节）自适应解码。
+  ///
+  /// 各地住建部 CU 写卡实现并不完全统一，按以下顺序判定，绝不把 HEX
+  /// 直接当卡号返回：
+  /// 1. 全 00 / 全 FF：未写入，digits 为 null；
+  /// 2. 严格 BCD（每个半字节 0~9）：按十进制半字节解码；
+  /// 3. 宽松 BCD：仅剥离首尾连续的填充半字节（F / A），剩余全为数字且
+  ///    有效位 ≥ 8 时采纳（奇数位卡号常见的末位 F 填充）；
+  /// 4. 8 字节二进制大端无符号整数：转十进制字符串（位数 ≥ 8 才采纳）；
+  /// 5. 均不成立：返回 error，调用方不得输出卡号。
+  static CardNumberDecode decodeCardNumber(List<int> bytes) {
+    if (bytes.isEmpty) {
+      return const CardNumberDecode(error: '序列号字段为空');
+    }
+    if (bytes.every((b) => b == 0x00 || b == 0xFF)) {
+      return const CardNumberDecode(error: '序列号未写入（全 00 / 全 FF）');
+    }
+
+    final strict = bcdString(bytes);
+    if (strict != null) {
+      final asciiLike = bytes.every((b) => b >= 0x30 && b <= 0x39);
+      return CardNumberDecode(
+        digits: strict,
+        note: asciiLike ? 'BCD（疑似 ASCII 数字编码）' : 'BCD',
+      );
+    }
+
+    final nibbles = <int>[
+      for (final b in bytes) ...[b >> 4, b & 0x0F],
+    ];
+    bool isPad(int n) => n == 0x0F || n == 0x0A;
+    var start = 0;
+    var end = nibbles.length;
+    while (start < end && isPad(nibbles[start])) {
+      start++;
+    }
+    while (end > start && isPad(nibbles[end - 1])) {
+      end--;
+    }
+    if (start < end) {
+      final valid = nibbles.sublist(start, end);
+      if (valid.every((n) => n <= 9) && valid.length >= 8) {
+        return CardNumberDecode(
+          digits: valid.join(),
+          note: 'BCD，含 ${nibbles.length - valid.length} 个填充半字节（F/A）',
+        );
+      }
+    }
+
+    return CardNumberDecode(
+      error: '序列号非 BCD 编码（原始 ${hexSpaced(bytes)}），无法解码为卡号',
+    );
+  }
+
   /// 校验 8 位 BCD 数字串（YYYYMMDD）是否为真实日历日期。
   /// 以 DateTime 反向校验，防止 20240230 这类非法日期被自动进位。
   static bool isValidDateDigits(String digits) {
@@ -71,4 +125,21 @@ class CityUnionCodec {
 
   /// SFI 展示标签（如 0x15）。
   static String sfiLabel(int sfi) => '0x${hexByte(sfi)}';
+}
+
+/// 卡号字段自适应解码结果。
+class CardNumberDecode {
+  /// 纯数字卡号（保留前导零，展示/指纹按需再处理）；无法判定时为 null。
+  final String? digits;
+
+  /// 实际命中的编码口径说明；无法判定时为 null。
+  final String? note;
+
+  /// 无法判定或非标准编码的说明；正常 BCD 为 null。
+  final String? error;
+
+  const CardNumberDecode({this.digits, this.note, this.error});
+
+  /// 卡号是否为纯数字（输出卡号前必须成立；负号/字母一律不合格）。
+  bool get isNumeric => digits != null && RegExp(r'^\d+$').hasMatch(digits!);
 }

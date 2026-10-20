@@ -4,6 +4,7 @@ import '../../core/analysis/tunion_analysis_models.dart';
 import '../../core/card/card_parser.dart';
 import '../../core/nfc/nfc_models.dart';
 import '../../core/transit/city_union/city_union_models.dart';
+import '../../core/transit/local_card/cards/shanghai_transit_union_models.dart';
 import '../../core/transit/tunion/qr/jt_t1179_qr_display.dart';
 import '../../core/transit/tunion/qr/jt_t1179_qr_parser.dart';
 import '../../core/transit/tunion/tunion_models.dart';
@@ -105,9 +106,9 @@ class _ExpertPageState extends State<ExpertPage> {
     final parsed = app.parsedCard;
     final analysis = app.analysis;
     final processRecords = app.transitProcessRecords;
-    // 解析器分派：交通联合专属字段与页签随解析器选择展示；未命中交通联合
-    // 解析器时不展示（未来接入住建部一卡通解析器时按 parserId 扩展分支）。
-    final isTUnion = parsed?.parserId == CardParserIds.tunion;
+    // 解析器分派：交通联合家族（普通交通联合 / 上海交通卡（交通联合版））
+    // 专属字段与页签随之展示；其它解析器不展示。
+    final isTUnion = CardParserIds.isTUnionFamily(parsed?.parserId);
 
     // 页签随解析器动态构建：JT/T 978 符合性仅在交通联合解析器命中时存在。
     final tabs = <Tab>[
@@ -281,8 +282,9 @@ class _ExpertPageState extends State<ExpertPage> {
     final parsed = app.parsedCard;
     final info = app.cardInfo;
     final identity = app.analysis?.identity;
-    final isTUnion = parsed?.parserId == CardParserIds.tunion;
+    final isTUnion = CardParserIds.isTUnionFamily(parsed?.parserId);
     final isCityUnion = parsed?.parserId == CardParserIds.cityUnion;
+    final isShanghai = parsed?.parserId == CardParserIds.shanghaiTunion;
     return [
       _kv('解析器', parsed?.parserName ?? '—'),
       _kv(
@@ -292,14 +294,19 @@ class _ExpertPageState extends State<ExpertPage> {
               : parsed.selectedAidHex),
       // 交通联合应用：交通联合解析器专属字段，仅在命中时展示
       if (isTUnion) _kv('交通联合应用', '已发现'),
-      // 城市一卡通应用：城市一卡通解析器命中，或双应用卡在同一张卡上附带
-      // 住建部应用时展示（后者标注「双应用卡」）。
-      if (isCityUnion || parsed?.dualApplication == true)
+      if (isShanghai) ...[
+        _kv('上海交通卡识别状态', app.shanghaiTransitUnion?.status.label ?? '未知'),
+        _kv('TU 应用', app.shanghaiTransitUnion?.tu.stateText ?? '未知'),
+        _kv('CU 应用', app.shanghaiTransitUnion?.cu.stateText ?? '未知'),
+        if (app.shanghaiTransitUnion?.matchedPrefix != null)
+          _kv('辅助前缀', app.shanghaiTransitUnion!.matchedPrefix!),
+      ],
+      // 城市一卡通应用：城市一卡通解析器命中，或同一张卡上附带住建部
+      // 应用时展示（后者标注「双应用卡」）。
+      if (isCityUnion || app.cityUnionFiles.isNotEmpty)
         _kv(
           '城市一卡通应用',
-          (!isCityUnion && parsed?.dualApplication == true)
-              ? '已发现（双应用卡）'
-              : '已发现',
+          parsed?.dualApplication == true ? '已发现（双应用卡）' : '已发现',
         ),
       _kv('识别城市', identity?.cityName ?? app.cityUnionCard?.city ?? '未知'),
       _kv('卡种', identity?.cardFamily ?? '未知'),
@@ -328,9 +335,9 @@ class _ExpertPageState extends State<ExpertPage> {
       ];
     }
     return switch (parsed.parserId) {
-      CardParserIds.tunion => [
+      CardParserIds.tunion || CardParserIds.shanghaiTunion => [
         ..._tunionTransitFields(parsed),
-        if (parsed.dualApplication) ..._dualCityUnionFields(parsed),
+        if (parsed.cityUnionFiles.isNotEmpty) ..._dualCityUnionFields(parsed),
       ],
       CardParserIds.cityUnion => _cityUnionTransitFields(parsed),
       _ => [_hintLine('当前解析器暂未提供交通数据字段视图')],

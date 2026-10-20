@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../core/card/card_parser.dart';
+import '../../core/felica/models/felica_card_type.dart';
+import '../../core/felica/models/felica_models.dart';
 import '../../core/nfc/nfc_models.dart';
+import '../../core/transit/local_card/cards/shanghai_transit_union_models.dart';
 import '../../core/transit/tunion/qr/jt_t1179_qr_display.dart';
 import '../../core/transit/tunion/qr/jt_t1179_qr_parser.dart';
 import '../../state/app_state.dart';
@@ -87,8 +90,11 @@ class _RecentScanSectionState extends State<RecentScanSection> {
     final app = widget.app;
     final bankResult = app.lastBankCardResult;
     // 银行卡分析结果存在（交通应用未命中）时不再展示空交通卡片视图。
+    // 解析进行中 parsedCard / felicaResult 已被 _resetCard 清空，此时
+    // 不能用 lastResult 兜底，否则整段解析期间会显示「未识别卡片」假面板。
     final hasCard = app.parsedCard != null ||
-        (app.lastResult != null && bankResult == null);
+        app.felicaResult != null ||
+        (!app.parsing && app.lastResult != null && bankResult == null);
     final hasQr = app.qrData != null;
     final hasBank = bankResult != null;
     if (!hasCard && !hasQr && !hasBank) return const SizedBox.shrink();
@@ -174,9 +180,13 @@ class _RecentScanSectionState extends State<RecentScanSection> {
   List<Widget> _cardPanel(BuildContext context, AppState app) {
     final result = app.lastResult;
     final parsed = app.parsedCard;
+    final felica = app.felicaResult;
+    // FeliCa（NFC-F）结果：与 TU / CU 卡片视图并列，使用同一版式。
+    if (felica != null && parsed == null) return _felicaPanel(context, felica);
     final identified = app.lastIdentified;
-    final isTUnion = parsed?.parserId == CardParserIds.tunion;
+    final isTUnion = CardParserIds.isTUnionFamily(parsed?.parserId);
     final isCityUnion = parsed?.parserId == CardParserIds.cityUnion;
+    final isShanghai = parsed?.parserId == CardParserIds.shanghaiTunion;
     final isLocal = parsed?.parserId == CardParserIds.localCard;
     final local = parsed?.localCard;
     final info = parsed?.info;
@@ -186,49 +196,50 @@ class _RecentScanSectionState extends State<RecentScanSection> {
     final expireDate = isTUnion ? info?.expireDate : null;
 
     // 卡片名称：正式卡名优先（识别引擎），未识别时回退卡型通用名称。
+    final typeLabel = isShanghai
+        ? cardTypeLabel(CardTypes.shanghaiTransitUnion)
+        : isCityUnion
+            ? cardTypeLabel(CardTypes.cityUnion)
+            : cardTypeLabel(CardTypes.chinaTunion);
     final name = identified != null
         ? identified.displayName
         : parsed == null
             ? '未识别卡片'
             : isLocal
-                ? local!.info.cardKindLabel
-                : cardTypeLabel(
-                    isCityUnion ? CardTypes.cityUnion : CardTypes.chinaTunion,
-                  );
+                ? (local?.info.cardKindLabel ?? typeLabel)
+                : typeLabel;
     // 发卡地：识别城市优先，回退城市码表（与识别引擎链路一致）。
     final cityName =
         identified?.identity.cityName ?? app.cityNameOf(app.cardCityCode);
     // 卡号（完整，不脱敏）：识别结果优先，回退解析字段，最后回退 UID。
-    final cardNumber = identified?.cardNumber ??
-        (isLocal
-            ? (local!.info.cardNumber.isEmpty
-                ? null
-                : local.info.cardNumber)
-            : isCityUnion
-                ? publicInfo?.applicationSerialNumber
-                : info?.displayCardNumber) ??
-        result?.uid ??
-        '未知';
+    final String? parsedCardNumber;
+    if (isLocal) {
+      final number = local?.info.cardNumber ?? '';
+      parsedCardNumber = number.isEmpty ? null : number;
+    } else if (isCityUnion) {
+      parsedCardNumber = publicInfo?.displayApplicationSerialNumber;
+    } else {
+      parsedCardNumber = info?.displayCardNumber ??
+          publicInfo?.displayApplicationSerialNumber;
+    }
+    final cardNumber =
+        identified?.cardNumber ?? parsedCardNumber ?? '未读取到卡号';
 
     return [
       ..._nameLine(context, name),
       if (parsed != null)
-        _kv(
-          context,
-          '类型',
-          isLocal
-              ? '地方交通卡'
-              : cardTypeLabel(
-                  isCityUnion ? CardTypes.cityUnion : CardTypes.chinaTunion,
-                ),
-        )
+        _kv(context, '类型', isLocal ? '地方交通卡' : typeLabel)
       else if (result?.cardType != null)
         _kv(context, '卡型', result!.cardType!),
       if (cityName != null && cityName.isNotEmpty)
         _kv(context, '发卡地', cityName),
+      if (isShanghai)
+        _kv(context, '识别状态', app.shanghaiTransitUnion?.status.label ?? '未知'),
       if (cardKind != null)
         _kv(context, '卡种', app.cardKindName(cardKind) ?? cardKind),
       _kv(context, '卡号', cardNumber),
+      // 仅读到 NFC 标签（未解析成功）时补充 UID，与模块文档说明一致。
+      if (parsed == null && result != null) _kv(context, 'UID', result.uid),
       if (isLocal && local != null && local.info.balance != 0)
         _kv(
           context,
@@ -237,6 +248,17 @@ class _RecentScanSectionState extends State<RecentScanSection> {
         ),
       if (isTUnion && wallet?.balanceText != null)
         _kv(context, '余额', wallet!.balanceText!),
+      // 上海卡 CU 单侧可用时，TU 钱包不可读，单独展示住建部钱包余额
+      // （双应用卡统一在下方的双应用区块中展示，避免重复）。
+      if (isShanghai &&
+          wallet?.balanceText == null &&
+          parsed?.dualApplication != true &&
+          app.cityUnionBalanceFen != null)
+        _kv(
+          context,
+          '城市一卡通余额',
+          '${(app.cityUnionBalanceFen! / 100).toStringAsFixed(2)} 元',
+        ),
       if (expireDate != null) _kv(context, '有效期至', _fmtDate(expireDate)),
       if (isCityUnion && publicInfo?.applicationExpiryDate != null)
         _kv(context, '有效期至', publicInfo!.applicationExpiryDate!),
@@ -273,9 +295,10 @@ class _RecentScanSectionState extends State<RecentScanSection> {
             '城市一卡通余额',
             '${(app.cityUnionBalanceFen! / 100).toStringAsFixed(2)} 元',
           ),
-        if (publicInfo?.applicationSerialNumber != null &&
-            publicInfo!.applicationSerialNumber!.isNotEmpty)
-          _kv(context, '城市一卡通卡号', publicInfo.applicationSerialNumber!),
+        if (publicInfo?.displayApplicationSerialNumber != null &&
+            publicInfo!.displayApplicationSerialNumber!.isNotEmpty)
+          _kv(context, '城市一卡通卡号',
+              publicInfo.displayApplicationSerialNumber!),
         _kv(
           context,
           '城市一卡通互联互通',
@@ -469,4 +492,158 @@ class _RecentScanSectionState extends State<RecentScanSection> {
         false => '未启用（非互通卡）',
         null => '未知（未读到管理信息文件或部标未定义取值）',
       };
+
+  /// FeliCa（NFC-F）面板：卡型 / 读取状态 / 钱包 / 跨境信息 / 交易记录 /
+  /// 原始块。余额未验证时显示「暂不可读取」，双钱包分别标注币种，
+  /// 交易金额按记录所属钱包格式化，未解析记录只展示原始十六进制。
+  List<Widget> _felicaPanel(BuildContext context, FelicaScanResult felica) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final crossBorder = felica.crossBorder;
+    final now = DateTime.now();
+    return [
+      ..._nameLine(context, felica.displayName),
+      _kv(context, '识别状态', felica.stateText),
+      if (felica.idm != null) _kv(context, 'IDm', felica.idm!),
+      if (felica.systemCodes.isNotEmpty)
+        _kv(context, '系统码', felica.systemCodeText),
+      if (felica.transitCapability != null)
+        _kv(context, '交通功能', felica.transitCapability!),
+      for (final wallet in felica.wallets)
+        _kv(
+          context,
+          wallet.currency.isEmpty
+              ? wallet.name
+              : '${wallet.name}（${wallet.currency}）',
+          wallet.balanceText ??
+              wallet.errorMessage ??
+              wallet.note ??
+              '暂不可读取',
+        ),
+      if (crossBorder != null) ...[
+        _kv(
+          context,
+          '跨境支付',
+          '${crossBorder.sourceCurrency} 钱包 → ${crossBorder.targetCurrency}'
+              '（按发卡方汇率折算，不是独立 '
+              '${crossBorder.targetCurrency} 钱包）',
+        ),
+        if (crossBorder.hasVerifiedExchangeRate &&
+            !crossBorder.isExpiredAt(now))
+          _kv(
+            context,
+            '汇率',
+            '1 ${crossBorder.sourceCurrency} = '
+                '${crossBorder.exchangeRateText} '
+                '${crossBorder.targetCurrency}'
+                '${crossBorder.rateUpdatedAt == null ? '' : '（更新于 ${_fmtDate(crossBorder.rateUpdatedAt!)}）'}',
+          ),
+      ],
+      if (felica.wallets.length > 1)
+        _hint(context, '双钱包产品：两个钱包需分别验证服务与读取权限，'
+            '未读到的钱包不显示为 0'),
+      if (felica.transactions.isNotEmpty) ...[
+        const SizedBox(height: 4),
+        _kv(context, '交易记录', '${felica.transactions.length} 条'),
+        for (final tx in felica.transactions.take(5))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(
+              '块 ${tx.sequence ?? '-'} · ${_txTime(tx)} · '
+              '${_txAmountText(tx, felica.wallets)}'
+              '${tx.locationCode == null ? '' : ' · 终端 ${tx.locationCode}'}'
+              '${tx.crossBorder ? ' · 跨境交易' : ''}'
+              '${tx.decoded ? '' : ' · 未解析'}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontFamily: 'monospace',
+                color: tx.decoded ? null : scheme.outline,
+              ),
+            ),
+          ),
+        if (felica.transactions.length > 5)
+          _hint(context, '仅展示最近 5 条，完整记录见原始数据块'),
+      ],
+      if (felica.statuses.isNotEmpty) ...[
+        const SizedBox(height: 4),
+        for (final status in felica.statuses)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              '· ${status.stage}：${status.state.label} — ${status.message}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: status.state.isFailure ? scheme.error : scheme.outline,
+              ),
+            ),
+          ),
+      ],
+      if (felica.rawBlocks.isNotEmpty)
+        ExpansionTile(
+          tilePadding: EdgeInsets.zero,
+          childrenPadding: const EdgeInsets.only(bottom: 8),
+          shape: const Border(),
+          collapsedShape: const Border(),
+          title: Text(
+            '原始数据块（${felica.rawBlocks.length}）',
+            style: theme.textTheme.titleSmall,
+          ),
+          children: [
+            for (final block in felica.rawBlocks)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    '${block.label}：'
+                    '${block.isSuccess ? block.hex : '读取失败（${block.error}）'}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+    ];
+  }
+
+  /// 交易金额：优先按记录所属钱包格式化，无法确认币种时不猜测。
+  static String _txAmountText(
+    FelicaTransaction tx,
+    List<FelicaWallet> wallets,
+  ) {
+    final amount = tx.amountMinorUnits;
+    if (amount == null) return '金额未解析';
+    final wallet = _walletForTransaction(tx, wallets);
+    if (wallet == null) return '$amount（币种未知）';
+    return wallet.formatAmount(amount);
+  }
+
+  static FelicaWallet? _walletForTransaction(
+    FelicaTransaction tx,
+    List<FelicaWallet> wallets,
+  ) {
+    if (tx.walletKind != FelicaWalletKind.unknown) {
+      for (final wallet in wallets) {
+        if (wallet.kind == tx.walletKind) return wallet;
+      }
+    }
+    final currency = tx.currency;
+    if (currency != null) {
+      for (final wallet in wallets) {
+        if (wallet.currency == currency) return wallet;
+      }
+    }
+    if (wallets.length == 1 && tx.walletKind == FelicaWalletKind.unknown) {
+      return wallets.single;
+    }
+    return null;
+  }
+
+  static String _txTime(FelicaTransaction tx) {
+    final time = tx.time;
+    if (time == null) return '时间未解析';
+    String pad2(int value) => value.toString().padLeft(2, '0');
+    return '${time.year}-${pad2(time.month)}-${pad2(time.day)} '
+        '${pad2(time.hour)}:${pad2(time.minute)}';
+  }
 }

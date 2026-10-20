@@ -11,12 +11,15 @@ import '../core/data/tunion_knowledge_base.dart';
 import '../core/data/city_union_knowledge_base.dart';
 import '../core/data/settings_store.dart';
 import '../core/data/station_codes.dart';
+import '../core/felica/felica.dart';
 import '../core/logging/app_logger.dart';
 import '../core/logging/log_exporter.dart';
+import '../core/nfc/felica_channel.dart';
 import '../core/nfc/nfc_models.dart';
 import '../core/nfc/nfc_service.dart';
 import '../core/qr/gms_qr_scanner.dart';
 import '../core/transit/city_union/city_union_models.dart';
+import '../core/transit/local_card/cards/shanghai_transit_union_models.dart';
 import '../core/transit/local_card/local_card_models.dart';
 import '../core/transit/local_card/local_card_parser.dart';
 import '../core/transit/tunion/qr/jt_t1179_qr_parser.dart';
@@ -48,12 +51,14 @@ import '../features/card_archive/services/card_identification_service.dart';
 class AppState extends ChangeNotifier {
   AppState({
     NfcChannel? channel,
+    FelicaChannel? felicaChannel,
     AssetBundle? bundle,
     SettingsStore? settingsStore,
     AppLogger? logger,
     LogExporter? logExporter,
     AppDatabase? database,
   })  : _channel = channel ?? const MethodChannelNfcChannel(),
+        _felicaChannel = felicaChannel ?? const MethodChannelFelicaChannel(),
         _bundle = bundle,
         _settingsStore = settingsStore ?? FileSettingsStore(),
         _logger = logger ?? AppLogger(),
@@ -61,6 +66,10 @@ class AppState extends ChangeNotifier {
         cardRepository = CardRepository(database ?? AppDatabase());
 
   final NfcChannel _channel;
+
+  /// NFC-F（FeliCa）原始帧通道：与 [_channel] 共用原生 NFC 连接，
+  /// 仅补充 FeliCa 帧收发（卡种识别与解析在 core/felica 模块内）。
+  final FelicaChannel _felicaChannel;
   final AssetBundle? _bundle;
 
   /// 设置持久化（app_settings.txt 文本键值对；测试注入内存实现）。
@@ -125,6 +134,12 @@ class AppState extends ChangeNotifier {
   ParsedCard? _parsedCard;
   ParsedCard? get parsedCard => _parsedCard;
 
+  ShanghaiTransitUnionResult? _shanghaiTransitUnion;
+
+  /// 上海交通卡（交通联合版）双路识读详情：TU / CU 各自的应用确认、
+  /// 读取成功、数据完整状态与合并结果；非该卡种时为 null。
+  ShanghaiTransitUnionResult? get shanghaiTransitUnion => _shanghaiTransitUnion;
+
   /// 地方交通卡识读结果（非地方卡时为 null）：卡信息 / 乘车流水 /
   /// 扩展槽位，供展示层按 [CardParserIds.localCard] 分派渲染。
   ReadResult? get localReadResult => _parsedCard?.localCard;
@@ -133,6 +148,11 @@ class AppState extends ChangeNotifier {
   /// 最近一次银行卡只读分析结果（统一识读流程在交通应用未命中后作为一等
   /// 阶段自动分析，会话内展示用，不写入普通日志）。
   BankCardResult? get lastBankCardResult => _lastBankCardResult;
+
+  /// FeliCa（NFC-F）识读结果：Suica / 八达通等卡由独立 FeliCa 模块解析，
+  /// 与 TU / CU / 银行卡链路并列；失败时保留 IDm、原始块与读取状态。
+  FelicaScanResult? _felicaResult;
+  FelicaScanResult? get felicaResult => _felicaResult;
 
   /// 缓存的银行卡分析器（字典随资产加载，一次会话内复用，避免重复读资产）。
   BankCardAnalyzer? _bankAnalyzer;
@@ -203,8 +223,8 @@ class AppState extends ChangeNotifier {
     return null;
   }
 
-  /// 是否已发现交通联合应用（当前解析结果由交通联合解析器产出）。
-  bool get tunionDetected => _parsedCard?.parserId == CardParserIds.tunion;
+  /// 是否已发现交通联合应用（普通交通联合卡或上海交通卡（交通联合版））。
+  bool get tunionDetected => CardParserIds.isTUnionFamily(_parsedCard?.parserId);
 
   /// 是否已发现城市一卡通应用（当前解析结果由城市一卡通解析器产出）。
   bool get cityUnionDetected =>
@@ -747,10 +767,15 @@ class AppState extends ChangeNotifier {
         _autoScanConsumed = true;
         _logEvent('发现卡片：UID=${result.uid}'
             ' · 卡型=${result.cardType ?? '未知'}'
-            ' · ISO-DEP=${result.isoDepConnected ? '已连接' : '未连接'}');
+            ' · ISO-DEP=${result.isoDepConnected ? '已连接' : '未连接'}'
+            ' · NFC-F=${result.felicaConnected ? '已连接' : '未连接'}');
       }
       if (result != null && result.isoDepConnected) {
         await _parseAndAnalyze();
+      } else if (result != null && result.felicaConnected) {
+        // NFC-F（FeliCa）：交给独立模块（协议探测 → 适配器 → 解析），
+        // 与交通联合 / 城市一卡通 / 银行卡链路并列，不混写读取逻辑。
+        await _readFelica(result);
       } else {
         _resetCard();
       }
@@ -815,10 +840,17 @@ class AppState extends ChangeNotifier {
       }
       final parsed = outcome.parsedCard!;
       _parsedCard = parsed;
-      if (parsed.parserId == CardParserIds.tunion) {
+      _shanghaiTransitUnion = outcome.shanghai;
+      if (CardParserIds.isTUnionFamily(parsed.parserId)) {
         _analysis = _engine?.analyze(parsed);
         _log('== 解析完成：${parsed.transactions.length} 条交易记录 / '
             '${parsed.transitProcessRecords.length} 条过程记录 ==');
+        final shanghai = outcome.shanghai;
+        if (shanghai != null) {
+          _log('== 上海交通卡（交通联合版）识别：${shanghai.status.label} / '
+              '${shanghai.tu.stateText} / ${shanghai.cu.stateText}'
+              '${shanghai.duplicateTripCount == 0 ? '' : ' / 行程去重 ${shanghai.duplicateTripCount} 条'} ==');
+        }
         if (parsed.dualApplication) {
           final cu = parsed.cityUnionBalanceFen;
           _log('== 检测到双应用卡：交通联合 + 城市一卡通（'
@@ -980,10 +1012,64 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// FeliCa（NFC-F）识读：原生只负责 NfcF 连接与原始帧收发，
+  /// 协议校验 / 卡型匹配 / 记录解析全部由独立 FeliCa 模块完成。
+  Future<void> _readFelica(NfcScanResult tag) async {
+    _parsing = true;
+    _readProgress = null;
+    _resetCard();
+    notifyListeners();
+
+    try {
+      final reader = FelicaReader(
+        _felicaTransceive,
+        onStage: (stage) => _log('== 尝试解析：$stage =='),
+        onProgress: _reportReadProgress,
+      );
+      final result = await reader.read(
+        preferredSystemCode: _hexWord(tag.nfcFSystemCode),
+      );
+      _felicaResult = result;
+      _log('== FeliCa 识读完成：${result.displayName} / ${result.stateText} ==');
+      for (final status in result.statuses) {
+        _log('   ${status.stage}：${status.state.label} — ${status.message}');
+      }
+      _reportReadProgress(100);
+    } catch (e) {
+      _log('!! FeliCa 识读异常：$e');
+    } finally {
+      _parsing = false;
+      notifyListeners();
+    }
+  }
+
+  /// FeliCa 原始帧收发（带会话日志）：协议层需要感知通道错误，
+  /// 因此记录后继续抛出，由 FelicaReader 统一映射为读取状态。
+  Future<List<int>> _felicaTransceive(List<int> frame) async {
+    try {
+      final resp = await _felicaChannel.transceive(frame);
+      _log('>> FeliCa ${_hex(frame)}\n<< ${_hex(resp)}');
+      return resp;
+    } on PlatformException catch (e) {
+      _log('!! FeliCa ${e.code}：${e.message ?? ''}');
+      rethrow;
+    }
+  }
+
+  /// 原生提供为 "00 03" 形式的系统码 HEX，转换为 16 位整数供探测使用。
+  static int? _hexWord(String? hex) {
+    if (hex == null) return null;
+    final cleaned = hex.replaceAll(' ', '');
+    if (cleaned.length != 4) return null;
+    return int.tryParse(cleaned, radix: 16);
+  }
+
   void _resetCard() {
     _parsedCard = null;
+    _shanghaiTransitUnion = null;
     _analysis = null;
     _lastBankCardResult = null;
+    _felicaResult = null;
     // 新会话开始时清除会话指纹：本次识别失败 / 未读到卡片时，卡片详情页
     // 不再误与旧会话数据关联（各自展示已保存的记录快照）。
     _lastFingerprint = null;

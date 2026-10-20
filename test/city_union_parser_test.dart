@@ -460,6 +460,26 @@ void main() {
     });
   });
 
+  group('CityUnionCodec.decodeCardNumber', () {
+    test('非 BCD 序列号不产出伪卡号（禁止二进制整数回退）', () {
+      const bytes = [0x80, 0x0A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+      final result = CityUnionCodec.decodeCardNumber(bytes);
+      expect(result.digits, isNull);
+      expect(result.error, isNotNull);
+      expect(result.isNumeric, isFalse);
+    });
+
+    test('标准 8 字节 BCD 保持 16 位定长（含前导 0）', () {
+      const bytes = [0x00, 0x00, 0x12, 0x34, 0x56, 0x78, 0x90, 0x12];
+      final result = CityUnionCodec.decodeCardNumber(bytes);
+      expect(result.digits, '0000123456789012');
+      expect(result.isNumeric, isTrue);
+
+      final info = CjT331PublicInfoParser.parse(_sampleFile(serial: bytes));
+      expect(info.displayApplicationSerialNumber, '0000123456789012');
+    });
+  });
+
   group('JSON 输出', () {
     test('包含类型化字段、字段明细、异常与原始值', () {
       final info = CjT331PublicInfoParser.parse(_sampleFile());

@@ -136,6 +136,6 @@ Future<List<int>?> _pickQrBytesFromGallery(BuildContext context) async {
 
 void _notifyResult(BuildContext context, bool ok) {
   ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-    SnackBar(content: Text(ok ? '二维码解析成功' : '二维码解析失败，请查看二维码详情')),
+    SnackBar(content: Text(ok ? '二维码解析成功' : '二维码解析失败，请查看首页错误提示')),
   );
 }

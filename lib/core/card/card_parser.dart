@@ -11,11 +11,21 @@ abstract final class CardParserIds {
   /// 交通联合电子钱包（JT/T 978.2）。
   static const String tunion = 'tunion';
 
+  /// 上海交通卡（交通联合版）：TU + CU 双标卡独立卡种。
+  /// 由 [ShanghaiTransitUnionCardParser] 以「辅助前缀 + 应用结构」双重确认，
+  /// 不归入普通交通联合解析器（[tunion]）。
+  static const String shanghaiTunion = 'shanghai_tunion';
+
   /// 城市一卡通（住建部 City Union，CJ/T 331-2016）。
   static const String cityUnion = 'city_union';
 
   /// 地方交通卡（北京 / 羊城通 / 深圳通 / 苏州 / 天府通等城市探测卡种）。
   static const String localCard = 'local_card';
+
+  /// 是否属于交通联合（JT/T 978.2）家族：普通交通联合卡或上海交通卡
+  /// （交通联合版）。分析链路与展示层按族级分派时使用。
+  static bool isTUnionFamily(String? parserId) =>
+      parserId == tunion || parserId == shanghaiTunion;
 }
 
 /// 统一卡片解析器接口。
@@ -62,7 +72,8 @@ class ParsedCard {
   /// 城市一卡通（CU，CJ/T 331-2016）两个应用。为 true 时，[info] /
   /// [transactions] / [transitProcessRecords] 承载交通部互联互通应用数据，
   /// [cityUnionFiles] 与 [cityUnionBalanceFen] 承载住建部城市一卡通应用数据；
-  /// [parserId] 保持 [CardParserIds.tunion]（以互联互通应用驱动分析链路）。
+  /// [parserId] 为 [CardParserIds.tunion] 或 [CardParserIds.shanghaiTunion]
+  /// （以互联互通应用驱动分析链路）。
   final bool dualApplication;
 
   /// 双应用卡上城市一卡通（CU）应用的电子钱包余额（分）；非双应用或未读到

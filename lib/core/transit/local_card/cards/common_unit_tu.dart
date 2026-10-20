@@ -99,6 +99,15 @@ class CommonUnitTu {
   /// 识读成功后的标准文件解析结果（未识读 / 失败时为 null）。
   ParsedCard? parsedCard;
 
+  /// 最近一次读取到的交通联合卡信息（含应用序列号 / 发卡机构标识）。
+  ///
+  /// 即使 [read] 因应用序列号校验失败返回 null 也会保留，供上海交通卡
+  /// （交通联合版）识别器以卡号前缀 / 发卡机构标识做辅助判定。
+  TUnionCardInfo? _lastCardInfo;
+
+  /// 最近一次读取的卡信息（失败时同样保留）；未读取时为 null。
+  TUnionCardInfo? get lastCardInfo => _lastCardInfo;
+
   List<int>? _selectedAid;
   List<int>? _fciDiscretionary;
 
@@ -119,6 +128,7 @@ class CommonUnitTu {
     if (_selectedAid == null) return null;
 
     final cardInfo = await _readCardInfo();
+    _lastCardInfo = cardInfo;
     if (!_isValidTUnionSerial(cardInfo)) {
       info.isTU = false;
       return null;

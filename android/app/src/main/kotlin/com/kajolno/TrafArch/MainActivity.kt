@@ -30,6 +30,7 @@ import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanner
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
+import com.kajolno.TrafArch.nfc.FelicaNfcBridge
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
@@ -66,6 +67,9 @@ class MainActivity : FlutterActivity(), NfcAdapter.ReaderCallback {
     @Volatile
     private var isoDep: IsoDep? = null
 
+    /** NFC-F（FeliCa）通信桥：只负责 NfcF 连接与原始帧收发。 */
+    private val felicaBridge = FelicaNfcBridge()
+
     // 导出等待存储权限期间挂起的请求（仅 Android 9- 需要）
     @Volatile
     private var pendingExportResult: MethodChannel.Result? = null
@@ -98,6 +102,7 @@ class MainActivity : FlutterActivity(), NfcAdapter.ReaderCallback {
                     "scanOnce" -> startScan(result)
                     "stopScan" -> stopScan(result)
                     "transceive" -> transceive(call, result)
+                    "transceiveFelica" -> transceiveFelica(call, result)
                     else -> result.notImplemented()
                 }
             }
@@ -187,6 +192,34 @@ class MainActivity : FlutterActivity(), NfcAdapter.ReaderCallback {
         }.start()
     }
 
+    /**
+     * FeliCa（NFC-F）原始帧收发：完整帧（含 LEN）原样透传，
+     * 不解析 Suica / 八达通的业务字段。
+     */
+    private fun transceiveFelica(call: MethodCall, result: MethodChannel.Result) {
+        val frame = when (val args = call.arguments) {
+            is ByteArray -> args
+            is List<*> -> args.map { (it as Number).toByte() }.toByteArray()
+            else -> null
+        }
+        if (frame == null) {
+            result.error("BAD_ARGUMENT", "FeliCa 帧格式错误", null)
+            return
+        }
+        if (!felicaBridge.isConnected()) {
+            result.error("FELICA_NOT_CONNECTED", "NFC-F 未连接", null)
+            return
+        }
+        Thread {
+            try {
+                result.success(felicaBridge.transceive(frame))
+            } catch (e: Exception) {
+                Log.w(TAG, "FeliCa transceive failed: ${e.message}")
+                result.error("TRANSCEIVE_FAILED", e.message, null)
+            }
+        }.start()
+    }
+
     private fun startScan(result: MethodChannel.Result) {
         if (nfcAdapter == null) {
             result.error("NFC_UNAVAILABLE", "当前设备没有 NFC", null)
@@ -206,6 +239,7 @@ class MainActivity : FlutterActivity(), NfcAdapter.ReaderCallback {
 
     private fun stopScan(result: MethodChannel.Result? = null) {
         nfcAdapter?.disableReaderMode(this)
+        felicaBridge.close()
         synchronized(this) {
             pendingResult?.error("NFC_STOPPED", "扫描已停止", null)
             pendingResult = null
@@ -708,6 +742,20 @@ class MainActivity : FlutterActivity(), NfcAdapter.ReaderCallback {
             Log.w(TAG, "Failed to read ISO-DEP: ${e.message}")
         }
 
+        // NFC-F（FeliCa）：无 ISO-DEP 时连接 NfcF，供 Dart 层发送 FeliCa
+        // 原始帧（Suica / 八达通由独立模块解析）。
+        var felicaConnected = false
+        if (!connected) {
+            try {
+                if (NfcF.get(tag) != null) {
+                    felicaBridge.attach(tag)
+                    felicaConnected = felicaBridge.isConnected()
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to attach NFC-F: ${e.message}")
+            }
+        }
+
         // ATQA/SAK -> 卡型，历史字节 -> 解读
         val cardType = identifyCardType(atqa, sak, techs, connected)
         val atsDescription = describeHistoricalBytes(historicalBytes)
@@ -737,6 +785,7 @@ class MainActivity : FlutterActivity(), NfcAdapter.ReaderCallback {
             "maxTransceiveLength" to maxLen,
             "tagDescription" to tag.toString(),
             "isoDepConnected" to connected,
+            "felicaConnected" to felicaConnected,
             "timestamp" to java.time.Instant.now().toString()
         )
 

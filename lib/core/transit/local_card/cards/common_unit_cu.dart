@@ -157,33 +157,17 @@ class CommonUnitCu {
   }
 
   /// READ BINARY 读取透明（二进制）文件；全空数据返回 null。
+  ///
+  /// 首次读取使用明确长度（不再用 Le=0x00，避免部分卡片对“读到文件尾”
+  /// 的解释不一致导致数据起点偏移）；长度不足时不再静默拼接，直接失败，
+  /// 由上层保留原始数据。
   Future<List<int>?> _readTransparentFile(int sfi, int length) async {
-    final out = <int>[];
-
     final whole = await _exchange(
-      TUnionApdu.readBinary(sfi, offset: 0, le: 0x00),
+      TUnionApdu.readBinary(sfi, offset: 0, le: length),
     );
-    if (_isSuccess(whole)) {
-      out.addAll(_stripSw(whole));
-    }
-
-    while (out.length < length) {
-      final want = (length - out.length) > _readBinaryChunk
-          ? _readBinaryChunk
-          : length - out.length;
-      final resp = await _exchange(
-        TUnionApdu.readBinary(sfi, offset: out.length, le: want),
-      );
-      if (!_isSuccess(resp)) break;
-      final chunk = _stripSw(resp);
-      if (chunk.isEmpty) break;
-      if (_matchesFromStart(out, chunk)) break;
-      out.addAll(chunk);
-      if (chunk.length < want) break;
-    }
-
-    if (out.isEmpty) return null;
-    final data = out.length > length ? out.sublist(0, length) : out;
+    if (!_isSuccess(whole)) return null;
+    final data = _stripSw(whole);
+    if (data.length != length) return null;
     if (data.every((b) => b == 0x00 || b == 0xFF)) return null;
     return data;
   }
@@ -245,7 +229,7 @@ class CommonUnitCu {
     final public = files.whereType<CjT331PublicInfo>().firstOrNull;
     if (public == null) return;
     if (public.issuerCode != null) info.issuerCode = public.issuerCode!;
-    final serial = public.applicationSerialNumber;
+    final serial = public.displayApplicationSerialNumber;
     if (serial != null && serial.isNotEmpty) info.cardNumber = serial;
     final city = _cityCodeOf(public.cityCode);
     if (city != 0) info.cityCode = city;
@@ -287,7 +271,7 @@ class CommonUnitCu {
   /// "YYYY-MM-DD" / "HH:MM:SS" 组合解析；任一非法返回 null（不猜测）。
   static DateTime? _dateTimeOf(String? date, String? time) {
     if (date == null || date.isEmpty) return null;
-    final iso = (time == null || time.isEmpty) ? date : '$date\'T$time';
+    final iso = (time == null || time.isEmpty) ? date : '${date}T$time';
     return DateTime.tryParse(iso);
   }
 

@@ -28,6 +28,8 @@ class CardIdentificationService {
     switch (card.parserId) {
       case CardParserIds.tunion:
         return _identifyTUnion(card, analysisIdentity);
+      case CardParserIds.shanghaiTunion:
+        return _identifyShanghaiTransitUnion(card, analysisIdentity);
       case CardParserIds.cityUnion:
         return _identifyCityUnion(card);
       default:
@@ -65,8 +67,9 @@ class CardIdentificationService {
   /// 回退发卡机构指纹库与城市码表识别结果。均未命中时保持未知。
   IdentifiedCard? _identifyTUnion(
     ParsedCard card,
-    CardIdentity? analysisIdentity,
-  ) {
+    CardIdentity? analysisIdentity, {
+    String? cardType,
+  }) {
     final info = card.info;
     final catalog = knowledge.cardPrefixes.lookup(info.displayCardNumber) ??
         knowledge.cardPrefixes.lookupByIssuerId(info.issuerId);
@@ -87,7 +90,7 @@ class CardIdentificationService {
         ? null
         : rawConfidence;
     final identity = resolve(
-      cardType: _refineTUnionType(officialName),
+      cardType: cardType ?? _refineTUnionType(officialName),
       officialName: officialName,
       issuerName: issuerName,
       cityName: cityName,
@@ -111,7 +114,7 @@ class CardIdentificationService {
   /// （SFI 0x15）；正式卡名与发卡地取自 CU 卡片识别库（城市代码 =
   /// 邮编前四位 / CU 城市项目代码 → 本地卡名称参考 / 城市），识别库
   /// 未收录城市时回退交通联合城市码表；均未命中时保持未知（不猜测）。
-  IdentifiedCard? _identifyCityUnion(ParsedCard card) {
+  IdentifiedCard? _identifyCityUnion(ParsedCard card, {String? cardType}) {
     CjT331PublicInfo? publicInfo;
     for (final view in card.cityUnionFiles) {
       if (view is CjT331PublicInfo) {
@@ -128,7 +131,7 @@ class CardIdentificationService {
             ? CardIdentificationSources.cityCode
             : CardIdentificationSources.parserOnly;
     final identity = resolve(
-      cardType: CardTypes.cityUnion,
+      cardType: cardType ?? CardTypes.cityUnion,
       officialName: officialName,
       cityName: cityName,
       source: source,
@@ -136,13 +139,15 @@ class CardIdentificationService {
     final fingerprint = CardFingerprint.build(
       system: CardParserIds.cityUnion,
       issuerId: publicInfo?.issuerCode,
-      cardNumber: publicInfo?.applicationSerialNumber,
+      // 指纹必须用序列号原始字节：解码口径升级时指纹不变，
+      // 同一张卡重新读卡会命中已有档案而不是新建。
+      cardNumber: publicInfo?.applicationSerialNumberRawHex,
     );
     if (fingerprint == null) return null;
     return IdentifiedCard(
       fingerprint: fingerprint,
       identity: identity,
-      cardNumber: publicInfo?.applicationSerialNumber,
+      cardNumber: publicInfo?.displayApplicationSerialNumber,
     );
   }
 
@@ -167,6 +172,32 @@ class CardIdentificationService {
       }
     }
     return CardTypes.chinaTunion;
+  }
+
+  /// 上海交通卡（交通联合版）：卡型已由专用识别器以「辅助前缀 + 应用结构」
+  /// 双重确认，这里只产出卡名 / 城市 / 发行方与稳定指纹。
+  ///
+  /// 指纹系统标识保持与既有档案一致，避免规则升级产生重复档案：
+  /// - TU 侧可用：沿用 [CardParserIds.tunion] 指纹（卡号 + 发卡机构）；
+  /// - 仅 CU 侧可用：回退 [CardParserIds.cityUnion] 指纹（0x15 序列号原始字节）。
+  IdentifiedCard? _identifyShanghaiTransitUnion(
+    ParsedCard card,
+    CardIdentity? analysisIdentity,
+  ) {
+    final info = card.info;
+    final aid = card.selectedAidHex.replaceAll(' ', '').toUpperCase();
+    // TU 钱包 / 电子现金 AID 前缀：A0000006320101（05 钱包 / 06 现金）。
+    final tuSelected = aid.isEmpty || aid.startsWith('A0000006320101');
+    final tuUsable =
+        tuSelected && (info.displayCardNumber != null || info.issuerId != null);
+    if (tuUsable) {
+      return _identifyTUnion(
+        card,
+        analysisIdentity,
+        cardType: CardTypes.shanghaiTransitUnion,
+      );
+    }
+    return _identifyCityUnion(card, cardType: CardTypes.shanghaiTransitUnion);
   }
 }
 

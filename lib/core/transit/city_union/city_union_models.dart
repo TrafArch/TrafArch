@@ -25,8 +25,9 @@ abstract final class CityUnionFileIds {
   static const int walletRecharge = 0x1A;
 }
 
-/// 字段编码格式：BCD 按十进制半字节解码，HEX 按字节原样保留。
-enum CjFieldFormat { bcd, hex }
+/// 字段编码格式：BCD 按十进制半字节解码，HEX 按字节原样保留，
+/// AUTO 为卡号类字段的自适应解码（BCD 优先，失败回退二进制）。
+enum CjFieldFormat { bcd, hex, auto }
 
 /// 单个字段的解析结果：原始值、标准解码值与可读说明一起保留，
 /// 字段级异常只标记本字段（原始字节始终保留在 [rawHex]）。
@@ -86,7 +87,11 @@ class CjField {
         'key': key,
         'name': name,
         'byteRange': byteRange,
-        'format': format == CjFieldFormat.bcd ? 'BCD' : 'HEX',
+        'format': switch (format) {
+          CjFieldFormat.bcd => 'BCD',
+          CjFieldFormat.hex => 'HEX',
+          CjFieldFormat.auto => 'AUTO（BCD 优先自适应）',
+        },
         'rawHex': rawHex,
         'decoded': decoded,
         'note': note,
@@ -138,7 +143,11 @@ class CjT331PublicInfo implements CityUnionFileView {
   final String? interconnectionEnabled;
   final String? applicationVersion;
   final String? interconnectionId;
+
+  /// 用户卡应用序列号（0x15 第 13-20 字节）解码后的**纯数字串**；
+  /// 由解析层自适应解码，无法判定为数字时为 null（不回退 HEX）。
   final String? applicationSerialNumber;
+
   final String? applicationStartDate;
   final String? applicationExpiryDate;
   final String? reserved2;
@@ -175,6 +184,29 @@ class CjT331PublicInfo implements CityUnionFileView {
   /// 互联互通启用标识：00 未启用，非 00 启用；字段缺失视为未启用。
   bool get isInterconnectionEnabled =>
       interconnectionEnabled != null && interconnectionEnabled != '00';
+
+  /// 用户卡应用序列号原始字节（连续大写 HEX，无分隔符）。
+  ///
+  /// 指纹与历史档案比对必须使用本值：字段解码口径升级时指纹保持不变，
+  /// 避免同一张卡产生重复档案。
+  String? get applicationSerialNumberRawHex {
+    for (final f in fields) {
+      if (f.key == 'applicationSerialNumber') {
+        return f.rawHex.replaceAll(' ', '');
+      }
+    }
+    return applicationSerialNumber;
+  }
+
+  /// 展示用卡号：CJ/T 331-2016 用户卡应用序列号为 8 字节 BCD（定长 16 位
+  /// 数字），不做前导 0 裁剪；填充位解码导致有效位不足 16 位时左补 0
+  /// 恢复定长。非纯数字（异常/外部构造）原样返回，避免掩盖问题。
+  String? get displayApplicationSerialNumber {
+    final s = applicationSerialNumber;
+    if (s == null || s.isEmpty) return null;
+    if (!RegExp(r'^\d+$').hasMatch(s)) return s;
+    return s.length < 16 ? s.padLeft(16, '0') : s;
+  }
 
   @override
   List<String> get errors => [

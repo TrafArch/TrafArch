@@ -23,6 +23,10 @@ class NfcScanResult {
   final int? maxTransceiveLength;
   final String? tagDescription;
   final bool isoDepConnected;
+
+  /// 原生是否已建立 NFC-F（FeliCa）连接：Suica / 八达通等卡
+  /// 走独立 FeliCa 链路，不经过 ISO-DEP APDU 流程。
+  final bool felicaConnected;
   final DateTime timestamp;
 
   const NfcScanResult({
@@ -50,6 +54,7 @@ class NfcScanResult {
     this.maxTransceiveLength,
     this.tagDescription,
     required this.isoDepConnected,
+    this.felicaConnected = false,
     required this.timestamp,
   });
 
@@ -81,6 +86,7 @@ class NfcScanResult {
       maxTransceiveLength: (map['maxTransceiveLength'] as num?)?.toInt(),
       tagDescription: map['tagDescription']?.toString(),
       isoDepConnected: map['isoDepConnected'] == true,
+      felicaConnected: map['felicaConnected'] == true,
       timestamp: DateTime.tryParse('${map['timestamp']}') ?? DateTime.now(),
     );
   }
