@@ -10,8 +10,8 @@
 .history
 .svn/
 .swiftpm/
-.tool/
-.tools/
+/tool/
+/tools/
 migrate_working_dir/
 
 # IntelliJ related
@@ -49,6 +49,3 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
-
-# Local scratch tooling (maintained tools/reference_data is tracked)
-/tools/local/
