@@ -88,9 +88,27 @@ class _CardDetailBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final transactions = history.records
-        .where((r) => r.kind == ArchiveRecordKind.transaction)
-        .length;
+    final trips = presentArchiveTrips(
+      history.records,
+      onDiagnostics: (record) => _showEvidence(
+        context,
+        '诊断与原始证据',
+        const JsonEncoder.withIndent('  ').convert({
+          'context': record.context.toJson(),
+          'cardCityCode': record.cardCityCode,
+          'record': record.fields,
+          'sources': [
+            for (final source in record.sources)
+              {
+                'batchId': source.batchId,
+                'path': source.path,
+                'capturedParseVersion': source.capturedParseVersion,
+                'provenance': source.provenance,
+              },
+          ],
+        }),
+      ),
+    );
     return ListView(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 28),
       children: [
@@ -115,31 +133,9 @@ class _CardDetailBody extends StatelessWidget {
         const SizedBox(height: 8),
         TripCardsView(
           key: ValueKey(history.card!.id),
-          entries: presentArchiveTrips(
-            history.records,
-            onDiagnostics: (record) => _showEvidence(
-              context,
-              '诊断与原始证据',
-              const JsonEncoder.withIndent('  ').convert({
-                'context': record.context.toJson(),
-                'cardCityCode': record.cardCityCode,
-                'record': record.fields,
-                'sources': [
-                  for (final source in record.sources)
-                    {
-                      'batchId': source.batchId,
-                      'path': source.path,
-                      'capturedParseVersion': source.capturedParseVersion,
-                      'provenance': source.provenance,
-                    },
-                ],
-              }),
-            ),
-          ),
+          entries: trips.entries,
           sourceLabels: archiveTripSourceLabels,
-          summaryText:
-              '交易 $transactions 条 · '
-              '过程及应用记录 ${history.records.length - transactions} 条',
+          summaryText: trips.summaryText,
         ),
         const SizedBox(height: 16),
         TextButton.icon(

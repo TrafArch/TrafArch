@@ -20,7 +20,7 @@ void main() {
         sources: [],
       ),
     ], onDiagnostics: (_) {});
-    expect(entries.single.info.title, '其他 · 序号 1');
+    expect(entries.entries.single.info.title, '其他 · 序号 1');
   });
 
   test('0x1A零值及未知扩展不虚构进出站事件', () {
@@ -40,9 +40,9 @@ void main() {
         sources: [],
       ),
     ], onDiagnostics: (_) {});
-    expect(entries, hasLength(1));
-    expect(entries.single.dateText, '日期未知');
-    expect(entries.single.info.title, isNot('进站'));
-    expect(entries.single.info.title, isNot('出站'));
+    expect(entries.entries, hasLength(1));
+    expect(entries.entries.single.dateText, '日期未知');
+    expect(entries.entries.single.info.title, isNot('进站'));
+    expect(entries.entries.single.info.title, isNot('出站'));
   });
 }
