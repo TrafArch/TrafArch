@@ -12,46 +12,15 @@ const archiveTripSourceLabels = {
   ArchiveRecordKind.bus: '0x1A 公交',
 };
 
-/// Prefer valid same-mode 0x1E observations within each capture, as on the live
-/// trip page. Original history/evidence remains intact. A surviving 0x1A record
-/// has up to two UI events with its complete context and attribution.
+/// Adapt the authoritative history, without re-merging records or looking up
+/// anything in a live scan/reference database. A 0x1A record has up to two UI
+/// events; both retain the complete record, captured context and attribution.
 List<TripCardPresentation<ArchiveRecordKind>> presentArchiveTrips(
   List<ArchiveHistoryRecord> records, {
   required void Function(ArchiveHistoryRecord) onDiagnostics,
 }) {
-  final cycleCaptures = <(String, int)>{};
-  for (final record in records) {
-    if (record.kind != ArchiveRecordKind.process) continue;
-    final mode = record.fields['appTypeCode'];
-    final type = record.fields['typeCode'];
-    if ((mode != 1 && mode != 2) ||
-        type is! int ||
-        type == 0 ||
-        type == 0xFF ||
-        record.fields['time'] is! int) {
-      continue;
-    }
-    for (final source in record.sources) {
-      cycleCaptures.add((source.batchId, mode as int));
-    }
-  }
   final events = <_ArchiveEvent>[];
   for (final record in records) {
-    final mode = switch (record.kind) {
-      ArchiveRecordKind.rail => 1,
-      ArchiveRecordKind.bus => 2,
-      _ => null,
-    };
-    // A merged historical 1A may also belong to an older capture with no 1E.
-    // Suppress it only when every attribution is superseded; never erase that
-    // earlier independent observation or guess a batch for legacy records.
-    if (mode != null &&
-        record.sources.isNotEmpty &&
-        record.sources.every(
-          (s) => cycleCaptures.contains((s.batchId, mode)),
-        )) {
-      continue;
-    }
     if (record.kind == ArchiveRecordKind.rail ||
         record.kind == ArchiveRecordKind.bus) {
       final sides = [

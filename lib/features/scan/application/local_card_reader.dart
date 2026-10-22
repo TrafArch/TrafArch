@@ -70,9 +70,9 @@ class LocalReadOutcome {
 
 /// 交通卡 / 银行卡统一识读编排主体（新模块为主）：按优先级串联各读法，
 /// 命中即返回。
-/// 0) 通用 TU / CU 应用探测：两路独立识读、独立状态，再由
-///    [ShanghaiTransitUnionCardParser] 校验上海卡身份；确认后使用上海
-///    交通卡（交通联合版）的独立合并产物；
+/// 0) 上海交通卡（交通联合版）独立卡种：默认按 TU + CU 双标卡处理，
+///    TU / CU 两路独立识读、独立状态、合并结果（见
+///    [ShanghaiTransitUnionCardParser]）；命中时以其合并产物为准；
 /// 1) 非上海卡的交通联合（JT/T 978.2）富识读 [CommonUnitTu]（复用 0 阶段
 ///    已读到的 TU 结果，不重复读卡）；
 /// 2) 城市一卡通（CJ/T 331-2016）富识读（同样复用 0 阶段结果），
@@ -137,8 +137,8 @@ class LocalCardReader {
     try {
       callback.onProgress(5);
 
-      // 1) 先按通用协议读取 TU / CU 应用，再核验上海卡身份。
-      //    两路独立执行（一侧失败不跳过另一侧）。命中后以独立
+      // 1) 上海交通卡（交通联合版）独立卡种：默认按 TU + CU 双标卡处理，
+      //    TU / CU 两路独立执行（一侧失败不跳过另一侧）。命中后以独立
       //    parserId（shanghaiTunion）产出合并结果；未命中（普通 TU 卡 /
       //    普通 CU 卡 / 非交通卡）时复用本次已读到的应用结果，避免二次读卡。
       callback.onProgress(10);
@@ -151,7 +151,6 @@ class LocalCardReader {
       final cuCard = shanghai.cu.card;
 
       if (shanghai.isShanghaiTransitUnion && shanghai.mergedCard != null) {
-        onStage?.call('已识别：${ShanghaiTransitUnionIds.moduleName}');
         callback.onProgress(95);
         return LocalReadOutcome.transit(
           readResult: shanghai.readResult,

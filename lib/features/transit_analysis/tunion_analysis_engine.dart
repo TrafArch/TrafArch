@@ -332,20 +332,13 @@ class AnalysisEngine {
   /// 行程标记为进站并补齐进站城市名与站点原始编码（站点名称待线路库接入
   /// 后补全）。记录 1 进站交易金额字段非 0 视为异常数据、进站时间缺失
   /// （未写入 / 截断）时不参与配对；同键多条视为不可判定不注解。
-  /// 同次读取中已存在同类有效 0x1E 时，该类 0x1A 不参与兜底；
-  /// 未与某笔交易配对不能作为重新启用 0x1A 的理由。
+  /// 0x1E 过程记录对同一交易存在注解时以 0x1E 为准（调用方优先消费）。
   Map<String, _EntryFallback> _buildEntryFallbacks(
     ParsedCard card,
     CardIdentity identity,
   ) {
     final byKey = <String, _EntryFallback>{};
     final ambiguous = <String>{};
-    final hasRailCycle = card.transitProcessRecords.any(
-      (r) => r.sfi == 0x1E && r.trip?.isCityRail == true,
-    );
-    final hasBusCycle = card.transitProcessRecords.any(
-      (r) => r.sfi == 0x1E && r.trip?.isBus == true,
-    );
     for (final record in card.transitProcessRecords) {
       if (record.sfi != 0x1A) continue;
       final rail = record.railTransit;
@@ -355,7 +348,6 @@ class AnalysisEngine {
       DateTime? entryTime;
       final String statusName;
       if (rail != null) {
-        if (hasRailCycle) continue;
         // 进站交易金额非 0 与 0 元进站交易的实测特征不符，视为异常不配对。
         if (rail.entryAmountFen != null && rail.entryAmountFen != 0) continue;
         entryCityCode = rail.entryCityCode;
@@ -363,7 +355,6 @@ class AnalysisEngine {
         entryTime = rail.entryTime;
         statusName = '进站';
       } else if (bus != null) {
-        if (hasBusCycle) continue;
         entryCityCode = bus.entryCityCode;
         entryStationId = bus.entryStationCode;
         entryTime = bus.entryTime;
