@@ -4,7 +4,7 @@ import '../../protocols/transit/tunion/tunion_models.dart';
 
 /// 行程解析口径版本：解析 / 关联规则变更时递增，随读取批次持久化，
 /// 历史数据据此识别产出批次所用的解析口径。
-const int kTripParseVersion = 3;
+const int kTripParseVersion = 4;
 
 /// 识别证据：来源、说明与权重（0 表示"出场但未命中"）。
 class Evidence {

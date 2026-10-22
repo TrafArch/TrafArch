@@ -64,7 +64,8 @@ class ShanghaiTransitUnionCardParser implements CardParser {
 
   /// 交通联合应用识读（TU）。
   Future<ShanghaiTransitApplication> _readTu(ApduExchange apdu) async {
-    onStage?.call('$moduleName · ${ShanghaiTransitUnionIds.tuSystem}');
+    // The shared probe runs before issuer identity is known.
+    onStage?.call(CommonUnitTu.moduleName);
     final info = CardInfo();
     final records = <ApduRecord>[];
     final errors = <String>[];
@@ -116,7 +117,7 @@ class ShanghaiTransitUnionCardParser implements CardParser {
 
   /// 城市一卡通应用识读（CU）：读余额开关常开（该卡种 CU 侧为独立钱包）。
   Future<ShanghaiTransitApplication> _readCu(ApduExchange apdu) async {
-    onStage?.call('$moduleName · ${ShanghaiTransitUnionIds.cuSystem}');
+    onStage?.call(CommonUnitCu.moduleName);
     final info = CardInfo();
     final records = <ApduRecord>[];
     final errors = <String>[];

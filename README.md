@@ -1,71 +1,107 @@
 # TrafArch
 
-基于 Flutter / Dart 与 Android Kotlin NFC 的交通卡读取和分析项目。当前重构以 `8a4818e7d4dc848432a3e39a69195255138a3b95` 为基线，源码版本 `1.0.1-alpha+2066`。当前安装包使用 applicationId `com.kajolno.TrafArch`（与旧正式包一致）；arm64 Release APK 使用 Android Debug 证书签名。
+TrafArch 是一款 Android 交通卡读取工具。将卡片贴近手机，即可查看卡片信息、可读取的余额和最近行程；也可以保存卡片，之后随时查看已保存的记录。
 
-项目维护约束：后续每次修改均保持 applicationId **`com.kajolno.TrafArch`**；非正式/测试发布显示名为 **TrafArch Alpha <数字>**（当前为 **TrafArch Alpha 1**），正式发布显示名 **TrafArch**，Debug、Release 和验证构建均适用。具体约束写入 [AGENTS.md](AGENTS.md)。
+[查看发布版本](https://github.com/TrafArch/TrafArch/releases) · [更新记录](CHANGELOG.md)
 
-## 功能与边界
+目前处于 Alpha 阶段，卡片兼容性和线路、站点识别仍在完善。不同城市、卡种与发行批次开放的信息可能不同，显示内容以实际读取结果为准。
 
-- 交通联合（TU）：电子钱包、公共应用信息、交易明细、SFI 0x1A / 0x1E 乘车过程文件及行程分析。
-- 城市一卡通（CU / C-Union）：独立应用读取和独立参考数据库；保留卡内原始文件、城市码、终端码和查询证据。
-- 地方交通卡：保留现有北京、上海、深圳、广州、苏州等读取路径。各卡种具体支持范围由卡片开放文件决定。
-- 银行卡：EMV / PBOC 只读应用枚举、FCI / GPO / AFL / TLV 解析，按每个应用选择逻辑并保留混合结果。卡号仅在卡片返回相应标签时可提取；本轮未做实卡验证。
-- FeliCa：保留现有识别、服务探测和卡适配器。未增加未经证据支持的八达通余额或历史服务。
-- JT/T 1179 二维码：应用内相机、系统扫码选项及相册导入，保留纯 Dart 图片解码兜底。
-- 交通卡档案：保存读取批次、余额观察和原始证据，支持自定义名、历史详情、删除和导出。银行卡及 FeliCa 未新增归档策略。
+## 可以做什么
 
-系统扫码默认关闭，应用内相机需要相机权限；手动开启系统扫码后使用 Google Play 服务，设备不具备服务时需关闭该开关恢复内置相机。当前 Android 配置使用非捆绑 ML Kit 模型，内置相机首次识别可能需要下载模型；图片导入另有纯 Dart 解码路径。不要把参考数据离线能力理解为所有扫码服务都无需网络。
+- **查看卡片与余额**：读取支持的交通卡，显示卡片名称、可读取的余额及其他卡片信息。
+- **查看最近行程**：展示卡内保留的交易和乘车记录，结合内置参考数据识别线路、站点，并按交通类型筛选。
+- **管理已保存卡片**：保存读取结果、自定义卡片名称、查看历次保存的记录，以及删除或导出卡片记录。
+- **解析乘车码**：通过相机扫描或从相册导入，查看符合 JT/T 1179 标准的交通一卡通乘车码信息。
+- **查看详细信息**：“专家”页面提供更详细的卡片与读取结果，便于了解数据或协助排查问题。
 
-## 本地参考数据
+应用提供信息读取与展示，不提供充值、支付或修改卡片功能。
 
-应用直接读取项目自有发布包，不连接 Trip Reader 数据服务，不在启动时解析 CSV、合并来源或重建知识库索引。
+## 安装与开始使用
 
-| 发布文件 | 主要内容 |
-|---|---|
-| `assets/data/TrafArch_Database_TU.sqlite` | TU 原始地区、站点、公交 / BRT、卡前缀、发卡城市及构建好的领域文档 |
-| `assets/data/TrafArch_Database_CU.sqlite` | CU 独立站点、终端规则、线路编码、公交字典和卡名文档 |
-| `assets/data/reference_manifest.json` | 格式 / 内容版本、SHA256、大小、表计数、来源、冲突决策及字段溯源 |
+### 使用要求
 
-原始输入冻结在 `data/reference/sources/`；维护工具在 `tools/reference_data/`。用户覆盖和未知站点报告写入独立 `reference_user.sqlite`，与只读参考包分离。数据来源致谢保留，但来源链接不是运行时依赖。
+- Android 8.0 及以上。
+- 读取实体卡需要手机支持 NFC，并在系统设置中开启 NFC。
+- 相机扫码需要相机权限；也可选择“从相册导入”。没有 NFC 的设备仍可使用二维码图片导入功能。
 
-``powershell
-python -X utf8 -m tools.reference_data inspect
-python -X utf8 -m tools.reference_data build
-python -X utf8 -m tools.reference_data validate
-```
+可在本仓库的 [Releases 页面](https://github.com/TrafArch/TrafArch/releases)查看已发布版本及对应说明，安装适合手机的 APK。测试版本的兼容性可能随版本变化，更新前请阅读对应发布说明。
 
-工具使用 Python 标准库。逐字节重建需与发布清单相同的 SQLite 引擎、输入、策略和工具源码；详见 [离线维护说明](docs/REFERENCE_DATA_TOOLING.md)。不要通过 Gradle 从本机目录覆盖 SQLite 文件。旧 `transitDbMasterDir` 已退役。
+### 读取一张卡
 
-## 开发入口
+1. 开启手机 NFC，打开 TrafArch，进入“首页”。
+2. 在等待贴卡时，将卡片贴近手机背面的 NFC 感应区域，并保持不动，直到读取结束。
+3. 在首页查看卡片信息与余额；进入“行程”查看本次读取到的记录。
+4. 根据读卡后的提示选择是否保存。保存后可在“卡片”页面查看历史记录并修改名称。
 
-- [Changelog](CHANGELOG.md)：Feature、Bug fix、Refactor、Data、Migration、Docs 和验证限制。
-- [架构与目录职责](docs/ARCHITECTURE.md)：控制器、依赖方向、协议和平台边界。
-- [迁移说明](docs/MIGRATION.md)：档案 schema 6、快照 v3、用户覆盖迁移、开发者升级步骤。
-- [离线数据维护](docs/REFERENCE_DATA_TOOLING.md)：导入、构建、校验、差异报告及 SQL。
-- [NFC 会话契约](docs/NATIVE_SESSION_CONTRACT.md)：兼容通道、会话标识、取消与释放失败。
-- [旧包名升级交付（历史）](docs/UPGRADE_HANDOFF_20261021.md)：原 `com.kajolno.TrafArch` 升级包的版本码、原证书指纹和未签名 APK 记录；当前包沿用同一 applicationId，可用于升级与签名比对。
-- [重构验证记录](docs/REFACTOR_VALIDATION_20261021.md)：上一批并装 APK 的历史构建证据及重构测试 / 数据结论；当前安装身份以覆盖安装交付文档为准。
+如果希望每次读取后直接保存，可在“设置”中开启“读取后自动保存”。读卡结束后，使用首页的“再次读取”继续读取下一张卡。
 
-## 环境与验证
+### 查看与导出记录
 
-项目声明 Dart `^3.13.5`，Android 最低 API 26、编译 / 目标 API 37。Flutter、Android SDK、JDK 和签名配置由开发者本地准备；源码包不包含私钥、Firebase 私有配置或机器路径。版本号取自 `pubspec.yaml`；普通发布构建保留版本递增机制，`repairBuild=true` 的验证构建不递增版本。
+- **行程**：查看本次读取到的行程，可筛选轨道交通、公共汽电车等类型。
+- **卡片**：打开已保存卡片，查看历史读取记录和行程详情。
+- **导出卡片记录**：在“卡片”页面点击导出按钮，将已保存记录导出为文本文件；完成后按提示到手机的“下载”目录查找。
 
-用户在 2026-10-21 重新明确授权完整测试和源码 / APK 交付。最终全量 Flutter 测试 611 项通过，Dart analyzer 无问题；Android Kotlin / Gradle 编译及 Release / Debug 构建成功。详细 Lint 警告、签名、资产哈希和交付复验见验证文档。未安装或启动真实设备，未进行实体卡验证。
+导出文件用于阅读和留存，当前不支持将该文本文件导入应用还原卡片档案。
 
-在项目根目录执行：
+## 卡片与功能支持
 
-``powershell
-flutter pub get
-flutter analyze --no-pub
-flutter test --no-pub --reporter expanded
-python -X utf8 -m tools.reference_data validate
-flutter build apk --release --target-platform android-arm64 --split-per-abi -PrepairBuild=true -PunsignedApk=true --no-pub
-flutter build apk --debug --target-platform android-arm64 --split-per-abi -PrepairBuild=true -PunsignedApk=true --no-pub
-.\android\gradlew.bat -p android :app:lintDebug :app:testDebugUnitTest -PrepairBuild=true -PunsignedApk=true --console=plain
-```
+| 类型 | 当前可用范围 |
+| --- | --- |
+| 交通联合卡 | 支持读取可公开访问的卡片信息、钱包余额、交易与乘车记录；线路和站点识别取决于卡内记录及参考数据。 |
+| 城市一卡通 | 支持部分城市和卡种的信息、余额及记录读取，具体可读取内容因卡片而异。 |
+| 地方交通卡 | 已有北京、上海、武汉通、羊城通、深圳通、苏州、天府通等读取路径；不保证上述城市的所有卡片版本均可读取。 |
+| 部分 FeliCa 卡片 | 提供卡片识别及部分信息读取；Suica 可尝试读取开放服务中的余额与历史，取决于卡片和手机的 NFC 能力。 |
+| 八达通相关产品 | 支持部分产品识别；目前尚未实现八达通港币钱包余额及交易记录读取。八达通全国通的交通联合侧金额不等于港币钱包余额。 |
+| 部分非接触式银行卡 | 可查看卡片公开返回的应用信息；不提供银行卡余额查询、支付或转账。 |
+| 交通一卡通乘车码 | 支持 JT/T 1179 标准的乘车码扫描与图片导入；不适用于所有支付码和城市自有格式的乘车码。 |
 
-Windows 直接运行 Gradle Lint 前，若 Flutter 生成的 `android/local.properties` 含未转义的盘符冒号，应写为 `C\:/...`（或 Java properties 的完整反斜杠转义形式）。该文件是本机配置，不随源码交付。原生 Unit Test 任务为 `NO-SOURCE`；611 项指 Dart / Flutter 测试，不能当作 Android 设备测试数量。
+卡片通常只保留有限条最近记录。多次读取并保存可以留存应用已读到的信息，无法找回卡内已经被覆盖的旧记录。
 
-当前测试发布 APK 显示名为“TrafArch Alpha 1”，applicationId 为 `com.kajolno.TrafArch`（与旧正式包一致），versionName 为 `1.0.1-alpha`。源码构建号为 2066，arm64 拆包由 Flutter 按 ABI 生成 Android versionCode **4066**。当前验证 APK 按用户要求使用 Android Debug 证书签名；Debug 签名不能覆盖原签名应用，也不代表开发者原签名。`repairBuild=true` 仅控制无私有 Firebase 配置和不自动递增构建号；`unsignedApk=true` 明确关闭 Gradle 签名，便于后续使用 Debug 或开发者密钥重签。
+## 常见问题
 
-当前包沿用旧正式包的 applicationId（`com.kajolno.TrafArch`），安装按覆盖升级处理：只有同签名证书可升级，Debug 签名包需先卸载旧应用，且旧应用数据不会保留。上海 TU 卡“实际 100 元、原 APK 显示 108 元”已有原始响应到 UI / 档案的 100 元回归用例，但仍需用实体卡复核；代码未加入固定减 8 元补偿。
+### 手机没有反应，或提示读取失败
+
+先确认手机支持 NFC 且已开启 NFC，再调整卡片与手机背面的位置。读卡时保持贴合，避免同时叠放多张卡；较厚的保护壳或金属配件也可能影响感应。
+
+如果手机能够感应，但仍提示不支持或只有部分信息，可能是该卡种暂未适配、卡片没有开放相关数据，或本次通信未完成。可以重新读取，并按下方步骤提交日志。
+
+### 为什么没有站名，或只显示线路、站点编码？
+
+站名识别需要卡片实际记录与内置参考数据相匹配。未收录、编码含义不明或存在多种可能时，应用可能保留原始编码或显示“未匹配”。这不一定代表没有读到记录。
+
+发卡城市与实际乘车城市可以不同；异地乘车记录应按该笔行程的信息理解。
+
+### 扫码或相册导入无法识别
+
+请先确认二维码属于支持的交通一卡通乘车码，并尽量使用清晰、完整、未遮挡的图片。
+
+“设置”中的“使用系统扫码”默认关闭。开启后需要 Google Play 服务；如果系统扫码不可用，可关闭该开关，恢复应用内相机扫码。相机扫码需要相机权限，首次识别也可能需要联网下载识别模型；相册导入另有内置解码方式，但仍受图片质量与二维码格式限制。
+
+### 八达通全国通显示的金额和港币余额不同
+
+交通联合侧金额与港币钱包余额的含义不同，不能直接互相替代。显示“港币余额未读取”时，表示本次没有读出实际港币钱包余额；请通过八达通官方渠道核对港币余额。
+
+### 更新时提示与已安装应用不兼容
+
+不同来源或签名的安装包可能无法直接覆盖安装，请核对对应版本的发布说明。卸载应用可能删除本地卡片档案，遇到更新错误时不要直接通过卸载解决。
+
+## 数据与权限
+
+- 已保存的卡片、读取快照和设置保存在本机；线路、站点识别使用随应用提供的本地参考数据。
+- NFC 用于读取实体卡，相机权限用于应用内扫码。系统扫码、识别模型下载及在线反馈等功能可能需要网络。
+- 卡片导出文件与运行日志可能包含卡片标识、交易时间、行程和终端信息。公开分享前，请先检查并遮盖不希望公开的内容。
+
+## 反馈问题
+
+可通过应用内“设置 → 反馈”中的 QQ 群或问卷提交问题。反馈时建议提供手机型号、Android 版本、应用版本、卡片种类，以及出现问题的操作步骤。
+
+需要附上读卡日志时：
+
+1. 在“设置”中开启“启用运行日志”（默认关闭）。
+2. 返回首页重新读卡，复现问题。
+3. 回到“设置”，点击“导出日志”。
+4. 到手机的“下载”目录查找 `transit_card_log_*.txt`，检查其中的个人信息后再提交。
+
+## 致谢
+
+感谢 TrafArch 原作者 kajolno 及项目贡献者。城市和站点参考数据的来源包括[读卡识途（Trip Reader）公开数据集](https://github.com/domosekai/tripreader-data)，感谢原作者和数据贡献者的整理与维护。相关数据的署名与许可信息保留在应用内“关于 → 致谢”及数据来源记录中。

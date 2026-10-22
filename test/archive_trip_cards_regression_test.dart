@@ -61,7 +61,8 @@ void main() {
       ),
     );
     await _open(tester, repository, id);
-    expect(find.byType(TripEntryCard), findsNWidgets(6));
+    // The bus 1E supersedes the two bus 1A sides from this capture.
+    expect(find.byType(TripEntryCard), findsNWidgets(4));
     expect(find.textContaining('人民广场'), findsOneWidget);
     expect(find.textContaining('世纪大道'), findsOneWidget);
     expect(find.text('交易 1 条 · 过程及应用记录 3 条'), findsOneWidget);
@@ -77,9 +78,9 @@ void main() {
     expect(find.byType(TripEntryCard), findsNWidgets(3));
     await _filter(tester, '全部来源');
     await _filter(tester, '公共汽电车');
-    expect(find.byType(TripEntryCard), findsNWidgets(3));
+    expect(find.byType(TripEntryCard), findsOneWidget);
     await _filter(tester, '全部方式');
-    expect(find.byType(TripEntryCard), findsNWidgets(6));
+    expect(find.byType(TripEntryCard), findsNWidgets(4));
     _expectNoJson();
     await _close(tester);
   });
