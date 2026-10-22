@@ -3,7 +3,7 @@ import 'package:drift/native.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/database/app_database.dart';
+import 'package:transit_card_analyzer/features/archive/data/app_database.dart';
 
 /// Tests must not open the platform's persistent card archive.
 AppDatabase testDatabase() {

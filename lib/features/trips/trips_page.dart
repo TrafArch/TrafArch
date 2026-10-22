@@ -1,16 +1,16 @@
-// 新建文件：lib/features/trips/trips_page.dart
 import 'package:flutter/material.dart';
-import '../../core/analysis/tunion_analysis_models.dart';
-import '../../core/ui_constants.dart';
-import '../../state/app_state.dart';
-import '../settings/settings_action_button.dart';
+
+import '../transit_analysis/tunion_analysis_models.dart';
+import '../../shared/presentation/ui_constants.dart';
+import '../../app/app_dependencies.dart';
+import '../settings/presentation/settings_action_button.dart';
 import 'trip_stream_view.dart';
 
 /// 行程页：展示最近一次读卡解析出的行程流（0x18 交易明细为主干，
 /// 0x1A / 0x1E 过程记录逐条关联、确认重复合并、无法关联独立保留），
 /// 统一统计口径与日期分组 / 来源筛选交互由 [TripStreamView] 提供。
 class TripsPage extends StatelessWidget {
-  final AppState app;
+  final AppDependencies app;
   const TripsPage({super.key, required this.app});
 
   @override
@@ -29,7 +29,10 @@ class TripsPage extends StatelessWidget {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(
-                  12, 12, 12, UiConstants.floatingNavBarClearance,
+                  12,
+                  12,
+                  12,
+                  UiConstants.floatingNavBarClearance,
                 ),
                 child: _TripsBody(app: app),
               ),
@@ -42,7 +45,7 @@ class TripsPage extends StatelessWidget {
 }
 
 class _TripsBody extends StatelessWidget {
-  final AppState app;
+  final AppDependencies app;
   const _TripsBody({required this.app});
 
   @override
@@ -64,8 +67,8 @@ class _TripsBody extends StatelessWidget {
     // 合并为按时间倒序的行程流。
     final stream = buildTripStream(
       trips: trips,
-      rails: [if (rail != null) rail],
-      buses: [if (bus != null) bus],
+      rails: [?rail],
+      buses: [?bus],
       processTrips: app.cycleProcessTrips,
     );
 
@@ -75,9 +78,7 @@ class _TripsBody extends StatelessWidget {
           leading: const Icon(Icons.directions_transit_outlined),
           title: const Text('暂无行程数据'),
           subtitle: Text(
-            app.lastResult == null
-                ? '读取卡片后在这里展示解析出的行程记录'
-                : '本次读取未解析到行程记录',
+            app.lastResult == null ? '读取卡片后在这里展示解析出的行程记录' : '本次读取未解析到行程记录',
           ),
         ),
       );
@@ -90,11 +91,7 @@ class _TripsBody extends StatelessWidget {
           _SessionHeader(analysis: analysis, app: app),
           const SizedBox(height: 12),
         ],
-        TripStreamView(
-          stream: stream,
-          app: app,
-          isRemote: app.isRemoteUse,
-        ),
+        TripStreamView(stream: stream, app: app, isRemote: app.isRemoteUse),
       ],
     );
   }
@@ -103,7 +100,7 @@ class _TripsBody extends StatelessWidget {
 /// 本次读卡会话摘要：卡片名称、余额与交易笔数（0x18 口径）。
 class _SessionHeader extends StatelessWidget {
   final CardAnalysisResult analysis;
-  final AppState app;
+  final AppDependencies app;
   const _SessionHeader({required this.analysis, required this.app});
 
   @override
@@ -113,10 +110,8 @@ class _SessionHeader extends StatelessWidget {
     final identity = analysis.identity;
     final wallet = analysis.wallet;
     final prefix = app.cardPrefixOf(wallet.cardNumber);
-    final cardName = prefix?.cardName ??
-        identity.cardFamily ??
-        identity.operatorName ??
-        '—';
+    final cardName =
+        prefix?.cardName ?? identity.cardFamily ?? identity.operatorName ?? '—';
 
     return Card(
       child: Padding(
@@ -129,14 +124,16 @@ class _SessionHeader extends StatelessWidget {
                 children: [
                   Text(
                     cardName,
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w600),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     wallet.cardNumber ?? '—',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: scheme.onSurfaceVariant),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),
@@ -154,8 +151,9 @@ class _SessionHeader extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   '交易 ${analysis.trips.length} 笔',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: scheme.outline),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.outline,
+                  ),
                 ),
               ],
             ),

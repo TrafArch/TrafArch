@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../domain/models/bank_card_result.dart';
-import '../domain/models/card_application.dart';
-import '../domain/models/parse_issue.dart';
+import '../../../protocols/bank/domain/models/bank_card_result.dart';
+import '../../../protocols/bank/domain/models/card_application.dart';
+import '../../../protocols/bank/domain/models/parse_issue.dart';
 import 'application_detail_page.dart';
 
 /// 银行卡只读分析结果视图（专家页「信息获取」页签内嵌展示）：
@@ -80,6 +80,7 @@ class BankCardResultView extends StatelessWidget {
   Widget _applicationTile(BuildContext context, ParsedApplication app) {
     final scheme = Theme.of(context).colorScheme;
     final selected = app.application.selected;
+    final expiry = app.summary.expiry;
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: Icon(
@@ -92,8 +93,10 @@ class BankCardResultView extends StatelessWidget {
         '${app.summary.panTail == null ? '' : '  ·  卡号尾号 ****${app.summary.panTail}'}\n'
         '${app.parserId.toUpperCase()} · FCI ${app.fciTags.length} 标签'
         ' · GPO ${app.gpoTags.length} 标签'
-        ' · 记录 ${app.records.length} 条'
-        '${app.issues.isEmpty ? '' : ' · 异常 ${app.issues.length} 项'}',
+        ' · 记录 ${app.records.length} 条\n'
+        '${expiry == null ? '' : '有效期 $expiry'}'
+        '${expiry != null && app.issues.isNotEmpty ? ' · ' : ''}'
+        '${app.issues.isEmpty ? '' : '异常 ${app.issues.length} 项'}',
       ),
       isThreeLine: true,
       trailing: const Icon(Icons.chevron_right),

@@ -1,9 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/core/card/card_parser.dart';
-import 'package:transit_card_analyzer/core/transit/city_union/city_union_models.dart';
-import 'package:transit_card_analyzer/core/transit/local_card/apdu_exchange.dart';
-import 'package:transit_card_analyzer/core/transit/local_card/cards/common_unit_cu.dart';
-import 'package:transit_card_analyzer/core/transit/local_card/local_card_models.dart';
+import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
+import 'package:transit_card_analyzer/protocols/transit/city_union/city_union_models.dart';
+import 'package:transit_card_analyzer/protocols/transit/local/apdu_exchange.dart';
+import 'package:transit_card_analyzer/protocols/transit/city_union/city_union_reader.dart';
+import 'package:transit_card_analyzer/protocols/transit/local/local_card_models.dart';
 
 /// 驱动新模块 CU 单元完成一次识读（等价原 CityUnionParser.parse()，
 /// APDU 序列完全一致；老模块已移除，测试改为直接调用单元）。
@@ -44,6 +44,37 @@ void main() {
       final recharge = files[2];
       expect(recharge, isA<CjT331WalletRecharge>());
       expect((recharge as CjT331WalletRecharge).isRecharge, isTrue);
+    });
+
+    test('非 BCD 应用序列号：卡号按原始 HEX 展示而非读取失败', () async {
+      final link = _ScriptedLink();
+      link.enqueue(0xA4, const [0x90, 0x00]);
+      link.enqueue(0xA4, _sw9000(const []));
+      link.enqueue(
+        0xB0,
+        _sw9000(
+          _publicFile(
+            serial: const [0xB9, 0x21, 0xDC, 0xAD, 0x7E, 0x32, 0xED, 0xA7],
+          ),
+        ),
+      );
+      link.enqueue(0xB2, const [0x6A, 0x83]); // 0x18 未找到
+      link.enqueue(0xB2, const [0x6A, 0x83]); // 0x1A 未找到
+
+      final apdu = ApduExchange(transceive: link.call);
+      final info = CardInfo();
+      final cu = CommonUnitCu(apdu);
+      expect(await cu.select(info, <ApduRecord>[]), isTrue);
+      final parsed = await cu.read(info, <ApduRecord>[]);
+
+      expect(parsed, isNotNull);
+      // 新架构卡汇总使用 CU 卡号（原始 HEX），不因非 BCD 而留空。
+      expect(info.cardNumber, 'B921DCAD7E32EDA7');
+      final public = parsed!.cityUnionFiles
+          .whereType<CjT331PublicInfo>()
+          .single;
+      expect(public.applicationSerialNumber, 'B921DCAD7E32EDA7');
+      expect(public.displayApplicationSerialNumber, 'B921DCAD7E32EDA7');
     });
 
     test('非城市一卡通卡：CLA 00 / 80 应用选择均失败返回 null', () async {
@@ -120,8 +151,7 @@ void main() {
 
       final parsed = await _parseCu(link.call);
 
-      final local =
-          parsed!.cityUnionFiles.where((f) => f.sfi == 0x18).toList();
+      final local = parsed!.cityUnionFiles.where((f) => f.sfi == 0x18).toList();
       expect(local, hasLength(1)); // 重复内容停止，不产出重复条目
       expect(local.single, isA<CjT331WalletLocalConsumption>());
     });
@@ -159,39 +189,41 @@ _ScriptedLink _baseLink() {
 List<int> _sw9000(List<int> data) => [...data, 0x90, 0x00];
 
 /// 表 5 示例文件（30 字节，全字段合法）。
-List<int> _publicFile() => [
-      0x01, 0x23, // 01-02 发卡方代码（BCD）
-      0x0A, 0x01, // 03-04 城市代码（HEX）
-      0x01, // 05 多算法支持
-      0x26, // 06 行业代码
-      0x00, 0x00, // 07-08 预留
-      0x01, // 09 互联互通启用标识
-      0x02, // 10 应用版本
-      0x0A, 0x01, // 11-12 互联互通标识
-      0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, // 13-20 应用序列号
-      0x20, 0x24, 0x01, 0x01, // 21-24 应用启动日期 2024-01-01
-      0x20, 0x30, 0x12, 0x31, // 25-28 应用有效日期 2030-12-31
-      0x00, 0x00, // 29-30 预留
-    ];
+List<int> _publicFile({List<int> serial = _defaultSerial}) => [
+  0x01, 0x23, // 01-02 发卡方代码（BCD）
+  0x0A, 0x01, // 03-04 城市代码（HEX）
+  0x01, // 05 多算法支持
+  0x26, // 06 行业代码
+  0x00, 0x00, // 07-08 预留
+  0x01, // 09 互联互通启用标识
+  0x02, // 10 应用版本
+  0x0A, 0x01, // 11-12 互联互通标识
+  ...serial, // 13-20 应用序列号
+  0x20, 0x24, 0x01, 0x01, // 21-24 应用启动日期 2024-01-01
+  0x20, 0x30, 0x12, 0x31, // 25-28 应用有效日期 2030-12-31
+  0x00, 0x00, // 29-30 预留
+];
+
+const _defaultSerial = [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88];
 
 /// 表 7 示例记录（23 字节，本地消费 1000，终端 123456789012）。
 List<int> _localRecord() => [
-      0x00, 0x01, // 01-02 交易序号
-      0x00, 0x00, 0x00, // 03-05 预留
-      0x00, 0x00, 0x03, 0xE8, // 06-09 交易金额
-      0x06, // 10 交易类型：消费
-      0x12, 0x34, 0x56, 0x78, 0x90, 0x12, // 11-16 交易终端编号（BCD）
-      0x20, 0x24, 0x05, 0x01, // 17-20 交易日期 2024-05-01
-      0x08, 0x30, 0x00, // 21-23 交易时间 08:30:00
-    ];
+  0x00, 0x01, // 01-02 交易序号
+  0x00, 0x00, 0x00, // 03-05 预留
+  0x00, 0x00, 0x03, 0xE8, // 06-09 交易金额
+  0x06, // 10 交易类型：消费
+  0x12, 0x34, 0x56, 0x78, 0x90, 0x12, // 11-16 交易终端编号（BCD）
+  0x20, 0x24, 0x05, 0x01, // 17-20 交易日期 2024-05-01
+  0x08, 0x30, 0x00, // 21-23 交易时间 08:30:00
+];
 
 /// 表 9 示例记录（23 字节，充值 1000）。
 List<int> _rechargeRecord() => [
-      0x00, 0x01, // 01-02 交易序号
-      0x00, 0x00, 0x00, // 03-05 预留
-      0x00, 0x00, 0x03, 0xE8, // 06-09 交易金额
-      0x02, // 10 交易类型：充值
-      0x12, 0x34, 0x56, 0x78, 0x90, 0x12, // 11-16 交易终端编号（BCD）
-      0x20, 0x26, 0x01, 0x01, // 17-20 交易日期 2026-01-01
-      0x12, 0x30, 0x45, // 21-23 交易时间 12:30:45
-    ];
+  0x00, 0x01, // 01-02 交易序号
+  0x00, 0x00, 0x00, // 03-05 预留
+  0x00, 0x00, 0x03, 0xE8, // 06-09 交易金额
+  0x02, // 10 交易类型：充值
+  0x12, 0x34, 0x56, 0x78, 0x90, 0x12, // 11-16 交易终端编号（BCD）
+  0x20, 0x26, 0x01, 0x01, // 17-20 交易日期 2026-01-01
+  0x12, 0x30, 0x45, // 21-23 交易时间 12:30:45
+];

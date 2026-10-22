@@ -1,6 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/features/qr/qr_image_picker.dart';
+import 'package:transit_card_analyzer/platform/qr/qr_image_picker.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -36,10 +36,7 @@ void main() {
 
   test('原生读取失败：PlatformException 向上传播', () async {
     messenger.setMockMethodCallHandler(qrImagePickerChannel, (call) async {
-      throw PlatformException(
-        code: 'IMAGE_READ_FAILED',
-        message: '无法打开所选图片',
-      );
+      throw PlatformException(code: 'IMAGE_READ_FAILED', message: '无法打开所选图片');
     });
 
     await expectLater(

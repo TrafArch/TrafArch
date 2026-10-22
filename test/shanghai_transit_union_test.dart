@@ -1,54 +1,49 @@
 // test/shanghai_transit_union_test.dart
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/core/card/card_parser.dart';
-import 'package:transit_card_analyzer/core/transit/city_union/city_union_models.dart';
-import 'package:transit_card_analyzer/core/transit/local_card/cards/shanghai_transit_union_card.dart';
-import 'package:transit_card_analyzer/core/transit/local_card/cards/shanghai_transit_union_models.dart';
-import 'package:transit_card_analyzer/core/transit/local_card/local_card_models.dart';
-import 'package:transit_card_analyzer/core/transit/tunion/tunion_models.dart';
+import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
+import 'package:transit_card_analyzer/protocols/transit/city_union/city_union_models.dart';
+import 'package:transit_card_analyzer/protocols/transit/local/cards/shanghai_transit_union_card.dart';
+import 'package:transit_card_analyzer/protocols/transit/local/cards/shanghai_transit_union_models.dart';
+import 'package:transit_card_analyzer/protocols/transit/local/local_card_models.dart';
+import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_models.dart';
 
 const _shanghaiSerial = '3104770000000000001';
 
 CjT331PublicInfo _publicInfo({
   String serial = _shanghaiSerial,
   String? cityCode = '3100',
-}) =>
-    CjT331PublicInfo(
-      issuerCode: '0200',
-      cityCode: cityCode,
-      applicationSerialNumber: serial,
-      fields: const [],
-      rawHex: '',
-    );
+}) => CjT331PublicInfo(
+  issuerCode: '0200',
+  cityCode: cityCode,
+  applicationSerialNumber: serial,
+  fields: const [],
+  rawHex: '',
+);
 
 ParsedCard _tuCard({
   String serial = _shanghaiSerial,
   int? balanceFen = 1000,
   List<TUnionTransaction> transactions = const [],
-}) =>
-    ParsedCard(
-      parserId: CardParserIds.tunion,
-      parserName: '交通联合',
-      info: TUnionCardInfo(
-        issuerId: '0200290012345678',
-        applicationSerial: serial,
-        balanceFen: balanceFen,
-      ),
-      transactions: transactions,
-      selectedAidHex: 'A000000632010105',
-    );
+}) => ParsedCard(
+  parserId: CardParserIds.tunion,
+  parserName: '交通联合',
+  info: TUnionCardInfo(
+    issuerId: '0200290012345678',
+    applicationSerial: serial,
+    balanceFen: balanceFen,
+  ),
+  transactions: transactions,
+  selectedAidHex: 'A000000632010105',
+);
 
-ParsedCard _cuCard({
-  CjT331PublicInfo? public,
-  int? balanceFen = 500,
-}) =>
+ParsedCard _cuCard({CjT331PublicInfo? public, int? balanceFen = 500}) =>
     ParsedCard(
       parserId: CardParserIds.cityUnion,
       parserName: '城市一卡通',
       info: const TUnionCardInfo().withBalance(balanceFen),
       transactions: const [],
-      cityUnionFiles: [if (public != null) public],
+      cityUnionFiles: [?public],
       selectedAidHex: 'A00000000386980701',
     );
 
@@ -60,21 +55,20 @@ ShanghaiTransitApplication _application({
   ParsedCard? card,
   TUnionCardInfo? identity,
   List<ApduRecord> records = const [],
-}) =>
-    ShanghaiTransitApplication(
-      system: system,
-      confirmed: confirmed,
-      readSucceeded: readSucceeded,
-      dataComplete: dataComplete,
-      card: card,
-      identity: identity,
-      // 读取层会把解析出的卡号回填到 CardInfo；测试按同一约定构造，
-      // 避免用空 CardInfo 模拟真实读取结果。
-      cardInfo: CardInfo()
-        ..cardNumber =
-            card?.info.applicationSerial ?? identity?.applicationSerial ?? '',
-      records: List<ApduRecord>.of(records),
-    );
+}) => ShanghaiTransitApplication(
+  system: system,
+  confirmed: confirmed,
+  readSucceeded: readSucceeded,
+  dataComplete: dataComplete,
+  card: card,
+  identity: identity,
+  // 读取层会把解析出的卡号回填到 CardInfo；测试按同一约定构造，
+  // 避免用空 CardInfo 模拟真实读取结果。
+  cardInfo: CardInfo()
+    ..cardNumber =
+        card?.info.applicationSerial ?? identity?.applicationSerial ?? '',
+  records: List<ApduRecord>.of(records),
+);
 
 void main() {
   group('ShanghaiTransitUnionResult', () {
@@ -203,13 +197,12 @@ void main() {
       required DateTime time,
       required String terminal,
       int balanceDelta = 0,
-    }) =>
-        ApduRecord()
-          ..type = 2
-          ..label = label
-          ..timestamp = time
-          ..terminalHex = terminal
-          ..balanceDelta = balanceDelta;
+    }) => ApduRecord()
+      ..type = 2
+      ..label = label
+      ..timestamp = time
+      ..terminalHex = terminal
+      ..balanceDelta = balanceDelta;
 
     test('同一笔交易（分钟 + 终端号一致）只保留 TU 记录', () {
       final tu = [
@@ -310,13 +303,9 @@ void main() {
   });
 }
 
-const _tuWalletAid = <int>[
-  0xA0, 0x00, 0x00, 0x06, 0x32, 0x01, 0x01, 0x05,
-];
+const _tuWalletAid = <int>[0xA0, 0x00, 0x00, 0x06, 0x32, 0x01, 0x01, 0x05];
 
-const _cuAid = <int>[
-  0xA0, 0x00, 0x00, 0x00, 0x03, 0x86, 0x98, 0x07, 0x01,
-];
+const _cuAid = <int>[0xA0, 0x00, 0x00, 0x00, 0x03, 0x86, 0x98, 0x07, 0x01];
 
 bool _contains(List<int> apdu, List<int> pattern) {
   if (pattern.isEmpty || apdu.length < pattern.length) return false;

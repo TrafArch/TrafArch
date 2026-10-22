@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:transit_card_analyzer/core/data/beijing_bus_decoder.dart';
+import 'package:transit_card_analyzer/features/reference_data/domain/beijing_bus_decoder.dart';
 
 void main() {
   // Literal txLine fixtures reconstructed from Trip Reader's Beijing branch:

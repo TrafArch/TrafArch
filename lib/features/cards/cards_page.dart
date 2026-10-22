@@ -1,16 +1,16 @@
-// 新建文件：lib/features/cards/cards_page.dart
 import 'package:flutter/material.dart';
-import '../../core/ui_constants.dart';
-import '../../database/app_database.dart';
-import '../../state/app_state.dart';
-import '../card_archive/models/card_name_extension.dart';
-import '../settings/settings_action_button.dart';
-import '../trips/card_detail_page.dart';
+
+import '../../shared/presentation/ui_constants.dart';
+import '../archive/data/app_database.dart';
+import '../../app/app_dependencies.dart';
+import '../archive/domain/card_name_extension.dart';
+import '../settings/presentation/settings_action_button.dart';
+import '../archive/presentation/card_detail_page.dart';
 
 /// 卡片列表页：展示已保存的卡片档案摘要，
 /// 数据流监听数据库（重复读取与改名后自动刷新），最近读取的在前。
 class CardsPage extends StatelessWidget {
-  final AppState app;
+  final AppDependencies app;
   const CardsPage({super.key, required this.app});
 
   @override
@@ -92,7 +92,7 @@ class CardsPage extends StatelessWidget {
 /// 右侧操作菜单支持删除该档案。
 class _SavedCardTile extends StatelessWidget {
   final SavedCard card;
-  final AppState app;
+  final AppDependencies app;
 
   const _SavedCardTile({required this.card, required this.app});
 
@@ -106,11 +106,8 @@ class _SavedCardTile extends StatelessWidget {
       child: InkWell(
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute<void>(
-            builder: (_) => CardDetailPage(
-              repository: app.cardRepository,
-              cardId: card.id,
-              app: app,
-            ),
+            builder: (_) =>
+                CardDetailPage(repository: app.cardRepository, cardId: card.id),
           ),
         ),
         child: Padding(
@@ -125,42 +122,48 @@ class _SavedCardTile extends StatelessWidget {
                       card.displayName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w600),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       card.cardNumberText,
-                      style: theme.textTheme.bodyMedium
-                          ?.copyWith(color: scheme.onSurfaceVariant),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       card.lastReadShortText ?? '—',
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: scheme.outline),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.outline,
+                      ),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    card.balanceText ?? '—',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: scheme.primary,
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      card.balanceText ?? '—',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: scheme.primary,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    card.transactionCountText ?? '—',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: scheme.outline),
-                  ),
-                ],
+                    const SizedBox(height: 6),
+                    Text(
+                      card.transactionCountText ?? '—',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.outline,
+                      ),
+                    ),
+                  ],
+                ),
               ),
               PopupMenuButton<_SavedCardAction>(
                 tooltip: '卡片操作',
@@ -243,7 +246,7 @@ enum _SavedCardAction { delete }
 /// 到手机下载目录；导出进行中禁用按钮并展示进度，完成后以 SnackBar
 /// 反馈保存路径 / 失败原因 / 无卡片提示。
 class _ExportCardsButton extends StatefulWidget {
-  final AppState app;
+  final AppDependencies app;
   const _ExportCardsButton({required this.app});
 
   @override

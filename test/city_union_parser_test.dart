@@ -1,11 +1,12 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/core/transit/city_union/city_union_file_parser.dart';
-import 'package:transit_card_analyzer/core/transit/city_union/city_union_models.dart';
-import 'package:transit_card_analyzer/core/transit/city_union/cj_t331_public_info_parser.dart';
-import 'package:transit_card_analyzer/core/transit/city_union/cj_t331_wallet_local_consumption_parser.dart';
-import 'package:transit_card_analyzer/core/transit/city_union/cj_t331_wallet_recharge_parser.dart';
+import 'package:transit_card_analyzer/protocols/transit/city_union/city_union_codec.dart';
+import 'package:transit_card_analyzer/protocols/transit/city_union/city_union_file_parser.dart';
+import 'package:transit_card_analyzer/protocols/transit/city_union/city_union_models.dart';
+import 'package:transit_card_analyzer/protocols/transit/city_union/cj_t331_public_info_parser.dart';
+import 'package:transit_card_analyzer/protocols/transit/city_union/cj_t331_wallet_local_consumption_parser.dart';
+import 'package:transit_card_analyzer/protocols/transit/city_union/cj_t331_wallet_recharge_parser.dart';
 
 void main() {
   group('CjT331PublicInfoParser 表5 公共应用基本信息文件', () {
@@ -105,10 +106,7 @@ void main() {
     test('越界字节值抛 FormatException', () {
       final data = _sampleFile();
       data[2] = 0x1FF;
-      expect(
-        () => CjT331PublicInfoParser.parse(data),
-        throwsFormatException,
-      );
+      expect(() => CjT331PublicInfoParser.parse(data), throwsFormatException);
     });
 
     test('BCD 非法只标记该字段，其他字段照常解析', () {
@@ -170,8 +168,9 @@ void main() {
 
   group('CjT331WalletLocalConsumptionParser 表7 电子钱包本地消费交易明细记录', () {
     test('合法 23 字节单条记录完整解析：HEX 与 BCD 分别处理', () {
-      final record =
-          CjT331WalletLocalConsumptionParser.parseRecord(_sampleLocal());
+      final record = CjT331WalletLocalConsumptionParser.parseRecord(
+        _sampleLocal(),
+      );
 
       expect(record.sfi, 0x18);
       expect(record.fileLabel, '电子钱包本地消费交易明细记录文件');
@@ -461,12 +460,26 @@ void main() {
   });
 
   group('CityUnionCodec.decodeCardNumber', () {
-    test('非 BCD 序列号不产出伪卡号（禁止二进制整数回退）', () {
+    test('非 BCD 序列号不产出伪数字卡号，回退原始 HEX 展示', () {
       const bytes = [0x80, 0x0A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
       final result = CityUnionCodec.decodeCardNumber(bytes);
       expect(result.digits, isNull);
-      expect(result.error, isNotNull);
+      expect(result.hex, '800A000000000000');
+      expect(result.displayValue, '800A000000000000');
+      expect(result.error, isNull);
       expect(result.isNumeric, isFalse);
+    });
+
+    test('非 BCD 8 字节序列号进入卡号字段并保留原始指纹', () {
+      const bytes = [0xB9, 0x21, 0xDC, 0xAD, 0x7E, 0x32, 0xED, 0xA7];
+      final info = CjT331PublicInfoParser.parse(_sampleFile(serial: bytes));
+      expect(info.applicationSerialNumber, 'B921DCAD7E32EDA7');
+      expect(info.displayApplicationSerialNumber, 'B921DCAD7E32EDA7');
+      expect(info.applicationSerialNumberRawHex, 'B921DCAD7E32EDA7');
+      expect(info.fields[8].decoded, 'B921DCAD7E32EDA7');
+      expect(info.fields[8].note, contains('HEX'));
+      expect(info.fields[8].error, isNull);
+      expect(info.errors, isEmpty);
     });
 
     test('标准 8 字节 BCD 保持 16 位定长（含前导 0）', () {
@@ -483,8 +496,9 @@ void main() {
   group('JSON 输出', () {
     test('包含类型化字段、字段明细、异常与原始值', () {
       final info = CjT331PublicInfoParser.parse(_sampleFile());
-      final json = jsonDecode(CjT331PublicInfoParser.toPrettyJson(info))
-          as Map<String, dynamic>;
+      final json = jsonDecode(
+        CjT331PublicInfoParser.toPrettyJson(info),
+      ) as Map<String, dynamic>;
 
       expect(json['sfi'], '0x15');
       expect(json['issuerCode'], '0123');
@@ -499,8 +513,9 @@ void main() {
       final info = CjT331PublicInfoParser.parse(
         _sampleFile(issuer: const [0x1A, 0x23]),
       );
-      final json = jsonDecode(CjT331PublicInfoParser.toPrettyJson(info))
-          as Map<String, dynamic>;
+      final json = jsonDecode(
+        CjT331PublicInfoParser.toPrettyJson(info),
+      ) as Map<String, dynamic>;
 
       expect(json['issuerCode'], isNull);
       expect(json['errors'], contains('发卡方代码：BCD 编码非法'));
@@ -510,8 +525,9 @@ void main() {
     });
 
     test('表 7 记录 JSON 包含原始值与解码值', () {
-      final record =
-          CjT331WalletLocalConsumptionParser.parseRecord(_sampleLocal());
+      final record = CjT331WalletLocalConsumptionParser.parseRecord(
+        _sampleLocal(),
+      );
       final json = jsonDecode(
         CjT331WalletLocalConsumptionParser.toPrettyJson(record),
       ) as Map<String, dynamic>;
@@ -561,21 +577,20 @@ List<int> _sampleFile({
   List<int> serial = const [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88],
   List<int> start = const [0x20, 0x24, 0x01, 0x01],
   List<int> expiry = const [0x20, 0x30, 0x12, 0x31],
-}) =>
-    [
-      ...issuer, // 01-02 发卡方代码（BCD）
-      ...city, // 03-04 城市代码（HEX）
-      0x01, // 05 多算法支持
-      0x26, // 06 行业代码
-      0x00, 0x00, // 07-08 预留
-      enabled, // 09 互联互通启用标识
-      0x02, // 10 应用版本
-      ...interop, // 11-12 互联互通标识
-      ...serial, // 13-20 用户卡应用序列号
-      ...start, // 21-24 应用启动日期
-      ...expiry, // 25-28 应用有效日期
-      0x00, 0x00, // 29-30 预留
-    ];
+}) => [
+  ...issuer, // 01-02 发卡方代码（BCD）
+  ...city, // 03-04 城市代码（HEX）
+  0x01, // 05 多算法支持
+  0x26, // 06 行业代码
+  0x00, 0x00, // 07-08 预留
+  enabled, // 09 互联互通启用标识
+  0x02, // 10 应用版本
+  ...interop, // 11-12 互联互通标识
+  ...serial, // 13-20 用户卡应用序列号
+  ...start, // 21-24 应用启动日期
+  ...expiry, // 25-28 应用有效日期
+  0x00, 0x00, // 29-30 预留
+];
 
 /// 构造表 7 示例记录（默认全字段合法，单条 23 字节；消费类型 0x06）。
 List<int> _sampleLocal({
@@ -585,16 +600,15 @@ List<int> _sampleLocal({
   List<int> terminal = const [0x12, 0x34, 0x56, 0x78, 0x90, 0x12],
   List<int> date = const [0x20, 0x24, 0x05, 0x01],
   List<int> time = const [0x08, 0x30, 0x00],
-}) =>
-    [
-      ...sequence, // 01-02 电子钱包消费交易序号（HEX）
-      0x00, 0x00, 0x00, // 03-05 预留
-      ...amount, // 06-09 交易金额（HEX 大端）
-      type, // 10 交易类型（06 消费 / 09 复合消费）
-      ...terminal, // 11-16 交易终端编号（BCD）
-      ...date, // 17-20 交易日期（BCD）
-      ...time, // 21-23 交易时间（BCD）
-    ];
+}) => [
+  ...sequence, // 01-02 电子钱包消费交易序号（HEX）
+  0x00, 0x00, 0x00, // 03-05 预留
+  ...amount, // 06-09 交易金额（HEX 大端）
+  type, // 10 交易类型（06 消费 / 09 复合消费）
+  ...terminal, // 11-16 交易终端编号（BCD）
+  ...date, // 17-20 交易日期（BCD）
+  ...time, // 21-23 交易时间（BCD）
+];
 
 /// 构造表 9 示例记录（默认全字段合法，单条 23 字节；
 List<int> _sampleRecharge({
@@ -604,13 +618,12 @@ List<int> _sampleRecharge({
   List<int> terminal = const [0x12, 0x34, 0x56, 0x78, 0x90, 0x12],
   List<int> date = const [0x20, 0x26, 0x01, 0x01],
   List<int> time = const [0x12, 0x30, 0x45],
-}) =>
-    [
-      ...sequence, // 01-02 电子钱包充值交易序号（HEX）
-      0x00, 0x00, 0x00, // 03-05 预留
-      ...amount, // 06-09 交易金额（HEX 大端）
-      type, // 10 交易类型（02 充值）
-      ...terminal, // 11-16 交易终端编号（BCD）
-      ...date, // 17-20 交易日期（BCD）
-      ...time, // 21-23 交易时间（BCD）
-    ];
+}) => [
+  ...sequence, // 01-02 电子钱包充值交易序号（HEX）
+  0x00, 0x00, 0x00, // 03-05 预留
+  ...amount, // 06-09 交易金额（HEX 大端）
+  type, // 10 交易类型（02 充值）
+  ...terminal, // 11-16 交易终端编号（BCD）
+  ...date, // 17-20 交易日期（BCD）
+  ...time, // 21-23 交易时间（BCD）
+];

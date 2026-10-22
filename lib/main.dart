@@ -1,22 +1,10 @@
-import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
-import 'app.dart';
+import 'package:flutter/widgets.dart';
+
+import 'app/trafarch_app.dart';
+import 'app/theme/safe_error_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  // 临时诊断：release 下让 ErrorWidget 直接显示异常文本（定位根因后删除）
-  ErrorWidget.builder = (FlutterErrorDetails details) => Material(
-        color: Colors.white,
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              details.exceptionAsString(),
-              style: const TextStyle(
-                  color: Colors.red, fontSize: 11, fontFamily: 'monospace'),
-            ),
-          ),
-        ),
-      );
+  installReleaseErrorPresentation();
   runApp(const TransitCardAnalyzerApp());
 }

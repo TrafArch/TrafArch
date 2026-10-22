@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:qr/qr.dart';
-import 'package:transit_card_analyzer/features/qr/qr_dart_decoder.dart';
+import 'package:transit_card_analyzer/features/qr/data/qr_dart_decoder.dart';
 
 void main() {
   group('decodeQrFromRgba', () {

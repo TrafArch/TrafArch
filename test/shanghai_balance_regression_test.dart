@@ -1,12 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/core/data/settings_store.dart';
-import 'package:transit_card_analyzer/core/logging/app_logger.dart';
-import 'package:transit_card_analyzer/core/nfc/nfc_models.dart';
-import 'package:transit_card_analyzer/core/nfc/nfc_service.dart';
+import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
+import 'package:transit_card_analyzer/platform/storage/app_logger.dart';
+import 'package:transit_card_analyzer/platform/nfc/nfc_models.dart';
+import 'package:transit_card_analyzer/platform/nfc/nfc_service.dart';
 import 'package:transit_card_analyzer/features/home/recent_scan_section.dart';
-import 'package:transit_card_analyzer/state/app_state.dart';
+import 'package:transit_card_analyzer/app/app_dependencies.dart';
+import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
 
 import 'support/test_database.dart';
 
@@ -18,7 +19,7 @@ void main() {
     (tester) async {
       final database = testDatabase();
       final channel = _ShanghaiChannel();
-      final app = AppState(
+      final app = AppDependencies(
         database: database,
         channel: channel,
         bundle: MissingTestAssets(),
@@ -31,7 +32,10 @@ void main() {
         // A previous saved reading must be replaced, never added to a new one.
         channel.balanceFen = 10800;
         await app.scanOnce();
-        expect(await app.acceptPendingSave(), isTrue);
+        expect(
+          await app.acceptPendingSave(app.pendingCardSave?.pendingSaveId ?? ''),
+          isTrue,
+        );
         channel.balanceFen = 10000;
         await app.scanOnce();
         expect(app.cardInfo!.cityCode, '3050');
@@ -39,9 +43,14 @@ void main() {
         expect(app.analysis!.wallet.balanceText, '¥100.00');
         expect(
           app.apduLog.join('\n'),
-          contains('parsedFen=10000; display=¥100.00; archiveFen=10000; cuFen=null'),
+          contains(
+            'parsedFen=10000; display=¥100.00; archiveFen=10000; cuFen=null',
+          ),
         );
-        expect(await app.acceptPendingSave(), isTrue);
+        expect(
+          await app.acceptPendingSave(app.pendingCardSave?.pendingSaveId ?? ''),
+          isTrue,
+        );
         final cards = await database.select(database.savedCards).get();
         expect(cards, hasLength(1));
         expect(cards.single.balanceFen, 10000);
@@ -61,7 +70,7 @@ void main() {
 
   test('zero wallet balance is valid and must not be replaced by another balance field', () async {
     final channel = _ShanghaiChannel()..balanceFen = 0;
-    final app = AppState(
+    final app = AppDependencies(
       database: testDatabase(),
       channel: channel,
       bundle: MissingTestAssets(),
@@ -76,11 +85,49 @@ void main() {
       [0x80, 0x5C, 0, 2, 4],
     ]);
   });
+
+  testWidgets('Shanghai TU refreshes an already mounted home from 108 to 100', (
+    tester,
+  ) async {
+    final channel = _ShanghaiChannel(shanghaiIdentity: true)
+      ..balanceFen = 10800;
+    final app = AppDependencies(
+      database: testDatabase(),
+      channel: channel,
+      bundle: MissingTestAssets(),
+      logger: AppLogger(store: MemoryLogStore()),
+      settingsStore: MemorySettingsStore(),
+    );
+    addTearDown(app.dispose);
+    await tester.runAsync(() async {
+      await app.init();
+      await app.scanOnce();
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: RecentScanSection(app: app)),
+      ),
+    );
+    expect(app.parsedCard!.parserId, CardParserIds.shanghaiTunion);
+    expect(app.cardInfo!.cityCode, '2900');
+    expect(find.text('¥108.00'), findsOneWidget);
+    channel.balanceFen = 10000;
+    await tester.runAsync(app.scanOnce);
+    await tester.pump();
+    expect(find.text('¥100.00'), findsOneWidget);
+    expect(find.text('¥108.00'), findsNothing);
+    expect(app.pendingCardSave!.balanceFen, 10000);
+    expect(channel.balanceCommands, everyElement([0x80, 0x5C, 0, 2, 4]));
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
 }
 
 /// Only the 80 5C 00 response is from the user; all identity/other responses are
 /// synthetic. No real card number or personal information is stored here.
 class _ShanghaiChannel implements NfcChannel {
+  _ShanghaiChannel({this.shanghaiIdentity = false});
+  final bool shanghaiIdentity;
   int balanceFen = 10000;
   final balanceCommands = <List<int>>[];
   bool _tuSelected = false;
@@ -121,20 +168,20 @@ class _ShanghaiChannel implements NfcChannel {
       switch (apdu[2] & 0x1F) {
         case 0x15:
           return [
+            shanghaiIdentity ? 0x02 : 0,
             0,
-            0,
-            0x30,
-            0x50,
+            shanghaiIdentity ? 0x29 : 0x30,
+            shanghaiIdentity ? 0x00 : 0x50,
             0,
             0,
             0,
             0,
             1,
             1,
-            0x03,
-            0x10,
-            0,
-            0,
+            shanghaiIdentity ? 0x00 : 0x03,
+            shanghaiIdentity ? 0x31 : 0x10,
+            shanghaiIdentity ? 0x04 : 0,
+            shanghaiIdentity ? 0x77 : 0,
             0,
             0,
             0,
@@ -157,8 +204,8 @@ class _ShanghaiChannel implements NfcChannel {
         case 0x16:
           return [...List.filled(55, 0), 0x90, 0];
         case 0x17:
-          final data = List.filled(60, 0)..[6] = 0x30;
-          data[7] = 0x50;
+          final data = List.filled(60, 0)..[6] = shanghaiIdentity ? 0x29 : 0x30;
+          data[7] = shanghaiIdentity ? 0x00 : 0x50;
           return [...data, 0x90, 0];
       }
     }

@@ -1,0 +1,638 @@
+[
+  {
+    "from": "lib/app.dart",
+    "to": "lib/app/trafarch_app.dart"
+  },
+  {
+    "from": "lib/core/analysis/tunion_analysis_engine.dart",
+    "to": "lib/features/transit_analysis/tunion_analysis_engine.dart"
+  },
+  {
+    "from": "lib/core/analysis/tunion_analysis_models.dart",
+    "to": "lib/features/transit_analysis/tunion_analysis_models.dart"
+  },
+  {
+    "from": "lib/core/analysis/tunion_card_identifier.dart",
+    "to": "lib/features/transit_analysis/tunion_card_identifier.dart"
+  },
+  {
+    "from": "lib/core/app_info.dart",
+    "to": "lib/app/app_info.dart"
+  },
+  {
+    "from": "lib/core/card/card_parser.dart",
+    "to": "lib/protocols/transit/card_parser.dart"
+  },
+  {
+    "from": "lib/core/data/beijing_bus_decoder.dart",
+    "to": "lib/features/reference_data/domain/beijing_bus_decoder.dart"
+  },
+  {
+    "from": "lib/core/data/city_union_knowledge_base.dart",
+    "to": "lib/features/reference_data/domain/city_union_knowledge_base.dart"
+  },
+  {
+    "from": "lib/core/data/city_union_region_database.dart",
+    "to": "lib/features/reference_data/data/city_union_region_database.dart"
+  },
+  {
+    "from": "lib/core/data/reference_match.dart",
+    "to": "lib/features/reference_data/domain/reference_match.dart"
+  },
+  {
+    "from": "lib/core/data/reference_package.dart",
+    "to": "lib/features/reference_data/data/reference_package.dart"
+  },
+  {
+    "from": "lib/core/data/reference_user_store.dart",
+    "to": "lib/features/reference_data/data/reference_user_store.dart"
+  },
+  {
+    "from": "lib/core/data/region_db_store.dart",
+    "to": "lib/features/reference_data/domain/region_db_store.dart"
+  },
+  {
+    "from": "lib/core/data/settings_store.dart",
+    "to": "lib/platform/storage/settings_store.dart"
+  },
+  {
+    "from": "lib/core/data/station_codes.dart",
+    "to": "lib/features/reference_data/domain/station_codes.dart"
+  },
+  {
+    "from": "lib/core/data/tu_database.dart",
+    "to": "lib/features/reference_data/data/tu_database.dart"
+  },
+  {
+    "from": "lib/core/data/tu_region_live_source.dart",
+    "to": "lib/features/reference_data/data/tu_region_live_source.dart"
+  },
+  {
+    "from": "lib/core/data/tu_station_repository.dart",
+    "to": "lib/features/reference_data/data/tu_station_repository.dart"
+  },
+  {
+    "from": "lib/core/data/tunion_bus_location.dart",
+    "to": "lib/features/reference_data/data/tunion_bus_location.dart"
+  },
+  {
+    "from": "lib/core/data/tunion_knowledge_base.dart",
+    "to": "lib/features/reference_data/data/tunion_knowledge_base.dart"
+  },
+  {
+    "from": "lib/core/data/tunion_terminal_decoder.dart",
+    "to": "lib/features/reference_data/domain/tunion_terminal_decoder.dart"
+  },
+  {
+    "from": "lib/core/emv/data/aid_registry.dart",
+    "to": "lib/protocols/bank/emv/data/aid_registry.dart"
+  },
+  {
+    "from": "lib/core/emv/discovery/application_enumerator.dart",
+    "to": "lib/protocols/bank/emv/discovery/application_enumerator.dart"
+  },
+  {
+    "from": "lib/core/emv/emv.dart",
+    "to": "lib/protocols/bank/emv/emv.dart"
+  },
+  {
+    "from": "lib/core/emv/models/emv_application.dart",
+    "to": "lib/protocols/bank/emv/models/emv_application.dart"
+  },
+  {
+    "from": "lib/core/emv/models/emv_discovery_result.dart",
+    "to": "lib/protocols/bank/emv/models/emv_discovery_result.dart"
+  },
+  {
+    "from": "lib/core/emv/parser/ber_tlv.dart",
+    "to": "lib/protocols/bank/emv/parser/ber_tlv.dart"
+  },
+  {
+    "from": "lib/core/emv/parser/fci_parser.dart",
+    "to": "lib/protocols/bank/emv/parser/fci_parser.dart"
+  },
+  {
+    "from": "lib/core/emv/protocol/emv_apdu.dart",
+    "to": "lib/protocols/bank/emv/protocol/emv_apdu.dart"
+  },
+  {
+    "from": "lib/core/emv/protocol/read_only_exchange.dart",
+    "to": "lib/protocols/bank/emv/protocol/read_only_exchange.dart"
+  },
+  {
+    "from": "lib/core/emv/service/emv_reader.dart",
+    "to": "lib/protocols/bank/emv/service/emv_reader.dart"
+  },
+  {
+    "from": "lib/core/emv/transport.dart",
+    "to": "lib/protocols/bank/emv/transport.dart"
+  },
+  {
+    "from": "lib/core/felica/cards/card_adapter_registry.dart",
+    "to": "lib/protocols/felica/cards/card_adapter_registry.dart"
+  },
+  {
+    "from": "lib/core/felica/cards/felica_card_adapter.dart",
+    "to": "lib/protocols/felica/cards/felica_card_adapter.dart"
+  },
+  {
+    "from": "lib/core/felica/cards/felica_card_profiles.dart",
+    "to": "lib/protocols/felica/cards/felica_card_profiles.dart"
+  },
+  {
+    "from": "lib/core/felica/cards/felica_wallet_factory.dart",
+    "to": "lib/protocols/felica/cards/felica_wallet_factory.dart"
+  },
+  {
+    "from": "lib/core/felica/cards/generic_adapter.dart",
+    "to": "lib/protocols/felica/cards/generic_adapter.dart"
+  },
+  {
+    "from": "lib/core/felica/cards/octopus_adapter.dart",
+    "to": "lib/protocols/felica/cards/octopus_adapter.dart"
+  },
+  {
+    "from": "lib/core/felica/cards/suica_adapter.dart",
+    "to": "lib/protocols/felica/cards/suica_adapter.dart"
+  },
+  {
+    "from": "lib/core/felica/detection/octopus_detector.dart",
+    "to": "lib/protocols/felica/detection/octopus_detector.dart"
+  },
+  {
+    "from": "lib/core/felica/detection/suica_detector.dart",
+    "to": "lib/protocols/felica/detection/suica_detector.dart"
+  },
+  {
+    "from": "lib/core/felica/felica.dart",
+    "to": "lib/protocols/felica/felica.dart"
+  },
+  {
+    "from": "lib/core/felica/felica_failure_mapping.dart",
+    "to": "lib/protocols/felica/felica_failure_mapping.dart"
+  },
+  {
+    "from": "lib/core/felica/felica_hex.dart",
+    "to": "lib/protocols/felica/felica_hex.dart"
+  },
+  {
+    "from": "lib/core/felica/felica_reader.dart",
+    "to": "lib/protocols/felica/felica_reader.dart"
+  },
+  {
+    "from": "lib/core/felica/models/cross_border_payment.dart",
+    "to": "lib/protocols/felica/models/cross_border_payment.dart"
+  },
+  {
+    "from": "lib/core/felica/models/felica_card_type.dart",
+    "to": "lib/protocols/felica/models/felica_card_type.dart"
+  },
+  {
+    "from": "lib/core/felica/models/felica_models.dart",
+    "to": "lib/protocols/felica/models/felica_models.dart"
+  },
+  {
+    "from": "lib/core/felica/models/felica_service_probe.dart",
+    "to": "lib/protocols/felica/models/felica_service_probe.dart"
+  },
+  {
+    "from": "lib/core/felica/parsers/felica_block_parser.dart",
+    "to": "lib/protocols/felica/parsers/felica_block_parser.dart"
+  },
+  {
+    "from": "lib/core/felica/parsers/suica_record_parser.dart",
+    "to": "lib/protocols/felica/parsers/suica_record_parser.dart"
+  },
+  {
+    "from": "lib/core/felica/protocol/felica_command.dart",
+    "to": "lib/protocols/felica/protocol/felica_command.dart"
+  },
+  {
+    "from": "lib/core/felica/protocol/felica_frame_evidence.dart",
+    "to": "lib/protocols/felica/protocol/felica_frame_evidence.dart"
+  },
+  {
+    "from": "lib/core/felica/protocol/felica_protocol.dart",
+    "to": "lib/protocols/felica/protocol/felica_protocol.dart"
+  },
+  {
+    "from": "lib/core/felica/protocol/felica_response.dart",
+    "to": "lib/protocols/felica/protocol/felica_response.dart"
+  },
+  {
+    "from": "lib/core/felica/transport.dart",
+    "to": "lib/protocols/felica/transport.dart"
+  },
+  {
+    "from": "lib/core/logging/app_logger.dart",
+    "to": "lib/platform/storage/app_logger.dart"
+  },
+  {
+    "from": "lib/core/logging/log_exporter.dart",
+    "to": "lib/platform/storage/log_exporter.dart"
+  },
+  {
+    "from": "lib/core/nfc/felica_channel.dart",
+    "to": "lib/platform/nfc/felica_channel.dart"
+  },
+  {
+    "from": "lib/core/nfc/nfc_models.dart",
+    "to": "lib/platform/nfc/nfc_models.dart"
+  },
+  {
+    "from": "lib/core/nfc/nfc_service.dart",
+    "to": "lib/platform/nfc/nfc_service.dart"
+  },
+  {
+    "from": "lib/core/nfc/transport_failure_mapper.dart",
+    "to": "lib/platform/nfc/transport_failure_mapper.dart"
+  },
+  {
+    "from": "lib/core/qr/gms_qr_scanner.dart",
+    "to": "lib/platform/qr/gms_qr_scanner.dart"
+  },
+  {
+    "from": "lib/core/transit/city_union/city_union_codec.dart",
+    "to": "lib/protocols/transit/city_union/city_union_codec.dart"
+  },
+  {
+    "from": "lib/core/transit/city_union/city_union_file_parser.dart",
+    "to": "lib/protocols/transit/city_union/city_union_file_parser.dart"
+  },
+  {
+    "from": "lib/core/transit/city_union/city_union_models.dart",
+    "to": "lib/protocols/transit/city_union/city_union_models.dart"
+  },
+  {
+    "from": "lib/core/transit/city_union/cj_t331_public_info_parser.dart",
+    "to": "lib/protocols/transit/city_union/cj_t331_public_info_parser.dart"
+  },
+  {
+    "from": "lib/core/transit/city_union/cj_t331_wallet_local_consumption_parser.dart",
+    "to": "lib/protocols/transit/city_union/cj_t331_wallet_local_consumption_parser.dart"
+  },
+  {
+    "from": "lib/core/transit/city_union/cj_t331_wallet_recharge_parser.dart",
+    "to": "lib/protocols/transit/city_union/cj_t331_wallet_recharge_parser.dart"
+  },
+  {
+    "from": "lib/core/transit/local_card/apdu_exchange.dart",
+    "to": "lib/protocols/transit/local/apdu_exchange.dart"
+  },
+  {
+    "from": "lib/core/transit/local_card/bank_card_probe.dart",
+    "to": "lib/features/scan/application/bank_card_probe.dart"
+  },
+  {
+    "from": "lib/core/transit/local_card/card_aid.dart",
+    "to": "lib/protocols/transit/local/card_aid.dart"
+  },
+  {
+    "from": "lib/core/transit/local_card/cards/beijing_local_card.dart",
+    "to": "lib/protocols/transit/local/cards/beijing_local_card.dart"
+  },
+  {
+    "from": "lib/core/transit/local_card/cards/common_card_info.dart",
+    "to": "lib/protocols/transit/local/cards/common_card_info.dart"
+  },
+  {
+    "from": "lib/core/transit/local_card/cards/common_unit_cu.dart",
+    "to": "lib/protocols/transit/city_union/city_union_reader.dart"
+  },
+  {
+    "from": "lib/core/transit/local_card/cards/common_unit_tu.dart",
+    "to": "lib/protocols/transit/tunion/tunion_reader.dart"
+  },
+  {
+    "from": "lib/core/transit/local_card/cards/shanghai_transit_union_card.dart",
+    "to": "lib/protocols/transit/local/cards/shanghai_transit_union_card.dart"
+  },
+  {
+    "from": "lib/core/transit/local_card/cards/shanghai_transit_union_models.dart",
+    "to": "lib/protocols/transit/local/cards/shanghai_transit_union_models.dart"
+  },
+  {
+    "from": "lib/core/transit/local_card/cards/shenzhentong.dart",
+    "to": "lib/protocols/transit/local/cards/shenzhentong.dart"
+  },
+  {
+    "from": "lib/core/transit/local_card/cards/suzhou_card.dart",
+    "to": "lib/protocols/transit/local/cards/suzhou_card.dart"
+  },
+  {
+    "from": "lib/core/transit/local_card/cards/suzhou_cika.dart",
+    "to": "lib/protocols/transit/local/cards/suzhou_cika.dart"
+  },
+  {
+    "from": "lib/core/transit/local_card/cards/tft_local_card.dart",
+    "to": "lib/protocols/transit/local/cards/tft_local_card.dart"
+  },
+  {
+    "from": "lib/core/transit/local_card/cards/yangchengtong.dart",
+    "to": "lib/protocols/transit/local/cards/yangchengtong.dart"
+  },
+  {
+    "from": "lib/core/transit/local_card/local_card_models.dart",
+    "to": "lib/protocols/transit/local/local_card_models.dart"
+  },
+  {
+    "from": "lib/core/transit/local_card/local_card_parser.dart",
+    "to": "lib/features/scan/application/local_card_parser.dart"
+  },
+  {
+    "from": "lib/core/transit/local_card/local_card_reader.dart",
+    "to": "lib/features/scan/application/local_card_reader.dart"
+  },
+  {
+    "from": "lib/core/transit/local_card/local_hex.dart",
+    "to": "lib/protocols/transit/local/local_hex.dart"
+  },
+  {
+    "from": "lib/core/transit/local_card/trips/trip_dedup.dart",
+    "to": "lib/protocols/transit/local/trips/trip_dedup.dart"
+  },
+  {
+    "from": "lib/core/transit/local_card/trips/trip_extras.dart",
+    "to": "lib/protocols/transit/local/trips/trip_extras.dart"
+  },
+  {
+    "from": "lib/core/transit/local_card/trips/trip_records.dart",
+    "to": "lib/protocols/transit/local/trips/trip_records.dart"
+  },
+  {
+    "from": "lib/core/transit/tunion/qr/jt_t1179_certificate_parser.dart",
+    "to": "lib/protocols/transit/qr/jt_t1179_certificate_parser.dart"
+  },
+  {
+    "from": "lib/core/transit/tunion/qr/jt_t1179_qr_display.dart",
+    "to": "lib/features/qr/presentation/jt_t1179_qr_display.dart"
+  },
+  {
+    "from": "lib/core/transit/tunion/qr/jt_t1179_qr_parser.dart",
+    "to": "lib/protocols/transit/qr/jt_t1179_qr_parser.dart"
+  },
+  {
+    "from": "lib/core/transit/tunion/tunion_apdu.dart",
+    "to": "lib/protocols/transit/tunion/tunion_apdu.dart"
+  },
+  {
+    "from": "lib/core/transit/tunion/tunion_codec.dart",
+    "to": "lib/protocols/transit/tunion/tunion_codec.dart"
+  },
+  {
+    "from": "lib/core/transit/tunion/tunion_models.dart",
+    "to": "lib/protocols/transit/tunion/tunion_models.dart"
+  },
+  {
+    "from": "lib/core/transit/tunion/tunion_process_parser.dart",
+    "to": "lib/protocols/transit/tunion/tunion_process_parser.dart"
+  },
+  {
+    "from": "lib/core/ui_constants.dart",
+    "to": "lib/shared/presentation/ui_constants.dart"
+  },
+  {
+    "from": "lib/database/app_database.dart",
+    "to": "lib/features/archive/data/app_database.dart"
+  },
+  {
+    "from": "lib/database/app_database.g.dart",
+    "to": "lib/features/archive/data/app_database.g.dart"
+  },
+  {
+    "from": "lib/database/tables/card_read_batches.dart",
+    "to": "lib/features/archive/data/tables/card_read_batches.dart"
+  },
+  {
+    "from": "lib/database/tables/saved_cards.dart",
+    "to": "lib/features/archive/data/tables/saved_cards.dart"
+  },
+  {
+    "from": "lib/features/bank_card/data/apdu/apdu_command.dart",
+    "to": "lib/protocols/bank/data/apdu/apdu_command.dart"
+  },
+  {
+    "from": "lib/features/bank_card/data/apdu/apdu_response.dart",
+    "to": "lib/protocols/bank/data/apdu/apdu_response.dart"
+  },
+  {
+    "from": "lib/features/bank_card/data/apdu/status_word.dart",
+    "to": "lib/protocols/bank/data/apdu/status_word.dart"
+  },
+  {
+    "from": "lib/features/bank_card/data/dictionary/emv_tag_dictionary.dart",
+    "to": "lib/protocols/bank/data/dictionary/emv_tag_dictionary.dart"
+  },
+  {
+    "from": "lib/features/bank_card/data/dictionary/json_tag_dictionary.dart",
+    "to": "lib/protocols/bank/data/dictionary/json_tag_dictionary.dart"
+  },
+  {
+    "from": "lib/features/bank_card/data/dictionary/pboc_tag_dictionary.dart",
+    "to": "lib/protocols/bank/data/dictionary/pboc_tag_dictionary.dart"
+  },
+  {
+    "from": "lib/features/bank_card/data/pdol/pdol_data_builder.dart",
+    "to": "lib/protocols/bank/data/pdol/pdol_data_builder.dart"
+  },
+  {
+    "from": "lib/features/bank_card/data/tlv/ber_tlv_decoder.dart",
+    "to": "lib/protocols/bank/data/tlv/ber_tlv_decoder.dart"
+  },
+  {
+    "from": "lib/features/bank_card/data/tlv/hex_codec.dart",
+    "to": "lib/protocols/bank/data/tlv/hex_codec.dart"
+  },
+  {
+    "from": "lib/features/bank_card/data/transport/nfc_card_transport.dart",
+    "to": "lib/features/scan/application/nfc_card_transport.dart"
+  },
+  {
+    "from": "lib/features/bank_card/data/transport/recording_card_transport.dart",
+    "to": "lib/protocols/bank/data/transport/recording_card_transport.dart"
+  },
+  {
+    "from": "lib/features/bank_card/domain/interfaces/card_parser.dart",
+    "to": "lib/protocols/bank/domain/interfaces/card_parser.dart"
+  },
+  {
+    "from": "lib/features/bank_card/domain/interfaces/card_transport.dart",
+    "to": "lib/protocols/bank/domain/interfaces/card_transport.dart"
+  },
+  {
+    "from": "lib/features/bank_card/domain/interfaces/tag_dictionary.dart",
+    "to": "lib/protocols/bank/domain/interfaces/tag_dictionary.dart"
+  },
+  {
+    "from": "lib/features/bank_card/domain/models/apdu_trace.dart",
+    "to": "lib/protocols/bank/domain/models/apdu_trace.dart"
+  },
+  {
+    "from": "lib/features/bank_card/domain/models/bank_card_result.dart",
+    "to": "lib/protocols/bank/domain/models/bank_card_result.dart"
+  },
+  {
+    "from": "lib/features/bank_card/domain/models/card_application.dart",
+    "to": "lib/protocols/bank/domain/models/card_application.dart"
+  },
+  {
+    "from": "lib/features/bank_card/domain/models/card_field_summary.dart",
+    "to": "lib/protocols/bank/domain/models/card_field_summary.dart"
+  },
+  {
+    "from": "lib/features/bank_card/domain/models/card_record.dart",
+    "to": "lib/protocols/bank/domain/models/card_record.dart"
+  },
+  {
+    "from": "lib/features/bank_card/domain/models/parse_issue.dart",
+    "to": "lib/protocols/bank/domain/models/parse_issue.dart"
+  },
+  {
+    "from": "lib/features/bank_card/domain/models/tlv_node.dart",
+    "to": "lib/protocols/bank/domain/models/tlv_node.dart"
+  },
+  {
+    "from": "lib/features/bank_card/parsers/bank_card_analyzer.dart",
+    "to": "lib/protocols/bank/parsers/bank_card_analyzer.dart"
+  },
+  {
+    "from": "lib/features/bank_card/parsers/bank_card_probe_impl.dart",
+    "to": "lib/features/scan/application/bank_card_probe_impl.dart"
+  },
+  {
+    "from": "lib/features/bank_card/parsers/contactless_read_parser.dart",
+    "to": "lib/protocols/bank/parsers/contactless_read_parser.dart"
+  },
+  {
+    "from": "lib/features/bank_card/parsers/emv/emv_parser.dart",
+    "to": "lib/protocols/bank/parsers/emv/emv_parser.dart"
+  },
+  {
+    "from": "lib/features/bank_card/parsers/pboc/pboc_parser.dart",
+    "to": "lib/protocols/bank/parsers/pboc/pboc_parser.dart"
+  },
+  {
+    "from": "lib/features/bank_card/parsers/pboc/pboc_version_rules.dart",
+    "to": "lib/protocols/bank/parsers/pboc/pboc_version_rules.dart"
+  },
+  {
+    "from": "lib/features/bank_card/test_support/replay_card_transport.dart",
+    "to": "test/support/replay_card_transport.dart"
+  },
+  {
+    "from": "lib/features/card_archive/card_records_export.dart",
+    "to": "lib/features/archive/application/card_records_export.dart"
+  },
+  {
+    "from": "lib/features/card_archive/models/archive_context.dart",
+    "to": "lib/features/archive/domain/archive_context.dart"
+  },
+  {
+    "from": "lib/features/card_archive/models/card_archive_identity.dart",
+    "to": "lib/features/archive/domain/card_archive_identity.dart"
+  },
+  {
+    "from": "lib/features/card_archive/models/card_fingerprint.dart",
+    "to": "lib/features/archive/domain/card_fingerprint.dart"
+  },
+  {
+    "from": "lib/features/card_archive/models/card_name_extension.dart",
+    "to": "lib/features/archive/domain/card_name_extension.dart"
+  },
+  {
+    "from": "lib/features/card_archive/models/card_session_snapshot.dart",
+    "to": "lib/features/archive/domain/card_session_snapshot.dart"
+  },
+  {
+    "from": "lib/features/card_archive/models/card_types.dart",
+    "to": "lib/features/archive/domain/card_types.dart"
+  },
+  {
+    "from": "lib/features/card_archive/models/pending_card_save.dart",
+    "to": "lib/features/archive/domain/pending_card_save.dart"
+  },
+  {
+    "from": "lib/features/card_archive/models/snapshot_diagnostics.dart",
+    "to": "lib/features/archive/domain/snapshot_diagnostics.dart"
+  },
+  {
+    "from": "lib/features/card_archive/repositories/card_repository.dart",
+    "to": "lib/features/archive/data/card_repository.dart"
+  },
+  {
+    "from": "lib/features/card_archive/services/archive_history.dart",
+    "to": "lib/features/archive/application/archive_history.dart"
+  },
+  {
+    "from": "lib/features/card_archive/services/archive_record_presenter.dart",
+    "to": "lib/features/archive/presentation/archive_record_presenter.dart"
+  },
+  {
+    "from": "lib/features/card_archive/services/card_identification_service.dart",
+    "to": "lib/features/archive/application/card_identification_service.dart"
+  },
+  {
+    "from": "lib/features/qr/presentation/qr_acquisition.dart",
+    "to": "lib/features/qr/application/qr_acquisition.dart"
+  },
+  {
+    "from": "lib/features/qr/qr_acquire.dart",
+    "to": "lib/features/qr/presentation/qr_acquire.dart"
+  },
+  {
+    "from": "lib/features/qr/qr_barcode_payload.dart",
+    "to": "lib/features/qr/domain/qr_barcode_payload.dart"
+  },
+  {
+    "from": "lib/features/qr/qr_dart_decoder.dart",
+    "to": "lib/features/qr/data/qr_dart_decoder.dart"
+  },
+  {
+    "from": "lib/features/qr/qr_image_picker.dart",
+    "to": "lib/platform/qr/qr_image_picker.dart"
+  },
+  {
+    "from": "lib/features/qr/qr_scan_page.dart",
+    "to": "lib/features/qr/presentation/qr_scan_page.dart"
+  },
+  {
+    "from": "lib/features/scan/application/owned_notifier.dart",
+    "to": "lib/shared/application/owned_notifier.dart"
+  },
+  {
+    "from": "lib/features/settings/about_page.dart",
+    "to": "lib/features/settings/presentation/about_page.dart"
+  },
+  {
+    "from": "lib/features/settings/acknowledgements_page.dart",
+    "to": "lib/features/settings/presentation/acknowledgements_page.dart"
+  },
+  {
+    "from": "lib/features/settings/feedback_page.dart",
+    "to": "lib/features/settings/presentation/feedback_page.dart"
+  },
+  {
+    "from": "lib/features/settings/knowledge_base_page.dart",
+    "to": "lib/features/reference_data/presentation/knowledge_base_page.dart"
+  },
+  {
+    "from": "lib/features/settings/settings_action_button.dart",
+    "to": "lib/features/settings/presentation/settings_action_button.dart"
+  },
+  {
+    "from": "lib/features/settings/settings_page.dart",
+    "to": "lib/features/settings/presentation/settings_page.dart"
+  },
+  {
+    "from": "lib/features/settings/survey_page.dart",
+    "to": "lib/features/settings/presentation/survey_page.dart"
+  },
+  {
+    "from": "lib/features/trips/card_detail_page.dart",
+    "to": "lib/features/archive/presentation/card_detail_page.dart"
+  },
+  {
+    "from": "lib/state/app_state.dart",
+    "to": "lib/app/app_dependencies.dart"
+  }
+]

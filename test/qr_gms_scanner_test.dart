@@ -1,10 +1,9 @@
-import 'dart:typed_data';
-
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/core/data/settings_store.dart';
-import 'package:transit_card_analyzer/core/qr/gms_qr_scanner.dart';
-import 'package:transit_card_analyzer/state/app_state.dart';
+import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
+import 'package:transit_card_analyzer/platform/qr/gms_qr_scanner.dart';
+import 'package:transit_card_analyzer/app/app_dependencies.dart';
+
 import 'support/test_database.dart';
 
 void main() {
@@ -95,13 +94,17 @@ void main() {
     });
   });
 
-  group('AppState 扫码模块决策：开启系统扫码即整体屏蔽应用内相机', () {
+  group('AppDependencies 扫码模块决策：开启系统扫码即整体屏蔽应用内相机', () {
     test('检测到 GMS + 开关默认关闭：使用应用内相机扫码', () async {
       messenger.setMockMethodCallHandler(gmsQrScannerChannel, (call) async {
         return call.method == 'isAvailable' ? true : null;
       });
 
-      final app = AppState(database: testDatabase(), bundle: MissingTestAssets(), settingsStore: MemorySettingsStore());
+      final app = AppDependencies(
+        database: testDatabase(),
+        bundle: MissingTestAssets(),
+        settingsStore: MemorySettingsStore(),
+      );
       await app.init();
       await pumpEventQueue();
 
@@ -114,11 +117,12 @@ void main() {
         return call.method == 'isAvailable' ? true : null;
       });
 
-      final app = AppState(
+      final app = AppDependencies(
         database: testDatabase(),
         bundle: MissingTestAssets(),
-        settingsStore:
-            MemorySettingsStore({SettingsKeys.gmsScanEnabled: 'true'}),
+        settingsStore: MemorySettingsStore({
+          SettingsKeys.gmsScanEnabled: 'true',
+        }),
       );
       await app.init();
 
@@ -127,11 +131,12 @@ void main() {
 
     test('未检测到 GMS + 开关开启：不依赖探测结果，保持屏蔽不回退相机', () async {
       // 不注册 mock handler：探测降级为不具备 GMS
-      final app = AppState(
+      final app = AppDependencies(
         database: testDatabase(),
         bundle: MissingTestAssets(),
-        settingsStore:
-            MemorySettingsStore({SettingsKeys.gmsScanEnabled: 'true'}),
+        settingsStore: MemorySettingsStore({
+          SettingsKeys.gmsScanEnabled: 'true',
+        }),
       );
       await app.init();
 
@@ -140,19 +145,24 @@ void main() {
     });
   });
 
-  group('AppState 系统扫码开关', () {
+  group('AppDependencies 系统扫码开关', () {
     test('默认关闭', () async {
-      final app = AppState(database: testDatabase(), bundle: MissingTestAssets(), settingsStore: MemorySettingsStore());
+      final app = AppDependencies(
+        database: testDatabase(),
+        bundle: MissingTestAssets(),
+        settingsStore: MemorySettingsStore(),
+      );
       await app.init();
       expect(app.gmsScanEnabled, isFalse);
     });
 
     test('读取持久化值：显式开启后启用 GMS 扫码', () async {
-      final app = AppState(
+      final app = AppDependencies(
         database: testDatabase(),
         bundle: MissingTestAssets(),
-        settingsStore:
-            MemorySettingsStore({SettingsKeys.gmsScanEnabled: 'true'}),
+        settingsStore: MemorySettingsStore({
+          SettingsKeys.gmsScanEnabled: 'true',
+        }),
       );
       await app.init();
       expect(app.gmsScanEnabled, isTrue);
@@ -160,7 +170,11 @@ void main() {
 
     test('切换开关并持久化', () async {
       final store = MemorySettingsStore();
-      final app = AppState(database: testDatabase(), bundle: MissingTestAssets(), settingsStore: store);
+      final app = AppDependencies(
+        database: testDatabase(),
+        bundle: MissingTestAssets(),
+        settingsStore: store,
+      );
       await app.init();
 
       await app.setGmsScanEnabled(true);
@@ -179,11 +193,12 @@ void main() {
         return call.method == 'isAvailable' ? true : null;
       });
 
-      final app = AppState(
+      final app = AppDependencies(
         database: testDatabase(),
         bundle: MissingTestAssets(),
-        settingsStore:
-            MemorySettingsStore({SettingsKeys.gmsScanEnabled: 'true'}),
+        settingsStore: MemorySettingsStore({
+          SettingsKeys.gmsScanEnabled: 'true',
+        }),
       );
       await app.init();
       // 预热为 fire-and-forget：放行事件循环后再断言
@@ -200,7 +215,11 @@ void main() {
         return call.method == 'isAvailable' ? true : null;
       });
 
-      final app = AppState(database: testDatabase(), bundle: MissingTestAssets(), settingsStore: MemorySettingsStore());
+      final app = AppDependencies(
+        database: testDatabase(),
+        bundle: MissingTestAssets(),
+        settingsStore: MemorySettingsStore(),
+      );
       await app.init();
       await pumpEventQueue();
 
@@ -215,11 +234,12 @@ void main() {
         return false;
       });
 
-      final app = AppState(
+      final app = AppDependencies(
         database: testDatabase(),
         bundle: MissingTestAssets(),
-        settingsStore:
-            MemorySettingsStore({SettingsKeys.gmsScanEnabled: 'true'}),
+        settingsStore: MemorySettingsStore({
+          SettingsKeys.gmsScanEnabled: 'true',
+        }),
       );
       await app.init();
       await pumpEventQueue();

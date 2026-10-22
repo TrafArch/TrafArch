@@ -1,21 +1,44 @@
 import 'dart:convert';
+import 'dart:io';
+
+import 'support/published_reference_fixture.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/core/data/settings_store.dart';
-import 'package:transit_card_analyzer/core/nfc/nfc_models.dart';
-import 'package:transit_card_analyzer/core/nfc/nfc_service.dart';
-import 'package:transit_card_analyzer/core/transit/tunion/qr/jt_t1179_qr_display.dart';
-import 'package:transit_card_analyzer/core/transit/tunion/qr/jt_t1179_qr_parser.dart';
+import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
+import 'package:transit_card_analyzer/platform/nfc/nfc_models.dart';
+import 'package:transit_card_analyzer/platform/nfc/nfc_service.dart';
+import 'package:transit_card_analyzer/features/qr/presentation/jt_t1179_qr_display.dart';
+import 'package:transit_card_analyzer/protocols/transit/qr/jt_t1179_qr_parser.dart';
 import 'package:transit_card_analyzer/features/expert/expert_page.dart';
 import 'package:transit_card_analyzer/features/home/home_page.dart';
-import 'package:transit_card_analyzer/features/qr/qr_image_picker.dart';
-import 'package:transit_card_analyzer/state/app_state.dart';
+import 'package:transit_card_analyzer/platform/qr/qr_image_picker.dart';
+import 'package:transit_card_analyzer/app/app_dependencies.dart';
 
 import 'support/test_database.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  late Directory referenceDirectory;
+  const pathProvider = MethodChannel('plugins.flutter.io/path_provider');
+  setUpAll(() {
+    referenceDirectory = Directory.systemTemp.createTempSync(
+      'trafarch-qr-reference-',
+    );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(pathProvider, (call) async {
+          if (call.method == 'getApplicationSupportDirectory') {
+            return referenceDirectory.path;
+          }
+          throw MissingPluginException(call.method);
+        });
+  });
+  tearDownAll(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(pathProvider, null);
+    referenceDirectory.deleteSync(recursive: true);
+  });
   group('JT/T 1179 二维码解析与展示扩展', () {
     test('样例二维码：表 2 全字段解析正确', () {
       final sample = _sampleQr();
@@ -62,7 +85,7 @@ void main() {
     });
   });
 
-  group('AppState 二维码状态', () {
+  group('AppDependencies 二维码状态', () {
     test('parseQrBytes 成功：保存结果并清空错误', () {
       final app = _newApp();
       expect(app.hasQrData, isFalse);
@@ -140,7 +163,7 @@ void main() {
 
       final app = _newApp(channel: _CardNfcChannel());
       await tester.runAsync(app.init);
-      await app.scanOnce();
+      await tester.runAsync(app.scanOnce);
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(body: HomePage(app: app, active: false)),
@@ -282,7 +305,7 @@ void main() {
 
       final app = _newApp(channel: _CardNfcChannel());
       await tester.runAsync(app.init);
-      await app.scanOnce();
+      await tester.runAsync(app.scanOnce);
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(body: ExpertPage(app: app)),
@@ -324,7 +347,7 @@ void main() {
       expect(find.text('发卡机构公钥证书（117 字节）'), findsOneWidget);
       expect(app.lastResult!.uid, '04A1B2C3D4');
 
-      await app.scanOnce();
+      await tester.runAsync(app.scanOnce);
       await tester.pumpAndSettle();
       expect(find.text('解析器'), findsOneWidget);
       expect(find.text('6225880123456789'), findsNothing);
@@ -335,12 +358,16 @@ void main() {
   });
 }
 
-AppState _newApp({NfcChannel? channel}) => AppState(
-  database: testDatabase(),
-  channel: channel ?? _NoopNfcChannel(),
-  bundle: _FakeBundle(_assets),
-  settingsStore: MemorySettingsStore(),
-);
+AppDependencies _newApp({NfcChannel? channel}) {
+  final app = AppDependencies(
+    database: testDatabase(),
+    channel: channel ?? _NoopNfcChannel(),
+    bundle: _FakeBundle(_assets),
+    settingsStore: MemorySettingsStore(),
+  );
+  addTearDown(app.dispose);
+  return app;
+}
 
 String _hexOf(List<int> bytes) =>
     bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
@@ -418,16 +445,19 @@ final Map<String, String> _assets = {
 class _FakeBundle extends CachingAssetBundle {
   final Map<String, String> _texts;
   _FakeBundle(this._texts);
+  late final _published = publishTuFixture(null, _texts);
 
   @override
   Future<ByteData> load(String key) async {
+    final published = _published[key];
+    if (published != null) return ByteData.sublistView(published);
     final text = _texts[key];
     if (text == null) throw FlutterError('资产不存在：$key');
     return ByteData.view(Uint8List.fromList(utf8.encode(text)).buffer);
   }
 }
 
-/// 空操作 NFC 通道：仅承载 AppState 构造，测试中不触发扫描。
+/// 空操作 NFC 通道：仅承载 AppDependencies 构造，测试中不触发扫描。
 class _NoopNfcChannel implements NfcChannel {
   @override
   Future<NfcScanResult?> scanOnce() async => null;

@@ -1,7 +1,6 @@
-// D:\iteam\TrafArch\test\emv_module_test.dart
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/core/emv/discovery/application_enumerator.dart';
-import 'package:transit_card_analyzer/core/emv/parser/ber_tlv.dart';
+import 'package:transit_card_analyzer/protocols/bank/emv/discovery/application_enumerator.dart';
+import 'package:transit_card_analyzer/protocols/bank/emv/parser/ber_tlv.dart';
 
 void main() {
   test('解析嵌套 FCI，提取 AID 与标签', () {

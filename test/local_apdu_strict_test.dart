@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/core/transit/local_card/apdu_exchange.dart';
-import 'package:transit_card_analyzer/core/transit/local_card/cards/beijing_local_card.dart';
-import 'package:transit_card_analyzer/core/transit/local_card/local_card_models.dart';
+import 'package:transit_card_analyzer/protocols/transit/local/apdu_exchange.dart';
+import 'package:transit_card_analyzer/protocols/transit/local/cards/beijing_local_card.dart';
+import 'package:transit_card_analyzer/protocols/transit/local/local_card_models.dart';
 
 void main() {
   test(

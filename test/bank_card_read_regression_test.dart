@@ -2,22 +2,26 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
-import 'package:transit_card_analyzer/features/bank_card/data/apdu/apdu_command.dart';
-import 'package:transit_card_analyzer/features/bank_card/data/pdol/pdol_data_builder.dart';
-import 'package:transit_card_analyzer/features/bank_card/data/tlv/hex_codec.dart';
-import 'package:transit_card_analyzer/features/bank_card/domain/interfaces/card_transport.dart';
-import 'package:transit_card_analyzer/features/bank_card/parsers/bank_card_analyzer.dart';
-import 'package:transit_card_analyzer/features/bank_card/parsers/emv/emv_parser.dart';
-import 'package:transit_card_analyzer/features/bank_card/parsers/pboc/pboc_parser.dart';
+import 'package:transit_card_analyzer/protocols/bank/data/apdu/apdu_command.dart';
+import 'package:transit_card_analyzer/protocols/bank/data/pdol/pdol_data_builder.dart';
+import 'package:transit_card_analyzer/protocols/bank/data/tlv/hex_codec.dart';
+import 'package:transit_card_analyzer/protocols/bank/domain/interfaces/card_transport.dart';
+import 'package:transit_card_analyzer/protocols/bank/emv/data/aid_registry.dart';
+import 'package:transit_card_analyzer/protocols/bank/parsers/bank_card_analyzer.dart';
+import 'package:transit_card_analyzer/protocols/bank/parsers/emv/emv_parser.dart';
+import 'package:transit_card_analyzer/protocols/bank/parsers/pboc/pboc_parser.dart';
 import 'package:transit_card_analyzer/features/bank_card/presentation/application_detail_page.dart';
 import 'package:transit_card_analyzer/features/bank_card/presentation/bank_card_result_view.dart';
-import 'package:transit_card_analyzer/features/bank_card/test_support/replay_card_transport.dart';
+
+import 'support/replay_card_transport.dart';
 
 const _emptyDictionary =
     '{"schemaVersion":1,"dictionaryId":"test","entries":[]}';
 const _visa = 'A0000000031010';
 const _mastercard = 'A0000000041010';
+const _mastercardChina = 'A0000000108888';
 const _amex = 'A00000002501';
+const _amexChina = 'A00000079001';
 const _pboc = 'A000000333010101';
 const _emptyGpo = '80A8000002830000';
 const _ppseSelect = '00A404000E325041592E5359532E444446303100';
@@ -342,6 +346,82 @@ void main() {
       });
     }
 
+    for (final card in [
+      (brand: '美国运通', international: _amex, domestic: _amexChina),
+      (brand: '万事网联', international: _mastercard, domestic: _mastercardChina),
+    ]) {
+      test('${card.brand}双应用卡：PPSE 只列出国际应用时补充读取境内 PBOC 应用', () async {
+        final replay = ReplayCardTransport([
+          _directory([card.international]),
+          _fci(card.international),
+          // 按补充探测顺序：命中国内清算网络的 PBOC 应用
+          ...kPbocSupplementalAids.map(
+            (aid) => aid == card.domestic ? _fci(card.domestic) : '6A82',
+          ),
+          _fci(card.international),
+          _oneRecordGpo,
+          _expiryRecord,
+          _fci(card.domestic),
+          _oneRecordGpo,
+          _expiryRecord,
+        ]);
+        final result = await (await _analyzer()).analyze(replay);
+        expect(result.applications.map((a) => a.application.aidHex), [
+          card.international,
+          card.domestic,
+        ]);
+        expect(result.applications.map((a) => a.parserId), ['emv', 'pboc']);
+        expect(result.protocolFamily, BankCardProtocolFamily.mixed);
+        expect(result.status, BankCardStatus.success);
+        expect(
+          result.applications.every((a) => a.summary.expiry == '2027-12-31'),
+          isTrue,
+        );
+      });
+    }
+
+    test('境内 PBOC 应用族识别覆盖万事网联与连通/美国运通', () {
+      for (final aid in [
+        _pboc,
+        'A000000333010106',
+        'A0000003330101',
+        _mastercardChina,
+        _amexChina,
+        'D156000101',
+      ]) {
+        expect(isPbocAid(aid), isTrue, reason: aid);
+      }
+      expect(isPbocAid(_amex), isFalse);
+      expect(isPbocAid(_mastercard), isFalse);
+      expect(isPbocAid(_visa), isFalse);
+    });
+
+    test('PPSE 只列出 Visa 时补充探测并读取 PBOC 应用', () async {
+      final replay = ReplayCardTransport([
+        _directory([_visa]),
+        _fci(_visa), // 枚举 Visa
+        // 按补充探测顺序：仅银联借记 AID 命中
+        ...kPbocSupplementalAids.map(
+          (aid) => aid == _pboc ? _fci(_pboc) : '6A82',
+        ),
+        _fci(_visa), // 解析 Visa
+        _oneRecordGpo,
+        _panRecord,
+        _fci(_pboc), // 解析 PBOC
+        _oneRecordGpo,
+        _panRecord,
+      ]);
+      final result = await (await _analyzer()).analyze(replay);
+      expect(result.applications.map((a) => a.application.aidHex), [
+        _visa,
+        _pboc,
+      ]);
+      expect(result.applications.map((a) => a.parserId), ['emv', 'pboc']);
+      expect(result.applications.every((a) => a.summary.pan != null), isTrue);
+      expect(result.protocolFamily, BankCardProtocolFamily.mixed);
+      expect(result.status, BankCardStatus.success);
+    });
+
     test(
       'one rejected directory application makes the surviving result partial',
       () async {
@@ -386,27 +466,26 @@ void main() {
       },
     );
 
-    test(
-      'one application I/O failure does not discard another application',
-      () async {
-        final replay = _CheckedReplay([
-          (_ppseSelect, _directory([_mastercard, _pboc])),
-          (_select(_mastercard), _fci(_mastercard)),
-          (_select(_pboc), _fci(_pboc)),
-          (_select(_mastercard), StateError('synthetic transport failure')),
-          (_select(_pboc), _fci(_pboc)),
-          (_emptyGpo, _oneRecordGpo),
-          ('00B2010C00', _panRecord),
-        ]);
-        final result = await (await _analyzer()).analyze(replay);
-        expect(
-          result.applications.any((a) => a.summary.pan == '4111111111111111'),
-          isTrue,
-        );
-        expect(result.status, BankCardStatus.partial);
-        replay.verifyComplete();
-      },
-    );
+    test('later application I/O failure retains earlier PAN and stops physical I/O', () async {
+      final replay = _CheckedReplay([
+        (_ppseSelect, _directory([_mastercard, _pboc])),
+        (_select(_mastercard), _fci(_mastercard)),
+        (_select(_pboc), _fci(_pboc)),
+        (_select(_mastercard), _fci(_mastercard)),
+        (_emptyGpo, _oneRecordGpo),
+        ('00B2010C00', _panRecord),
+        (_select(_pboc), StateError('synthetic transport failure')),
+      ]);
+      final result = await (await _analyzer()).analyze(replay);
+      expect(
+        result.applications.any((a) => a.summary.pan == '4111111111111111'),
+        isTrue,
+      );
+      expect(result.status, BankCardStatus.partial);
+      expect(result.applications, hasLength(2));
+      expect(result.transportFailure, isNotNull);
+      replay.verifyComplete();
+    });
   });
 
   testWidgets('mixed application view keeps both applications navigable', (
@@ -483,6 +562,7 @@ String _fci(String aid) => '${_tlv('6F', _tlv('84', aid))}9000';
 String _directory(List<String> aids) =>
     '${_tlv('6F', '${_tlv('84', '325041592E5359532E4444463031')}${_tlv('A5', _tlv('BF0C', aids.map((a) => _tlv('61', _tlv('4F', a))).join()))}')}9000';
 const _panRecord = '700A5A0841111111111111119000';
+const _expiryRecord = '70105A0841111111111111115F24032712319000';
 
 /// Strict command/response replay at the card boundary. A malformed command is
 /// rejected as a card would reject it; parsing and all transport wrappers are real.

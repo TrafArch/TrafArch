@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../domain/models/card_application.dart';
-import '../domain/models/card_field_summary.dart';
-import '../domain/models/card_record.dart';
-import '../domain/models/parse_issue.dart';
+import '../../../protocols/bank/domain/models/card_application.dart';
+import '../../../protocols/bank/domain/models/card_field_summary.dart';
+import '../../../protocols/bank/domain/models/card_record.dart';
+import '../../../protocols/bank/domain/models/parse_issue.dart';
 import 'tag_tree_view.dart';
 
 /// 单个银行卡应用详情页：应用选择证据（FCI）、GPO（AIP / AFL）、
@@ -31,6 +31,14 @@ class ApplicationDetailPage extends StatelessWidget {
             _kv('卡号 (PAN)', app.summary.pan!),
             _kv('卡号来源', '应用数据标签 ${app.summary.panSourceTag}'),
           ],
+          if (app.summary.expiry != null)
+            _kv(
+              '有效期',
+              '${app.summary.expiry}'
+                  '（来源 ${app.summary.expirySourceTag}）',
+            ),
+          if (app.summary.effectiveDate != null)
+            _kv('生效日期', app.summary.effectiveDate!),
           const Divider(height: 28),
           _sectionTitle(context, '卡号与交易信息'),
           if (app.summary.isEmpty)

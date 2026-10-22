@@ -1,0 +1,103 @@
+# Changelog
+
+## 2026-10-21 — 覆盖安装交付修正
+
+### Bug fix
+
+- 按用户要求恢复原包名 `com.kajolno.TrafArch`、显示名 TrafArch 和原 versionName，移除 Debug / Release 隐式 `.repair` 包名和 `-repair` 版本后缀，支持开发者签名后测试原应用升级。
+- 移除本批命令中的 `force-version-code-ignoring-abi`：原 APK Android versionCode 为 4059，源码号 2066 的 arm64 拆包应使用 4066，避免 2066 造成降级安装。
+
+### Build / Docs
+
+- 新增项目根 `AGENTS.md` 维护约束：以后每次修改均固定显示名称 `TrafArch` 和包名 `com.kajolno.TrafArch`，适用于 Debug、Release 和验证构建。
+- 增加显式 `unsignedApk=true`，同时支持 Release / Debug 输出未签名 APK，交由开发者使用原密钥签名。保留 `repairBuild=true` 的不递增和不要求私有 Firebase 配置行为；它不再改变应用身份。
+- 已核对原 APK 的正式证书 SHA256，记录版本、包名、签名要求和签名命令。用户选择由开发者使用原密钥签名；本地没有原密钥，未将测试签名冒充可覆盖原应用的签名。
+- 新交付目录为 `TrafArch-upgrade-20261021`；此前 `TrafArch-refactor-20261021` 中的 `.repair` APK 保留作历史，并非本次覆盖安装目标。
+- 本次测试、构建、未签名状态、原始数据资产、源码 / 补丁和哈希核对见 `docs/UPGRADE_HANDOFF_20261021.md` 及新证据包。尚未进行真实设备覆盖安装。
+
+以下条目记录原重构阶段及上一批并装构建的历史结果；安装身份以本节为准。
+
+## 2026-10-21 — 全项目模块化与离线参考数据重构
+
+基线：`8a4818e7d4dc848432a3e39a69195255138a3b95`，分支 `refactor/offline-modules-20261020`。保留原有本地修复，全部更改未提交、未推送。应用源码版本 `1.0.1-alpha+2066`；已构建同版本 arm64 Release / Debug 验证 APK（包名后缀 `.repair`）。
+
+### Feature
+
+- 增加 Python 标准库离线数据 CLI：`inspect`、`build`、`validate`、`import-csv`、`diff`，支持来源哈希、明确优先级、冲突决策、差异审查和可重复构建。
+- TU / CU 独立发布包与 manifest；知识库页展示版本、来源、覆盖范围和加载 / 用户迁移问题。
+- 档案快照 v3 保存读取上下文、观察字段、原始物理帧、文件、元数据诊断、解析及参考包版本。
+- 统一 ArchiveHistory 历史查询，详情和导出共享同一投影与来源记录。
+- 原生和 Dart 增加可选 sessionId、类型化读取结果与传输失败，保留部分读取证据。
+
+### Bug fix
+
+以下修正已通过对应回归和全量 Flutter 测试；实际 NFC / 卡片兼容性受下方实卡验证边界限制。
+
+- 保留北京公交 / BRT 的专用完整线路与站点字段匹配，避免与地铁片段查询混用；APDU 长度按修正后的最终 Le 判断。
+- CU 零余额不再被当作缺值；混合 EMV / PBOC 结果保留各应用及协议族标记。
+- 银行卡枚举遇到终止通信失败后停止后续物理交换；保留此前成功 SELECT 的 AID、请求 AID、FCI、优先级、目录标签和失败诊断。部分结果不再提前当作未支持丢弃。
+- CU 查询严格使用地区及已解码 carrier 上下文，缺少类型不启用受限规则；不从 CJ/T331 指令 06 / 09 猜 carrier。歧义不强行返回首站。
+- 深圳历史公交 fallback 限制为 5180、carrier 1、允许公交查找、站点未命中、已知时间早于 1735675200000，歧义不 fallback。
+- TU 同名不同线路判歧义；参考数据查询故障与普通未命中分开表达，用户覆盖参与实际查询且保留原字段。
+- 修复旧档案列迁移不一致、首次新保存覆盖旧 scalar 快照、部分读取抹空余额、迟到保存覆盖新数据和版本变化重复事件等路径。
+- 归档直接收集协议 0x1A 观察，不再因页面隐藏同模式记录而漏存；区分未读取交易文件和已观察空文件。
+- 保存解析时的 civil 时间及未核实标记；旧无时区记录稳定显示并保留原值。时间边界用显式范围，避免最小 signed integer 的 abs 溢出。
+- NFC 的旧异步完成 / close 绑定原 session 和连接；显式 null sessionId 被拒绝；引擎销毁完成待回复请求；释放失败 / 超时不再报告成功。元数据读取异常贯穿 Dart 和归档。
+- 设置文件读失败不再按空文件重写；串行写入完整临时文件后替换，失败在设置页可见。
+- 移除 Gradle 从本机固定目录覆盖裸数据库的旧同步逻辑，防止数据库与发布 manifest 不一致；版本同步路径更新为 `lib/app/app_info.dart`。
+- 修复迁移后缺少的 import、夹具发布契约和 API 引用，处理 analyzer 提示，保留 lint 规则和已有断言。
+- TU 公共身份文件成功后，持卡人 / 管理文件失败仍保留已确认身份；地方卡可选扩展 / 历史失败仍返回已观测身份、余额和记录，不误转银行卡探测。终止通信后不继续物理交换。
+- 修复“较新同内容读取被去重、随后部分读取与迟到保存导致余额倒退”的问题。独立持久化逐字段观察时间，重开后仍保留新鲜度，删除档案时一并清理。另修复旧格式档案的动态 lastReadAt 兜底压过明确观察时间的问题，新增 v2 / v5 / v6 旧库迁移后的部分读取、重开与迟到字段更新回归。
+- 修复日志启停标记遗漏：关闭前落盘关闭标记，开启生效后写开启标记，并等待 flush。
+- Android 相机 / 自动对焦声明为可选；移除重复启动背景和未使用颜色资源，迁移多余版本限定的图标资源。清理资源后从干净构建重新验证。
+- Release 验证包与 Debug 一样使用 `.repair` 包名和版本后缀；验证构建不再触发正式构建号递增。
+- 修复 Widget 测试真实 SQLite I/O 跨 fakeAsync 挂起和句柄未释放的问题；测试夹具模拟真实发布文档契约，银行卡中断用例保留对先前成功 PAN 和后续停止交换的断言。
+
+### Refactor
+
+- 按 app / protocols / platform / features / shared 重组，159 个文件按映射迁移；移除旧路径实现和未使用 NFC mixin。
+- AppState 改为 AppDependencies 装配门面，拆分 Scan、CardReadCoordinator、ReferenceData、Archive、Settings、QR 和 Diagnostics。
+- MainActivity 拆为会话、连接、I/O 调度、元数据、扫码、导出等 11 个 Kotlin 文件。
+- 共享 APDU 交换机制和有界 BER-TLV 基础；各协议保留自身状态字、Le、重试和 CLA 策略。
+- 协议层移除 Flutter 平台异常依赖，银行卡核心不再置于展示 feature，回放辅助移至 test/support。
+- 首页按卡族拆面板，专家页按文件拆组件，行程页提取条目、筛选与格式化；加载 / 缺失 / 错误状态分别处理，增加发布模式错误展示。
+- 清理过期注释和误导的在线更新文案，格式化 Dart 源码。
+
+### Data
+
+- 冻结 7 个输入与原始 SHA256；保留 TU 90 张、CU 20 张原始表的 schema / 行内容、索引 / 视图和 user_version。
+- TU 原始 all_records 7,480 行，其中 bus 1,708、brt 227；card_prefixes 429、issuer_city_codes 347。CU station_registry 1,732、terminal_index 6,111、routes 171、bus_routes 13,852、cu_prefix_dictionary 1,122。
+- CU 仍可独立使用，线路原码、line_key / line_code / line_number、station_code、source_key / source_field 和前导零完整保留。TU1210 / CU1210 使用不同城市命名空间。
+- 原始 JSON 从重复运行时资产中移除，冻结输入仍保留；运行时消费包内已构建文档，不运行 HTTP 下载、CSV 适配或知识库索引重建。
+- CSV 站点导入产出无损审核数据；缺少协议专用字段 / 规则映射时拒绝直接发布。TU 前缀增补有可注册的直接构建路径。
+
+### Migration
+
+- 档案 schema 6 根据实际列增量修复、事务回填旧快照，保留 ID、指纹、自定义名和坏 / 未来版本原文。新增幂等辅助表 `archive_field_observation_times`，将字段观察时间与不可变批次内容去重分离。
+- 用户覆盖和未知站点报告迁至独立 reference_user.sqlite，事务标记、时间比较、计数合并和完整旧行 JSON 支持追溯，旧文件保留。
+- 参考包使用内容哈希安装和只读打开；数据库句柄由控制器拥有，初始化后销毁和待完成保存均有释放路径。
+- 停用 `transitDbMasterDir`；详细接手、数据更新及降级限制见 `docs/MIGRATION.md`。
+
+### Docs
+
+- 重写 README，增加 ARCHITECTURE、MIGRATION、REFERENCE_DATA_TOOLING、NATIVE_SESSION_CONTRACT、验证记录、文件迁移映射和分类 Changelog。
+- 交付完整源码、针对基线的 binary patch、文件 SHA256 清单和证据包；交付脚本核对补丁重建结果与源码包逐文件一致。
+
+### Validation
+
+2026-10-21 用户重新授权完整测试，覆盖此前取消测试的历史限制。最终命令与结果见 `docs/REFACTOR_VALIDATION_20261021.md` 和交付证据；中间失败日志保留作为修复过程记录。
+
+- Flutter 全量测试：611 项全部通过，包括协议回放、首页 / 档案组件、TU / CU 数据运行时契约、SQLite v1–v6 迁移和字段新鲜度重开回归。
+- Dart analyzer：0 error / 0 warning / 0 info；Dart 格式检查和 Git 空白检查通过。
+- Android：原生 Kotlin / Gradle 编译、arm64 Release / Debug 构建、Lint 完成；原生 Unit Test 为 `NO-SOURCE`，未虚计测试数量。剩余非阻断警告及原因在验证报告逐类列出。
+- 数据：TU 原始 90 张 / CU 原始 20 张表内容与结构保留，完整性 / 外键检查通过，同引擎重复构建逐字节一致。
+- 交付：验证 APK 签名、16 KB ZIP 对齐、包名 / 版本 / ABI、包内双数据库与清单；完整补丁在干净基线上重建并与源码 ZIP 逐文件核对。
+- 未安装或启动模拟器 / 真实设备，未进行实体卡或真实设备升级测试。
+
+### Known limitations
+
+- 上海实体交通联合卡“实际 100 元，原 APK 首页显示 108 元”仍未验证解决。唯一已给余额响应为 `00 00 27 10 90 00`；未采用固定减 8 元。
+- 北京公交、银行卡号和双应用读取需要后续实卡验收，部分卡片可能不开放所需文件 / 标签。
+- 未新增八达通未知余额 / 历史服务，也未扩展银行卡 / FeliCa 的归档策略。
+- 历史记录未保存的原始时区、币种或来源无法可靠补造；显示为未知并保留原文。
+- 独立审阅范围、修前发现与后续修复证据在验证文档中记录。交付为可用于实体卡测试的构建，不是正式签名发布或实体卡兼容性认证。

@@ -48,5 +48,5 @@ app.*.map.json
 # Widget Preview related
 .widget_preview/
 
-# Local tooling scripts
-/tool/
+# Local scratch tooling (maintained tools/reference_data is tracked)
+/tools/local/

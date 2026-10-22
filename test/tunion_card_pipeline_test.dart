@@ -1,17 +1,17 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/core/analysis/tunion_analysis_engine.dart';
-import 'package:transit_card_analyzer/core/analysis/tunion_analysis_models.dart';
-import 'package:transit_card_analyzer/core/card/card_parser.dart';
-import 'package:transit_card_analyzer/core/data/tunion_knowledge_base.dart';
-import 'package:transit_card_analyzer/core/data/station_codes.dart';
-import 'package:transit_card_analyzer/core/data/tunion_terminal_decoder.dart';
-import 'package:transit_card_analyzer/core/transit/tunion/tunion_models.dart';
-import 'package:transit_card_analyzer/core/transit/local_card/apdu_exchange.dart';
-import 'package:transit_card_analyzer/core/transit/local_card/cards/common_unit_tu.dart';
-import 'package:transit_card_analyzer/core/transit/local_card/local_card_models.dart';
-import 'package:transit_card_analyzer/core/transit/tunion/tunion_process_parser.dart';
+import 'package:transit_card_analyzer/features/transit_analysis/tunion_analysis_engine.dart';
+import 'package:transit_card_analyzer/features/transit_analysis/tunion_analysis_models.dart';
+import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
+import 'package:transit_card_analyzer/features/reference_data/data/tunion_knowledge_base.dart';
+import 'package:transit_card_analyzer/features/reference_data/domain/station_codes.dart';
+import 'package:transit_card_analyzer/features/reference_data/domain/tunion_terminal_decoder.dart';
+import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_models.dart';
+import 'package:transit_card_analyzer/protocols/transit/local/apdu_exchange.dart';
+import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_reader.dart';
+import 'package:transit_card_analyzer/protocols/transit/local/local_card_models.dart';
+import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_process_parser.dart';
 
 /// 驱动新模块 TU 单元完成一次识读（等价原 TUnionParser.parse()，
 /// APDU 序列完全一致；老模块已移除，测试改为直接调用单元）。
@@ -828,7 +828,7 @@ void main() {
       expect(trip.amountText, '+¥50.00');
     });
 
-    test('八达通-全国通卡：余额、行程与合规明细按港币（HKD）展示', () {
+    test('八达通 HKD 账户元数据不改标 TU 观察、行程与合规明细', () {
       final octopusKb = KnowledgeBase.fromJsonStrings(
         cardPrefixes: jsonEncode({
           'entries': [
@@ -855,12 +855,12 @@ void main() {
       );
       final result = engine.analyze(parsed, now: DateTime(2026, 10, 7));
 
-      expect(result.currency.code, 'HKD');
-      expect(result.wallet.balanceText, 'HK\$53.40');
-      expect(result.trips.single.amountText, '-HK\$2.00');
+      expect(result.currency.code, 'CNY');
+      expect(result.wallet.balanceText, '¥53.40');
+      expect(result.trips.single.amountText, '-¥2.00');
       expect(
         result.compliance.items.firstWhere((i) => i.id == 'balance').detail,
-        '余额 53.40 港元',
+        '余额 53.40 元',
       );
     });
 

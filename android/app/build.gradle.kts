@@ -1,6 +1,4 @@
 import java.io.FileInputStream
-import java.io.RandomAccessFile
-import java.security.MessageDigest
 import java.util.Properties
 
 plugins {
@@ -10,8 +8,10 @@ plugins {
 }
 
 // Public source checkouts do not include the private Firebase configuration.
-// A repair APK is independent of the production Firebase application.
+// The alpha application ID keeps this build installable beside the original app.
 val repairBuild = providers.gradleProperty("repairBuild").orNull == "true"
+// Hand an aligned APK to the developer for signing with the original key.
+val unsignedApk = providers.gradleProperty("unsignedApk").orNull == "true"
 val hasGoogleServicesConfig = fileTree(projectDir) {
     include("google-services.json", "src/**/google-services.json")
 }.files.isNotEmpty()
@@ -23,10 +23,10 @@ if (hasGoogleServicesConfig && !repairBuild) {
 // pubspec.yaml 的 "version: x.y.z+N" 为版本唯一来源（N = 构建版本号，如 2003）：
 // - release 构建（assembleRelease / bundleRelease）时，本次产物直接使用当前 N；
 // - 构建成功后把 N 预分配为下一个号并写回 pubspec.yaml；构建失败不消耗号；
-// - 构建开始前同步 lib/core/app_info.dart，保证产物内 UI 显示的即本次号；
+// - 构建开始前同步 lib/app/app_info.dart，保证产物内 UI 显示的即本次号；
 // - debug 构建（flutter run 等）不递增、不修改任何文件。
 val pubspecFile = rootProject.file("../pubspec.yaml")
-val appInfoFile = rootProject.file("../lib/core/app_info.dart")
+val appInfoFile = rootProject.file("../lib/app/app_info.dart")
 val versionRegex = Regex("""(?m)^version:\s*([^\s+]+)\+(\d+)""")
 
 val pubspecText = pubspecFile.readText()
@@ -39,7 +39,7 @@ val isReleaseBuild = gradle.startParameter.taskNames.any {
     val taskName = it.substringAfterLast(':')
     taskName == "assembleRelease" || taskName == "bundleRelease"
 }
-if (isReleaseBuild) {
+if (isReleaseBuild && !repairBuild) {
     // 同步 app_info（发生在 Dart 编译之前，本次产物内显示的就是本次号）
     if (appInfoFile.exists()) {
         val original = appInfoFile.readText()
@@ -79,66 +79,13 @@ if (isReleaseBuild) {
 }
 // ==========================================================
 
-// ===================== 交通数据库自动同步 =====================
-// 把 transitDbMasterDir 下的 TrafArch_Database_CU/TU.sqlite 同步进
-// assets/data，并强制刷新修改时间戳——使 Flutter 按 mtime 判断的资产
-// 增量打包缓存失效，保证 compileFlutterBuild*（flutter assemble）
-// 读取到的永远是最新库。debug / release 构建均生效；属性未配置或
-// 目录不存在时静默跳过，直接使用仓库内资产。
-val transitDbMasterDirPath =
-    providers.gradleProperty("transitDbMasterDir").orNull?.trim().orEmpty()
-val transitDbAssetsDir = rootProject.file("../assets/data")
-val transitDbNames = listOf("TrafArch_Database_CU.sqlite", "TrafArch_Database_TU.sqlite")
-
-fun transitDbSha256(f: File): String =
-    MessageDigest.getInstance("SHA-256")
-        .digest(f.readBytes()).joinToString("") { "%02x".format(it) }
-
-fun transitDbUserVersion(f: File): Int? =
-    if (f.length() > 64) {
-        val b = ByteArray(4)
-        RandomAccessFile(f, "r").use { it.seek(60); it.readFully(b) }
-        ((b[0].toInt() and 0xFF) shl 24) or ((b[1].toInt() and 0xFF) shl 16) or
-            ((b[2].toInt() and 0xFF) shl 8) or (b[3].toInt() and 0xFF)
-    } else null
-
-val syncTransitDatabases = tasks.register("syncTransitDatabases") {
-    description = "Sync latest TrafArch_Database_*.sqlite into assets/data before packaging"
-    // 每次执行都做内容比对与 touch，不接受 up-to-date 判定
-    outputs.upToDateWhen { false }
-    doLast {
-        if (transitDbMasterDirPath.isEmpty()) {
-            logger.info("transitDbMasterDir 未配置，跳过交通数据库同步")
-            return@doLast
-        }
-        val masterDir = File(transitDbMasterDirPath)
-        if (!masterDir.isDirectory) {
-            logger.warn("transitDbMasterDir 不存在: $transitDbMasterDirPath，跳过同步")
-            return@doLast
-        }
-        for (name in transitDbNames) {
-            val src = masterDir.resolve(name)
-            if (!src.isFile) continue
-            val dst = transitDbAssetsDir.resolve(name)
-            if (!dst.isFile || dst.length() != src.length() ||
-                transitDbSha256(dst) != transitDbSha256(src)
-            ) {
-                dst.parentFile.mkdirs()
-                src.copyTo(dst, overwrite = true)
-                logger.lifecycle("Transit database synced: $name (user_version=${transitDbUserVersion(dst)})")
-            }
-            // 无论是否刚复制，都刷新 mtime，打破 Flutter 资产增量缓存
-            dst.setLastModified(System.currentTimeMillis())
-        }
-    }
+// Published reference packages and reference_manifest.json are maintained as
+// one verified set by tools/reference_data. Packaging never overwrites them
+// from a machine-specific directory or rewrites their modification times.
+check(!providers.gradleProperty("transitDbMasterDir").isPresent) {
+    "transitDbMasterDir is retired. Run python -m tools.reference_data build/validate " +
+        "and remove this Gradle property; see docs/MIGRATION.md."
 }
-
-// Flutter 资产打包（flutter assemble）所在的 Gradle 任务：
-// 同步必须先于它执行，APK 内的 SQLite 才是同步后的版本
-tasks.matching { it.name.startsWith("compileFlutterBuild") }.configureEach {
-    dependsOn(syncTransitDatabases)
-}
-// ==========================================================
 
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
@@ -168,23 +115,24 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.kajolno.TrafArch"
+        applicationId = "com.kajolno.trafarch.alpha"
         minSdk = 26
         targetSdk = 37
         versionCode = appVersionCode
         versionName = appVersionName
-        manifestPlaceholders["appLabel"] = if (repairBuild) "TrafArch 修复验证版" else "TrafArch"
+        manifestPlaceholders["appLabel"] = "TrafArch Alpha 1"
     }
 
     buildTypes {
         debug {
-            if (repairBuild) {
-                applicationIdSuffix = ".repair"
-                versionNameSuffix = "-repair"
+            if (unsignedApk) {
+                signingConfig = null
             }
         }
         release {
-            signingConfig = if (keystorePropertiesFile.exists()) {
+            signingConfig = if (unsignedApk) {
+                null
+            } else if (keystorePropertiesFile.exists()) {
                 signingConfigs.getByName("release")
             } else {
                 signingConfigs.getByName("debug")
@@ -222,7 +170,7 @@ dependencies {
     // https://firebase.google.com/docs/android/setup#available-libraries
 
     // Google Code Scanner（GMS 扫码）：扫码界面与相机由 Google Play 服务提供，
-    // 应用无需申请相机权限；无 GMS 设备由 Dart 端回退应用内相机扫码
+    // 此模式无需相机权限；系统扫码需用户开启，关闭后使用应用内相机
     implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
 
 }

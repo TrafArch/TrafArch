@@ -1,14 +1,14 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/core/card/card_parser.dart';
-import 'package:transit_card_analyzer/core/data/city_union_knowledge_base.dart';
-import 'package:transit_card_analyzer/core/data/tunion_knowledge_base.dart';
-import 'package:transit_card_analyzer/core/transit/city_union/city_union_models.dart';
-import 'package:transit_card_analyzer/core/transit/tunion/tunion_models.dart';
-import 'package:transit_card_analyzer/features/card_archive/models/card_archive_identity.dart';
-import 'package:transit_card_analyzer/features/card_archive/models/card_types.dart';
-import 'package:transit_card_analyzer/features/card_archive/services/card_identification_service.dart';
+import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
+import 'package:transit_card_analyzer/features/reference_data/domain/city_union_knowledge_base.dart';
+import 'package:transit_card_analyzer/features/reference_data/data/tunion_knowledge_base.dart';
+import 'package:transit_card_analyzer/protocols/transit/city_union/city_union_models.dart';
+import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_models.dart';
+import 'package:transit_card_analyzer/features/archive/domain/card_archive_identity.dart';
+import 'package:transit_card_analyzer/features/archive/domain/card_types.dart';
+import 'package:transit_card_analyzer/features/archive/application/card_identification_service.dart';
 
 void main() {
   group('CityUnionCardTable 解析与查表', () {
@@ -47,8 +47,8 @@ void main() {
     final kb = KnowledgeBase.fromJsonStrings(cityUnionCatalog: _catalogJson);
 
     test('命中 CU 识别库：正式卡名 + 城市 + 卡种目录来源', () {
-      final identified =
-          CardIdentificationService(kb).identify(_cityUnionCard('3500'))!;
+      final identified = CardIdentificationService(kb)
+          .identify(_cityUnionCard('3500'))!;
       expect(identified.identity.cardType, CardTypes.cityUnion);
       expect(identified.identity.officialName, '榕城通');
       expect(identified.identity.cityName, '福州');
@@ -60,8 +60,8 @@ void main() {
     });
 
     test('城市有记录但无卡名：仅城市，来源为城市代码', () {
-      final identified =
-          CardIdentificationService(kb).identify(_cityUnionCard('2760'))!;
+      final identified = CardIdentificationService(kb)
+          .identify(_cityUnionCard('2760'))!;
       expect(identified.identity.officialName, isNull);
       expect(identified.identity.cityName, '临沂');
       expect(
@@ -71,8 +71,8 @@ void main() {
     });
 
     test('未收录城市代码：仅确认卡种，来源为解析器', () {
-      final identified =
-          CardIdentificationService(kb).identify(_cityUnionCard('9999'))!;
+      final identified = CardIdentificationService(kb)
+          .identify(_cityUnionCard('9999'))!;
       expect(identified.identity.officialName, isNull);
       expect(identified.identity.cityName, isNull);
       expect(
@@ -84,20 +84,20 @@ void main() {
 }
 
 ParsedCard _cityUnionCard(String cityCode) => ParsedCard(
-      parserId: CardParserIds.cityUnion,
-      parserName: '城市一卡通',
-      info: const TUnionCardInfo(),
-      transactions: const [],
-      cityUnionFiles: [
-        CjT331PublicInfo(
-          issuerCode: '0012',
-          cityCode: cityCode,
-          applicationSerialNumber: 'AABBCCDD00112233',
-          fields: const [],
-          rawHex: '',
-        ),
-      ],
-    );
+  parserId: CardParserIds.cityUnion,
+  parserName: '城市一卡通',
+  info: const TUnionCardInfo(),
+  transactions: const [],
+  cityUnionFiles: [
+    CjT331PublicInfo(
+      issuerCode: '0012',
+      cityCode: cityCode,
+      applicationSerialNumber: 'AABBCCDD00112233',
+      fields: const [],
+      rawHex: '',
+    ),
+  ],
+);
 
 const _catalogJson = '''
 {

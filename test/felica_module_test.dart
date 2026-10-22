@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/core/felica/felica.dart';
+import 'package:transit_card_analyzer/protocols/felica/felica.dart';
 
 const _idm = [0x01, 0x2E, 0x3A, 0x4B, 0x5C, 0x6D, 0x7E, 0x8F];
 const _pmm = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08];
@@ -17,13 +17,13 @@ List<int> _suicaBalanceBlock({int balance = 1000}) {
 
 List<int> _suicaRecord({int balance = 1000}) {
   final record = List<int>.filled(16, 0);
-  record[0] = 0xC8;              // 端末種：自販機（写入时刻）
-  record[1] = 0x0B;              // 処理：物販
-  record[4] = 0x33;              // 日付：2025-10-20 打包（7 位年 | 4 位月 | 5 位日）
+  record[0] = 0xC8; // 端末種：自販機（写入时刻）
+  record[1] = 0x0B; // 処理：物販
+  record[4] = 0x33; // 日付：2025-10-20 打包（7 位年 | 4 位月 | 5 位日）
   record[5] = 0x54;
-  record[6] = 0x43;              // 時刻：08:30（高 5 位时 | 中 6 位分）
+  record[6] = 0x43; // 時刻：08:30（高 5 位时 | 中 6 位分）
   record[7] = 0xC0;
-  record[10] = balance & 0xFF;   // 交易后残高
+  record[10] = balance & 0xFF; // 交易后残高
   record[11] = (balance >> 8) & 0xFF;
   return record;
 }
@@ -32,10 +32,12 @@ class _ScriptedTag {
   _ScriptedTag({
     this.historyBlock1,
     this.serviceAvailable = true,
+    this.balance = 1000,
   });
 
   final List<int>? historyBlock1;
   final bool serviceAvailable;
+  final int balance;
 
   Future<List<int>> transceive(List<int> frame) async {
     if (frame.length < 2) return const [];
@@ -68,7 +70,7 @@ class _ScriptedTag {
       index += 2;
       final blockNumber = element & 0x0FFF;
       if (blockNumber == 0) {
-        blocks.add(_suicaBalanceBlock());
+        blocks.add(_suicaBalanceBlock(balance: balance));
       } else if (blockNumber == 1 && historyBlock1 != null) {
         blocks.add(historyBlock1!);
       } else {
@@ -100,11 +102,11 @@ Future<FelicaCardAdapter> _select(
 }
 
 FelicaProtocol _suicaServiceProtocol() => FelicaProtocol((frame) async {
-      if (frame.length < 2 || (frame[1] & 0xFF) != 0x02) {
-        return const [];
-      }
-      return _packet([0x03, ..._idm, 0x01, 0x00, 0x00]);
-    });
+  if (frame.length < 2 || (frame[1] & 0xFF) != 0x02) {
+    return const [];
+  }
+  return _packet([0x03, ..._idm, 0x01, 0x00, 0x00]);
+});
 
 void main() {
   test('Polling 帧：LEN 为整帧长度、系统码通配', () {
@@ -163,8 +165,9 @@ void main() {
 
   test('适配器选择：Suica 需服务验证，未知码回退通用模式', () async {
     expect(
-      (await _select(const [0x0003], protocol: _suicaServiceProtocol()))
-          .runtimeType,
+      (await _select(const [
+        0x0003,
+      ], protocol: _suicaServiceProtocol())).runtimeType,
       SuicaAdapter,
     );
     expect((await _select(const [0x8008])).runtimeType, OctopusAdapter);
@@ -175,18 +178,16 @@ void main() {
     expect(
       (await _select(
         const [0x0003],
-        protocol: _ScriptedTag(serviceAvailable: false).transceive,
-      ))
-          .runtimeType,
+        protocol: FelicaProtocol(
+          _ScriptedTag(serviceAvailable: false).transceive,
+        ),
+      )).runtimeType,
       GenericFelicaAdapter,
     );
   });
 
   test('仅凭 IDm 不认定卡型', () async {
-    expect(
-      (await _select(const [0x12FC])).runtimeType,
-      GenericFelicaAdapter,
-    );
+    expect((await _select(const [0x12FC])).runtimeType, GenericFelicaAdapter);
   });
 
   test('SuicaDetector：非 NFC-F 直接返回依据不足', () {
@@ -289,8 +290,10 @@ void main() {
 
   test('Suica 空块不产出交易记录', () {
     const parser = SuicaRecordParser();
-    final record =
-        parser.parseBlock(blockNumber: 2, bytes: List<int>.filled(16, 0));
+    final record = parser.parseBlock(
+      blockNumber: 2,
+      bytes: List<int>.filled(16, 0),
+    );
     expect(record.isBlank, isTrue);
     expect(record.decoded, isFalse);
   });
@@ -337,6 +340,16 @@ void main() {
     expect(result.state, FelicaReadState.success);
   });
 
+  test('Suica 端到端：卡内 500 日元不按前两字节误读成 1810', () async {
+    final block = _suicaBalanceBlock(balance: 500);
+    expect((block[1] << 8) | block[0], 1810);
+    final reader = FelicaReader(_ScriptedTag(balance: 500).transceive);
+    final result = await reader.read();
+    expect(result.wallets.single.balanceMinorUnits, 500);
+    expect(result.wallets.single.balanceText, '¥500');
+    expect(result.state, FelicaReadState.success);
+  });
+
   test('卡片无响应：映射为 tagLost 并保留失败阶段', () async {
     final reader = FelicaReader((_) async => const []);
     final result = await reader.read();
@@ -347,23 +360,22 @@ void main() {
   group('八达通产品模型', () {
     test('全国通卡只有港币钱包，不是双钱包', () {
       expect(FelicaCardProfiles.octopusTUnion.isDualWallet, isFalse);
-      expect(
-        FelicaCardProfiles.octopusTUnion.expectedWallets,
-        [FelicaWalletKind.octopusHKD],
-      );
+      expect(FelicaCardProfiles.octopusTUnion.expectedWallets, [
+        FelicaWalletKind.octopusHkd,
+      ]);
     });
 
     test('岭南通 / 深港互通行是双钱包产品', () {
       expect(FelicaCardProfiles.octopusLingnan.isDualWallet, isTrue);
-      expect(
-        FelicaCardProfiles.octopusLingnan.expectedWallets,
-        [FelicaWalletKind.octopusHKD, FelicaWalletKind.lingnanRmb],
-      );
+      expect(FelicaCardProfiles.octopusLingnan.expectedWallets, [
+        FelicaWalletKind.octopusHkd,
+        FelicaWalletKind.lingnanRmb,
+      ]);
       expect(FelicaCardProfiles.octopusShenzhen.isDualWallet, isTrue);
-      expect(
-        FelicaCardProfiles.octopusShenzhen.expectedWallets,
-        [FelicaWalletKind.octopusHKD, FelicaWalletKind.shenzhenTongRmb],
-      );
+      expect(FelicaCardProfiles.octopusShenzhen.expectedWallets, [
+        FelicaWalletKind.octopusHkd,
+        FelicaWalletKind.shenzhenTongRmb,
+      ]);
     });
 
     test('钱包占位不产生已验证余额', () {
@@ -443,7 +455,7 @@ void main() {
     final result = await const OctopusAdapter().read(context);
     expect(result.cardProductType, FelicaCardType.octopus);
     expect(result.wallets, hasLength(1));
-    expect(result.wallets.single.kind, FelicaWalletKind.octopusHKD);
+    expect(result.wallets.single.kind, FelicaWalletKind.octopusHkd);
     expect(result.wallets.single.currency, 'HKD');
     expect(result.wallets.single.readState, FelicaWalletReadState.unsupported);
     expect(result.wallets.single.balanceText, isNull);
@@ -467,7 +479,7 @@ void main() {
     final result = await adapter.read(context);
     expect(result.cardType, 'octopus_tunion');
     expect(result.wallets, hasLength(1));
-    expect(result.wallets.single.kind, FelicaWalletKind.octopusHKD);
+    expect(result.wallets.single.kind, FelicaWalletKind.octopusHkd);
     expect(result.wallets.single.currency, 'HKD');
     expect(result.wallets.single.balanceText, isNull);
 
@@ -494,15 +506,12 @@ void main() {
     final result = await adapter.read(context);
     expect(result.cardType, 'octopus_lingnan_dual');
     expect(result.wallets, hasLength(2));
-    expect(
-      result.wallets.map((w) => w.kind),
-      [FelicaWalletKind.octopusHKD, FelicaWalletKind.lingnanRmb],
-    );
+    expect(result.wallets.map((w) => w.kind), [
+      FelicaWalletKind.octopusHkd,
+      FelicaWalletKind.lingnanRmb,
+    ]);
 
-    expect(
-      result.wallets.map((w) => w.currency),
-      ['HKD', 'CNY'],
-    );
+    expect(result.wallets.map((w) => w.currency), ['HKD', 'CNY']);
     expect(
       result.wallets.every(
         (w) => w.readState == FelicaWalletReadState.unsupported,

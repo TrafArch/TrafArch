@@ -8,6 +8,9 @@
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
     <uses-feature android:name="android.hardware.nfc" android:required="false" />
+    <!-- NFC reading and image import also work without a built-in camera. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
 
     <!-- Android 11+（targetSdk 30+）包可见性 -->
     <queries>

@@ -1,18 +1,19 @@
+import 'package:transit_card_analyzer/features/reference_data/data/tu_region_live_source.dart';
 import 'package:flutter/material.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
-import 'package:transit_card_analyzer/core/analysis/tunion_analysis_engine.dart';
-import 'package:transit_card_analyzer/core/analysis/tunion_analysis_models.dart';
-import 'package:transit_card_analyzer/core/card/card_parser.dart';
-import 'package:transit_card_analyzer/core/data/station_codes.dart';
-import 'package:transit_card_analyzer/core/data/tu_station_repository.dart';
-import 'package:transit_card_analyzer/core/data/tunion_knowledge_base.dart';
-import 'package:transit_card_analyzer/core/transit/tunion/tunion_models.dart';
-import 'package:transit_card_analyzer/core/transit/tunion/tunion_process_parser.dart';
+import 'package:transit_card_analyzer/features/transit_analysis/tunion_analysis_engine.dart';
+import 'package:transit_card_analyzer/features/transit_analysis/tunion_analysis_models.dart';
+import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
+import 'package:transit_card_analyzer/features/reference_data/domain/station_codes.dart';
+import 'package:transit_card_analyzer/features/reference_data/data/tu_station_repository.dart';
+import 'package:transit_card_analyzer/features/reference_data/data/tunion_knowledge_base.dart';
+import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_models.dart';
+import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_process_parser.dart';
 import 'package:transit_card_analyzer/features/trips/trip_stream_view.dart';
-import 'package:transit_card_analyzer/state/app_state.dart';
-import 'package:transit_card_analyzer/database/app_database.dart';
+import 'package:transit_card_analyzer/app/app_dependencies.dart';
+import 'package:transit_card_analyzer/features/archive/data/app_database.dart';
 
 void main() {
   late Database db;
@@ -110,7 +111,7 @@ void main() {
     (tester) async {
       final database = AppDatabase(NativeDatabase.memory());
       addTearDown(database.close);
-      final app = AppState(database: database);
+      final app = AppDependencies(database: database);
       addTearDown(app.dispose);
       final record = const TUnionProcessParser().parseCycleTrip(
         cycleBytes('0001000A000100', bus: true),
@@ -138,7 +139,7 @@ void main() {
   ) async {
     final database = AppDatabase(NativeDatabase.memory());
     addTearDown(database.close);
-    final app = AppState(database: database);
+    final app = AppDependencies(database: database);
     addTearDown(app.dispose);
     final record = BusTransitRecord(
       statusCode: 1,

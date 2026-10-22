@@ -1,10 +1,11 @@
 // test/app_logger_test.dart
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/core/data/settings_store.dart';
-import 'package:transit_card_analyzer/core/logging/app_logger.dart';
-import 'package:transit_card_analyzer/core/logging/log_exporter.dart';
-import 'package:transit_card_analyzer/state/app_state.dart';
+import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
+import 'package:transit_card_analyzer/platform/storage/app_logger.dart';
+import 'package:transit_card_analyzer/platform/storage/log_exporter.dart';
+import 'package:transit_card_analyzer/app/app_dependencies.dart';
+
 import 'support/test_database.dart';
 
 void main() {
@@ -31,10 +32,10 @@ void main() {
     });
   });
 
-  group('AppState 日志导出', () {
+  group('AppDependencies 日志导出', () {
     test('exportLog 拼接头部并调用导出通道，文件名带时间戳', () async {
       final exporter = _RecordingExporter();
-      final app = AppState(
+      final app = AppDependencies(
         database: testDatabase(),
         settingsStore: MemorySettingsStore(),
         logger: AppLogger(store: MemoryLogStore()),
@@ -55,7 +56,7 @@ void main() {
 
     test('导出被拒（权限）时记录失败信息', () async {
       final exporter = _RecordingExporter()..fail = true;
-      final app = AppState(
+      final app = AppDependencies(
         database: testDatabase(),
         settingsStore: MemorySettingsStore(),
         logger: AppLogger(store: MemoryLogStore()),
@@ -71,7 +72,7 @@ void main() {
     test('日志开关默认关闭；开启后持久化，关闭后停止写入', () async {
       final settings = MemorySettingsStore();
       final store = MemoryLogStore();
-      final app = AppState(
+      final app = AppDependencies(
         database: testDatabase(),
         settingsStore: settings,
         logger: AppLogger(store: store),

@@ -1,3 +1,7 @@
+import 'support/published_reference_fixture.dart';
+
+import 'package:transit_card_analyzer/features/reference_data/data/tu_database.dart';
+
 // 文件整体重写：原行程卡 / 0x1A / 0x1E 渲染测试改为模型级管道断言
 // （scanOnce → TUnionParser → AnalysisEngine 的解析结果直接断言）；
 // 新增卡片列表、卡片详情与首页保存确认对话框的组件测试。
@@ -10,17 +14,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
-import 'package:transit_card_analyzer/core/data/tu_database.dart';
-import 'package:transit_card_analyzer/core/data/settings_store.dart';
-import 'package:transit_card_analyzer/core/nfc/nfc_models.dart';
-import 'package:transit_card_analyzer/core/nfc/nfc_service.dart';
-import 'package:transit_card_analyzer/database/app_database.dart';
-import 'package:transit_card_analyzer/features/card_archive/models/card_archive_identity.dart';
-import 'package:transit_card_analyzer/features/card_archive/models/card_types.dart';
+import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
+import 'package:transit_card_analyzer/platform/nfc/nfc_models.dart';
+import 'package:transit_card_analyzer/platform/nfc/nfc_service.dart';
+import 'package:transit_card_analyzer/features/archive/data/app_database.dart';
+import 'package:transit_card_analyzer/features/archive/domain/card_archive_identity.dart';
+import 'package:transit_card_analyzer/features/archive/domain/card_types.dart';
 import 'package:transit_card_analyzer/features/home/home_page.dart';
 import 'package:transit_card_analyzer/features/cards/cards_page.dart';
-import 'package:transit_card_analyzer/state/app_state.dart';
-import 'package:transit_card_analyzer/core/qr/gms_qr_scanner.dart';
+import 'package:transit_card_analyzer/features/trips/trip_entry_card.dart';
+import 'package:transit_card_analyzer/app/app_dependencies.dart';
+import 'package:transit_card_analyzer/platform/qr/gms_qr_scanner.dart';
 
 /// 行程模块链路测试：
 /// - 模型级：假 NFC 通道 + 假资产包驱动完整管道（scanOnce → TUnionParser
@@ -35,11 +39,9 @@ void main() {
     _stationDatabaseBytes = _stationDatabaseFixture(fixtureDirectory);
   });
   tearDownAll(() {
-    TuDatabase.reset();
     fixtureDirectory.deleteSync(recursive: true);
   });
   setUp(() async {
-    TuDatabase.reset();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(pathProvider, (call) async {
           if (call.method == 'getApplicationSupportDirectory') {
@@ -48,18 +50,18 @@ void main() {
           throw MissingPluginException(call.method);
         });
     // 在 widget 测试的 fakeAsync 之外预热真实 SQLite 加载链路。
-    // 每例重置单例，避免前一例的知识库掩盖缺失 / 错误夹具。
+    // 每例独立拥有句柄；资产按内容哈希安装。
     final stations = await TuDatabase.open(bundle: _FakeBundle(_assets));
     expect(stations, isNotNull);
     expect(
-      stations!.repository.findByKey('3910', '39100231').single.stationName,
+      stations.repository.findByKey('3910', '39100231').single.stationName,
       '苏洋',
     );
+    stations.close();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(gmsQrScannerChannel, (_) async => false);
   });
   tearDown(() {
-    TuDatabase.reset();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(pathProvider, null);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -409,7 +411,7 @@ void main() {
       expect(app.busTransitRecord, isNull); // 记录 2 起始位置不可定位
     });
 
-    test('八达通-全国通卡：金额按人民币缺省口径（屏蔽单独适配）', () async {
+    test('八达通 TU 行程保留人民币口径，与港币账户余额分开', () async {
       final app = await _scan(
         _FakeNfcChannel()..enqueueWalletScript(
           record: _record(terminal: '123456789012'),
@@ -425,7 +427,7 @@ void main() {
       expect(app.railTransitRecord!.entryBalanceFen, 2500);
     });
 
-    test('前缀元数据显式声明 HKD：金额按港币（HK\$）口径', () async {
+    test('八达通前缀声明 HKD 不能把 TU 行程金额直接改标港币', () async {
       final app = await _scan(
         _FakeNfcChannel()..enqueueWalletScript(
           record: _record(terminal: '123456789012'),
@@ -434,16 +436,16 @@ void main() {
         ),
         assets: {
           ..._octopusAssets,
-          // 外币来自显式元数据；不能只凭八达通卡名推断币种。
+          // 此处描述港币账户，不能替代 TU 文件自身的金额语义。
           'assets/data/tunion_card_meta.json': jsonEncode({
             'currencyByPrefix': {'31048500': 'HKD'},
           }),
         },
       );
       final trip = app.analysis!.trips.single;
-      expect(trip.amountText, '-HK\$46.60');
-      expect(app.cardCurrency.code, 'HKD');
-      expect(app.cardCurrency.symbol, 'HK\$');
+      expect(trip.amountText, '-¥46.60');
+      expect(app.cardCurrency.code, 'CNY');
+      expect(app.cardCurrency.symbol, '¥');
       expect(app.railTransitRecord!.entryBalanceFen, 2500);
     });
   });
@@ -453,14 +455,15 @@ void main() {
       final channel = _FakeNfcChannel()
         ..enqueueWalletScript(record: _record(terminal: '391002003100'));
       final database = _memoryDatabase();
-      final app = AppState(
+      final app = AppDependencies(
         channel: channel,
         bundle: _FakeBundle(_assets),
         settingsStore: MemorySettingsStore(),
         database: database,
       );
-      await app.init();
-      await app.scanOnce(); // 解析完成 → 产生待保存结果
+      addTearDown(app.dispose);
+      await tester.runAsync(app.init);
+      await tester.runAsync(app.scanOnce); // 解析完成 → 产生待保存结果
 
       await tester.pumpWidget(
         MaterialApp(
@@ -497,7 +500,7 @@ void main() {
       channel
         ..reset()
         ..enqueueWalletScript(record: _record(terminal: '391002003100'));
-      await app.scanOnce();
+      await tester.runAsync(app.scanOnce);
       await tester.pumpAndSettle();
       expect(find.text('保存卡片'), findsOneWidget);
 
@@ -518,9 +521,13 @@ void main() {
       final channel = _FakeNfcChannel()
         ..enqueueWalletScript(record: _record(terminal: '391002003100'));
       final database = _memoryDatabase();
-      final app = await _scan(channel, database: database);
+      final app = (await tester.runAsync(
+        () => _scan(channel, database: database),
+      ))!;
 
-      await app.acceptPendingSave();
+      await tester.runAsync(
+        () => app.acceptPendingSave(app.pendingCardSave?.pendingSaveId ?? ''),
+      );
       final first = (await database.select(database.savedCards).get()).single;
       await app.cardRepository.renameCard(first.id, '上学用的卡');
 
@@ -528,8 +535,10 @@ void main() {
       channel
         ..reset()
         ..enqueueWalletScript(record: _record(terminal: '391002003100'));
-      await app.scanOnce();
-      await app.acceptPendingSave();
+      await tester.runAsync(app.scanOnce);
+      await tester.runAsync(
+        () => app.acceptPendingSave(app.pendingCardSave?.pendingSaveId ?? ''),
+      );
 
       final rows = await database.select(database.savedCards).get();
       expect(rows.length, 1); // 同一指纹不重复建档
@@ -542,10 +551,14 @@ void main() {
       final channel = _FakeNfcChannel()
         ..enqueueWalletScript(record: _record(), cycleRecord: _cycleRecord());
       final database = _memoryDatabase();
-      final app = await _scan(channel, database: database);
+      final app = (await tester.runAsync(
+        () => _scan(channel, database: database),
+      ))!;
 
       // 第一张卡：保存并改名，确认档案记录了行程快照
-      await app.acceptPendingSave();
+      await tester.runAsync(
+        () => app.acceptPendingSave(app.pendingCardSave?.pendingSaveId ?? ''),
+      );
       final first = (await database.select(database.savedCards).get()).single;
       expect(first.sessionDataJson, isNotNull);
       await app.cardRepository.renameCard(first.id, '老卡片');
@@ -558,8 +571,10 @@ void main() {
           cycleRecord: _cycleRecord(amountFen: 200, day: 2),
           publicFile: _secondPublicFile(),
         );
-      await app.scanOnce();
-      await app.acceptPendingSave();
+      await tester.runAsync(app.scanOnce);
+      await tester.runAsync(
+        () => app.acceptPendingSave(app.pendingCardSave?.pendingSaveId ?? ''),
+      );
       expect(app.lastCardFingerprint, isNot(first.cardFingerprint));
 
       // 打开老卡片详情：回退档案快照展示，记录不因读取新卡片消失
@@ -572,11 +587,21 @@ void main() {
       await tester.tap(find.text('老卡片'));
       await tester.pumpAndSettle();
 
-      expect(find.text('行程记录 · 1 次读取'), findsOneWidget);
+      expect(find.text('行程记录 · 1 个已保存批次'), findsOneWidget);
       expect(find.text('消费 · 苏洋 · 序号 1'), findsOneWidget);
-      expect(find.text('-¥46.60'), findsOneWidget);
+      final savedTransactionCard = find.ancestor(
+        of: find.text('消费 · 苏洋 · 序号 1'),
+        matching: find.byType(TripEntryCard),
+      );
+      expect(
+        find.descendant(
+          of: savedTransactionCard,
+          matching: find.text('-¥ 46.60'),
+        ),
+        findsOneWidget,
+      );
       expect(find.text('消费 · 苏洋 · 序号 2'), findsNothing);
-      expect(find.text('-¥2.00'), findsNothing);
+      expect(find.text('-¥ 2.00'), findsNothing);
       expect(find.text('城市轨道交通'), findsWidgets);
 
       await tester.pumpWidget(const SizedBox());
@@ -585,7 +610,7 @@ void main() {
 
     testWidgets('卡片列表：展示名称 / 卡号 / 最近读取时间 / 余额 / 记录条数', (tester) async {
       final database = _memoryDatabase();
-      final app = AppState(database: database);
+      final app = AppDependencies(database: database);
       await app.cardRepository.saveIdentity(
         fingerprint: 'tunion:1:2',
         identity: const CardArchiveIdentity(
@@ -601,6 +626,7 @@ void main() {
         transactionCount: 41,
         readAt: DateTime(2026, 10, 14, 21, 40),
       );
+      addTearDown(app.dispose);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -621,12 +647,13 @@ void main() {
     });
 
     testWidgets('卡片列表：空状态提示', (tester) async {
-      final app = AppState(database: _memoryDatabase());
+      final app = AppDependencies(database: _memoryDatabase());
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(body: CardsPage(app: app)),
         ),
       );
+      addTearDown(app.dispose);
       await tester.pumpAndSettle();
 
       expect(find.text('还没有保存的卡片'), findsOneWidget);
@@ -637,7 +664,7 @@ void main() {
 
     testWidgets('卡片列表：按最近读取时间倒序', (tester) async {
       final database = _memoryDatabase();
-      final app = AppState(database: database);
+      final app = AppDependencies(database: database);
       await app.cardRepository.saveIdentity(
         fingerprint: 'tunion:1:1',
         identity: const CardArchiveIdentity(
@@ -646,6 +673,7 @@ void main() {
         ),
         readAt: DateTime(2026, 10, 1, 8, 0),
       );
+      addTearDown(app.dispose);
       await app.cardRepository.saveIdentity(
         fingerprint: 'tunion:1:2',
         identity: const CardArchiveIdentity(
@@ -672,7 +700,7 @@ void main() {
 
     testWidgets('点击卡片进入详情：展示读取快照，编辑名称同步到列表', (tester) async {
       final database = _memoryDatabase();
-      final app = AppState(database: database);
+      final app = AppDependencies(database: database);
       await app.cardRepository.saveIdentity(
         fingerprint: 'tunion:1:2',
         identity: const CardArchiveIdentity(
@@ -688,6 +716,7 @@ void main() {
         transactionCount: 41,
         readAt: DateTime(2026, 10, 14, 21, 40),
       );
+      addTearDown(app.dispose);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -701,9 +730,9 @@ void main() {
 
       // 详情页展示读取快照
       expect(find.text('卡片信息'), findsOneWidget);
-      expect(find.text('卡号'), findsOneWidget);
+      expect(find.text('已观察卡号'), findsOneWidget);
       expect(find.text('3105060012345678900'), findsOneWidget);
-      expect(find.text('余额'), findsOneWidget);
+      expect(find.text('已观察余额'), findsOneWidget);
       expect(find.text('¥ 2.00'), findsOneWidget);
       expect(find.text('交易记录'), findsOneWidget);
       expect(find.text('41条'), findsOneWidget);
@@ -713,7 +742,7 @@ void main() {
       // 编辑自定义名称
       await tester.tap(find.byTooltip('自定义名称'));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField), '上学用的卡');
+      await tester.enterText(find.byType(TextFormField), '上学用的卡');
       await tester.tap(find.text('保存'));
       await tester.pumpAndSettle();
       expect(find.text('上学用的卡'), findsOneWidget);
@@ -730,7 +759,7 @@ void main() {
 
     testWidgets('卡片列表：删除需确认，确认后档案与读取记录一并移除', (tester) async {
       final database = _memoryDatabase();
-      final app = AppState(database: database);
+      final app = AppDependencies(database: database);
       await app.cardRepository.saveIdentity(
         fingerprint: 'tunion:1:2',
         identity: const CardArchiveIdentity(
@@ -740,6 +769,7 @@ void main() {
         sessionDataJson: '{"trips":[{"sequence":1}]}',
         readAt: DateTime(2026, 10, 14, 21, 40),
       );
+      addTearDown(app.dispose);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -779,17 +809,18 @@ void main() {
 
 /// 注入假通道、假资产包、内存设置存储与内存数据库（卡片档案），
 /// 走一次完整扫描（scanOnce → 解析 → 识别）并返回应用状态。
-Future<AppState> _scan(
+Future<AppDependencies> _scan(
   _FakeNfcChannel channel, {
   Map<String, String>? assets,
   AppDatabase? database,
 }) async {
-  final app = AppState(
+  final app = AppDependencies(
     channel: channel,
     bundle: _FakeBundle(assets ?? _assets),
     settingsStore: MemorySettingsStore(),
     database: database ?? _memoryDatabase(),
   );
+  addTearDown(app.dispose);
   await app.init();
   await app.scanOnce();
   return app;
@@ -967,11 +998,13 @@ INSERT INTO region_fuzhou VALUES(
 class _FakeBundle extends CachingAssetBundle {
   final Map<String, String> _texts;
   _FakeBundle(this._texts);
+  late final _published = publishTuFixture(_stationDatabaseBytes, _texts);
 
   @override
   Future<ByteData> load(String key) async {
-    if (key == TuDatabase.assetPath) {
-      return ByteData.sublistView(_stationDatabaseBytes);
+    final published = _published[key];
+    if (published != null) {
+      return ByteData.sublistView(published);
     }
     final text = _texts[key];
     if (text == null) throw FlutterError('资产不存在：$key');

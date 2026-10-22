@@ -1,12 +1,14 @@
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/features/bank_card/data/pdol/pdol_data_builder.dart';
-import 'package:transit_card_analyzer/features/bank_card/data/tlv/hex_codec.dart';
-import 'package:transit_card_analyzer/features/bank_card/parsers/bank_card_analyzer.dart';
-import 'package:transit_card_analyzer/features/bank_card/parsers/emv/emv_parser.dart';
-import 'package:transit_card_analyzer/features/bank_card/parsers/pboc/pboc_parser.dart';
-import 'package:transit_card_analyzer/features/bank_card/test_support/replay_card_transport.dart';
+import 'package:transit_card_analyzer/protocols/bank/data/pdol/pdol_data_builder.dart';
+import 'package:transit_card_analyzer/protocols/bank/data/tlv/hex_codec.dart';
+import 'package:transit_card_analyzer/protocols/bank/emv/data/aid_registry.dart';
+import 'package:transit_card_analyzer/protocols/bank/parsers/bank_card_analyzer.dart';
+import 'package:transit_card_analyzer/protocols/bank/parsers/emv/emv_parser.dart';
+import 'package:transit_card_analyzer/protocols/bank/parsers/pboc/pboc_parser.dart';
+
+import 'support/replay_card_transport.dart';
 
 const String _emptyDict =
     '{"schemaVersion":1,"dictionaryId":"test","entries":[]}';
@@ -81,8 +83,10 @@ void main() {
     test('GPO 发送 83 00，AIP+AFL 裸拼接响应正确提取 AFL', () async {
       final transport = ReplayCardTransport([
         _ppseEmv,
-        _selectEmv,
-        _selectEmv, // 发现阶段 SELECT + 解析阶段各 SELECT 一次
+        _selectEmv, // 发现阶段 SELECT
+        // PPSE 未列 PBOC：补充探测均未命中
+        ...List.filled(kPbocSupplementalAids.length, '6A82'),
+        _selectEmv, // 解析阶段 SELECT
         _gpoEmv,
         _recordPan,
       ]);
@@ -94,8 +98,9 @@ void main() {
       expect(app.parserId, 'emv');
       expect(app.records, hasLength(1));
 
-      expect(HexCodec.encode(transport.sent[3]), '80A8000002830000');
-      expect(HexCodec.encode(transport.sent[4]), '00B2010C00');
+      final gpoIndex = transport.sent.indexWhere((c) => c[1] == 0xA8);
+      expect(HexCodec.encode(transport.sent[gpoIndex]), '80A8000002830000');
+      expect(HexCodec.encode(transport.sent[gpoIndex + 1]), '00B2010C00');
     });
   });
 

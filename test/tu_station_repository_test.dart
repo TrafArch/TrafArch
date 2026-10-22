@@ -1,8 +1,9 @@
+import 'package:transit_card_analyzer/features/reference_data/data/tu_region_live_source.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
 
-import 'package:transit_card_analyzer/core/data/station_codes.dart';
-import 'package:transit_card_analyzer/core/data/tu_station_repository.dart';
+import 'package:transit_card_analyzer/features/reference_data/domain/station_codes.dart';
+import 'package:transit_card_analyzer/features/reference_data/data/tu_station_repository.dart';
 
 void main() {
   late Database db;
@@ -74,11 +75,11 @@ CREATE TABLE "region_北京_1000"(
     );
 
     TuStationRepository.ensureAppTables(db);
-    repo = TuStationRepository(db);
+    repo = TuStationRepository(db, userDatabase: db);
   });
 
   tearDown(() {
-    db.dispose();
+    db.close();
   });
 
   group('地区定位', () {
@@ -129,10 +130,7 @@ CREATE TABLE "region_北京_1000"(
       );
       repo.invalidate();
       expect(
-        repo.findStations(
-          sourceKey: '290000100018',
-          regionCode: '2900',
-        ),
+        repo.findStations(sourceKey: '290000100018', regionCode: '2900'),
         hasLength(2),
       );
       final narrowed = repo.findStations(
@@ -157,8 +155,10 @@ CREATE TABLE "region_北京_1000"(
 
     test('空编码 / 未知地区返回空', () {
       expect(repo.findStations(sourceKey: '  ', regionCode: '2900'), isEmpty);
-      expect(repo.findStations(sourceKey: '290000100018', regionCode: '9999'),
-          isEmpty);
+      expect(
+        repo.findStations(sourceKey: '290000100018', regionCode: '9999'),
+        isEmpty,
+      );
     });
 
     test('片段切分：12 位取 5-8 / 9-12，8 位取 5-6 / 7-8', () {
@@ -368,10 +368,7 @@ CREATE TABLE "region_回退_4000"(
         ['290000200031'],
       );
       expect((rows.first['c'] as num).toInt(), 1);
-      expect(
-        repo.queryOverride('2900', '290000200031')!.stationName,
-        '第二次',
-      );
+      expect(repo.queryOverride('2900', '290000200031')!.stationName, '第二次');
     });
   });
 
@@ -392,9 +389,7 @@ CREATE TABLE "region_回退_4000"(
         transportType: 'metro',
         seenAt: DateTime(2026, 2, 1),
       );
-      final row = db
-          .select('SELECT * FROM tu_unknown_station_reports')
-          .first;
+      final row = db.select('SELECT * FROM tu_unknown_station_reports').first;
       expect((row['hit_count'] as num).toInt(), 2);
       expect(row['first_seen_at'], startsWith('2026-01-01'));
       expect(row['last_seen_at'], startsWith('2026-02-01'));
@@ -482,8 +477,9 @@ CREATE TABLE "region_回退_4000"(
     });
 
     test('10 位键切分为 2 位线路 + 4 位站点', () {
-      final row =
-          repo.findStations(sourceKey: '10005E0013', regionCode: '1000').first;
+      final row = repo
+          .findStations(sourceKey: '10005E0013', regionCode: '1000')
+          .first;
       expect(row.segments, ('5E', '0013'));
     });
 
@@ -507,8 +503,9 @@ CREATE TABLE "region_回退_4000"(
     });
 
     test('0x1E 字段 005E0029 命中昌平线西二旗', () {
-      final table =
-          StationCodeTable.empty.withLiveSources([TuRegionLiveSource(repo)]);
+      final table = StationCodeTable.empty.withLiveSources([
+        TuRegionLiveSource(repo),
+      ]);
       final m = table.matchLineStationField(
         field: '005E0029000000',
         cityCode: '1000',
@@ -519,8 +516,9 @@ CREATE TABLE "region_回退_4000"(
     });
 
     test('0x1E 001B 不被十进制撞码 0027 干扰（北邵洼）', () {
-      final table =
-          StationCodeTable.empty.withLiveSources([TuRegionLiveSource(repo)]);
+      final table = StationCodeTable.empty.withLiveSources([
+        TuRegionLiveSource(repo),
+      ]);
       final m = table.matchLineStationField(
         field: '005E001B000000',
         cityCode: '1000',
@@ -530,8 +528,9 @@ CREATE TABLE "region_回退_4000"(
     });
 
     test('0x1E 001D 命中南邵而非西二旗（十六进制 29 撞码）', () {
-      final table =
-          StationCodeTable.empty.withLiveSources([TuRegionLiveSource(repo)]);
+      final table = StationCodeTable.empty.withLiveSources([
+        TuRegionLiveSource(repo),
+      ]);
       final m = table.matchLineStationField(
         field: '005E001D000000',
         cityCode: '1000',

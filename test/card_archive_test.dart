@@ -1,22 +1,21 @@
-// 新建文件：test/card_archive_test.dart
 import 'dart:convert';
 
 import 'package:drift/drift.dart' show DatabaseConnection, driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/core/analysis/tunion_analysis_models.dart';
-import 'package:transit_card_analyzer/core/card/card_parser.dart';
-import 'package:transit_card_analyzer/core/data/tunion_knowledge_base.dart';
-import 'package:transit_card_analyzer/core/transit/city_union/city_union_models.dart';
-import 'package:transit_card_analyzer/core/transit/tunion/tunion_models.dart';
-import 'package:transit_card_analyzer/database/app_database.dart';
-import 'package:transit_card_analyzer/features/card_archive/models/card_archive_identity.dart';
-import 'package:transit_card_analyzer/features/card_archive/models/card_fingerprint.dart';
-import 'package:transit_card_analyzer/features/card_archive/models/card_name_extension.dart';
-import 'package:transit_card_analyzer/features/card_archive/models/card_session_snapshot.dart';
-import 'package:transit_card_analyzer/features/card_archive/models/card_types.dart';
-import 'package:transit_card_analyzer/features/card_archive/repositories/card_repository.dart';
-import 'package:transit_card_analyzer/features/card_archive/services/card_identification_service.dart';
+import 'package:transit_card_analyzer/features/transit_analysis/tunion_analysis_models.dart';
+import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
+import 'package:transit_card_analyzer/features/reference_data/data/tunion_knowledge_base.dart';
+import 'package:transit_card_analyzer/protocols/transit/city_union/city_union_models.dart';
+import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_models.dart';
+import 'package:transit_card_analyzer/features/archive/data/app_database.dart';
+import 'package:transit_card_analyzer/features/archive/domain/card_archive_identity.dart';
+import 'package:transit_card_analyzer/features/archive/domain/card_fingerprint.dart';
+import 'package:transit_card_analyzer/features/archive/domain/card_name_extension.dart';
+import 'package:transit_card_analyzer/features/archive/domain/card_session_snapshot.dart';
+import 'package:transit_card_analyzer/features/archive/domain/card_types.dart';
+import 'package:transit_card_analyzer/features/archive/data/card_repository.dart';
+import 'package:transit_card_analyzer/features/archive/application/card_identification_service.dart';
 
 /// 卡片档案链路测试：识别（不猜测）→ 指纹（稳定、可复现）→ 仓库
 /// （不重复建档、不覆盖自定义名称）→ 名称展示规则。
@@ -38,7 +37,10 @@ void main() {
       expect(identity.officialName, '福路通');
       expect(identity.issuerName, isNull);
       expect(identity.cityName, isNull);
-      expect(identity.identificationSource, CardIdentificationSources.cardCatalog);
+      expect(
+        identity.identificationSource,
+        CardIdentificationSources.cardCatalog,
+      );
       expect(identity.confidence, 0.8);
     });
 
@@ -81,18 +83,26 @@ void main() {
       expect(identity.officialName, '福路通·榕城通');
       expect(identity.issuerName, '示例运营方');
       expect(identity.cityName, '福州市');
-      expect(identity.identificationSource, CardIdentificationSources.cardCatalog);
+      expect(
+        identity.identificationSource,
+        CardIdentificationSources.cardCatalog,
+      );
       expect(identity.confidence, 0.85);
-      expect(identified.fingerprint, 'tunion:1122334455667788:3105060012345678900');
+      expect(
+        identified.fingerprint,
+        'tunion:1122334455667788:3105060012345678900',
+      );
       expect(identified.cardNumber, '3105060012345678900');
     });
 
     test('卡种目录细化：八达通-全国通卡', () {
       final identified = service.identify(
-        _tunionCard(_tunionInfo(
-          serial: '03104850000000123456',
-          issuerId: 'AABBCCDDEEFF0011',
-        )),
+        _tunionCard(
+          _tunionInfo(
+            serial: '03104850000000123456',
+            issuerId: 'AABBCCDDEEFF0011',
+          ),
+        ),
       )!;
       expect(identified.identity.cardType, CardTypes.octopusTunion);
       expect(identified.identity.officialName, '八达通-全国通卡');
@@ -102,23 +112,30 @@ void main() {
 
     test('无目录 / 指纹命中：回退城市码表，保持不猜测', () {
       final identified = service.identify(
-        _tunionCard(_tunionInfo(
-          serial: '03999990000000123456',
-          issuerId: 'AABBCCDDEEFF0011',
-        )),
+        _tunionCard(
+          _tunionInfo(
+            serial: '03999990000000123456',
+            issuerId: 'AABBCCDDEEFF0011',
+          ),
+        ),
         analysisIdentity: const CardIdentity(confidence: 0),
       )!;
       expect(identified.identity.officialName, isNull);
       expect(identified.identity.issuerName, isNull);
       expect(identified.identity.cityName, '福州市'); // 城市代码 3910 查表
-      expect(identified.identity.identificationSource, CardIdentificationSources.cityCode);
+      expect(
+        identified.identity.identificationSource,
+        CardIdentificationSources.cityCode,
+      );
       expect(identified.identity.confidence, isNull); // 无证据不记录置信度
     });
 
     test('应用序列号缺失或全 0（未写入）：无法生成指纹，跳过建档', () {
       expect(service.identify(_tunionCard(_tunionInfo(serial: null))), isNull);
       expect(
-        service.identify(_tunionCard(_tunionInfo(serial: '00000000000000000000'))),
+        service.identify(
+          _tunionCard(_tunionInfo(serial: '00000000000000000000')),
+        ),
         isNull,
       );
     });
@@ -132,7 +149,10 @@ void main() {
       expect(identified.identity.cardType, CardTypes.cityUnion);
       expect(identified.identity.officialName, isNull);
       expect(identified.identity.cityName, '福州市');
-      expect(identified.identity.identificationSource, CardIdentificationSources.cityCode);
+      expect(
+        identified.identity.identificationSource,
+        CardIdentificationSources.cityCode,
+      );
       expect(identified.fingerprint, 'city_union:0012:AABBCCDD00112233');
       expect(identified.cardNumber, 'AABBCCDD00112233');
     });
@@ -303,7 +323,7 @@ void main() {
       expect(decoded.busRecord!.transactionAmountFen, 300);
     });
 
-    test('异地用卡判定与 AppState 同口径：未写入 / 不可判定不猜测', () {
+    test('异地用卡判定与 AppDependencies 同口径：未写入 / 不可判定不猜测', () {
       const snapshot = CardSessionSnapshot(cardCityCode: '3910');
       expect(snapshot.isRemoteUse('3501'), isTrue);
       expect(snapshot.isRemoteUse('3910'), isFalse);
@@ -323,8 +343,8 @@ void main() {
       expect(_savedCard().sessionSnapshot, isNull);
       expect(_savedCard(sessionDataJson: 'not-json').sessionSnapshot, isNull);
       final card = _savedCard(
-        sessionDataJson:
-            const CardSessionSnapshot(cardCityCode: '3910').encode(),
+        sessionDataJson: const CardSessionSnapshot(cardCityCode: '3910')
+            .encode(),
       );
       expect(card.sessionSnapshot, isNotNull);
       expect(card.sessionSnapshot!.cardCityCode, '3910');
@@ -418,10 +438,7 @@ void main() {
       final id = (await db.select(db.savedCards).get()).single.id;
 
       await repository.renameCard(id, '  通勤卡  ');
-      expect(
-        (await db.select(db.savedCards).get()).single.customName,
-        '通勤卡',
-      );
+      expect((await db.select(db.savedCards).get()).single.customName, '通勤卡');
 
       await repository.renameCard(id, '   ');
       expect((await db.select(db.savedCards).get()).single.customName, isNull);
@@ -457,7 +474,7 @@ void main() {
       expect(row.transactionCount, 42);
     });
 
-    test('行程记录快照：写入后无新快照保留，有新快照更新', () async {
+    test('行程记录快照：新捕获单独保存，旧原文保留在历史批次', () async {
       await repository.saveIdentity(
         fingerprint: 'tunion:1:2',
         identity: const CardArchiveIdentity(cardType: CardTypes.chinaTunion),
@@ -467,14 +484,21 @@ void main() {
       var row = (await db.select(db.savedCards).get()).single;
       expect(row.sessionDataJson, '{"trips":[{"sequence":1}]}');
 
-      // 再次读取未解析到行程（快照为空）：保留既有记录，不覆盖
+      // 再次读取未解析到行程：保留本次空捕获，旧内容仍在独立历史批次。
       await repository.saveIdentity(
         fingerprint: 'tunion:1:2',
         identity: const CardArchiveIdentity(cardType: CardTypes.chinaTunion),
         readAt: DateTime(2026, 1, 2),
       );
       row = (await db.select(db.savedCards).get()).single;
-      expect(row.sessionDataJson, '{"trips":[{"sequence":1}]}');
+      final latest = CardSessionSnapshot.decodeResult(row.sessionDataJson!);
+      expect(latest.formatVersion, 3);
+      expect(latest.snapshot!.trips, isEmpty);
+      final retained = await repository.watchBatches(row.id).first;
+      expect(
+        retained.map((b) => b.payloadJson),
+        contains('{"trips":[{"sequence":1}]}'),
+      );
 
       // 重新解析到行程：更新为新快照
       await repository.saveIdentity(
@@ -519,8 +543,9 @@ void main() {
       );
       final cards = await repository.watchCards().first;
       final target = cards.firstWhere((c) => c.cardFingerprint == 'tunion:1:2');
-      final survivor =
-          cards.firstWhere((c) => c.cardFingerprint == 'tunion:1:1');
+      final survivor = cards.firstWhere(
+        (c) => c.cardFingerprint == 'tunion:1:1',
+      );
 
       expect(await repository.deleteCard(target.id), isTrue);
 
@@ -537,66 +562,66 @@ void main() {
 
 /// 最小知识库：卡种目录（福路通 + 八达通条目）、发卡机构指纹。
 KnowledgeBase _knowledge() => KnowledgeBase.fromJsonStrings(
-      cardPrefixes: jsonEncode({
-        'entries': [
-          {
-            'prefix': '31050600',
-            'issuer': '01283910',
-            'cardName': '福路通·榕城通',
-            'city': '福州市',
-          },
-          {
-            'prefix': '31048500',
-            'cardName': '八达通-全国通卡',
-            'city': '香港',
-          },
-        ]
-      }),
-      issuerFingerprints: jsonEncode({
-        'entries': [
-          {
-            'issuerId': '1122334455667788',
-            'cityCode': '3910',
-            'cityName': '福州市',
-            'operator': '示例运营方',
-          }
-        ]
-      }),
-    );
+  cityUnionCatalog: jsonEncode({
+    'entries': [
+      {'cuCityProjectCode': '3910', 'city': '福州市'},
+    ],
+  }),
+  cardPrefixes: jsonEncode({
+    'entries': [
+      {
+        'prefix': '31050600',
+        'issuer': '01283910',
+        'cardName': '福路通·榕城通',
+        'city': '福州市',
+      },
+      {'prefix': '31048500', 'cardName': '八达通-全国通卡', 'city': '香港'},
+    ],
+  }),
+  issuerFingerprints: jsonEncode({
+    'entries': [
+      {
+        'issuerId': '1122334455667788',
+        'cityCode': '3910',
+        'cityName': '福州市',
+        'operator': '示例运营方',
+      },
+    ],
+  }),
+);
 
 TUnionCardInfo _tunionInfo({
   String? serial = '03105060012345678900',
   String? issuerId = '1122334455667788',
   String? cityCode = '3910',
-}) =>
-    TUnionCardInfo(
-      applicationSerial: serial,
-      issuerId: issuerId,
-      cityCode: cityCode,
-    );
+}) => TUnionCardInfo(
+  applicationSerial: serial,
+  issuerId: issuerId,
+  cityCode: cityCode,
+);
 
 ParsedCard _tunionCard(TUnionCardInfo info) => ParsedCard(
-      parserId: CardParserIds.tunion,
-      parserName: '交通联合',
-      info: info,
-      transactions: const [],
-    );
+  parserId: CardParserIds.tunion,
+  parserName: '交通联合',
+  info: info,
+  transactions: const [],
+);
 
 ParsedCard _cityUnionCard() => ParsedCard(
-      parserId: CardParserIds.cityUnion,
-      parserName: '城市一卡通',
-      info: const TUnionCardInfo(),
-      transactions: const [],
-      cityUnionFiles: [
-        const CjT331PublicInfo(
-          issuerCode: '0012',
-          cityCode: '3910',
-          applicationSerialNumber: 'AABBCCDD00112233',
-          fields: [],
-          rawHex: '',
-        ),
-      ],
-    );
+  parserId: CardParserIds.cityUnion,
+  parserName: '城市一卡通',
+  info: const TUnionCardInfo(),
+  transactions: const [],
+  cityUnionFiles: [
+    const CjT331PublicInfo(
+      issuerCode: '0012',
+      cityCode: '3910',
+      applicationSerialNumber: 'AABBCCDD00112233',
+      fields: [],
+      rawHex: '',
+    ),
+  ],
+);
 
 SavedCard _savedCard({
   String cardType = CardTypes.chinaTunion,
@@ -610,24 +635,23 @@ SavedCard _savedCard({
   int? transactionCount,
   String? sessionDataJson,
   int? lastReadAt = 1000,
-}) =>
-    SavedCard(
-      id: 'card-1',
-      cardFingerprint: 'tunion:1:2',
-      cardType: cardType,
-      officialName: officialName,
-      customName: customName,
-      issuerName: issuerName,
-      cityName: cityName,
-      identificationSource: CardIdentificationSources.cardCatalog,
-      identificationConfidence: 0.85,
-      cardNumber: cardNumber,
-      balanceFen: balanceFen,
-      currencyCode: currencyCode,
-      transactionCount: transactionCount,
-      sessionDataJson: sessionDataJson,
-      cardImagePath: null,
-      lastReadAt: lastReadAt,
-      createdAt: 900,
-      updatedAt: 1000,
-    );
+}) => SavedCard(
+  id: 'card-1',
+  cardFingerprint: 'tunion:1:2',
+  cardType: cardType,
+  officialName: officialName,
+  customName: customName,
+  issuerName: issuerName,
+  cityName: cityName,
+  identificationSource: CardIdentificationSources.cardCatalog,
+  identificationConfidence: 0.85,
+  cardNumber: cardNumber,
+  balanceFen: balanceFen,
+  currencyCode: currencyCode,
+  transactionCount: transactionCount,
+  sessionDataJson: sessionDataJson,
+  cardImagePath: null,
+  lastReadAt: lastReadAt,
+  createdAt: 900,
+  updatedAt: 1000,
+);

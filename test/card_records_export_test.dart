@@ -1,13 +1,12 @@
-// 新建文件：test/card_records_export_test.dart
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/core/analysis/tunion_analysis_models.dart';
-import 'package:transit_card_analyzer/core/app_info.dart';
-import 'package:transit_card_analyzer/core/transit/tunion/tunion_models.dart';
-import 'package:transit_card_analyzer/database/app_database.dart';
-import 'package:transit_card_analyzer/features/card_archive/card_records_export.dart';
-import 'package:transit_card_analyzer/features/card_archive/models/card_archive_identity.dart';
-import 'package:transit_card_analyzer/features/card_archive/models/card_session_snapshot.dart';
-import 'package:transit_card_analyzer/features/card_archive/models/card_types.dart';
+import 'package:transit_card_analyzer/features/transit_analysis/tunion_analysis_models.dart';
+import 'package:transit_card_analyzer/app/app_info.dart';
+import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_models.dart';
+import 'package:transit_card_analyzer/features/archive/data/app_database.dart';
+import 'package:transit_card_analyzer/features/archive/application/card_records_export.dart';
+import 'package:transit_card_analyzer/features/archive/domain/card_archive_identity.dart';
+import 'package:transit_card_analyzer/features/archive/domain/card_session_snapshot.dart';
+import 'package:transit_card_analyzer/features/archive/domain/card_types.dart';
 
 /// 卡片记录导出文本构建测试：验证导出头部、卡片基础字段、行程记录
 /// （行程明细 / 城市轨道进出站 / 公共汽电车上下车）与异地用卡标记。
@@ -16,16 +15,15 @@ void main() {
 
   group('buildCardRecordsExport 导出头部', () {
     test('包含应用名 / 版本 / 导出时间 / 卡片数量', () {
-      final text = buildCardRecordsExport(
-        [_savedCard()],
-        exportedAt: exportedAt,
-      );
+      final text = buildCardRecordsExport([
+        _savedCard(),
+      ], exportedAt: exportedAt);
       expect(text, contains('${AppInfo.appName} 卡片记录导出'));
       expect(
         text,
         contains('应用版本：${AppInfo.version}（Build ${AppInfo.buildNumber}）'),
       );
-      expect(text, contains('导出时间：2026-10-15 09:30:00.000'));
+      expect(text, contains('导出时间：2026-10-15 09:30:00'));
       expect(text, contains('卡片数量：1'));
     });
 
@@ -61,10 +59,7 @@ void main() {
     });
 
     test('自定义名称优先展示，副标题保留正式卡名', () {
-      final card = _savedCard(
-        officialName: '福路通·榕城通',
-        customName: '上学用的卡',
-      );
+      final card = _savedCard(officialName: '福路通·榕城通', customName: '上学用的卡');
       final text = buildCardRecordsExport([card], exportedAt: exportedAt);
       expect(text, contains('【1】上学用的卡'));
       expect(text, contains('识别信息：福路通·榕城通 · 示例运营方 · 福州市'));
@@ -83,21 +78,17 @@ void main() {
     });
 
     test('无行程快照：标注行程记录为无', () {
-      final text = buildCardRecordsExport(
-        [_savedCard()],
-        exportedAt: exportedAt,
-      );
+      final text = buildCardRecordsExport([
+        _savedCard(),
+      ], exportedAt: exportedAt);
       expect(text, contains('行程记录：（无）'));
     });
 
     test('多张卡片按顺序编号', () {
-      final text = buildCardRecordsExport(
-        [
-          _savedCard(id: 'card-1', officialName: '甲卡'),
-          _savedCard(id: 'card-2', officialName: '乙卡'),
-        ],
-        exportedAt: exportedAt,
-      );
+      final text = buildCardRecordsExport([
+        _savedCard(id: 'card-1', officialName: '甲卡'),
+        _savedCard(id: 'card-2', officialName: '乙卡'),
+      ], exportedAt: exportedAt);
       expect(text, contains('卡片数量：2'));
       expect(text, contains('【1】甲卡'));
       expect(text, contains('【2】乙卡'));
@@ -108,6 +99,10 @@ void main() {
     test('行程明细：时间 / 状态 / 序号 / 金额 / 余额 / 站点 / 城市', () {
       final card = _savedCard(
         sessionDataJson: CardSessionSnapshot(
+          context: const ArchiveContext(
+            currencyCode: 'CNY',
+            minorUnitDigits: 2,
+          ),
           cardCityCode: '3910',
           trips: [
             TransitTrip(
@@ -133,9 +128,9 @@ void main() {
       expect(text, contains('2024-05-01 08:30:00'));
       expect(text, contains('出站'));
       expect(text, contains('序号 1'));
-      expect(text, contains('-¥46.60'));
-      expect(text, contains('余额 ¥53.40'));
-      expect(text, contains('2号线 苏洋'));
+      expect(text, contains('金额 -¥ 46.60'));
+      expect(text, contains('交易后余额 ¥ 53.40'));
+      expect(text, contains('线路 2号线 | 站点 苏洋'));
       expect(text, contains('福州市'));
       // 同城用卡不标注异地
       expect(text, isNot(contains('福州市（异地用卡）')));
@@ -144,6 +139,10 @@ void main() {
     test('异地用卡：城市与发卡地不同时追加标记', () {
       final card = _savedCard(
         sessionDataJson: CardSessionSnapshot(
+          context: const ArchiveContext(
+            currencyCode: 'CNY',
+            minorUnitDigits: 2,
+          ),
           cardCityCode: '3910',
           trips: [
             TransitTrip(
@@ -167,6 +166,10 @@ void main() {
     test('城市轨道进出站记录：状态 / 时间 / 站点 / 余额 / 金额', () {
       final card = _savedCard(
         sessionDataJson: CardSessionSnapshot(
+          context: const ArchiveContext(
+            currencyCode: 'CNY',
+            minorUnitDigits: 2,
+          ),
           rails: [
             TransitRecord(
               statusCode: 0x02,
@@ -181,19 +184,23 @@ void main() {
         ).encode(),
       );
       final text = buildCardRecordsExport([card], exportedAt: exportedAt);
-      expect(text, contains('城市轨道交通 · 进出站记录：'));
+      expect(text, contains('0x1A 轨道 · 状态 出闸'));
       expect(text, contains('状态 出闸'));
-      expect(text, contains('进站 2026-08-08 09:06:02'));
-      expect(text, contains('出站 2026-08-08 09:12:31'));
-      expect(text, contains('进站站点 0800190030000123'));
-      expect(text, contains('出站站点 0800190030000456'));
-      expect(text, contains('进站余额 ¥25.00'));
-      expect(text, contains('出站金额 ¥3.00'));
+      expect(text, contains('进入 2026-08-08 09:06:02'));
+      expect(text, contains('离开 2026-08-08 09:12:31'));
+      expect(text, contains('进入站点码 0800190030000123'));
+      expect(text, contains('离开站点码 0800190030000456'));
+      expect(text, contains('进入时余额 ¥ 25.00'));
+      expect(text, contains('离开时金额 ¥ 3.00'));
     });
 
     test('公共汽电车上下车记录：状态 / 时间 / 金额 / 里程 / 方向', () {
       final card = _savedCard(
         sessionDataJson: CardSessionSnapshot(
+          context: const ArchiveContext(
+            currencyCode: 'CNY',
+            minorUnitDigits: 2,
+          ),
           buses: [
             BusTransitRecord(
               statusCode: 0x00,
@@ -207,11 +214,11 @@ void main() {
         ).encode(),
       );
       final text = buildCardRecordsExport([card], exportedAt: exportedAt);
-      expect(text, contains('公共汽电车 · 上下车记录：'));
+      expect(text, contains('0x1A 公交 · 状态 初始值'));
       expect(text, contains('状态 初始值'));
-      expect(text, contains('上车 2026-08-08 09:06:02'));
-      expect(text, contains('下车 2026-08-08 09:12:31'));
-      expect(text, contains('金额 ¥3.00'));
+      expect(text, contains('进入 2026-08-08 09:06:02'));
+      expect(text, contains('离开 2026-08-08 09:12:31'));
+      expect(text, contains('金额 ¥ 3.00'));
       expect(text, contains('里程 5 站'));
       expect(text, contains('方向 未知方向'));
     });
@@ -231,24 +238,23 @@ SavedCard _savedCard({
   int? transactionCount,
   String? sessionDataJson,
   int? lastReadAt = 1000,
-}) =>
-    SavedCard(
-      id: id,
-      cardFingerprint: 'tunion:1:2',
-      cardType: cardType,
-      officialName: officialName,
-      customName: customName,
-      issuerName: issuerName,
-      cityName: cityName,
-      identificationSource: CardIdentificationSources.cardCatalog,
-      identificationConfidence: 0.85,
-      cardNumber: cardNumber,
-      balanceFen: balanceFen,
-      currencyCode: currencyCode,
-      transactionCount: transactionCount,
-      sessionDataJson: sessionDataJson,
-      cardImagePath: null,
-      lastReadAt: lastReadAt,
-      createdAt: 900,
-      updatedAt: 1000,
-    );
+}) => SavedCard(
+  id: id,
+  cardFingerprint: 'tunion:1:2',
+  cardType: cardType,
+  officialName: officialName,
+  customName: customName,
+  issuerName: issuerName,
+  cityName: cityName,
+  identificationSource: CardIdentificationSources.cardCatalog,
+  identificationConfidence: 0.85,
+  cardNumber: cardNumber,
+  balanceFen: balanceFen,
+  currencyCode: currencyCode,
+  transactionCount: transactionCount,
+  sessionDataJson: sessionDataJson,
+  cardImagePath: null,
+  lastReadAt: lastReadAt,
+  createdAt: 900,
+  updatedAt: 1000,
+);
