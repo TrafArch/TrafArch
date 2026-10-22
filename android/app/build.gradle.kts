@@ -8,7 +8,8 @@ plugins {
 }
 
 // Public source checkouts do not include the private Firebase configuration.
-// The alpha application ID keeps this build installable beside the original app.
+// The application ID below is the install identity; a debug-signed build cannot
+// upgrade an installation that uses the developer's original signing key.
 val repairBuild = providers.gradleProperty("repairBuild").orNull == "true"
 // Hand an aligned APK to the developer for signing with the original key.
 val unsignedApk = providers.gradleProperty("unsignedApk").orNull == "true"
@@ -115,12 +116,12 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.kajolno.trafarch.alpha"
+        applicationId = "com.kajolno.TrafArch"
         minSdk = 26
         targetSdk = 37
         versionCode = appVersionCode
         versionName = appVersionName
-        manifestPlaceholders["appLabel"] = "TrafArch Alpha 1"
+        manifestPlaceholders["appLabel"] = "TrafArch"
     }
 
     buildTypes {

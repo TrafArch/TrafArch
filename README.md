@@ -1,8 +1,8 @@
 # TrafArch
 
-基于 Flutter / Dart 与 Android Kotlin NFC 的交通卡读取和分析项目。当前重构以 `8a4818e7d4dc848432a3e39a69195255138a3b95` 为基线，源码版本 `1.0.1-alpha+2066`。当前 alpha 验证包使用 applicationId `com.kajolno.trafarch.alpha`，可与原应用并行安装；arm64 Release APK 使用 Android Debug 证书签名。
+基于 Flutter / Dart 与 Android Kotlin NFC 的交通卡读取和分析项目。当前重构以 `8a4818e7d4dc848432a3e39a69195255138a3b95` 为基线，源码版本 `1.0.1-alpha+2066`。当前安装包使用 applicationId `com.kajolno.TrafArch`（与旧正式包一致）；arm64 Release APK 使用 Android Debug 证书签名。
 
-项目维护约束：后续每次修改均保持 applicationId **`com.kajolno.trafarch.alpha`**；非正式/测试发布显示名为 **TrafArch Alpha <数字>**（当前为 **TrafArch Alpha 1**），正式发布显示名 **TrafArch**，Debug、Release 和验证构建均适用。具体约束写入 [AGENTS.md](AGENTS.md)。
+项目维护约束：后续每次修改均保持 applicationId **`com.kajolno.TrafArch`**；非正式/测试发布显示名为 **TrafArch Alpha <数字>**（当前为 **TrafArch Alpha 1**），正式发布显示名 **TrafArch**，Debug、Release 和验证构建均适用。具体约束写入 [AGENTS.md](AGENTS.md)。
 
 ## 功能与边界
 
@@ -28,7 +28,7 @@
 
 原始输入冻结在 `data/reference/sources/`；维护工具在 `tools/reference_data/`。用户覆盖和未知站点报告写入独立 `reference_user.sqlite`，与只读参考包分离。数据来源致谢保留，但来源链接不是运行时依赖。
 
-```powershell
+``powershell
 python -X utf8 -m tools.reference_data inspect
 python -X utf8 -m tools.reference_data build
 python -X utf8 -m tools.reference_data validate
@@ -43,7 +43,7 @@ python -X utf8 -m tools.reference_data validate
 - [迁移说明](docs/MIGRATION.md)：档案 schema 6、快照 v3、用户覆盖迁移、开发者升级步骤。
 - [离线数据维护](docs/REFERENCE_DATA_TOOLING.md)：导入、构建、校验、差异报告及 SQL。
 - [NFC 会话契约](docs/NATIVE_SESSION_CONTRACT.md)：兼容通道、会话标识、取消与释放失败。
-- [旧包名升级交付（历史）](docs/UPGRADE_HANDOFF_20261021.md)：原 `com.kajolno.TrafArch` 升级包的版本码、原证书指纹和未签名 APK 记录，不适用于当前 alpha 并装包。
+- [旧包名升级交付（历史）](docs/UPGRADE_HANDOFF_20261021.md)：原 `com.kajolno.TrafArch` 升级包的版本码、原证书指纹和未签名 APK 记录；当前包沿用同一 applicationId，可用于升级与签名比对。
 - [重构验证记录](docs/REFACTOR_VALIDATION_20261021.md)：上一批并装 APK 的历史构建证据及重构测试 / 数据结论；当前安装身份以覆盖安装交付文档为准。
 
 ## 环境与验证
@@ -54,7 +54,7 @@ python -X utf8 -m tools.reference_data validate
 
 在项目根目录执行：
 
-```powershell
+``powershell
 flutter pub get
 flutter analyze --no-pub
 flutter test --no-pub --reporter expanded
@@ -66,6 +66,6 @@ flutter build apk --debug --target-platform android-arm64 --split-per-abi -Prepa
 
 Windows 直接运行 Gradle Lint 前，若 Flutter 生成的 `android/local.properties` 含未转义的盘符冒号，应写为 `C\:/...`（或 Java properties 的完整反斜杠转义形式）。该文件是本机配置，不随源码交付。原生 Unit Test 任务为 `NO-SOURCE`；611 项指 Dart / Flutter 测试，不能当作 Android 设备测试数量。
 
-当前测试发布 APK 显示名为“TrafArch Alpha 1”，applicationId 为 `com.kajolno.trafarch.alpha`，versionName 为 `1.0.1-alpha`。源码构建号为 2066，arm64 拆包由 Flutter 按 ABI 生成 Android versionCode **4066**。当前 alpha 验证 APK 按用户要求使用 Android Debug 证书签名；Debug 签名不能覆盖原签名应用，也不代表开发者原签名。`repairBuild=true` 仅控制无私有 Firebase 配置和不自动递增构建号；`unsignedApk=true` 明确关闭 Gradle 签名，便于后续使用 Debug 或开发者密钥重签。
+当前测试发布 APK 显示名为“TrafArch Alpha 1”，applicationId 为 `com.kajolno.TrafArch`（与旧正式包一致），versionName 为 `1.0.1-alpha`。源码构建号为 2066，arm64 拆包由 Flutter 按 ABI 生成 Android versionCode **4066**。当前验证 APK 按用户要求使用 Android Debug 证书签名；Debug 签名不能覆盖原签名应用，也不代表开发者原签名。`repairBuild=true` 仅控制无私有 Firebase 配置和不自动递增构建号；`unsignedApk=true` 明确关闭 Gradle 签名，便于后续使用 Debug 或开发者密钥重签。
 
-alpha 包使用独立 applicationId 和数据空间，可与原应用并存。上海 TU 卡“实际 100 元、原 APK 显示 108 元”已有原始响应到 UI / 档案的 100 元回归用例，但仍需用实体卡复核；代码未加入固定减 8 元补偿。
+当前包沿用旧正式包的 applicationId（`com.kajolno.TrafArch`），安装按覆盖升级处理：只有同签名证书可升级，Debug 签名包需先卸载旧应用，且旧应用数据不会保留。上海 TU 卡“实际 100 元、原 APK 显示 108 元”已有原始响应到 UI / 档案的 100 元回归用例，但仍需用实体卡复核；代码未加入固定减 8 元补偿。

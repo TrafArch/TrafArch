@@ -1,9 +1,9 @@
 # Android native session and channel contract
 
 Task 5, approved refactor dated 2026-10-20; integration keys confirmed with the parent on 2026-10-21.
-The 2026-10-21 alpha side-by-side package uses applicationId `com.kajolno.trafarch.alpha`
-(the Kotlin namespace remains `com.kajolno.TrafArch`). No manifest, permission, Dart protocol,
-APDU construction or response interpretation is changed here.
+The install package identity is applicationId `com.kajolno.TrafArch`, which is also the Kotlin
+namespace. No manifest, permission, Dart protocol, APDU construction or response interpretation
+is changed here.
 
 ## NFC wire interface
 
