@@ -1,4 +1,5 @@
 import '../../../protocols/transit/tunion/tunion_models.dart';
+import '../../transit_analysis/tunion_analysis_models.dart';
 import '../../trips/trip_cards_view.dart';
 import '../../trips/trip_entry_presenter.dart';
 import '../../trips/trip_filters.dart';
@@ -12,15 +13,80 @@ const archiveTripSourceLabels = {
   ArchiveRecordKind.bus: '0x1A 公交',
 };
 
+/// Saved-history projection plus the visible record counts. Linked 0x1E records
+/// and the matching 0x1A rail record are merged into the 0x18 card; the
+/// authoritative history and its raw evidence remain untouched.
+class ArchiveTripProjection {
+  const ArchiveTripProjection({
+    required this.entries,
+    required this.transactionCount,
+    required this.processRecordCount,
+    required this.mergedRecordCount,
+  });
+
+  final List<TripCardPresentation<ArchiveRecordKind>> entries;
+  final int transactionCount;
+  final int processRecordCount;
+  final int mergedRecordCount;
+
+  String get summaryText =>
+      '交易 $transactionCount 条 · 过程及应用记录 $processRecordCount 条'
+      '${mergedRecordCount == 0 ? '' : '（$mergedRecordCount 条已并入 0x18 交易）'}';
+}
+
 /// Adapt the authoritative history, without re-merging records or looking up
 /// anything in a live scan/reference database. A 0x1A record has up to two UI
 /// events; both retain the complete record, captured context and attribution.
-List<TripCardPresentation<ArchiveRecordKind>> presentArchiveTrips(
+ArchiveTripProjection presentArchiveTrips(
   List<ArchiveHistoryRecord> records, {
   required void Function(ArchiveHistoryRecord) onDiagnostics,
 }) {
+  // Association evidence is stored with the 0x18 record. A linked 0x1E is
+  // represented by the 0x18 card; a rail 0x1A is hidden only when one of its
+  // sides is proven to be that same process event.
+  final mergedProcesses = <TUnionTripRecord>[];
+  final mergedRailRecords = <ArchiveHistoryRecord>{};
+  for (final record in records) {
+    if (record.kind != ArchiveRecordKind.transaction) continue;
+    final matched = record.fields['matchedProcess'];
+    if (matched is! Map<String, dynamic>) continue;
+    final process = _processFromFields(matched);
+    if (process == null) continue;
+    mergedProcesses.add(process);
+    if (record.fields['consume'] != true || !process.isCityRail) continue;
+    for (final rail in records) {
+      if (rail.kind != ArchiveRecordKind.rail) continue;
+      final railRecord = _railFromFields(rail.fields);
+      if (railRecord != null && railRecordMatchesProcess(railRecord, process)) {
+        mergedRailRecords.add(rail);
+      }
+    }
+  }
+  var transactionCount = 0;
+  var processRecordCount = 0;
+  var mergedRecordCount = 0;
   final events = <_ArchiveEvent>[];
   for (final record in records) {
+    if (record.kind == ArchiveRecordKind.rail &&
+        mergedRailRecords.contains(record)) {
+      mergedRecordCount++;
+      continue;
+    }
+    if (record.kind == ArchiveRecordKind.process) {
+      final process = _processFromFields(record.fields);
+      if (process != null &&
+          mergedProcesses.any(
+            (matched) => sameProcessRecord(matched, process),
+          )) {
+        mergedRecordCount++;
+        continue;
+      }
+      processRecordCount++;
+    } else if (record.kind == ArchiveRecordKind.transaction) {
+      transactionCount++;
+    } else {
+      processRecordCount++;
+    }
     if (record.kind == ArchiveRecordKind.rail ||
         record.kind == ArchiveRecordKind.bus) {
       final sides = [
@@ -45,18 +111,82 @@ List<TripCardPresentation<ArchiveRecordKind>> presentArchiveTrips(
       );
       return time != 0 ? time : a.$1.compareTo(b.$1);
     });
-  return [
-    for (final (_, event) in indexed)
-      TripCardPresentation(
-        info: event.info,
-        source: event.record.kind,
-        mode: event.mode,
-        dateText: event.dateText,
-        remote: event.remote,
-        onDiagnostics: () => onDiagnostics(event.record),
-      ),
-  ];
+  return ArchiveTripProjection(
+    entries: [
+      for (final (_, event) in indexed)
+        TripCardPresentation(
+          info: event.info,
+          source: event.record.kind,
+          mode: event.mode,
+          dateText: event.dateText,
+          remote: event.remote,
+          onDiagnostics: () => onDiagnostics(event.record),
+        ),
+    ],
+    transactionCount: transactionCount,
+    processRecordCount: processRecordCount,
+    mergedRecordCount: mergedRecordCount,
+  );
 }
+
+TUnionTripRecord? _processFromFields(Map<String, dynamic> fields) {
+  final typeCode = fields['typeCode'];
+  final terminalId = fields['terminalId'];
+  final appTypeCode = fields['appTypeCode'];
+  final lineStationCode = fields['lineStationCode'];
+  final amountFen = fields['amountFen'];
+  final balanceFen = fields['balanceFen'];
+  final time = fields['time'];
+  if (typeCode is! int ||
+      terminalId is! String ||
+      appTypeCode is! int ||
+      lineStationCode is! String ||
+      amountFen is! int ||
+      balanceFen is! int ||
+      time is! int) {
+    return null;
+  }
+  return TUnionTripRecord(
+    typeCode: typeCode,
+    terminalId: terminalId,
+    appTypeCode: appTypeCode,
+    lineStationCode: lineStationCode,
+    amountFen: amountFen,
+    balanceFen: balanceFen,
+    time: DateTime.fromMillisecondsSinceEpoch(time, isUtc: true),
+    cityCode: _text(fields['cityCode']),
+    acquirerId: _text(fields['acquirerId']),
+    rawHex: _text(fields['rawHex']),
+  );
+}
+
+TransitRecord? _railFromFields(Map<String, dynamic> fields) {
+  final status = fields['status'];
+  if (status is! int) return null;
+  return TransitRecord(
+    statusCode: status,
+    entryCityCode: _text(fields['entryCityCode']),
+    exitCityCode: _text(fields['exitCityCode']),
+    entryTerminalId: _text(fields['entryTerminalId']),
+    exitTerminalId: _text(fields['exitTerminalId']),
+    entryTime: _date(fields['entryTime']),
+    exitTime: _date(fields['exitTime']),
+    entryAmountFen: fields['entryAmountFen'] is int
+        ? fields['entryAmountFen'] as int
+        : null,
+    exitAmountFen: fields['exitAmountFen'] is int
+        ? fields['exitAmountFen'] as int
+        : null,
+    rawHex: _text(fields['rawHex']),
+  );
+}
+
+String? _text(Object? value) =>
+    value is String && value.isNotEmpty ? value : null;
+
+DateTime? _date(Object? value) => value is int
+    ? DateTime.fromMillisecondsSinceEpoch(value, isUtc: true)
+    : null;
 
 class _ArchiveEvent {
   const _ArchiveEvent(this.record, {this.side});
@@ -76,18 +206,7 @@ class _ArchiveEvent {
 
   TUnionTripRecord? get process => record.kind != ArchiveRecordKind.process
       ? null
-      : TUnionTripRecord(
-          typeCode: fields['typeCode'] as int,
-          terminalId: fields['terminalId'] as String,
-          appTypeCode: fields['appTypeCode'] as int,
-          lineStationCode: fields['lineStationCode'] as String,
-          amountFen: fields['amountFen'] as int,
-          balanceFen: fields['balanceFen'] as int,
-          time: DateTime.fromMillisecondsSinceEpoch(
-            fields['time'] as int,
-            isUtc: true,
-          ),
-        );
+      : _processFromFields(fields);
 
   TripModeFilter get mode {
     if (rail) return TripModeFilter.rail;

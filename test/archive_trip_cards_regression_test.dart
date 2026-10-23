@@ -85,6 +85,60 @@ void main() {
     await _close(tester);
   });
 
+  testWidgets('linked rail 0x1E and 0x1A merge into the 0x18 card', (
+    tester,
+  ) async {
+    final repository = CardRepository(testDatabase());
+    final time = DateTime(2026, 10, 19, 23, 58);
+    final process = {
+      'typeCode': 4,
+      'terminalId': '000000004200',
+      'appTypeCode': 1,
+      'lineStationCode': '02310000000000',
+      'amountFen': 450,
+      'balanceFen': 1234,
+      'time': time.millisecondsSinceEpoch,
+      'cityCode': '3910',
+      'rawHex': '1E01',
+    };
+    final id = await _save(
+      repository,
+      _snapshot(
+        trips: [
+          {
+            ..._transaction(),
+            'time': time.millisecondsSinceEpoch,
+            'matchedProcess': process,
+            'balanceAfterFen': 1234,
+          },
+        ],
+        rails: [
+          {
+            'status': 2,
+            'entryTime': DateTime(2026, 10, 19, 23, 50).millisecondsSinceEpoch,
+            'exitTime': time.millisecondsSinceEpoch,
+            'entryCityCode': '3910',
+            'exitCityCode': '3910',
+            'entryTerminalId': '000000000000000A',
+            'exitTerminalId': '000000004200',
+            'entryAmountFen': 0,
+            'exitAmountFen': 450,
+            'rawHex': '1A01',
+          },
+        ],
+        cycle: [process],
+      ),
+    );
+    await _open(tester, repository, id);
+    expect(find.byType(TripEntryCard), findsOneWidget);
+    expect(find.text('交易 1 条 · 过程及应用记录 0 条（2 条已并入 0x18 交易）'), findsOneWidget);
+    await tester.tap(find.byType(TripEntryCard));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('保存时已关联 0x1E 过程记录'), findsOneWidget);
+    _expectNoJson();
+    await _close(tester);
+  });
+
   testWidgets('cross-batch duplicates retain attribution and wallet contexts', (
     tester,
   ) async {

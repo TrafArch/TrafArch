@@ -355,10 +355,11 @@ final class ProcessTripEntry extends TripEntry {
 
 /// 合并交易行程（0x18，主干来源）、0x1A 过程记录（按进 / 出侧拆分）与
 /// 0x1E 过程记录为按时间倒序的行程流：
-/// - 0x1A 侧记录仅当与某条交易的配对 0x1E（双向唯一、时间 + 城市 +
-///   金额 / 终端逐条互证）确认重复时才隐藏，关联不成立一律保留；
 /// - 已与交易配对的 0x1E 由交易条目代表；无法配对的 0x1E 保留为
-///   [ProcessTripEntry]（独立过程事件，不丢弃）。
+///   [ProcessTripEntry]（独立过程事件，不丢弃）；
+/// - 城市轨道 1A 记录只要任一侧与已关联 1E（时间 + 城市 + 金额 /
+///   终端互证）对应，整条记录（进 / 出两侧）均隐藏，由 18+1E 混合
+///   行程作为最终展示；未证实对应的 1A 记录保持完整展示。
 List<TripEntry> buildTripStream({
   required List<TransitTrip> trips,
   List<TransitRecord> rails = const [],
@@ -381,12 +382,18 @@ List<TripEntry> buildTripStream({
     ],
   };
   // 复合消费（0x09）交易时间戳与某条 0x1A 进 / 出站记录完全一致时，该行程
-  // 已由更完整的 0x1A 明细（含进 / 出两侧 + 城市 + 终端）表达，屏蔽 0x18
-  // 复合消费条目避免重复；其余交易类型（普通消费 / 充值）不屏蔽。
+  // 已由更完整的 0x1A 明细表达，屏蔽 0x18 复合消费条目避免重复。例外：该
+  // 交易已唯一关联城市轨道 0x1E 时，18+1E 混合行程才是最终展示，18 保留。
   final shownTrips = <TransitTrip>[
     for (final t in trips)
-      if (!(t.isCompositeConsume && recordTimes.contains(t.time))) t,
+      if (!(t.isCompositeConsume &&
+          t.matchedProcessTrip?.isCityRail != true &&
+          recordTimes.contains(t.time)))
+        t,
   ];
+  // 已与 18 唯一关联的城市轨道 1E：对应 1A 记录的进 / 出两侧都并入
+  // 18+1E 混合行程，整条 1A 记录隐藏；未获证据证实的 1A 保持展示。
+  final hiddenRails = _hiddenRailRecords(shownTrips, rails);
   final matches = <TransitTrip, List<TripEntry>>{
     for (final trip in shownTrips)
       trip: halves.where((side) => _matchesProcessSide(trip, side)).toList(),
@@ -408,47 +415,93 @@ List<TripEntry> buildTripStream({
       .toList();
   return <TripEntry>[
     for (final t in shownTrips) TransactionTripEntry(t),
-    ...halves.where((side) => !hidden.contains(side)),
+    ...halves.where(
+      (side) =>
+          !hidden.contains(side) &&
+          !(side is RailRecordEntry && hiddenRails.contains(side.record)),
+    ),
     for (final p in processTrips)
-      if (!linked.any((l) => _sameProcessRecord(l, p))) ProcessTripEntry(p),
+      if (!linked.any((l) => sameProcessRecord(l, p))) ProcessTripEntry(p),
   ]..sort((a, b) => b.time.compareTo(a.time));
 }
+
+Set<TransitRecord> _hiddenRailRecords(
+  List<TransitTrip> trips,
+  List<TransitRecord> rails,
+) {
+  final hidden = <TransitRecord>{};
+  for (final trip in trips) {
+    final process = trip.matchedProcessTrip;
+    if (process == null || !trip.isConsume || !process.isCityRail) continue;
+    for (final rail in rails) {
+      if (railRecordMatchesProcess(rail, process)) hidden.add(rail);
+    }
+  }
+  return hidden;
+}
+
+/// 0x1A 城市轨道记录是否与 0x1E 过程记录描述同一进 / 出站侧：
+/// 类型、时间、城市及金额 / 终端互证；仅凭时间或金额相似不成立。
+bool railRecordMatchesProcess(TransitRecord rail, TUnionTripRecord process) {
+  if (!process.isCityRail) return false;
+  final entry = _processEntrySide(process.typeCode);
+  if (entry == null) return false;
+  return _matchesProcessEvidence(
+    source: process,
+    entry: entry,
+    time: entry ? rail.entryTime : rail.exitTime,
+    city: entry ? rail.entryCityCode : rail.exitCityCode,
+    terminal: entry ? rail.entryTerminalId : rail.exitTerminalId,
+    amount: entry ? rail.entryAmountFen : rail.exitAmountFen,
+  );
+}
+
+bool? _processEntrySide(int typeCode) => switch (typeCode) {
+  0x01 || 0x03 => true,
+  0x02 || 0x04 => false,
+  _ => null,
+};
 
 bool _matchesProcessSide(TransitTrip trip, TripEntry side) {
   final source = trip.matchedProcessTrip;
   if (source == null || !trip.isConsume) return false;
-  final bool entry;
-  switch (source.typeCode) {
-    case 0x01:
-    case 0x03:
-      entry = true;
-    case 0x02:
-    case 0x04:
-      entry = false;
+  switch (side) {
+    case RailRecordEntry(:final record, :final isEntry):
+      if (!source.isCityRail) return false;
+      return _matchesProcessEvidence(
+        source: source,
+        entry: isEntry,
+        time: isEntry ? record.entryTime : record.exitTime,
+        city: isEntry ? record.entryCityCode : record.exitCityCode,
+        terminal: isEntry ? record.entryTerminalId : record.exitTerminalId,
+        amount: isEntry ? record.entryAmountFen : record.exitAmountFen,
+      );
+    case BusRecordEntry(:final record, :final isEntry):
+      if (!source.isBus) return false;
+      return _matchesProcessEvidence(
+        source: source,
+        entry: isEntry,
+        time: isEntry ? record.entryTime : record.exitTime,
+        city: isEntry ? record.entryCityCode : record.exitCityCode,
+        terminal: isEntry ? record.entryTerminalId : record.exitTerminalId,
+        // 公交 transactionAmountFen 未声明侧归属，不能用作任一侧金额证据。
+        amount: null,
+      );
     default:
       return false;
   }
-  DateTime? time;
-  String? city;
-  String? terminal;
-  int? amount;
-  if (side is RailRecordEntry && source.isCityRail) {
-    if (side.isEntry != entry) return false;
-    final r = side.record;
-    time = entry ? r.entryTime : r.exitTime;
-    city = entry ? r.entryCityCode : r.exitCityCode;
-    terminal = entry ? r.entryTerminalId : r.exitTerminalId;
-    amount = entry ? r.entryAmountFen : r.exitAmountFen;
-  } else if (side is BusRecordEntry && source.isBus) {
-    if (side.isEntry != entry) return false;
-    final r = side.record;
-    time = entry ? r.entryTime : r.exitTime;
-    city = entry ? r.entryCityCode : r.exitCityCode;
-    terminal = entry ? r.entryTerminalId : r.exitTerminalId;
-    // 公交 transactionAmountFen 未声明侧归属，不能用作任一侧金额证据。
-  } else {
-    return false;
-  }
+}
+
+bool _matchesProcessEvidence({
+  required TUnionTripRecord source,
+  required bool entry,
+  required DateTime? time,
+  required String? city,
+  required String? terminal,
+  required int? amount,
+}) {
+  final sourceEntry = _processEntrySide(source.typeCode);
+  if (sourceEntry == null || entry != sourceEntry) return false;
   String? validHex(String? value, int length) {
     final text = value?.trim().toUpperCase();
     if (text == null ||
@@ -481,7 +534,7 @@ bool _matchesProcessSide(TransitTrip trip, TripEntry side) {
 
 /// 0x1E 记录同一性判定（跨快照重建对象后仍可按值关联）：
 /// 优先按原始 HEX；无原始字节时按 类型 + 时间 + 金额 + 终端 四要素。
-bool _sameProcessRecord(TUnionTripRecord a, TUnionTripRecord b) {
+bool sameProcessRecord(TUnionTripRecord a, TUnionTripRecord b) {
   if (identical(a, b)) return true;
   final ra = a.rawHex;
   final rb = b.rawHex;
