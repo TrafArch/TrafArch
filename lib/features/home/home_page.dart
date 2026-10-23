@@ -54,7 +54,12 @@ class _HomePageState extends State<HomePage> {
       _scheduleAutoScan();
     }
     if (oldWidget.active && !widget.active) {
-      app.stop();
+      // stop() 会同步广播状态变更，而 didUpdateWidget 运行在 build 阶段，
+      // 直接调用会让 app 的监听者（TripsPage / ExpertPage）在 build 中
+      // setState 触发断言；挪到本帧结束后执行。
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) app.stop();
+      });
     } else if (!oldWidget.active && widget.active) {
       _scheduleAutoScan();
     }
