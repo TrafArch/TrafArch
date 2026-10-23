@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:google_nav_bar/google_nav_bar.dart';
+import 'package:flutter/services.dart';
 
 import '../../shared/presentation/ui_constants.dart';
 
-/// 悬浮底栏本体：GNav（Telegram 式展开：未选中仅图标，选中项胶囊 +
-/// 文字展开）+ 圆角阴影容器，视觉高度与 [UiConstants.floatingNavBarHeight] 一致。
+/// 悬浮底栏：未选中仅图标，选中项为「图标 + 文字」的胶囊。
+///
+/// 选中状态直接由 [index] 计算，不挂任何隐式动画：点按即切换，
+/// 没有涟漪、胶囊过渡或文字展开动画。
 class FloatingNavBar extends StatelessWidget {
   const FloatingNavBar({
     super.key,
@@ -14,6 +16,13 @@ class FloatingNavBar extends StatelessWidget {
 
   final int index;
   final ValueChanged<int> onSelect;
+
+  static const List<({IconData icon, String label})> _tabs = [
+    (icon: Icons.home_outlined, label: '首页'),
+    (icon: Icons.directions_transit_outlined, label: '行程'),
+    (icon: Icons.credit_card_outlined, label: '卡片'),
+    (icon: Icons.science_outlined, label: '专家'),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -33,54 +42,85 @@ class FloatingNavBar extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(UiConstants.floatingNavBarRadius),
-        child: GNav(
-          selectedIndex: index,
-          onTabChange: onSelect,
-          // 采用库默认的 google 样式（即演示的 Telegram 式展开效果）：
-          // 未选中仅显示图标；选中项胶囊高亮，文字从图标右侧展开/收起
-          backgroundColor: Colors.transparent,
-          color: scheme.onSurfaceVariant,
-          activeColor: scheme.primary,
-          tabBackgroundColor: scheme.primary.withValues(alpha: 0.16),
-          rippleColor: scheme.primary.withValues(alpha: 0.08),
-          hoverColor: scheme.primary.withValues(alpha: 0.04),
-          // 图标与展开文字之间的水平间距
-          gap: 8,
-          iconSize: 24,
-          // google 样式下文字样式由 textStyle 控制（textSize 仅对 oldSchool 生效）
-          textStyle: TextStyle(
-            color: scheme.primary,
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              for (var i = 0; i < _tabs.length; i++)
+                _NavItem(
+                  icon: _tabs[i].icon,
+                  label: _tabs[i].label,
+                  selected: i == index,
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    onSelect(i);
+                  },
+                ),
+            ],
           ),
-          // 胶囊内边距：图标 24 + 垂直内边距 12×2 = 48 高胶囊
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          // 胶囊上下各留白 10：底栏总高 48 + 10×2 = 68，与 UiConstants 一致
-          tabMargin: const EdgeInsets.symmetric(vertical: 10),
-          tabBorderRadius: 100,
-          curve: Curves.easeOutExpo,
-          // 切换过渡速度（文字展开/收起与胶囊背景同步，保持快速切换）
-          duration: const Duration(milliseconds: 200),
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          haptic: true,
-          tabs: const [
-            GButton(icon: Icons.home_outlined, text: '首页', semanticLabel: '首页'),
-            GButton(
-              icon: Icons.directions_transit_outlined,
-              text: '行程',
-              semanticLabel: '行程',
-            ),
-            GButton(
-              icon: Icons.credit_card_outlined,
-              text: '卡片',
-              semanticLabel: '卡片',
-            ),
-            GButton(
-              icon: Icons.science_outlined,
-              text: '专家',
-              semanticLabel: '专家',
-            ),
-          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NavItem extends StatelessWidget {
+  const _NavItem({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      onTap: onTap,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          // 胶囊 44 高，配合外层上下 6 留白，底栏总高 56
+          height: 44,
+          padding: EdgeInsets.symmetric(horizontal: selected ? 16 : 12),
+          decoration: selected
+              ? BoxDecoration(
+                  color: scheme.primary.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(100),
+                )
+              : null,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 24,
+                color: selected ? scheme.primary : scheme.onSurfaceVariant,
+              ),
+              if (selected) ...[
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: scheme.primary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );
