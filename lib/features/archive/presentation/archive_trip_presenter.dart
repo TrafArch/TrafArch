@@ -257,21 +257,29 @@ class _ArchiveEvent {
     return '${debit && value > 0 ? '-' : ''}${record.context.formatAmount(value)}';
   }
 
+  String? get balanceAfterText {
+    final matched = fields['matchedProcess'];
+    final source = transaction && matched is Map<String, dynamic>
+        ? _processFromFields(matched)
+        : process;
+    if (source != null) {
+      final balance = source.balanceAfterFen;
+      return balance == null ? null : record.context.formatAmount(balance);
+    }
+    return transaction ? amount('balanceAfterFen') : null;
+  }
+
   TripEntryInfo get info {
     final cycle = process;
     final isConsume = transaction
         ? fields['consume'] == true
         : cycle != null
-        ? !cycle.isEntry && cycle.amountFen > 0
+        ? cycle.isConsume && cycle.amountFen > 0
         : !entry;
     final amountKey = side == null || !rail ? 'amountFen' : '${side}AmountFen';
-    final balance = amount(
-      transaction
-          ? 'balanceAfterFen'
-          : cycle != null
-          ? 'balanceFen'
-          : 'entryBalanceFen',
-    );
+    final balance = transaction || cycle != null
+        ? balanceAfterText
+        : amount('entryBalanceFen');
     final station =
         text(side == null ? 'stationLabel' : '${side}StationName') ??
         (side == null ? null : text('${side}Station${rail ? 'Id' : 'Code'}'));
@@ -305,6 +313,8 @@ class _ArchiveEvent {
       timeText: timeText(timeKey),
       amountText: record.kind == ArchiveRecordKind.bus && entry
           ? null
+          : cycle != null && cycle.isRecharge
+          ? '+${record.context.formatAmount(cycle.amountFen)}'
           : amount(amountKey, debit: isConsume),
       isConsume: isConsume,
       subText:
@@ -380,8 +390,7 @@ class _ArchiveEvent {
       if (timeText(field.key) case final value?) (field.value, value),
     for (final field in const {
       'amountFen': '金额',
-      'balanceAfterFen': '交易后余额',
-      'balanceFen': '交易后余额',
+      'balanceFen': '记录余额',
       'entryBalanceFen': '进入时余额',
       'entryAmountFen': '进入时金额',
       'exitAmountFen': '离开时金额',
@@ -397,6 +406,7 @@ class _ArchiveEvent {
           )
           case final value?)
         (field.value, value),
+    if (balanceAfterText case final balance?) ('交易后余额', balance),
     if (fields['mileage'] case final int mileage) ('里程', '$mileage 站'),
     if (fields['directionCode'] case final int direction)
       (

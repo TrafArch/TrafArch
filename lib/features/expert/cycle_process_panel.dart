@@ -79,7 +79,7 @@ class CycleProcessPanel extends StatelessWidget {
           ExpertField('站点', expertValue(trip.stationCode)),
           ExpertField('运营代码', expertValue(trip.operatorCode)),
           ExpertField('交易金额', values.amountCell(trip.amountFen)),
-          ExpertField('交易后余额', values.amountCell(trip.balanceFen)),
+          ExpertField('记录余额', values.amountCell(trip.balanceFen)),
           ExpertField('交易日期时间', dateTimeDigits(trip.time)),
           ExpertField('受理方城市代码', values.cityCell(trip.cityCode)),
           ExpertField('受理方机构标识', hexLower(trip.acquirerId)),

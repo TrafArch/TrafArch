@@ -214,7 +214,7 @@ class TUnionProcessRecord {
 /// - [0x0A-0x0B] 线路代码（BCD，4 位）　[0x0C-0x0D] 站点代码（BCD，4 位）
 ///   [0x0E-0x0F] 运营代码（BCD，4 位）　[0x10] 预留字段；
 /// - [0x11-0x14] 交易金额（大端无符号，单位：分）；
-/// - [0x15-0x18] 交易后余额（大端无符号，单位：分）；
+/// - [0x15-0x18] 记录余额（大端无符号，单位：分）；
 /// - [0x19-0x1F] 交易日期时间（BCD YYYYMMDDhhmmss）；
 /// - [0x20-0x21] 受理方城市代码（HEX）；
 /// - [0x22-0x29] 受理方机构标识（HEX）；
@@ -227,7 +227,7 @@ class TUnionTripRecord {
   final int appTypeCode; // [0x09] 应用分类码原始值
   final String lineStationCode; // [0x0A-0x10] 线路和站点代码（BCD）
   final int amountFen; // [0x11-0x14] 交易金额（分）
-  final int balanceFen; // [0x15-0x18] 交易后余额（分）
+  final int balanceFen; // [0x15-0x18] 记录余额（分）
   final DateTime time; // [0x19-0x1F] 交易日期时间
   final String? cityCode; // [0x20-0x21] 受理方城市代码（HEX）
   final String? acquirerId; // [0x22-0x29] 受理方机构标识（HEX）
@@ -266,6 +266,20 @@ class TUnionTripRecord {
 
   /// 是否公共汽电车行业记录（[0x09] 应用分类码标准值 0x02）。
   bool get isBus => appTypeCode == 0x02;
+
+  /// 仅适用于 0x1E 的消费与充值类型，不复用 0x18 的类型码。
+  bool get isConsume =>
+      const {0x02, 0x04, 0x05, 0x06, 0x07, 0x08}.contains(typeCode);
+  bool get isRecharge => typeCode == 0x09 || typeCode == 0x0A;
+
+  /// 按用户实测将记录余额解释为交易前余额；尚待多卡验证，非规范结论。
+  /// 不改原始 balanceFen/rawHex；未知类型及非零金额进站不推断。
+  int? get balanceAfterFen {
+    if (isConsume) return balanceFen - amountFen;
+    if (isRecharge) return balanceFen + amountFen;
+    if (isEntry && amountFen == 0) return balanceFen;
+    return null;
+  }
 
   /// 是否入站/上车/进场类记录（EC 0x01 / EP 0x03）：不承载扣费金额，
   /// 不参与与交易明细（0x18）的行程配对。

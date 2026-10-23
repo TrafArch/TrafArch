@@ -124,8 +124,8 @@ void main() {
       );
       final trip = app.analysis!.trips.single;
       expect(trip.typeName, '充值');
-      expect(trip.balanceAfterFen, 5340);
-      expect(trip.balanceAfterText, '¥53.40');
+      expect(trip.balanceAfterFen, 10000);
+      expect(trip.balanceAfterText, '¥100.00');
       expect(trip.appTypeName, '城市轨道交通');
     });
 
@@ -159,7 +159,7 @@ void main() {
       expect(trip.stationLabel, '苏洋');
       expect(trip.stationType, '地铁');
       expect(trip.appTypeName, '城市轨道交通');
-      expect(trip.balanceAfterFen, 5340);
+      expect(trip.balanceAfterFen, 680);
     });
 
     test('复合消费（0x09）配对 0x1E 出站：状态短名与站点', () async {
@@ -326,7 +326,7 @@ void main() {
       expect(trip.appTypeName, '城市轨道交通');
       expect(trip.cityName, '福州市');
       expect(trip.timeText, '2024-05-01 08:30:00');
-      expect(trip.balanceAfterFen, 5340);
+      expect(trip.balanceAfterFen, 680);
     });
 
     test('0x1A 与 0x1E 同时出现（公共汽电车）：不抑制 0x1A', () async {
@@ -384,7 +384,7 @@ void main() {
       expect(app.busTransitRecord, isNull); // 0x1A 记录 2 被抑制
       final trip = app.analysis!.trips.single;
       expect(trip.appTypeName, '公共汽电车');
-      expect(trip.balanceAfterFen, 5340);
+      expect(trip.balanceAfterFen, 680);
     });
 
     test('0x1A 记录 2 与 0x1E（城市轨道）：不抑制公交记录', () async {

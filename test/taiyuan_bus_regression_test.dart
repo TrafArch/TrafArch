@@ -17,6 +17,31 @@ const _reportedHex =
     'CA202609 24182929 16101297 1610FFFF FFFF0000 00000000';
 
 void main() {
+  test('1E balance derivation preserves raw values and handles all types', () {
+    for (final type in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 0, 255]) {
+      for (final amount in [0, 100]) {
+        final record = TUnionTripRecord(
+          typeCode: type,
+          terminalId: '0000000000000000',
+          appTypeCode: 2,
+          lineStationCode: '00000000000000',
+          amountFen: amount,
+          balanceFen: 100,
+          time: DateTime(2026),
+          rawHex: 'ABCD',
+        );
+        final int? expected = switch (type) {
+          2 || 4 || 5 || 6 || 7 || 8 => 100 - amount,
+          9 || 10 => 100 + amount,
+          1 || 3 when amount == 0 => 100,
+          _ => null,
+        };
+        expect(record.balanceAfterFen, expected, reason: '$type/$amount');
+        expect(record.balanceFen, 100);
+        expect(record.rawHex, 'ABCD');
+      }
+    }
+  });
   late Database db;
   late StationCodeTable stations;
   late KnowledgeBase knowledge;
@@ -90,7 +115,7 @@ void main() {
     expect(trip.lineLabel, '864');
     expect(trip.matchedProcessTrip!.lineCode, '0016');
     expect(trip.matchedProcessTrip!.rawHex, _reportedHex.replaceAll(' ', ''));
-    expect(trip.balanceAfterFen, 15050);
+    expect(trip.balanceAfterFen, 14950);
     expect(trip.stationConfidence, isNot(StationMatchConfidence.exact));
     expect(trip.stationLabel, '0000');
   });

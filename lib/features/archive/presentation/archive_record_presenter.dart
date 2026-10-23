@@ -61,7 +61,7 @@ String archiveRecordText(ArchiveHistoryRecord record) {
   value('sequence', '序号');
   amount('amountFen', '金额');
   amount('balanceAfterFen', '交易后余额');
-  amount('balanceFen', '交易后余额');
+  amount('balanceFen', '记录余额');
   amount('entryBalanceFen', '进入时余额');
   amount('entryAmountFen', '进入时金额');
   amount('exitAmountFen', '离开时金额');

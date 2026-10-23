@@ -405,6 +405,21 @@ class CardSessionSnapshot {
     final time = _date(m['time']);
     if (time == null) return null;
     final matched = m['matchedProcess'];
+    final process =
+        matched is Map<String, dynamic> &&
+            [
+              'typeCode',
+              'appTypeCode',
+              'amountFen',
+              'balanceFen',
+              'time',
+            ].every((key) => matched[key] is int) &&
+            [
+              'terminalId',
+              'lineStationCode',
+            ].every((key) => matched[key] is String)
+        ? _cycleFromJson(matched)
+        : null;
     final location = m['location'];
     return TransitTrip(
       time: time,
@@ -432,7 +447,9 @@ class CardSessionSnapshot {
       stationLabel: _str(m['stationLabel']),
       stationType: _str(m['stationType']),
       appTypeName: _str(m['appTypeName']),
-      balanceAfterFen: _int(m['balanceAfterFen']),
+      balanceAfterFen: process != null
+          ? process.balanceAfterFen
+          : _int(m['balanceAfterFen']),
       rideStatusName: _str(m['rideStatusName']),
       isEntry: m['isEntry'] == true,
       matchedProcessTrip: matched is Map<String, dynamic>

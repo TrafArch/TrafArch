@@ -188,7 +188,7 @@ class AnalysisEngine {
             (isBus ? annotation?.record.stationCode : null),
         stationType: stationEntry?.type,
         appTypeName: annotation?.record.appTypeLabel,
-        balanceAfterFen: annotation?.record.balanceFen,
+        balanceAfterFen: annotation?.record.balanceAfterFen,
         rideStatusName: rideStatusName,
         isEntry: annotation?.record.isEntry ?? (fallback != null),
         matchedProcessTrip: annotation?.record,

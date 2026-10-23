@@ -1,5 +1,8 @@
 import 'dart:convert';
 
+import 'package:transit_card_analyzer/features/archive/domain/card_session_snapshot.dart';
+import 'package:transit_card_analyzer/features/archive/presentation/archive_trip_presenter.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/app/app_dependencies.dart';
@@ -16,6 +19,66 @@ import 'package:transit_card_analyzer/features/transit_analysis/tunion_analysis_
 import 'support/test_database.dart';
 
 void main() {
+  test('old cached balances derive from raw process on every projection', () {
+    for (final (type, expected) in [(6, 0), (9, 200), (10, 200), (255, null)]) {
+      final process = {
+        ..._process,
+        'typeCode': type,
+        'amountFen': 100,
+        'balanceFen': 100,
+        'rawHex': 'ABCD',
+      };
+      final fields = {
+        ..._transaction(),
+        'balanceAfterFen': 999,
+        'matchedProcess': process,
+      };
+      final original = jsonEncode(_snapshot(trips: [fields]));
+      var restored = CardSessionSnapshot.decode(original)!;
+      for (var i = 0; i < 3; i++) {
+        expect(restored.trips.single.balanceAfterFen, expected);
+        expect(restored.trips.single.matchedProcessTrip!.balanceFen, 100);
+        restored = CardSessionSnapshot.decode(restored.encode())!;
+        for (final kind in [
+          ArchiveRecordKind.transaction,
+          ArchiveRecordKind.process,
+        ]) {
+          final record = ArchiveHistoryRecord(
+            kind: kind,
+            fields: Map<String, dynamic>.from(
+              kind == ArchiveRecordKind.transaction ? fields : process,
+            ),
+            context: const ArchiveContext(
+              currencyCode: 'CNY',
+              minorUnitDigits: 2,
+            ),
+            sources: const [],
+          );
+          final info = presentArchiveTrips([
+            record,
+          ], onDiagnostics: (_) {}).entries.single.info;
+          expect(
+            info.subText,
+            expected == null
+                ? null
+                : '余额 ${record.context.formatAmount(expected)}',
+          );
+          if (kind == ArchiveRecordKind.process && (type == 9 || type == 10)) {
+            expect(info.amountText, startsWith('+'));
+            expect(info.isConsume, isFalse);
+          }
+        }
+      }
+      expect(fields['balanceAfterFen'], 999);
+      expect(process['balanceFen'], 100);
+      expect(process['rawHex'], 'ABCD');
+      expect(jsonEncode(_snapshot(trips: [fields])), original);
+    }
+    final unmatched = CardSessionSnapshot.decode(
+      jsonEncode(_snapshot(trips: [_transaction()])),
+    )!;
+    expect(unmatched.trips.single.balanceAfterFen, 1234);
+  });
   testWidgets(
     'saved history opens offline as trip cards and readable details',
     (tester) async {
