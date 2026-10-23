@@ -45,6 +45,12 @@ class _TripCardsViewState<S extends Enum> extends State<TripCardsView<S>> {
   final _sources = <S>{};
   final _modes = <TripModeFilter>{};
 
+  InputDecoration _filterDecoration(String label) => InputDecoration(
+    labelText: label,
+    border: const OutlineInputBorder(),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+  );
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -65,26 +71,53 @@ class _TripCardsViewState<S extends Enum> extends State<TripCardsView<S>> {
           ),
         ),
         const SizedBox(height: 8),
-        TripFilterChips(
-          allLabel: '全部来源',
-          labels: widget.sourceLabels,
-          selected: _sources,
-          onChanged: (next) => setState(() {
-            _sources
-              ..clear()
-              ..addAll(next);
-          }),
-        ),
-        const SizedBox(height: 6),
-        TripFilterChips(
-          allLabel: '全部方式',
-          labels: tripModeLabels,
-          selected: _modes,
-          onChanged: (next) => setState(() {
-            _modes
-              ..clear()
-              ..addAll(next);
-          }),
+        Row(
+          children: [
+            Expanded(
+              child: DropdownButtonFormField<S?>(
+                initialValue: _sources.isEmpty ? null : _sources.single,
+                isExpanded: true,
+                decoration: _filterDecoration('来源'),
+                items: [
+                  DropdownMenuItem<S?>(value: null, child: Text('全部来源')),
+                  for (final entry in widget.sourceLabels.entries)
+                    DropdownMenuItem<S?>(
+                      value: entry.key,
+                      child: Text(entry.value),
+                    ),
+                ],
+                onChanged: (next) => setState(() {
+                  _sources
+                    ..clear()
+                    ..addAll(next == null ? <S>{} : {next});
+                }),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: DropdownButtonFormField<TripModeFilter?>(
+                initialValue: _modes.isEmpty ? null : _modes.single,
+                isExpanded: true,
+                decoration: _filterDecoration('方式'),
+                items: [
+                  const DropdownMenuItem<TripModeFilter?>(
+                    value: null,
+                    child: Text('全部方式'),
+                  ),
+                  for (final entry in tripModeLabels.entries)
+                    DropdownMenuItem<TripModeFilter?>(
+                      value: entry.key,
+                      child: Text(entry.value),
+                    ),
+                ],
+                onChanged: (next) => setState(() {
+                  _modes
+                    ..clear()
+                    ..addAll(next == null ? <TripModeFilter>{} : {next});
+                }),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 10),
         if (groups.isEmpty)

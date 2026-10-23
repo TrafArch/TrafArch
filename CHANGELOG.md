@@ -5,6 +5,8 @@
 ### Bug fix
 
 - 按用户要求恢复原包名 `com.kajolno.TrafArch`、显示名 TrafArch 和原 versionName，移除 Debug / Release 隐式 `.repair` 包名和 `-repair` 版本后缀，支持开发者签名后测试原应用升级。
+- 卡片列表：右侧「⋯」操作按钮不再被余额列的 loose `Flexible` 弹性空隙顶离右缘，改为与左侧信息列各占一半、按钮贴卡片右缘，长余额文本加单行省略防溢出。
+- 行程页：来源 / 方式两组筛选 chips 改为并排的两个下拉菜单（单选，「全部来源」「全部方式」为空选项），筛选与过滤逻辑不变；对应回归测试同步更新。
 - 移除本批命令中的 `force-version-code-ignoring-abi`：原 APK Android versionCode 为 4059，源码号 2066 的 arm64 拆包应使用 4066，避免 2066 造成降级安装。
 
 ### Build / Docs

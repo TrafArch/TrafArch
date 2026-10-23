@@ -74,7 +74,8 @@ void main() {
     expect(find.text('当前筛选条件下没有记录'), findsOneWidget);
     await _filter(tester, '全部方式');
     await _filter(tester, '0x1A 轨道');
-    expect(find.byType(TripEntryCard), findsNWidgets(3));
+    // 下拉为单选：只保留轨道记录来源（旧的 chips 多选会并集计 3）。
+    expect(find.byType(TripEntryCard), findsNWidgets(2));
     await _filter(tester, '全部来源');
     await _filter(tester, '公共汽电车');
     expect(find.byType(TripEntryCard), findsNWidgets(3));
@@ -392,9 +393,13 @@ Future<void> _open(
 }
 
 Future<void> _filter(WidgetTester tester, String label) async {
-  final chip = find.widgetWithText(FilterChip, label);
-  await tester.ensureVisible(chip);
-  await tester.tap(chip);
+  // 下拉单选：来源下拉含「全部来源」与 0x1x 标签，其余归属方式下拉。
+  final isSource = label == '全部来源' || label.startsWith('0x1');
+  final fields = find.byWidgetPredicate((w) => w is DropdownButtonFormField);
+  await tester.ensureVisible(fields.at(isSource ? 0 : 1));
+  await tester.tap(fields.at(isSource ? 0 : 1));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(label).last);
   await tester.pumpAndSettle();
 }
 

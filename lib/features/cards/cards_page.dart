@@ -144,12 +144,16 @@ class _SavedCardTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              Flexible(
+              // 与左侧各占一半，右对齐贴住操作按钮；避免 loose Flexible
+              // 的未用弹性空间把按钮顶离右缘，也避免长余额文本溢出。
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
                       card.balanceText ?? '—',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
                         color: scheme.primary,
@@ -158,6 +162,8 @@ class _SavedCardTile extends StatelessWidget {
                     const SizedBox(height: 6),
                     Text(
                       card.transactionCountText ?? '—',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: scheme.outline,
                       ),
