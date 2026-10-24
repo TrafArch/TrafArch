@@ -129,7 +129,7 @@ void main() {
       expect(text, contains('出站'));
       expect(text, contains('序号 1'));
       expect(text, contains('金额 -¥ 46.60'));
-      expect(text, contains('交易后余额 ¥ 53.40'));
+      expect(text, contains('记录余额 ¥ 53.40'));
       expect(text, contains('线路 2号线 | 站点 苏洋'));
       expect(text, contains('福州市'));
       // 同城用卡不标注异地
@@ -190,7 +190,7 @@ void main() {
       expect(text, contains('离开 2026-08-08 09:12:31'));
       expect(text, contains('进入站点码 0800190030000123'));
       expect(text, contains('离开站点码 0800190030000456'));
-      expect(text, contains('进入时余额 ¥ 25.00'));
+      expect(text, contains('进站时余额 ¥ 25.00'));
       expect(text, contains('离开时金额 ¥ 3.00'));
     });
 

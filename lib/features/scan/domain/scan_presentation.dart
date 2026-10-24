@@ -91,7 +91,7 @@ class ScanPresentation {
   }
 
   TransitRecord? _deriveRail() {
-    if (cycleProcessTrips.any((r) => r.isCityRail)) return null;
+    if (cycleProcessTrips.isNotEmpty) return null;
     TUnionProcessRecord? whole;
     for (final r in transitProcessRecords) {
       if (r.sfi != 0x1A) continue;
@@ -104,7 +104,7 @@ class ScanPresentation {
   }
 
   BusTransitRecord? _deriveBus() {
-    if (cycleProcessTrips.any((r) => r.isBus)) return null;
+    if (cycleProcessTrips.isNotEmpty) return null;
     for (final r in transitProcessRecords) {
       if (r.sfi == 0x1A && r.recordNumber == 2) {
         return r.isBlank ? null : r.busTransit;

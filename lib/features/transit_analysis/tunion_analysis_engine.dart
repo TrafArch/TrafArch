@@ -7,6 +7,7 @@ import '../../protocols/transit/tunion/tunion_models.dart';
 import 'tunion_analysis_models.dart';
 import 'tunion_card_identifier.dart';
 import 'balance_interpretation.dart';
+import 'balance_reconstruction.dart';
 import 'tunion_record_context.dart';
 
 /// 分析引擎：识别 → 行程聚合 → 符合性检查 → 异常检测。
@@ -61,12 +62,25 @@ class AnalysisEngine {
     // 0x1E 过程记录增强：按"交易时间（分钟）+ 金额"与交易记录配对。
     // 部分城市（如福州地铁）线路/站点信息不写终端号，只写 0x1E 文件，
     // 终端规则未命中时用注解补齐；配对命中时一并补充 0x1E 独有的
-    // 应用分类与交易后余额（配对不唯一时不注解，保持未知）。
+    // 应用分类与记录余额（配对不唯一时不注解，保持未知）。
     final rideAnnotations = _buildRideAnnotations(card, identity);
     // 0x1A 记录进站兜底：记录 1（城市轨道）/ 记录 2（公共汽电车）的
     // 进站信息与 0 元交易按时间配对，在 0x1E 注解未命中时标记进站。
     final entryFallbacks = _buildEntryFallbacks(card, identity);
-    final trips = card.transactions.map((txn) {
+    // 交易后余额：0x1E 记录余额优先，缺失处按账本顺序从当前钱包余额倒推；
+    // 无法证明连续（类型未知 / 顺序不明 / 无读取锚点）时保持未知。
+    final balanceMatches = _buildBalanceMatches(card);
+    final interpretation = BalanceInterpretation.fromParsedCard(card);
+    final balances = reconstructTransactionBalances(
+      card.transactions,
+      openingBalanceFen: interpretation.semantics == BalanceSemantics.direct
+          ? interpretation.accountBalanceMinor
+          : null,
+      recordedBalanceFen: (txn) => balanceMatches[txn]?.balanceFen,
+    );
+    final trips = card.transactions.indexed.map((indexed) {
+      final (index, txn) = indexed;
+      final balance = balances[index];
       // 终端解码切出的线路/站点编码 → 站点代码表（读卡识途数据）查名称；
       // 终端查表未命中时尝试 0x1E 注解；仍未收录则回退原始编码（不猜测）。
       final key = _pairKey(txn.time, txn.amountFen);
@@ -188,10 +202,13 @@ class AnalysisEngine {
             (isBus ? annotation?.record.stationCode : null),
         stationType: stationEntry?.type,
         appTypeName: annotation?.record.appTypeLabel,
-        balanceAfterFen: annotation?.record.balanceAfterFen,
+        balanceAfterFen: balance?.fen,
+        balanceAfterIsRecorded: balance?.isRecorded,
         rideStatusName: rideStatusName,
         isEntry: annotation?.record.isEntry ?? (fallback != null),
-        matchedProcessTrip: annotation?.record,
+        // 快照由 matchedProcess 的余额恢复来源，不能保存仅分钟级的注解
+        // 为余额证据，否则钱包倒推结果可能在恢复时被误标为记录余额。
+        matchedProcessTrip: balanceMatches[txn],
         stationConfidence: confidence,
         rawHex: txn.rawHex,
         currency: currency,
@@ -253,7 +270,7 @@ class AnalysisEngine {
   }
 
   /// 构建 0x1E 行程注解：可选补齐线路/站点名称（站点代码表命中时）与
-  /// 0x1E 独有的应用分类、交易后余额（未命中站点代码表时仍保留后两者）；
+  /// 0x1E 独有的应用分类、记录余额（未命中站点代码表时仍保留后两者）；
   /// 按"交易时间（分钟）+ 金额"与交易配对，同键多条视为不可判定不注解。
   /// 入站类记录（EC 0x01 / EP 0x03）不承载扣费金额（金额字段为 0），仅与
   /// 进站刷卡写入的 0 元交易配对，命中时行程标记为进站；金额字段非 0 的
@@ -306,6 +323,40 @@ class AnalysisEngine {
       (key, _) => ambiguous.contains(key) || transactionCounts[key] != 1,
     );
     return byKey;
+  }
+
+  /// 余额证据与宽松的站点注解分开：类型方向已知、金额及秒级时间一致，
+  /// 且两侧唯一才接受。两文件没有可证明时间偏差的关联流水号，不能仅凭
+  /// 同分钟（或终端片段）把不同秒的记录升级为余额锚点。
+  Map<TUnionTransaction, TUnionTripRecord> _buildBalanceMatches(
+    ParsedCard card,
+  ) {
+    final candidates = <TUnionTransaction, List<TUnionTripRecord>>{};
+    final uses = <TUnionTripRecord, int>{};
+    for (final txn in card.transactions) {
+      final matches = <TUnionTripRecord>[];
+      for (final record in card.transitProcessRecords) {
+        final trip = record.trip;
+        if (record.sfi != 0x1E || trip == null) continue;
+        final compatible = txn.isRecharge
+            ? trip.isRecharge
+            : txn.isConsume &&
+                  (trip.isConsume || (trip.isEntry && trip.amountFen == 0));
+        if (!compatible ||
+            txn.amountFen != trip.amountFen ||
+            !txn.time.isAtSameMomentAs(trip.time)) {
+          continue;
+        }
+        matches.add(trip);
+        uses.update(trip, (count) => count + 1, ifAbsent: () => 1);
+      }
+      candidates[txn] = matches;
+    }
+    return {
+      for (final entry in candidates.entries)
+        if (entry.value.length == 1 && uses[entry.value.single] == 1)
+          entry.key: entry.value.single,
+    };
   }
 
   StationMatch _matchRailCycle(TUnionTripRecord trip, String? cityCode) {

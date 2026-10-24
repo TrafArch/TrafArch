@@ -177,6 +177,7 @@ class CardSessionSnapshot {
       if (parser != null && (parser is! int || parser < 1)) {
         throw const FormatException('parseVersion 必须是正整数');
       }
+      final parseVersion = parser is int ? parser : 1;
       if (data['cityCode'] != null && data['cityCode'] is! String) {
         throw const FormatException('cityCode 必须是字符串或 null');
       }
@@ -254,14 +255,17 @@ class CardSessionSnapshot {
       }
       final snapshot = CardSessionSnapshot(
         formatVersion: version,
-        parseVersion: _int(data['parseVersion']) ?? 1,
+        parseVersion: parseVersion,
         cardCityCode: _str(data['cityCode']),
         context: context,
         rawEvidence: List.unmodifiable(evidence),
         recordProvenance: object('recordProvenance'),
         extensions: Map.unmodifiable(data),
         originalJson: json,
-        trips: records('trips', _tripFromJson),
+        trips: records(
+          'trips',
+          (fields) => _tripFromJson(fields, parseVersion),
+        ),
         rails: records(
           'rails',
           _railFromJson,
@@ -401,7 +405,7 @@ class CardSessionSnapshot {
         : _cycleToJson(t.matchedProcessTrip!),
   };
 
-  static TransitTrip? _tripFromJson(Map<String, dynamic> m) {
+  static TransitTrip? _tripFromJson(Map<String, dynamic> m, int parseVersion) {
     final time = _date(m['time']);
     if (time == null) return null;
     final matched = m['matchedProcess'];
@@ -420,6 +424,13 @@ class CardSessionSnapshot {
             ].every((key) => matched[key] is String)
         ? _cycleFromJson(matched)
         : null;
+    // v6 起 balanceAfterFen 可能是倒推值，以保存值为准；旧批次仍以
+    // 配对的 0x1E 记录余额为准（balanceAfterFen 只是其副本）。
+    final storedBalance = _int(m['balanceAfterFen']);
+    final reconstructed = parseVersion >= kBalanceReconstructionParseVersion;
+    final balanceAfterFen = reconstructed
+        ? storedBalance
+        : process?.balanceFen ?? storedBalance;
     final location = m['location'];
     return TransitTrip(
       time: time,
@@ -447,9 +458,12 @@ class CardSessionSnapshot {
       stationLabel: _str(m['stationLabel']),
       stationType: _str(m['stationType']),
       appTypeName: _str(m['appTypeName']),
-      balanceAfterFen: process != null
-          ? process.balanceAfterFen
-          : _int(m['balanceAfterFen']),
+      balanceAfterFen: balanceAfterFen,
+      balanceAfterIsRecorded: balanceAfterFen == null
+          ? null
+          : !reconstructed
+          ? true
+          : process != null && storedBalance == process.balanceFen,
       rideStatusName: _str(m['rideStatusName']),
       isEntry: m['isEntry'] == true,
       matchedProcessTrip: matched is Map<String, dynamic>

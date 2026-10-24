@@ -37,7 +37,7 @@ void main() {
       expect(stream.whereType<TransactionTripEntry>(), hasLength(1));
     });
 
-    test('未与 18 关联的 1A / 1E 保留展示', () {
+    test('未与 18 关联的 1E 保留展示，1A 隐藏', () {
       final process = _process();
       final unrelatedProcess = _process(
         time: DateTime(2026, 8, 8, 9, 30),
@@ -60,12 +60,12 @@ void main() {
         stream.whereType<RailRecordEntry>().where(
           (entry) => identical(entry.record, unrelatedRail),
         ),
-        hasLength(2),
+        isEmpty,
       );
       expect(stream.whereType<ProcessTripEntry>(), hasLength(1));
     });
 
-    test('关联 1E 为公交行业时不隐藏轨道 1A', () {
+    test('关联 1E 为公交行业时同样隐藏轨道 1A', () {
       final process = _process(appTypeCode: 0x02, rawHex: '1E03');
       final rail = _rail();
       final stream = buildTripStream(
@@ -73,13 +73,90 @@ void main() {
         rails: [rail],
         processTrips: [process],
       );
-      expect(stream.whereType<RailRecordEntry>(), hasLength(2));
+      expect(stream.whereType<RailRecordEntry>(), isEmpty);
       expect(stream.whereType<ProcessTripEntry>(), isEmpty);
     });
   });
 
+  test('仅 1A 保留，任意行业独立或已并入 18 的 1E 隐藏两种 1A', () {
+    final rails = [_rail()];
+    final buses = [
+      BusTransitRecord(
+        statusCode: 2,
+        entryTime: _entryTime,
+        exitTime: _exitTime,
+      ),
+    ];
+    expect(
+      buildTripStream(trips: [], rails: rails, buses: buses),
+      hasLength(4),
+    );
+    for (final industry in [1, 2, 99]) {
+      final process = _process(appTypeCode: industry);
+      for (final linked in [false, true]) {
+        final stream = buildTripStream(
+          trips: linked ? [_trip(process)] : [],
+          processTrips: linked ? [] : [process],
+          rails: rails,
+          buses: buses,
+        );
+        expect(stream, hasLength(1));
+        expect(stream.whereType<RailRecordEntry>(), isEmpty);
+        expect(stream.whereType<BusRecordEntry>(), isEmpty);
+      }
+    }
+    expect(rails, hasLength(1));
+    expect(buses, hasLength(1));
+  });
+
   group('卡片历史：1A + 1E + 18', () {
-    test('整条 1A 与已关联 1E 并入 18，未关联记录保留', () {
+    for (final linked in [false, true]) {
+      test('按来源批次隐藏，保留跨批次及未知来源 1A（linked=$linked）', () {
+        final process = _processJson(_process(appTypeCode: 2));
+        final records = [
+          _record(
+            linked ? ArchiveRecordKind.transaction : ArchiveRecordKind.process,
+            linked ? _transactionFields(process) : process,
+            batches: ['with-1e'],
+          ),
+          for (final kind in [ArchiveRecordKind.rail, ArchiveRecordKind.bus])
+            for (final batches in [
+              <String>['with-1e'],
+              <String>['only-1a'],
+              <String>['with-1e', 'only-1a'],
+              <String>[],
+            ])
+              _record(kind, _railJson(_rail()), batches: batches),
+        ];
+        final projection = presentArchiveTrips(records, onDiagnostics: (_) {});
+        for (final kind in [ArchiveRecordKind.rail, ArchiveRecordKind.bus]) {
+          expect(
+            projection.entries.where((entry) => entry.source == kind),
+            hasLength(6),
+          );
+        }
+        expect(records, hasLength(9)); // 原始证据未删除
+        expect(projection.mergedRecordCount, 0); // 隐藏不冒称已关联 18
+      });
+    }
+
+    test('无效过程字段不隐藏 1A', () {
+      final projection = presentArchiveTrips([
+        _record(ArchiveRecordKind.process, {'rawHex': '0000'}),
+        _record(
+          ArchiveRecordKind.transaction,
+          _transactionFields({'rawHex': 'FFFF'}),
+        ),
+        _record(ArchiveRecordKind.rail, _railJson(_rail())),
+      ], onDiagnostics: (_) {});
+      expect(
+        projection.entries.where(
+          (entry) => entry.source == ArchiveRecordKind.rail,
+        ),
+        hasLength(2),
+      );
+    });
+    test('同批次所有 1A 隐藏，仅关联 1E 并入 18', () {
       final process = _process();
       final unrelatedProcess = _process(
         time: DateTime(2026, 8, 8, 9, 30),
@@ -117,7 +194,7 @@ void main() {
         projection.entries.where(
           (entry) => entry.source == ArchiveRecordKind.rail,
         ),
-        hasLength(2),
+        isEmpty,
       );
       expect(
         projection.entries.where(
@@ -126,12 +203,12 @@ void main() {
         hasLength(1),
       );
       expect(projection.transactionCount, 1);
-      expect(projection.processRecordCount, 2);
-      expect(projection.mergedRecordCount, 2);
-      expect(projection.summaryText, '交易 1 条 · 过程及应用记录 2 条（2 条已并入 0x18 交易）');
+      expect(projection.processRecordCount, 1);
+      expect(projection.mergedRecordCount, 1);
+      expect(projection.summaryText, '交易 1 条 · 过程及应用记录 1 条（1 条已并入 0x18 交易）');
     });
 
-    test('1A 与关联 1E 时间不匹配时 1A 保留', () {
+    test('1A 与关联 1E 时间不匹配时仍隐藏 1A', () {
       final process = _process();
       final records = [
         _record(
@@ -145,8 +222,8 @@ void main() {
         _record(ArchiveRecordKind.process, _processJson(process)),
       ];
       final projection = presentArchiveTrips(records, onDiagnostics: (_) {});
-      expect(projection.entries, hasLength(3)); // 18 + 1A 两侧
-      expect(projection.processRecordCount, 1);
+      expect(projection.entries, hasLength(1)); // 仅 18，1A 无需关联
+      expect(projection.processRecordCount, 0);
       expect(projection.mergedRecordCount, 1); // 已关联 1E 并入 18
     });
   });
@@ -244,11 +321,14 @@ Map<String, dynamic> _transactionFields(Map<String, dynamic> process) => {
 
 ArchiveHistoryRecord _record(
   ArchiveRecordKind kind,
-  Map<String, dynamic> fields,
-) => ArchiveHistoryRecord(
+  Map<String, dynamic> fields, {
+  List<String> batches = const ['same-read'],
+}) => ArchiveHistoryRecord(
   kind: kind,
   fields: fields,
   context: const ArchiveContext(currencyCode: 'CNY', minorUnitDigits: 2),
   cardCityCode: '3501',
-  sources: const [],
+  sources: [
+    for (final batch in batches) ArchiveRecordSource(batch, 'test', 6, null),
+  ],
 );

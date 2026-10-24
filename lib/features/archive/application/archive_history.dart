@@ -7,6 +7,8 @@ import '../domain/card_session_snapshot.dart';
 import '../data/card_repository.dart';
 import '../domain/archive_balance.dart';
 import '../../transit_analysis/balance_interpretation.dart';
+import '../../transit_analysis/tunion_analysis_models.dart'
+    show kBalanceReconstructionParseVersion;
 
 enum ArchiveRecordKind { transaction, rail, bus, process }
 
@@ -358,6 +360,12 @@ class ArchiveHistory {
             _canonical({
               'kind': section.key,
               'fields': fields,
+              // Only split transactions whose balance value or source label
+              // changes across v6; unrelated records retain cross-version dedup.
+              if (section.value == ArchiveRecordKind.transaction &&
+                  _hasBalanceSemanticConflict(fields))
+                'reconstructedBalance':
+                    snapshot.parseVersion >= kBalanceReconstructionParseVersion,
               'context': {
                 'systemId': context.systemId,
                 'applicationId': context.applicationId,
@@ -411,6 +419,24 @@ class ArchiveHistory {
       balanceObservedAt: balanceObservedAt,
     );
   }
+}
+
+bool _hasBalanceSemanticConflict(Map<String, dynamic> fields) {
+  final stored = fields['balanceAfterFen'];
+  final matched = fields['matchedProcess'];
+  final hasMatchedBalance =
+      matched is Map<String, dynamic> &&
+      [
+        'typeCode',
+        'appTypeCode',
+        'amountFen',
+        'balanceFen',
+        'time',
+      ].every((key) => matched[key] is int) &&
+      ['terminalId', 'lineStationCode'].every((key) => matched[key] is String);
+  // With evidence, differing values include v6's explicit unknown. Without
+  // evidence, a saved amount changes from recorded to reconstructed in v6.
+  return hasMatchedBalance ? stored != matched['balanceFen'] : stored is int;
 }
 
 Object? _canonical(Object? value) {

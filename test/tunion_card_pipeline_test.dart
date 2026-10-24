@@ -1,5 +1,8 @@
 import 'dart:convert';
 
+import 'package:transit_card_analyzer/features/transit_analysis/balance_reconstruction.dart';
+import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_codec.dart';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/features/transit_analysis/tunion_analysis_engine.dart';
 import 'package:transit_card_analyzer/features/transit_analysis/tunion_analysis_models.dart';
@@ -26,6 +29,126 @@ Future<ParsedCard?> _parseTu(LocalTransceive link) async {
 
 void main() {
   group('交通联合（TU）解析管道', () {
+    for (final individual in [false, true]) {
+      for (final missing in [0, 1]) {
+        test('APDU 到余额：逐条=$individual 缺槽=$missing 不跨缺口', () async {
+          final slots = [
+            _record(seq: 3, day: 3),
+            _record(seq: 2, day: 2),
+            _record(seq: 1),
+          ];
+          slots[missing] = List.filled(23, 0);
+          final link = _baseLink(
+            b2Response: individual
+                ? [0x6A, 0x83]
+                : _sw9000(slots.expand((r) => r).toList()),
+          );
+          if (individual) {
+            for (final slot in slots) {
+              link.enqueue(0xB2, _sw9000(slot));
+            }
+            link.enqueue(0xB2, [0x6A, 0x83]);
+          }
+          final parsed = (await _parseTu(link.call))!;
+          expect(
+            parsed.transactions.map((t) => t.recordNumber),
+            missing == 0 ? [2, 3] : [1, 3],
+          );
+          final balances = reconstructTransactionBalances(
+            parsed.transactions,
+            openingBalanceFen: parsed.info.balanceFen,
+          );
+          expect(
+            balances.map((b) => b?.fen),
+            missing == 0 ? [null, null] : [10000, null],
+          );
+        });
+      }
+    }
+
+    for (final stamp in [
+      [0x20, 0x24, 0x02, 0x30, 0x08, 0x30, 0x00],
+      [0x20, 0x23, 0x02, 0x29, 0x08, 0x30, 0x00],
+      [0x20, 0x24, 0x05, 0x02, 0x24, 0x00, 0x00],
+      [0x20, 0x24, 0x05, 0x02, 0x08, 0x60, 0x00],
+      [0x20, 0x24, 0x05, 0x02, 0x08, 0x30, 0x60],
+      [0x20, 0x24, 0x05, 0x02, 0xFA, 0x30, 0x00],
+    ]) {
+      test('非法时间 $stamp 不归零/归一化且保留槽位缺口', () async {
+        final bad = _record(seq: 2)..setRange(16, 23, stamp);
+        final parsed = (await _parseTu(
+          _baseLink(
+            b2Response: _sw9000([
+              ..._record(seq: 3, day: 3),
+              ...bad,
+              ..._record(),
+            ]),
+          ).call,
+        ))!;
+        expect(parsed.transactions.map((t) => t.recordNumber), [1, 3]);
+        expect(
+          reconstructTransactionBalances(
+            parsed.transactions,
+            openingBalanceFen: 10000,
+          ).map((b) => b?.fen),
+          [10000, null],
+        );
+        expect(TUnionCodec.parseBcdDateTime(stamp), isNull);
+      });
+    }
+
+    test('日期严格校验且接受真实闰日', () {
+      expect(TUnionCodec.parseBcdDate([0x20, 0x24, 0x02, 0x30]), isNull);
+      expect(
+        TUnionCodec.parseBcdDate([0x20, 0x24, 0x02, 0x29]),
+        DateTime(2024, 2, 29),
+      );
+    });
+
+    for (final olderSequence in [3, 4, 0xFFFF]) {
+      test('APDU 异时重复/反向消费序号 $olderSequence 中断倒推', () async {
+        final parsed = (await _parseTu(
+          _baseLink(
+            b2Response: _sw9000([
+              ..._record(seq: 3, day: 2),
+              ..._record(seq: olderSequence),
+            ]),
+          ).call,
+        ))!;
+        expect(
+          reconstructTransactionBalances(
+            parsed.transactions,
+            openingBalanceFen: 10000,
+          ).map((b) => b?.fen),
+          [10000, null],
+        );
+      });
+    }
+
+    test('标准余额失败：P1=03 仅保留原始观察，不伪造钱包', () async {
+      final link = _baseLink();
+      final queries = <List<int>>[];
+      final parsed = (await _parseTu((apdu) async {
+        if (apdu[1] == 0x5C) {
+          queries.add(apdu);
+          return apdu[2] == 0
+              ? [0x6A, 0x82]
+              : _sw9000([0, 0, 0x27, 0x10, 0, 0, 0, 0]);
+        }
+        return link.call(apdu);
+      }))!;
+      expect(queries.map((a) => a[2]), [0, 0, 3]);
+      expect(parsed.info.balanceFen, isNull);
+      expect(parsed.info.overdraftQueryRawHex, '0000271000000000');
+      expect(
+        reconstructTransactionBalances(
+          parsed.transactions,
+          openingBalanceFen: parsed.info.balanceFen,
+        ),
+        everyElement(isNull),
+      );
+    });
+
     test('0x1E 整体读取的连续 70 模板保留两条完整记录', () async {
       final link = _baseLink();
       link.enqueue(0xB2, const [0x6A, 0x83]); // 1A record 1

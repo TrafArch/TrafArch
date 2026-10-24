@@ -157,7 +157,10 @@ class CommonUnitTu {
       }
       _report(0.25);
       final balance = await _readBalance();
-      merged = merged!.withBalance(balance ?? merged.balanceFen);
+      merged = merged!.withBalance(
+        balance,
+        overdraftQueryRawHex: _overdraftQueryRawHex,
+      );
       _report(0.4);
       await _readTransactions(transactions);
       _report(0.6);
@@ -247,15 +250,20 @@ class CommonUnitTu {
     return _lastCardInfo;
   }
 
+  String? _overdraftQueryRawHex;
+
   Future<int?> _readBalance() async {
-    // 优先使用标准电子钱包查询。P1=03 保留为原有兼容回退；
-    // 它不能替代成功的 P1=00 响应，也不能与该响应相加。
+    _overdraftQueryRawHex = null;
     final standard = await _queryBalance(0x00);
-    // Zero is a successful reading too; another response must not replace it.
+    // 零余额同样有效；P1=03 是透支数据，绝不作为钱包锚点。
     if (standard != null) return standard;
-    final wallet = await _queryBalance(0x03);
-    if (wallet != null && wallet != 0) return wallet;
-    return standard ?? wallet;
+    for (final cla in const [0x80, 0x00]) {
+      final resp = await _exchange(TUnionApdu.getBalance(cla: cla, p1: 0x03));
+      if (!_isSuccess(resp)) continue;
+      _overdraftQueryRawHex = TUnionCodec.hexBytes(_stripSw(resp));
+      break;
+    }
+    return null;
   }
 
   Future<int?> _queryBalance(int p1) async {
@@ -288,7 +296,7 @@ class CommonUnitTu {
         if (_stripSw(resp).length % _transactionRecordSize == 0) {
           _transactionFileObserved = true;
         }
-        records.addAll(_decodeRecords(_stripSw(resp)));
+        records.addAll(_decodeRecords(_stripSw(resp), firstRecordNumber: i));
         if (records.length >= _maxTransactionRecords) break;
       }
     }
@@ -506,7 +514,10 @@ class CommonUnitTu {
     );
   }
 
-  List<TUnionTransaction> _decodeRecords(List<int> data) {
+  List<TUnionTransaction> _decodeRecords(
+    List<int> data, {
+    int firstRecordNumber = 1,
+  }) {
     if (data.isEmpty) return const [];
     final payload = _unwrapRecordTemplate(data) ?? data;
     final out = <TUnionTransaction>[];
@@ -517,6 +528,7 @@ class CommonUnitTu {
     ) {
       final record = _decodeTransaction(
         payload.sublist(s, s + _transactionRecordSize),
+        recordNumber: firstRecordNumber + s ~/ _transactionRecordSize,
       );
       if (record != null) out.add(record);
     }
@@ -686,26 +698,18 @@ class CommonUnitTu {
     );
   }
 
-  TUnionTransaction? _decodeTransaction(List<int> data) {
+  TUnionTransaction? _decodeTransaction(
+    List<int> data, {
+    required int recordNumber,
+  }) {
     final payload = _unwrapRecordTemplate(data) ?? data;
     if (payload.length < _transactionRecordSize) return null;
     if (payload.every((b) => b == 0x00)) return null;
-    final date = TUnionCodec.parseBcdDate(payload.sublist(16, 20));
-    if (date == null) return null;
-
-    final timeBytes = payload.sublist(20, 23);
-    var hour = 0, minute = 0, second = 0;
-    if (timeBytes.every(TUnionCodec.isBcdByte)) {
-      final t = TUnionCodec.bcdToInt(timeBytes);
-      hour = t ~/ 10000;
-      minute = (t ~/ 100) % 100;
-      second = t % 100;
-      if (hour > 23 || minute > 59 || second > 59) {
-        hour = minute = second = 0;
-      }
-    }
+    final time = TUnionCodec.parseBcdDateTime(payload.sublist(16, 23));
+    if (time == null) return null;
 
     return TUnionTransaction(
+      recordNumber: recordNumber,
       sequence: (payload[0] << 8) | payload[1],
       overdraftLimitFen: (payload[2] << 16) | (payload[3] << 8) | payload[4],
       amountFen:
@@ -718,7 +722,7 @@ class CommonUnitTu {
           TUnionCodec.bcdString(payload.sublist(10, 16)) ??
           TUnionCodec.hexBytes(payload.sublist(10, 16)) ??
           '',
-      time: DateTime(date.year, date.month, date.day, hour, minute, second),
+      time: time,
       rawHex: TUnionCodec.hexBytes(payload),
     );
   }

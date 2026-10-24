@@ -39,7 +39,10 @@ class TUnionCodec {
         day > 31) {
       return null;
     }
-    return DateTime(year, month, day);
+    final date = DateTime(year, month, day);
+    return date.year == year && date.month == month && date.day == day
+        ? date
+        : null;
   }
 
   /// 7 字节 BCD 时间戳（YYYYMMDDhhmmss）转 DateTime，非法时返回 null。
@@ -62,7 +65,15 @@ class TUnionCodec {
         second > 59) {
       return null;
     }
-    return DateTime(year, month, day, hour, minute, second);
+    final time = DateTime(year, month, day, hour, minute, second);
+    return time.year == year &&
+            time.month == month &&
+            time.day == day &&
+            time.hour == hour &&
+            time.minute == minute &&
+            time.second == second
+        ? time
+        : null;
   }
 
   /// 大端无符号整数（最多 4 字节），超界自动截断。

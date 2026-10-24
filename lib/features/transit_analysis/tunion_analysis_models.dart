@@ -2,9 +2,14 @@ import '../reference_data/domain/station_codes.dart';
 import '../reference_data/domain/tunion_terminal_decoder.dart';
 import '../../protocols/transit/tunion/tunion_models.dart';
 
+/// 交易后余额倒推口径的起始解析版本：该版本起 `balanceAfterFen`
+/// 优先取 0x1E 记录余额、缺失处按连续交易倒推（未配对 0x1E 的交易
+/// 也可能带余额）；更早版本只保存 0x1E 配对的记录余额。
+const int kBalanceReconstructionParseVersion = 6;
+
 /// 行程解析口径版本：解析 / 关联规则变更时递增，随读取批次持久化，
 /// 历史数据据此识别产出批次所用的解析口径。
-const int kTripParseVersion = 4;
+const int kTripParseVersion = kBalanceReconstructionParseVersion;
 
 /// 识别证据：来源、说明与权重（0 表示"出场但未命中"）。
 class Evidence {
@@ -148,8 +153,13 @@ class TransitTrip {
   /// 由 0x1E 过程记录按"时间 + 金额"配对补充，未配对或未收录时为 null。
   final String? appTypeName;
 
-  /// 交易后余额（分）；由 0x1E 过程记录配对补充，未配对时为 null。
+  /// 交易后余额（分）：0x1E 记录余额优先，缺失处按账本顺序从当前钱包
+  /// 余额倒推；无法证明连续或未读取到余额时为 null（不猜测）。
   final int? balanceAfterFen;
+
+  /// 余额来源：true 为 0x1E 记录余额；false 为按连续交易倒推；
+  /// null 为旧数据 / 未标注（展示层按记录余额兼容）。
+  final bool? balanceAfterIsRecorded;
 
   /// 复合消费（0x09）行程配对命中时的状态短名（如 "出站" / "进站" /
   /// "上车" / "下车"）；其他行程或未配对时为 null，展示层据此替换
@@ -192,6 +202,7 @@ class TransitTrip {
     this.stationType,
     this.appTypeName,
     this.balanceAfterFen,
+    this.balanceAfterIsRecorded,
     this.rideStatusName,
     this.isEntry = false,
     this.matchedProcessTrip,
@@ -203,10 +214,17 @@ class TransitTrip {
   String get amountText =>
       '${isConsume ? '-' : '+'}${currency.symbol}${(amountFen / 100).toStringAsFixed(2)}';
 
-  /// 交易后余额展示文本（如 "¥53.40" / "HK\$53.40"）；无 0x1E 配对时为 null。
+  /// 余额展示文本（如 "¥53.40" / "HK\$53.40"）；无余额证据时为 null。
   String? get balanceAfterText => balanceAfterFen == null
       ? null
       : '${currency.symbol}${(balanceAfterFen! / 100).toStringAsFixed(2)}';
+
+  /// 余额口径标签：记录余额 / 交易后余额（旧数据按记录余额兼容）。
+  String? get balanceAfterLabel => balanceAfterFen == null
+      ? null
+      : balanceAfterIsRecorded == false
+      ? '交易后余额'
+      : '记录余额';
 
   bool get hasLocation =>
       lineLabel != null || stationLabel != null || cityName != null;
@@ -357,15 +375,21 @@ final class ProcessTripEntry extends TripEntry {
 /// 0x1E 过程记录为按时间倒序的行程流：
 /// - 已与交易配对的 0x1E 由交易条目代表；无法配对的 0x1E 保留为
 ///   [ProcessTripEntry]（独立过程事件，不丢弃）；
-/// - 城市轨道 1A 记录只要任一侧与已关联 1E（时间 + 城市 + 金额 /
-///   终端互证）对应，整条记录（进 / 出两侧）均隐藏，由 18+1E 混合
-///   行程作为最终展示；未证实对应的 1A 记录保持完整展示。
+/// - 同次读取存在已解析 1E（含已并入交易的证据）时，轨道和公交 1A
+///   均隐藏，不要求行业或事件对应；原始记录不变。
 List<TripEntry> buildTripStream({
   required List<TransitTrip> trips,
   List<TransitRecord> rails = const [],
   List<BusTransitRecord> buses = const [],
   List<TUnionTripRecord> processTrips = const [],
 }) {
+  // Inputs belong to one read. Suppress only the display inputs so hidden 1A
+  // timestamps cannot also suppress composite 0x18 transactions.
+  if (processTrips.isNotEmpty ||
+      trips.any((trip) => trip.matchedProcessTrip != null)) {
+    rails = const [];
+    buses = const [];
+  }
   final halves = <TripEntry>[
     for (final rail in rails) ..._railHalves(rail),
     for (final bus in buses) ..._busHalves(bus),

@@ -115,7 +115,7 @@ void main() {
       expect(trip.amountText, '+¥46.60');
     });
 
-    test('充值交易配对 0x1E：补充交易后余额与行业', () async {
+    test('充值交易配对 0x1E：补充记录余额与行业', () async {
       final app = await _scan(
         _FakeNfcChannel()..enqueueWalletScript(
           record: _record(terminal: '123456789012', rawType: 0x02),
@@ -124,9 +124,79 @@ void main() {
       );
       final trip = app.analysis!.trips.single;
       expect(trip.typeName, '充值');
-      expect(trip.balanceAfterFen, 10000);
-      expect(trip.balanceAfterText, '¥100.00');
+      expect(trip.balanceAfterFen, 5340);
+      expect(trip.balanceAfterText, '¥53.40');
+      expect(trip.balanceAfterLabel, '记录余额');
+      expect(trip.balanceAfterIsRecorded, isTrue);
       expect(trip.appTypeName, '城市轨道交通');
+    });
+
+    for (final types in [
+      (0x02, 0x04),
+      (0x06, 0x09),
+      (0x06, 0x0B),
+      (0xFF, 0x04),
+    ]) {
+      test('余额拒绝方向错配或未知类型 ${types.$1}/${types.$2}，站点注解保留', () async {
+        final database = _memoryDatabase();
+        final app = await _scan(
+          _FakeNfcChannel()..enqueueWalletScript(
+            record: _record(rawType: types.$1),
+            cycleRecord: _cycleRecord(typeCode: types.$2),
+          ),
+          database: database,
+        );
+        final trip = app.analysis!.trips.single;
+        expect(trip.balanceAfterIsRecorded, isNot(isTrue));
+        expect(trip.balanceAfterFen, isNot(5340));
+        expect(trip.matchedProcessTrip, isNull);
+        expect(trip.stationLabel, '苏洋');
+        await app.acceptPendingSave(app.pendingCardSave!.pendingSaveId);
+        final rows = await database.select(database.savedCards).get();
+        final snapshot =
+            jsonDecode(rows.single.sessionDataJson!) as Map<String, dynamic>;
+        expect((snapshot['trips'] as List).single['matchedProcess'], isNull);
+      });
+    }
+
+    test('同分钟不同秒只补站点，不作为余额证据', () async {
+      final cycle = _cycleRecord()..[31] = 0x01;
+      final app = await _scan(
+        _FakeNfcChannel()
+          ..enqueueWalletScript(record: _record(), cycleRecord: cycle),
+      );
+      final trip = app.analysis!.trips.single;
+      expect(trip.stationLabel, '苏洋');
+      expect(trip.balanceAfterFen, 10000);
+      expect(trip.balanceAfterIsRecorded, isFalse);
+      expect(trip.matchedProcessTrip, isNull);
+    });
+
+    test('同分钟多候选优先精确秒余额配对', () async {
+      final other = _cycleRecord()..[31] = 0x01;
+      final app = await _scan(
+        _FakeNfcChannel()..enqueueWalletScript(
+          record: _record(),
+          cycleRecord: [...other, ..._cycleRecord()],
+        ),
+      );
+      final trip = app.analysis!.trips.single;
+      expect(trip.balanceAfterFen, 5340);
+      expect(trip.balanceAfterIsRecorded, isTrue);
+      expect(trip.matchedProcessTrip!.time.second, 0);
+    });
+
+    test('精确秒重复候选不能作为余额证据', () async {
+      final app = await _scan(
+        _FakeNfcChannel()..enqueueWalletScript(
+          record: _record(),
+          cycleRecord: [..._cycleRecord(), ..._cycleRecord()],
+        ),
+      );
+      final trip = app.analysis!.trips.single;
+      expect(trip.balanceAfterFen, 10000);
+      expect(trip.balanceAfterIsRecorded, isFalse);
+      expect(trip.matchedProcessTrip, isNull);
     });
 
     test('站点编码未收录：线路命中名称、站点回退原始编码', () async {
@@ -159,7 +229,28 @@ void main() {
       expect(trip.stationLabel, '苏洋');
       expect(trip.stationType, '地铁');
       expect(trip.appTypeName, '城市轨道交通');
-      expect(trip.balanceAfterFen, 680);
+      expect(trip.balanceAfterFen, 5340);
+    });
+
+    test('无 0x1E：按钱包余额与交易金额倒推交易后余额', () async {
+      final app = await _scan(
+        _FakeNfcChannel()..enqueueWalletScript(
+          record: [
+            ..._record(seq: 2, amountFen: 1000, day: 2, rawType: 0x02),
+            ..._record(seq: 1, amountFen: 4660, day: 1),
+          ],
+        ),
+      );
+      final trips = app.analysis!.trips;
+      expect(trips.length, 2);
+      // 时间倒序：5-02 充值 10.00 元后余额 100.00 元；
+      // 更旧的 5-01 消费 46.60 元，其交易后余额为 100.00 - 10.00 = 90.00 元。
+      expect(trips[0].typeName, '充值');
+      expect(trips[0].balanceAfterFen, 10000);
+      expect(trips[0].balanceAfterLabel, '交易后余额');
+      expect(trips[1].typeName, '消费');
+      expect(trips[1].balanceAfterFen, 9000);
+      expect(trips[1].balanceAfterIsRecorded, isFalse);
     });
 
     test('复合消费（0x09）配对 0x1E 出站：状态短名与站点', () async {
@@ -285,7 +376,9 @@ void main() {
       expect(rec.entryStationId, '0800190030000123');
       expect(rec.entryBalanceFen, 2500);
       expect(rec.exitAmountFen, 300);
-      expect(rec.entryBalanceFen! - rec.exitAmountFen!, 2200); // 出站钱包余额推算
+      // 钱包余额即最新一笔交易之后的余额（与 0x1E 记录余额口径分开）。
+      expect(app.analysis!.trips.single.balanceAfterFen, 10000);
+      expect(app.analysis!.trips.single.balanceAfterLabel, '交易后余额');
     });
 
     test('0x1A 记录 1 未写入：不产出进出站记录', () async {
@@ -313,6 +406,25 @@ void main() {
       expect(rec.exitAmountFen, 300);
     });
 
+    for (final invalid in [
+      List<int>.filled(48, 0),
+      List<int>.filled(48, 255),
+      <int>[1, 2, 3],
+    ]) {
+      test('空白或无效 1E 不隐藏 1A：${invalid.first}', () async {
+        final app = await _scan(
+          _FakeNfcChannel()..enqueueWalletScript(
+            record: _record(),
+            varRecord: _railRecord(),
+            busRecord: _busRecord(),
+            cycleRecord: invalid,
+          ),
+        );
+        expect(app.railTransitRecord, isNotNull);
+        expect(app.busTransitRecord, isNotNull);
+      });
+    }
+
     test('0x1A 与 0x1E 同时出现（城市轨道）：以 0x1E 为准', () async {
       final app = await _scan(
         _FakeNfcChannel()..enqueueWalletScript(
@@ -326,10 +438,10 @@ void main() {
       expect(trip.appTypeName, '城市轨道交通');
       expect(trip.cityName, '福州市');
       expect(trip.timeText, '2024-05-01 08:30:00');
-      expect(trip.balanceAfterFen, 680);
+      expect(trip.balanceAfterFen, 5340);
     });
 
-    test('0x1A 与 0x1E 同时出现（公共汽电车）：不抑制 0x1A', () async {
+    test('0x1A 与 0x1E 同时出现（公共汽电车）：同样抑制 0x1A', () async {
       final app = await _scan(
         _FakeNfcChannel()..enqueueWalletScript(
           record: _record(terminal: '123456789012'),
@@ -337,8 +449,7 @@ void main() {
           cycleRecord: _cycleRecord(appTypeCode: 0x02), // 0x1E：公共汽电车行业
         ),
       );
-      expect(app.railTransitRecord, isNotNull); // 行业不匹配不抑制
-      expect(app.railTransitRecord!.entryBalanceFen, 2500);
+      expect(app.railTransitRecord, isNull); // 跨行业同样隐藏
       expect(app.analysis!.trips.single.appTypeName, '公共汽电车');
     });
 
@@ -384,10 +495,10 @@ void main() {
       expect(app.busTransitRecord, isNull); // 0x1A 记录 2 被抑制
       final trip = app.analysis!.trips.single;
       expect(trip.appTypeName, '公共汽电车');
-      expect(trip.balanceAfterFen, 680);
+      expect(trip.balanceAfterFen, 5340);
     });
 
-    test('0x1A 记录 2 与 0x1E（城市轨道）：不抑制公交记录', () async {
+    test('0x1A 记录 2 与 0x1E（城市轨道）：同样抑制公交记录', () async {
       final app = await _scan(
         _FakeNfcChannel()..enqueueWalletScript(
           record: _record(terminal: '123456789012'),
@@ -395,8 +506,7 @@ void main() {
           cycleRecord: _cycleRecord(), // 0x1E：城市轨道交通行业
         ),
       );
-      expect(app.busTransitRecord, isNotNull); // 行业不匹配不抑制
-      expect(app.busTransitRecord!.transactionAmountFen, 300);
+      expect(app.busTransitRecord, isNull); // 跨行业同样隐藏
       expect(app.analysis!.trips.single.appTypeName, '城市轨道交通');
     });
 
@@ -422,6 +532,9 @@ void main() {
       );
       final trip = app.analysis!.trips.single;
       expect(trip.amountText, '-¥46.60');
+      expect(trip.balanceAfterFen, isNull);
+      expect(trip.balanceAfterIsRecorded, isNull);
+      expect(trip.matchedProcessTrip, isNull);
       expect(app.cardCurrency.code, 'CNY');
       expect(app.cardCurrency.symbol, '¥');
       expect(app.railTransitRecord!.entryBalanceFen, 2500);
@@ -444,6 +557,9 @@ void main() {
       );
       final trip = app.analysis!.trips.single;
       expect(trip.amountText, '-¥46.60');
+      expect(trip.balanceAfterFen, isNull);
+      expect(trip.balanceAfterIsRecorded, isNull);
+      expect(trip.matchedProcessTrip, isNull);
       expect(app.cardCurrency.code, 'CNY');
       expect(app.cardCurrency.symbol, '¥');
       expect(app.railTransitRecord!.entryBalanceFen, 2500);
@@ -1187,7 +1303,7 @@ List<int> _cycleRecord({
     (balanceFen >> 24) & 0xFF,
     (balanceFen >> 16) & 0xFF,
     (balanceFen >> 8) & 0xFF,
-    balanceFen & 0xFF, // [15-18] 交易后余额
+    balanceFen & 0xFF, // [15-18] 记录余额
     0x20, 0x24, 0x05, day, 0x08, 0x30, 0x00, // [19-1F] 交易时间
     ..._bcd(cityCode), // [20-21] 城市代码
     ..._bcd('0000000000000000'), // [22-29] 收单机构

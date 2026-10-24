@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:transit_card_analyzer/features/trips/trip_entry_presenter.dart';
+import 'package:transit_card_analyzer/features/trips/trip_presentation_context.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/tu_region_live_source.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/tu_station_repository.dart';
@@ -17,7 +19,7 @@ const _reportedHex =
     'CA202609 24182929 16101297 1610FFFF FFFF0000 00000000';
 
 void main() {
-  test('1E balance derivation preserves raw values and handles all types', () {
+  test('1E display preserves raw balance for all types', () {
     for (final type in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 0, 255]) {
       for (final amount in [0, 100]) {
         final record = TUnionTripRecord(
@@ -30,16 +32,42 @@ void main() {
           time: DateTime(2026),
           rawHex: 'ABCD',
         );
-        final int? expected = switch (type) {
-          2 || 4 || 5 || 6 || 7 || 8 => 100 - amount,
-          9 || 10 => 100 + amount,
-          1 || 3 when amount == 0 => 100,
-          _ => null,
-        };
-        expect(record.balanceAfterFen, expected, reason: '$type/$amount');
+        final info = describeTripEntry(
+          ProcessTripEntry(record),
+          _display,
+          remote: false,
+        );
+        expect(info.subText, '记录余额 ¥1.00', reason: '$type/$amount');
+        expect(info.fields, contains(('记录余额', '¥1.00')));
         expect(record.balanceFen, 100);
         expect(record.rawHex, 'ABCD');
       }
+    }
+  });
+  test('1A displays only recorded entry balance without deducting fares', () {
+    for (final balance in [2500, 0, null]) {
+      final rail = TransitRecord(
+        statusCode: 2,
+        entryBalanceFen: balance,
+        entryAmountFen: 100,
+        exitAmountFen: 300,
+      );
+      final entry = describeTripEntry(
+        RailRecordEntry(rail, isEntry: true),
+        _display,
+        remote: false,
+      );
+      final exit = describeTripEntry(
+        RailRecordEntry(rail, isEntry: false),
+        _display,
+        remote: false,
+      );
+      expect(
+        entry.subText,
+        balance == null ? null : '余额 ¥${(balance / 100).toStringAsFixed(2)}',
+      );
+      expect(exit.subText, isNull);
+      expect(exit.fields.where((f) => f.$1.contains('余额')), isEmpty);
     }
   });
   late Database db;
@@ -115,7 +143,7 @@ void main() {
     expect(trip.lineLabel, '864');
     expect(trip.matchedProcessTrip!.lineCode, '0016');
     expect(trip.matchedProcessTrip!.rawHex, _reportedHex.replaceAll(' ', ''));
-    expect(trip.balanceAfterFen, 14950);
+    expect(trip.balanceAfterFen, 15050);
     expect(trip.stationConfidence, isNot(StationMatchConfidence.exact));
     expect(trip.stationLabel, '0000');
   });
@@ -246,6 +274,23 @@ void main() {
     expect(location.stationLabel, isNull);
   });
 }
+
+final _display = TripPresentationContext(
+  currency: Currency.cny,
+  cityNameOf: (_) => null,
+  resolveStationMatch: (_, _, {lineValue}) => StationMatch.unmatched,
+  resolveCycleStationMatch: (_, _, {terminalId, time, appType}) =>
+      StationMatch.unmatched,
+  resolveLineName: (_, _) => null,
+  resolveBusLocation:
+      (city, field, {context = const TunionBusDecodeContext()}) =>
+          resolveTunionBusLocation(
+            stations: StationCodeTable.empty,
+            cityCode: city,
+            field: field,
+            context: context,
+          ),
+);
 
 List<int> _bytes(String hex) {
   final compact = hex.replaceAll(RegExp(r'\s+'), '');

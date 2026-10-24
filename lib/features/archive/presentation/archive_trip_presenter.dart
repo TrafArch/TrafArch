@@ -14,8 +14,8 @@ const archiveTripSourceLabels = {
 };
 
 /// Saved-history projection plus the visible record counts. Linked 0x1E records
-/// and the matching 0x1A rail record are merged into the 0x18 card; the
-/// authoritative history and its raw evidence remain untouched.
+/// are merged into 0x18; 0x1A is hidden only when all its source batches have
+/// parsed 0x1E evidence. Authoritative history and raw evidence stay untouched.
 class ArchiveTripProjection {
   const ArchiveTripProjection({
     required this.entries,
@@ -41,25 +41,23 @@ ArchiveTripProjection presentArchiveTrips(
   List<ArchiveHistoryRecord> records, {
   required void Function(ArchiveHistoryRecord) onDiagnostics,
 }) {
-  // Association evidence is stored with the 0x18 record. A linked 0x1E is
-  // represented by the 0x18 card; a rail 0x1A is hidden only when one of its
-  // sides is proven to be that same process event.
+  // A parsed process, including evidence already merged into 0x18, suppresses
+  // 1A only within its source batches. Unknown attribution never hides history.
   final mergedProcesses = <TUnionTripRecord>[];
-  final mergedRailRecords = <ArchiveHistoryRecord>{};
+  final processBatches = <String>{};
   for (final record in records) {
-    if (record.kind != ArchiveRecordKind.transaction) continue;
-    final matched = record.fields['matchedProcess'];
-    if (matched is! Map<String, dynamic>) continue;
-    final process = _processFromFields(matched);
-    if (process == null) continue;
-    mergedProcesses.add(process);
-    if (record.fields['consume'] != true || !process.isCityRail) continue;
-    for (final rail in records) {
-      if (rail.kind != ArchiveRecordKind.rail) continue;
-      final railRecord = _railFromFields(rail.fields);
-      if (railRecord != null && railRecordMatchesProcess(railRecord, process)) {
-        mergedRailRecords.add(rail);
+    TUnionTripRecord? process;
+    if (record.kind == ArchiveRecordKind.process) {
+      process = _processFromFields(record.fields);
+    } else if (record.kind == ArchiveRecordKind.transaction) {
+      final matched = record.fields['matchedProcess'];
+      if (matched is Map<String, dynamic>) {
+        process = _processFromFields(matched);
+        if (process != null) mergedProcesses.add(process);
       }
+    }
+    if (process != null) {
+      processBatches.addAll(record.sources.map((source) => source.batchId));
     }
   }
   var transactionCount = 0;
@@ -67,9 +65,12 @@ ArchiveTripProjection presentArchiveTrips(
   var mergedRecordCount = 0;
   final events = <_ArchiveEvent>[];
   for (final record in records) {
-    if (record.kind == ArchiveRecordKind.rail &&
-        mergedRailRecords.contains(record)) {
-      mergedRecordCount++;
+    if ((record.kind == ArchiveRecordKind.rail ||
+            record.kind == ArchiveRecordKind.bus) &&
+        record.sources.isNotEmpty &&
+        record.sources.every(
+          (source) => processBatches.contains(source.batchId),
+        )) {
       continue;
     }
     if (record.kind == ArchiveRecordKind.process) {
@@ -160,33 +161,8 @@ TUnionTripRecord? _processFromFields(Map<String, dynamic> fields) {
   );
 }
 
-TransitRecord? _railFromFields(Map<String, dynamic> fields) {
-  final status = fields['status'];
-  if (status is! int) return null;
-  return TransitRecord(
-    statusCode: status,
-    entryCityCode: _text(fields['entryCityCode']),
-    exitCityCode: _text(fields['exitCityCode']),
-    entryTerminalId: _text(fields['entryTerminalId']),
-    exitTerminalId: _text(fields['exitTerminalId']),
-    entryTime: _date(fields['entryTime']),
-    exitTime: _date(fields['exitTime']),
-    entryAmountFen: fields['entryAmountFen'] is int
-        ? fields['entryAmountFen'] as int
-        : null,
-    exitAmountFen: fields['exitAmountFen'] is int
-        ? fields['exitAmountFen'] as int
-        : null,
-    rawHex: _text(fields['rawHex']),
-  );
-}
-
 String? _text(Object? value) =>
     value is String && value.isNotEmpty ? value : null;
-
-DateTime? _date(Object? value) => value is int
-    ? DateTime.fromMillisecondsSinceEpoch(value, isUtc: true)
-    : null;
 
 class _ArchiveEvent {
   const _ArchiveEvent(this.record, {this.side});
@@ -257,16 +233,9 @@ class _ArchiveEvent {
     return '${debit && value > 0 ? '-' : ''}${record.context.formatAmount(value)}';
   }
 
-  String? get balanceAfterText {
-    final matched = fields['matchedProcess'];
-    final source = transaction && matched is Map<String, dynamic>
-        ? _processFromFields(matched)
-        : process;
-    if (source != null) {
-      final balance = source.balanceAfterFen;
-      return balance == null ? null : record.context.formatAmount(balance);
-    }
-    return transaction ? amount('balanceAfterFen') : null;
+  String? get recordBalanceText {
+    final balance = archiveRecordBalanceFen(record);
+    return balance == null ? null : record.context.formatAmount(balance);
   }
 
   TripEntryInfo get info {
@@ -278,8 +247,10 @@ class _ArchiveEvent {
         : !entry;
     final amountKey = side == null || !rail ? 'amountFen' : '${side}AmountFen';
     final balance = transaction || cycle != null
-        ? balanceAfterText
-        : amount('entryBalanceFen');
+        ? recordBalanceText
+        : rail && entry
+        ? amount('entryBalanceFen')
+        : null;
     final station =
         text(side == null ? 'stationLabel' : '${side}StationName') ??
         (side == null ? null : text('${side}Station${rail ? 'Id' : 'Code'}'));
@@ -287,6 +258,8 @@ class _ArchiveEvent {
         ? text('rideStatusName') ?? text('typeName') ?? '其他'
         : cycle != null
         ? cycle.statusShortName ?? cycle.typeName
+        : record.kind == ArchiveRecordKind.process
+        ? '未知过程记录'
         : side != null
         ? (rail ? (entry ? '进站' : '出站') : (entry ? '上车' : '下车'))
         : rail
@@ -390,8 +363,7 @@ class _ArchiveEvent {
       if (timeText(field.key) case final value?) (field.value, value),
     for (final field in const {
       'amountFen': '金额',
-      'balanceFen': '记录余额',
-      'entryBalanceFen': '进入时余额',
+      'entryBalanceFen': '进站时余额',
       'entryAmountFen': '进入时金额',
       'exitAmountFen': '离开时金额',
       'transactionAmountFen': '交易金额',
@@ -406,7 +378,8 @@ class _ArchiveEvent {
           )
           case final value?)
         (field.value, value),
-    if (balanceAfterText case final balance?) ('交易后余额', balance),
+    if (recordBalanceText case final balance?)
+      (archiveRecordBalanceIsRecorded(record) ? '记录余额' : '交易后余额', balance),
     if (fields['mileage'] case final int mileage) ('里程', '$mileage 站'),
     if (fields['directionCode'] case final int direction)
       (
