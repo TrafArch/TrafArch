@@ -441,8 +441,8 @@ void main() {
       },
       'CU': {
         '00B095001E': bytes(cuPublic),
-        '00B201C400': bytes(cuTransaction),
-        '00B201D400': bytes(cuRecharge),
+        '00B201C417': bytes(cuTransaction),
+        '00B201D417': bytes(cuRecharge),
         '805C000204': bytes('000001F4'),
       },
     };
@@ -480,8 +480,8 @@ void main() {
       'TU:805C000204',
       'TU:00B201C500',
       'CU:00B095001E',
-      'CU:00B201C400',
-      'CU:00B201D400',
+      'CU:00B201C417',
+      'CU:00B201D417',
       'CU:805C000204',
     ]);
     final cuStart = commands.indexOf(cuSelect);
@@ -492,10 +492,10 @@ void main() {
     expect(commands.skip(cuStart), [
       cuSelect,
       '00B095001E',
-      '00B201C400',
-      '00B202C400',
-      '00B201D400',
-      '00B202D400',
+      '00B201C417',
+      '00B202C417',
+      '00B201D417',
+      '00B202D417',
       '805C000204',
     ]);
     for (final side in [result.tu, result.cu]) {

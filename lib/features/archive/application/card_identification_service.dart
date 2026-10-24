@@ -146,7 +146,7 @@ class CardIdentificationService {
     return IdentifiedCard(
       fingerprint: fingerprint,
       identity: identity,
-      cardNumber: publicInfo?.displayApplicationSerialNumber,
+      cardNumber: publicInfo?.cityCardNumber,
     );
   }
 

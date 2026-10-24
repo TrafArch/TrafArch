@@ -17,6 +17,133 @@ Future<ParsedCard?> _parseCu(LocalTransceive link) async {
 }
 
 void main() {
+  group('TripReader CU 完整 APDU 回归', () {
+    test('部分记录失败保留证据、无效时间不猜测、余额 CLA 回退', () async {
+      for (final fail in [false, true]) {
+        final row = _localRecord()..[22] = 0xFF;
+        final result = await _strictCu(
+          _publicFile(),
+          rows: [row, List.filled(20, 0x5A)],
+          balance: [0, 0, 0, 0],
+          balanceFallback: true,
+          balanceFailure: fail,
+        );
+        expect(result.$1.cityUnionFiles.last, isA<CityUnionRawFileView>());
+        expect(result.$3, hasLength(1));
+        expect(
+          result.$3.single.timestamp,
+          DateTime.fromMillisecondsSinceEpoch(0),
+        );
+        expect(result.$2.observedBalance, fail ? isNull : 0);
+      }
+    });
+    for (final city in [
+      1160,
+      2253,
+      2000,
+      2140,
+      2153,
+      3000,
+      3100,
+      3120,
+      3150,
+      3500,
+      2300,
+      5240,
+      3250,
+      4500,
+      7100,
+      9999,
+    ]) {
+      test('城市 $city 派生显示且标准字段不变', () async {
+        final data = _publicFile();
+        final code = city.toString();
+        data[2] = int.parse(code.substring(0, 2), radix: 16);
+        data[3] = int.parse(code.substring(2), radix: 16);
+        // 1234567890 -> 90 78 56 34 12；右侧起加倍得到前缀 3。
+        data.setRange(16, 20, [0x49, 0x96, 0x02, 0xD2]);
+        final expected = switch (city) {
+          1160 || 2253 => '441234567890',
+          2000 || 2140 => '39078563412',
+          2300 || 5240 => '499602D2',
+          3250 => '0A0111223344499602D2',
+          4500 => '3344499602D2',
+          7100 || 9999 => '1234567890',
+          _ => '11223344499602D2',
+        };
+        final result = await _strictCu(data);
+        final public = result.$1.cityUnionFiles.first as CjT331PublicInfo;
+        expect(result.$2.cardNumber, expected);
+        expect(public.cityCardNumber, expected);
+        expect(public.applicationSerialNumber, '11223344499602D2');
+        expect(public.applicationSerialNumberRawHex, '11223344499602D2');
+        expect(public.issuerCode, '0123');
+        expect(public.rawHex.replaceAll(' ', ''), _hex(data));
+      });
+    }
+    test('默认纯数字 HEX、无效城市与零校验位', () async {
+      for (final entry in [
+        (0x99, 0x99, '1122334455667788'),
+        (0x0A, 0x01, '1122334455667788'),
+        (0x20, 0x00, '00000000000'),
+      ]) {
+        final data = _publicFile()
+          ..[2] = entry.$1
+          ..[3] = entry.$2;
+        if (entry.$1 == 0x20) data.setRange(16, 20, [0, 0, 0, 0]);
+        expect((await _strictCu(data)).$2.cardNumber, entry.$3);
+      }
+    });
+    for (final value in [
+      ([0, 0, 0, 0], 0),
+      ([0xFF, 0xFF, 0xFF, 0x9C], -100),
+      ([0x00, 0xFF, 0xFF, 0x9C], -100),
+      ([0xFF, 0xFE, 0x79, 0x61], 16677217),
+      ([0xFF, 0xFE, 0x79, 0x60], 16677216),
+      ([1, 0, 0, 5], 5),
+    ]) {
+      test('2150 余额 ${value.$2}', () async {
+        final data = _publicFile()
+          ..[2] = 0x21
+          ..[3] = 0x50;
+        final result = await _strictCu(data, balance: value.$1);
+        expect(result.$2.observedBalance, value.$2);
+      });
+    }
+    test('31条边界、HEX终端、秒与标准金额保留', () async {
+      final rows = [
+        for (var i = 1; i <= 31; i++)
+          _localRecord()
+            ..[1] = i
+            ..[5] = 1
+            ..[10] = 0xAB
+            ..[22] = 0x59,
+      ];
+      final result = await _strictCu(_publicFile(), rows: rows);
+      expect(result.$3, hasLength(31));
+      expect(result.$3.last.recordNumber, 31);
+      expect(result.$3.first.terminalHex, 'AB3456789012');
+      expect(result.$3.first.timestamp.second, 59);
+      expect(result.$3.first.posType, 6);
+      expect(result.$3.first.response, _sw9000(rows.first));
+      expect(result.$3.first.balanceDelta, 0);
+      expect(
+        (result.$1.cityUnionFiles[1] as CjT331WalletLocalConsumption).amountHex,
+        '010003E8',
+      );
+    });
+    test('2120 ASCII 及恢复失败停止后续读取', () async {
+      for (final restore in [true, false]) {
+        final data = _publicFile()
+          ..[2] = 0x21
+          ..[3] = 0x20;
+        final result = await _strictCu(data, restore: restore);
+        expect(result.$2.cardNumber, '123456789012');
+        expect(result.$1.cityUnionFiles, hasLength(1));
+        expect(result.$2.observedBalance, isNull);
+      }
+    });
+  });
   group('城市一卡通（CU）解析管道', () {
     test('完整读取：0x15 公共信息 + 0x18 本地消费 + 0x1A 充值', () async {
       final parsed = await _parseCu(_baseLink().call);
@@ -158,7 +285,80 @@ void main() {
   });
 }
 
-/// 按 INS 字节匹配的脚本化 APDU 链路（无需真机）。
+String _hex(List<int> bytes) =>
+    bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join().toUpperCase();
+
+Future<(ParsedCard, CardInfo, List<ApduRecord>)> _strictCu(
+  List<int> data, {
+  List<int>? balance,
+  List<List<int>> rows = const [],
+  bool? restore,
+  bool balanceFallback = false,
+  bool balanceFailure = false,
+}) async {
+  final script = <(String, List<int>)>[
+    ('00A40000023F0000', [0x90, 0]),
+    ('00A4040009A0000000038698070100', [0x90, 0]),
+    ('00B095001E', _sw9000(data)),
+    if (restore != null) ...[
+      ('00A40000023F0000', [0x90, 0]),
+      (
+        '00B085002C',
+        _sw9000([...List.filled(32, 0), ...'123456789012'.codeUnits]),
+      ),
+      ('00A40000023F0000', [0x90, 0]),
+      ('00A4040009A0000000038698070100', restore ? [0x90, 0] : [0x6A, 0x82]),
+      if (!restore) ('80A4040009A0000000038698070100', [0x6A, 0x82]),
+    ],
+    if (restore != false) ...[
+      for (var i = 0; i < rows.length; i++)
+        (
+          '00B2${(i + 1).toRadixString(16).padLeft(2, '0').toUpperCase()}C417',
+          _sw9000(rows[i]),
+        ),
+      if (rows.length < 31)
+        (
+          '00B2${(rows.length + 1).toRadixString(16).padLeft(2, '0').toUpperCase()}C417',
+          [0x6A, 0x83],
+        ),
+      ('00B201D417', [0x6A, 0x83]),
+      if (balance != null) ...[
+        (
+          '805C00${data[2] == 0x21 && data[3] == 0x50 ? '01' : '02'}04',
+          balanceFallback ? [0x6A, 0x82] : _sw9000(balance),
+        ),
+        if (balanceFallback)
+          (
+            '005C00${data[2] == 0x21 && data[3] == 0x50 ? '01' : '02'}04',
+            balanceFailure ? [0x6A, 0x82] : _sw9000(balance),
+          ),
+      ],
+    ],
+  ];
+  final info = CardInfo();
+  final records = <ApduRecord>[];
+  var index = 0;
+  final cu = CommonUnitCu(
+    ApduExchange(
+      transceive: (command) async {
+        expect(index, lessThan(script.length));
+        final step = script[index++];
+        expect(_hex(command), step.$1);
+        return step.$2;
+      },
+    ),
+  );
+  expect(await cu.select(info, records), isTrue);
+  final parsed = await cu.read(
+    info,
+    records,
+    readBalance: balance != null || restore == false,
+  );
+  expect(index, script.length);
+  return (parsed!, info, records);
+}
+
+/// 历史 INS 脚本；上方新兼容规则使用严格全命令脚本验证。
 class _ScriptedLink {
   final Map<int, List<List<int>>> _queues = {};
 

@@ -48,8 +48,8 @@ class CommonUnitCu {
   /// 公共应用基本信息文件（SFI 0x15）标准长度 0x1E = 30 字节。
   static const _publicFileSize = 0x1E;
 
-  /// 记录号物理上限（READ RECORD 的 P1 为单字节，协议边界）。
-  static const _maxRecordNumber = 0xFE;
+  /// TripReader CU 标准记录通道最多读取 31 条。
+  static const _maxRecordNumber = 31;
 
   /// 展示 / 日志用的模块名（与原解析器同名，保持日志连续性）。
   static const String moduleName = '城市一卡通（CJ/T 331-2016）';
@@ -87,7 +87,11 @@ class CommonUnitCu {
     try {
       await _readFiles(files);
       _report(0.9);
-      balance = readBalance ? await _readBalance() : null;
+      balance = readBalance && _selectedAid != null
+          ? await _readBalance(
+              files.whereType<CjT331PublicInfo>().firstOrNull?.displayCityCode,
+            )
+          : null;
       _report(1);
     } finally {
       parsedCard = ParsedCard(
@@ -134,6 +138,30 @@ class CommonUnitCu {
     }
     _report(0.3); // 0x15 公共应用基本信息读取完成
 
+    final publicInfo = out.whereType<CjT331PublicInfo>().firstOrNull;
+    if (publicInfo?.displayCityCode == 2120) {
+      _selectedAid = null;
+      List<int>? extra;
+      try {
+        final mf = await _exchange(TUnionApdu.selectFile(const [0x3F, 0x00]));
+        if (_isSuccess(mf)) {
+          extra = await _readTransparentFile(0x05, 0x2C);
+        }
+      } finally {
+        // 即使 MF 读取失败也必须恢复 CU；失败时不能在 MF 下继续读记录。
+        await _selectApplication();
+      }
+      if (extra != null) {
+        final ascii = extra.sublist(32, 44);
+        if (ascii.every((b) => b >= 0x20 && b <= 0x7E)) {
+          out[out.indexOf(publicInfo!)] = publicInfo.withCityDisplayNumber(
+            String.fromCharCodes(ascii),
+          );
+        }
+      }
+      if (_selectedAid == null) return;
+    }
+
     await _readRecords(CityUnionFileIds.walletLocalConsumption, out);
     _report(0.65); // 0x18 本地消费交易读取完成
     await _readRecords(CityUnionFileIds.walletRecharge, out);
@@ -144,7 +172,7 @@ class CommonUnitCu {
   Future<void> _readRecords(int sfi, List<CityUnionFileView> out) async {
     List<int>? firstData;
     for (var i = 1; i <= _maxRecordNumber; i++) {
-      final resp = await _exchange(TUnionApdu.readRecord(sfi, i));
+      final resp = await _exchange(TUnionApdu.readRecord(sfi, i, le: 0x17));
       if (!_isSuccess(resp)) break;
       final data = _stripSw(resp);
       if (data.isEmpty) break;
@@ -206,9 +234,9 @@ class CommonUnitCu {
     final public = files.whereType<CjT331PublicInfo>().firstOrNull;
     if (public == null) return;
     if (public.issuerCode != null) info.issuerCode = public.issuerCode!;
-    final serial = public.displayApplicationSerialNumber;
+    final serial = public.cityCardNumber;
     if (serial != null && serial.isNotEmpty) info.cardNumber = serial;
-    final city = _cityCodeOf(public.cityCode);
+    final city = public.displayCityCode ?? 0;
     if (city != 0) info.cityCode = city;
     info.expiryDate =
         _dateTimeOf(public.applicationExpiryDate, null) ?? info.expiryDate;
@@ -223,15 +251,26 @@ class CommonUnitCu {
     List<CityUnionFileView> files,
   ) {
     for (final f in files) {
+      final hex = f.rawHex.replaceAll(' ', '');
+      final raw = [
+        for (var i = 0; i < hex.length; i += 2)
+          int.parse(hex.substring(i, i + 2), radix: 16),
+      ];
       if (f is CjT331WalletLocalConsumption) {
         records.add(
           ApduRecord()
             ..type = 2
             ..label = 'CU 0x18#${f.sequence}'
             ..timestamp =
-                _dateTimeOf(f.transactionDate, f.transactionTime) ??
+                (f.transactionTime == null
+                    ? null
+                    : _dateTimeOf(f.transactionDate, f.transactionTime)) ??
                 DateTime.fromMillisecondsSinceEpoch(0)
-            ..terminalHex = f.terminalNumber
+            ..response = [...raw, 0x90, 0x00]
+            ..recordNumber = f.sequence
+            ..posType = f.transactionType
+            ..fileSelector = f.sfi
+            ..terminalHex = CityUnionCodec.hex(raw.sublist(10, 16))
             ..cityCode = info.cityCode,
         );
       } else if (f is CjT331WalletRecharge) {
@@ -240,18 +279,19 @@ class CommonUnitCu {
             ..type = 2
             ..label = 'CU 0x1A#${f.sequence}'
             ..timestamp =
-                _dateTimeOf(f.transactionDate, f.transactionTime) ??
+                (f.transactionTime == null
+                    ? null
+                    : _dateTimeOf(f.transactionDate, f.transactionTime)) ??
                 DateTime.fromMillisecondsSinceEpoch(0)
-            ..terminalHex = f.terminalNumber
+            ..response = [...raw, 0x90, 0x00]
+            ..recordNumber = f.sequence
+            ..posType = f.transactionType
+            ..fileSelector = f.sfi
+            ..terminalHex = CityUnionCodec.hex(raw.sublist(10, 16))
             ..cityCode = info.cityCode,
         );
       }
     }
-  }
-
-  static int _cityCodeOf(String? raw) {
-    if (raw == null || raw.isEmpty) return 0;
-    return int.tryParse(raw) ?? int.tryParse(raw, radix: 16) ?? 0;
   }
 
   /// "YYYY-MM-DD" / "HH:MM:SS" 组合解析；任一非法返回 null（不猜测）。
@@ -262,14 +302,20 @@ class CommonUnitCu {
   }
 
   /// 读取电子钱包余额（GET BALANCE，相对当前选中的住建部 CU 应用）。
-  /// 命令形态与交通联合及本项目地方卡一致：`80 5C 00 02 04`，返回 4 字节
-  /// 大端无符号整数，单位为分；需剥离末尾状态字 `90 00` 后取前 4 字节。
-  /// CLA 0x80 失败时回退 0x00；均失败返回 null（不猜测）。
-  Future<int?> _readBalance() async {
+  /// 跳过首字节；金额最高字节为 FF 且补码大于 -100000 时认负数。
+  Future<int?> _readBalance(int? city) async {
     for (final cla in const [0x80, 0x00]) {
-      final resp = await _exchange(TUnionApdu.getBalance(cla: cla, p1: 0x00));
-      if (!_isSuccess(resp) || resp.length < 6) continue;
-      return (resp[0] << 24) | (resp[1] << 16) | (resp[2] << 8) | resp[3];
+      final resp = await _exchange([
+        cla,
+        0x5C,
+        0x00,
+        city == 2150 ? 0x01 : 0x02,
+        0x04,
+      ]);
+      if (!_isSuccess(resp) || resp.length != 6) continue;
+      final value = (resp[1] << 16) | (resp[2] << 8) | resp[3];
+      final signed = value - 0x1000000;
+      return resp[1] == 0xFF && signed > -100000 ? signed : value;
     }
     return null;
   }

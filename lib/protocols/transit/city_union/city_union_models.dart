@@ -153,6 +153,9 @@ class CjT331PublicInfo implements CityUnionFileView {
   final String? applicationExpiryDate;
   final String? reserved2;
 
+  /// 2120 的 MF 0x05 ASCII 卡号，仅为本次读取的展示补充，不序列化。
+  final String? cityDisplayNumber;
+
   @override
   final List<CjField> fields;
 
@@ -172,6 +175,7 @@ class CjT331PublicInfo implements CityUnionFileView {
     this.applicationStartDate,
     this.applicationExpiryDate,
     this.reserved2,
+    this.cityDisplayNumber,
     required this.fields,
     required this.rawHex,
   });
@@ -198,6 +202,76 @@ class CjT331PublicInfo implements CityUnionFileView {
     }
     return applicationSerialNumber;
   }
+
+  /// 严格有效 BCD 城市；标准 cityCode 字段仍保留原始 HEX 语义。
+  int? get displayCityCode =>
+      RegExp(r'^\d{4}$').hasMatch(cityCode ?? '') ? int.parse(cityCode!) : null;
+
+  /// TripReader 城市规则派生卡号，不改变标准序列号、JSON 或指纹。
+  String? get cityCardNumber {
+    final city = displayCityCode;
+    final hex = rawHex.replaceAll(' ', '');
+    if (city == null || hex.length < 40) {
+      return displayApplicationSerialNumber;
+    }
+    String part(int start) => hex.substring(start * 2, 40);
+    final decimal = int.parse(part(16), radix: 16).toString().padLeft(10, '0');
+    switch (city) {
+      case 1160:
+      case 2253:
+        return hex.substring(30, 32) + decimal;
+      case 2000:
+      case 2140:
+        final reversed = [
+          for (var i = 8; i >= 0; i -= 2) decimal.substring(i, i + 2),
+        ].join();
+        const doubled = [0, 2, 4, 6, 8, 1, 3, 5, 7, 9];
+        var sum = 0;
+        for (var i = 9; i >= 0; i--) {
+          final digit = int.parse(reversed[i]);
+          sum += i.isOdd ? doubled[digit] : digit;
+        }
+        return '${(10 - sum % 10) % 10}$reversed';
+      case 2120:
+        return cityDisplayNumber ?? displayApplicationSerialNumber;
+      case 2153:
+      case 3000:
+      case 3100:
+      case 3120:
+      case 3150:
+      case 3500:
+        return part(12);
+      case 2300:
+      case 5240:
+        return part(16);
+      case 3250:
+        return part(10);
+      case 4500:
+        return part(14);
+      case 7100:
+        return decimal;
+      default:
+        return RegExp(r'^\d+$').hasMatch(part(16)) ? part(12) : decimal;
+    }
+  }
+
+  CjT331PublicInfo withCityDisplayNumber(String number) => CjT331PublicInfo(
+    issuerCode: issuerCode,
+    cityCode: cityCode,
+    multiAlgorithmSupport: multiAlgorithmSupport,
+    industryCode: industryCode,
+    reserved1: reserved1,
+    interconnectionEnabled: interconnectionEnabled,
+    applicationVersion: applicationVersion,
+    interconnectionId: interconnectionId,
+    applicationSerialNumber: applicationSerialNumber,
+    applicationStartDate: applicationStartDate,
+    applicationExpiryDate: applicationExpiryDate,
+    reserved2: reserved2,
+    fields: fields,
+    rawHex: rawHex,
+    cityDisplayNumber: number,
+  );
 
   /// 展示用卡号：BCD 数字串不做前导 0 裁剪；填充位解码导致有效位不足
   /// 16 位时左补 0 恢复定长。非 BCD 的原始 HEX（固定 8 字节 = 16 字符）
