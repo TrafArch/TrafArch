@@ -552,6 +552,8 @@ void main() {
   testWidgets(
     'live trip stream retains shared filtering and readable details',
     (tester) async {
+      await tester.binding.setSurfaceSize(const Size(360, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
       final app = AppDependencies(database: testDatabase());
       addTearDown(app.dispose);
       final stream = buildTripStream(
@@ -733,12 +735,26 @@ Future<void> _open(
 Future<void> _filter(WidgetTester tester, String label) async {
   // 下拉单选：来源下拉含「全部来源」与 0x1x 标签，其余归属方式下拉。
   final isSource = label == '全部来源' || label.startsWith('0x1');
-  final fields = find.byWidgetPredicate((w) => w is DropdownButtonFormField);
-  await tester.ensureVisible(fields.at(isSource ? 0 : 1));
-  await tester.tap(fields.at(isSource ? 0 : 1));
+  final fields = find.byType(MenuAnchor);
+  final field = fields.at(isSource ? 0 : 1);
+  expect(tester.widget<MenuAnchor>(field).animated, isTrue);
+  await tester.ensureVisible(field);
+  await tester.tap(
+    find.descendant(of: field, matching: find.byType(InputDecorator)),
+  );
+  await tester.pump();
+  final arrow = find.descendant(
+    of: field,
+    matching: find.byType(AnimatedRotation),
+  );
+  expect(tester.widget<AnimatedRotation>(arrow).turns, 0.5);
+  expect(tester.binding.hasScheduledFrame, isTrue);
   await tester.pumpAndSettle();
-  await tester.tap(find.text(label).last);
+  await tester.tap(find.widgetWithText(MenuItemButton, label).hitTestable());
   await tester.pumpAndSettle();
+  expect(tester.widget<AnimatedRotation>(arrow).turns, 0);
+  expect(tester.testTextInput.isVisible, isFalse);
+  expect(tester.takeException(), isNull);
 }
 
 void _expectNoJson() {

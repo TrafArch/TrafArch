@@ -45,12 +45,6 @@ class _TripCardsViewState<S extends Enum> extends State<TripCardsView<S>> {
   final _sources = <S>{};
   final _modes = <TripModeFilter>{};
 
-  InputDecoration _filterDecoration(String label) => InputDecoration(
-    labelText: label,
-    border: const OutlineInputBorder(),
-    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-  );
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -74,55 +68,42 @@ class _TripCardsViewState<S extends Enum> extends State<TripCardsView<S>> {
         Row(
           children: [
             Expanded(
-              // alignedDropdown：弹出菜单与输入框同宽，避免默认
-              // 「不对齐菜单」外扩 40 逻辑像素、右侧顶出屏幕。
-              child: ButtonTheme(
-                alignedDropdown: true,
-                child: DropdownButtonFormField<S?>(
-                  initialValue: _sources.isEmpty ? null : _sources.single,
-                  isExpanded: true,
-                  decoration: _filterDecoration('来源'),
-                  items: [
-                    DropdownMenuItem<S?>(value: null, child: Text('全部来源')),
-                    for (final entry in widget.sourceLabels.entries)
-                      DropdownMenuItem<S?>(
-                        value: entry.key,
-                        child: Text(entry.value),
-                      ),
-                  ],
-                  onChanged: (next) => setState(() {
-                    _sources
-                      ..clear()
-                      ..addAll(next == null ? <S>{} : {next});
-                  }),
-                ),
+              child: _AnimatedTripFilter<S>(
+                selection: _sources.isEmpty ? null : _sources.single,
+                label: '来源',
+                dropdownMenuEntries: [
+                  DropdownMenuEntry<S?>(value: null, label: '全部来源'),
+                  for (final entry in widget.sourceLabels.entries)
+                    DropdownMenuEntry<S?>(value: entry.key, label: entry.value),
+                ],
+                onSelected: (next) => setState(() {
+                  _sources
+                    ..clear()
+                    ..addAll(next == null ? <S>{} : {next});
+                }),
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: ButtonTheme(
-                alignedDropdown: true,
-                child: DropdownButtonFormField<TripModeFilter?>(
-                  initialValue: _modes.isEmpty ? null : _modes.single,
-                  isExpanded: true,
-                  decoration: _filterDecoration('方式'),
-                  items: [
-                    const DropdownMenuItem<TripModeFilter?>(
-                      value: null,
-                      child: Text('全部方式'),
+              child: _AnimatedTripFilter<TripModeFilter>(
+                selection: _modes.isEmpty ? null : _modes.single,
+                label: '方式',
+                dropdownMenuEntries: [
+                  const DropdownMenuEntry<TripModeFilter?>(
+                    value: null,
+                    label: '全部方式',
+                  ),
+                  for (final entry in tripModeLabels.entries)
+                    DropdownMenuEntry<TripModeFilter?>(
+                      value: entry.key,
+                      label: entry.value,
                     ),
-                    for (final entry in tripModeLabels.entries)
-                      DropdownMenuItem<TripModeFilter?>(
-                        value: entry.key,
-                        child: Text(entry.value),
-                      ),
-                  ],
-                  onChanged: (next) => setState(() {
-                    _modes
-                      ..clear()
-                      ..addAll(next == null ? <TripModeFilter>{} : {next});
-                  }),
-                ),
+                ],
+                onSelected: (next) => setState(() {
+                  _modes
+                    ..clear()
+                    ..addAll(next == null ? <TripModeFilter>{} : {next});
+                }),
               ),
             ),
           ],
@@ -161,6 +142,85 @@ class _TripCardsViewState<S extends Enum> extends State<TripCardsView<S>> {
             ),
         ],
       ],
+    );
+  }
+}
+
+class _AnimatedTripFilter<T extends Enum> extends StatefulWidget {
+  const _AnimatedTripFilter({
+    required this.selection,
+    required this.label,
+    required this.dropdownMenuEntries,
+    required this.onSelected,
+  });
+
+  final T? selection;
+  final String label;
+  final List<DropdownMenuEntry<T?>> dropdownMenuEntries;
+  final ValueChanged<T?> onSelected;
+
+  @override
+  State<_AnimatedTripFilter<T>> createState() => _AnimatedTripFilterState<T>();
+}
+
+class _AnimatedTripFilterState<T extends Enum>
+    extends State<_AnimatedTripFilter<T>> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final selected = widget.dropdownMenuEntries.firstWhere(
+      (entry) => entry.value == widget.selection,
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) => MenuAnchor(
+        animated: !reduceMotion,
+        onOpen: () => setState(() => _open = true),
+        onClose: () => setState(() => _open = false),
+        style: MenuStyle(
+          minimumSize: WidgetStatePropertyAll(Size(constraints.maxWidth, 0)),
+          maximumSize: WidgetStatePropertyAll(
+            Size(constraints.maxWidth, double.infinity),
+          ),
+        ),
+        menuChildren: [
+          for (final entry in widget.dropdownMenuEntries)
+            MenuItemButton(
+              onPressed: () => widget.onSelected(entry.value),
+              child: Text(entry.label),
+            ),
+        ],
+        builder: (context, controller, child) => Semantics(
+          button: true,
+          expanded: _open,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(4),
+            onTap: () =>
+                controller.isOpen ? controller.close() : controller.open(),
+            child: InputDecorator(
+              isFocused: _open,
+              decoration: InputDecoration(
+                labelText: widget.label,
+                border: const OutlineInputBorder(),
+                suffixIcon: AnimatedRotation(
+                  turns: _open ? 0.5 : 0,
+                  duration: reduceMotion
+                      ? Duration.zero
+                      : const Duration(milliseconds: 200),
+                  curve: Curves.easeInOutCubic,
+                  child: const Icon(Icons.arrow_drop_down),
+                ),
+              ),
+              child: Text(
+                selected.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
