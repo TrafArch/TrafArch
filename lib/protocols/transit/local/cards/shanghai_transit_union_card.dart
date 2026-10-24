@@ -17,8 +17,8 @@ import 'shanghai_transit_union_models.dart';
 ///
 /// 任一侧失败都不会跳过另一侧：两侧各自持有独立的 [CardInfo] /
 /// [ApduRecord] / 错误列表，合并时只做数据汇聚，不互相覆盖。
-/// 卡号前缀（31047700 / 发卡机构 02002900）仅作辅助线索，最终是否认定为
-/// 本卡种还需要至少一侧应用结构被确认（见 [ShanghaiTransitUnionResult]）。
+/// 已确认 TU 的卡号前缀 31047700 / 已确认 CU 的 0x15 原始前四字节
+/// 86982000 仅作各自来源的辅助线索（见 [ShanghaiTransitUnionResult]）。
 class ShanghaiTransitUnionCardParser implements CardParser {
   ShanghaiTransitUnionCardParser(
     this._transceive, {

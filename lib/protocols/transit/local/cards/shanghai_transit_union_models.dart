@@ -20,8 +20,8 @@ abstract final class ShanghaiTransitUnionIds {
   /// AID 选择结果与实际读取数据确认，前缀不能单独证明应用结构。
   static const String cardNumberPrefix = '31047700';
 
-  /// 发卡机构标识（HEX）前缀，同为辅助线索（卡号 IIN 未命中时的回退）。
-  static const String issuerIdPrefix = '02002900';
+  /// 已确认 CU 应用的 0x15 原始前四字节（HEX），不是通用两字节 issuerCode。
+  static const String issuerIdPrefix = '86982000';
 
   /// 两个应用的展示名（日志 / 状态文本）。
   static const String tuSystem = '交通联合（TU）';
@@ -358,7 +358,13 @@ class ShanghaiTransitUnionResult {
       isShanghaiTransitUnion: isShanghaiTransitUnion,
       mergedRecords: merge.records,
       duplicateTripCount: merge.duplicateCount,
-      mergedCardInfo: tu.readSucceeded ? tu.cardInfo : cu.cardInfo,
+      mergedCardInfo:
+          (tu.available || (!cu.available && tu.readSucceeded)
+                  ? tu.cardInfo
+                  : cu.cardInfo)
+              .copy()
+            ..isTU = tu.available
+            ..isCU = cu.available,
       mergedCard: isShanghaiTransitUnion
           ? _buildMergedCard(tu: tu, cu: cu)
           : null,
@@ -373,24 +379,23 @@ class ShanghaiTransitUnionResult {
     ShanghaiTransitApplication tu,
     ShanghaiTransitApplication cu,
   ) {
-    for (final candidate in <String>[
-      ...tu.cardNumberCandidates,
-      ...cu.cardNumberCandidates,
-    ]) {
-      final digits = _digitsOnly(candidate);
-      if (digits != null &&
-          digits.startsWith(ShanghaiTransitUnionIds.cardNumberPrefix)) {
-        return ShanghaiTransitUnionIds.cardNumberPrefix;
+    if (tu.confirmed) {
+      for (final candidate in tu.cardNumberCandidates) {
+        final digits = _digitsOnly(candidate);
+        if (digits != null &&
+            digits.startsWith(ShanghaiTransitUnionIds.cardNumberPrefix)) {
+          return ShanghaiTransitUnionIds.cardNumberPrefix;
+        }
       }
     }
-    for (final candidate in <String>[
-      ...tu.issuerCandidates,
-      ...cu.issuerCandidates,
-    ]) {
-      final hex = _hexOnly(candidate);
-      if (hex != null &&
-          hex.length >= 8 &&
-          hex.startsWith(ShanghaiTransitUnionIds.issuerIdPrefix)) {
+    if (cu.confirmed) {
+      // CjT331PublicInfo 保留完整原始文件的 HEX；按 TripReader subList(0, 4)
+      // 取四字节，不拼接解码字段，也不使用 TU 发行方作为 CU 证据。
+      final raw = cu.cityUnionPublicInfo?.rawHex.replaceAll(RegExp(r'\s+'), '');
+      if (raw != null &&
+          raw.length >= 8 &&
+          raw.substring(0, 8).toUpperCase() ==
+              ShanghaiTransitUnionIds.issuerIdPrefix) {
         return ShanghaiTransitUnionIds.issuerIdPrefix;
       }
     }
@@ -401,11 +406,6 @@ class ShanghaiTransitUnionResult {
     final trimmed = value.trim();
     if (trimmed.isEmpty) return null;
     return RegExp(r'^[0-9]+$').hasMatch(trimmed) ? trimmed : null;
-  }
-
-  static String? _hexOnly(String value) {
-    final cleaned = value.replaceAll(RegExp(r'[^0-9A-Fa-f]'), '').toUpperCase();
-    return cleaned.isEmpty ? null : cleaned;
   }
 
   /// 统一解析结果：TU 侧优先承载卡信息 / 交易 / 过程记录，CU 侧承载
@@ -430,7 +430,7 @@ class ShanghaiTransitUnionResult {
       transitProcessRecords: tuCard?.transitProcessRecords ?? const [],
       cityUnionFiles: cuCard?.cityUnionFiles ?? const [],
       cityUnionBalanceFen: cuCard?.info.balanceFen,
-      dualApplication: tuCard != null && cuCard != null,
+      dualApplication: tu.available && cu.available,
       selectedAidHex: tuAid.isNotEmpty ? tuAid : (cuCard?.selectedAidHex ?? ''),
     );
   }

@@ -164,17 +164,24 @@ class LocalCardReader {
       if (tuCard != null) {
         callback.onProgress(95);
         return _outcome(
-          shanghai.tu.cardInfo,
-          shanghai.tu.records,
+          shanghai.mergedCardInfo,
+          shanghai.mergedRecords,
           extras,
-          cuCard != null ? _mergeDual(tuCard, cuCard) : tuCard,
+          cuCard != null
+              ? _mergeDual(
+                  tuCard,
+                  cuCard,
+                  dualApplication:
+                      shanghai.tu.available && shanghai.cu.available,
+                )
+              : tuCard,
         );
       }
       if (cuCard != null) {
         callback.onProgress(95);
         return _outcome(
-          shanghai.cu.cardInfo,
-          shanghai.cu.records,
+          shanghai.mergedCardInfo,
+          shanghai.mergedRecords,
           extras,
           cuCard,
         );
@@ -375,16 +382,22 @@ class LocalCardReader {
   /// [CardParserIds.tunion]，驱动既有分析与展示链路），并入城市一卡通
   /// （住建部）应用的标准文件视图与钱包余额，标记 [ParsedCard.dualApplication]。
   /// 两套钱包余额分属不同网络，互不覆盖。
-  static ParsedCard _mergeDual(ParsedCard tu, ParsedCard cu) => ParsedCard(
+  static ParsedCard _mergeDual(
+    ParsedCard tu,
+    ParsedCard cu, {
+    required bool dualApplication,
+  }) => ParsedCard(
     parserId: CardParserIds.tunion,
-    parserName: '${tu.parserName} + ${cu.parserName}（双应用）',
+    parserName:
+        '${tu.parserName} + ${cu.parserName}'
+        '${dualApplication ? '（双应用）' : ''}',
     info: tu.info,
     transactions: tu.transactions,
     transactionFileObserved: tu.transactionFileObserved,
     transitProcessRecords: tu.transitProcessRecords,
     cityUnionFiles: cu.cityUnionFiles,
     cityUnionBalanceFen: cu.info.balanceFen,
-    dualApplication: true,
+    dualApplication: dualApplication,
     selectedAidHex: tu.selectedAidHex,
   );
 

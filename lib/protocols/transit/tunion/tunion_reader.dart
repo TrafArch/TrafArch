@@ -130,10 +130,11 @@ class CommonUnitTu {
   List<int>? get selectedAid => _selectedAid;
 
   Future<bool> select(CardInfo info, List<ApduRecord> records) async {
-    if (info.isTU) return true;
+    // 发现标记不是当前选中应用的缓存（另一单元可能已切换应用）。
+    _selectedAid = null;
+    _fciDiscretionary = null;
     if (!await _selectApplication(const [walletAid, cashAid])) return false;
     info.isTU = true;
-    info.isCU = false;
     return true;
   }
 

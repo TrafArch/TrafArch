@@ -13,12 +13,13 @@ const _shanghaiSerial = '3104770000000000001';
 CjT331PublicInfo _publicInfo({
   String serial = _shanghaiSerial,
   String? cityCode = '3100',
+  String rawHex = '86 98 20 00',
 }) => CjT331PublicInfo(
-  issuerCode: '0200',
+  issuerCode: '8698',
   cityCode: cityCode,
   applicationSerialNumber: serial,
   fields: const [],
-  rawHex: '',
+  rawHex: rawHex,
 );
 
 ParsedCard _tuCard({
@@ -72,6 +73,58 @@ ShanghaiTransitApplication _application({
 
 void main() {
   group('ShanghaiTransitUnionResult', () {
+    test('来源隔离：CU 卡号和 TU 发行方不能替代对应来源', () {
+      for (final raw in ['', '86 98', '02 00 29 00', '00 86 98 20 00']) {
+        final result = ShanghaiTransitUnionResult.build(
+          tu: _application(
+            system: ShanghaiTransitUnionIds.tuSystem,
+            confirmed: true,
+            identity: const TUnionCardInfo(issuerId: '86982000'),
+            card: _tuCard(serial: '3100990000000000001'),
+          ),
+          cu: _application(
+            system: ShanghaiTransitUnionIds.cuSystem,
+            confirmed: true,
+            card: _cuCard(public: _publicInfo(rawHex: raw)),
+          ),
+        );
+        expect(result.isShanghaiTransitUnion, isFalse);
+      }
+    });
+
+    test('不完整侧保留证据但不算双标，汇总不修改侧内对象', () {
+      for (final complete in [false, true]) {
+        final tu = _application(
+          system: ShanghaiTransitUnionIds.tuSystem,
+          confirmed: true,
+          readSucceeded: true,
+          dataComplete: true,
+          card: _tuCard(),
+        );
+        final cu = _application(
+          system: ShanghaiTransitUnionIds.cuSystem,
+          confirmed: true,
+          readSucceeded: true,
+          dataComplete: complete,
+          card: _cuCard(public: _publicInfo()),
+        );
+        tu.cardInfo.isTU = true;
+        cu.cardInfo.isCU = true;
+        final result = ShanghaiTransitUnionResult.build(tu: tu, cu: cu);
+        expect(result.mergedCardInfo, isNot(same(tu.cardInfo)));
+        expect(result.mergedCardInfo, isNot(same(cu.cardInfo)));
+        expect(result.mergedCardInfo.isTU, isTrue);
+        expect(result.mergedCardInfo.isCU, complete);
+        expect(result.mergedCard!.dualApplication, complete);
+        expect(result.mergedCard!.cityUnionFiles, hasLength(1));
+        expect(tu.cardInfo.isCU, isFalse);
+        expect(cu.cardInfo.isTU, isFalse);
+        expect(cu.cardInfo.isCU, isTrue);
+        if (complete) {
+          expect(result.mergedCardInfo.cardKindLabel, contains('双应用'));
+        }
+      }
+    });
     test('TU + CU 均可用 → bothAvailable，两套数据同时保留', () {
       final tu = _application(
         system: ShanghaiTransitUnionIds.tuSystem,
@@ -183,12 +236,91 @@ void main() {
 
       final result = ShanghaiTransitUnionResult.build(tu: tu, cu: cu);
 
-      expect(result.matchedPrefix, ShanghaiTransitUnionIds.cardNumberPrefix);
+      expect(result.matchedPrefix, isNull);
       expect(result.structureConfirmed, isFalse);
       expect(result.isShanghaiTransitUnion, isFalse);
       expect(result.status, ShanghaiTransitUnionStatus.unknown);
       expect(result.mergedCard, isNull);
     });
+  });
+
+  test('CardInfo.copy 保留 nullable 余额及全部字段，rawInfo 独立', () {
+    final source = CardInfo()
+      ..cardNumber = '123'
+      ..issuerCode = '86'
+      ..issuerCode2 = '98'
+      ..cityCode = 1
+      ..terminalCode = 2
+      ..previousBalance = 3
+      ..deposit = 4
+      ..bonus = 5
+      ..extraBalance = 6
+      ..remainingTrips = 7
+      ..validFromDays = 8
+      ..cardTypeCode = 9
+      ..subtypeCode = 10
+      ..issueDate = DateTime(2020)
+      ..expiryDate = DateTime(2030)
+      ..startDate = DateTime(2021)
+      ..timezoneOffsetMinutes = 480
+      ..rawInfo = [1, 2]
+      ..isSuzhou = true
+      ..isTU = true
+      ..isCU = true
+      ..isBeijing = true
+      ..isWHCTC = true
+      ..isTFT = true
+      ..isSZT = true
+      ..isYCT = true
+      ..isSuxin = true
+      ..isCika = true
+      ..isCikaMode = true
+      ..specialLocal = true
+      ..lastSeenRecordIndex = 11;
+    List<Object?> values(CardInfo c) => [
+      c.cardNumber,
+      c.issuerCode,
+      c.issuerCode2,
+      c.cityCode,
+      c.terminalCode,
+      c.observedBalance,
+      c.previousBalance,
+      c.deposit,
+      c.bonus,
+      c.extraBalance,
+      c.remainingTrips,
+      c.validFromDays,
+      c.cardTypeCode,
+      c.subtypeCode,
+      c.issueDate,
+      c.expiryDate,
+      c.startDate,
+      c.timezoneOffsetMinutes,
+      c.rawInfo,
+      c.isSuzhou,
+      c.isTU,
+      c.isCU,
+      c.isBeijing,
+      c.isWHCTC,
+      c.isTFT,
+      c.isSZT,
+      c.isYCT,
+      c.isSuxin,
+      c.isCika,
+      c.isCikaMode,
+      c.specialLocal,
+      c.lastSeenRecordIndex,
+    ];
+    final copy = source.copy();
+    expect(values(copy), values(source));
+    expect(copy.observedBalance, isNull);
+    copy.rawInfo![0] = 9;
+    expect(source.rawInfo, [1, 2]);
+    for (final balance in [0, 1234]) {
+      source.balance = balance;
+      expect(values(source.copy()), values(source));
+    }
+    expect(CardInfo().copy().rawInfo, isNull);
   });
 
   group('ShanghaiTransitTripMerger', () {
@@ -275,6 +407,143 @@ void main() {
       expect(merge.duplicateCount, 0);
       expect(merge.records, hasLength(5));
     });
+  });
+
+  test('同一 APDU 通道先读 TU 成功再读 CU 成功，保留双应用独立数据', () async {
+    List<int> bytes(String hex) => [
+      for (var i = 0; i < hex.length; i += 2)
+        int.parse(hex.substring(i, i + 2), radix: 16),
+    ];
+    String hex(List<int> data) => data
+        .map((b) => b.toRadixString(16).padLeft(2, '0'))
+        .join()
+        .toUpperCase();
+    String compact(String raw) => raw.replaceAll(' ', '');
+
+    const tuPublic =
+        '02002900123456780101031047700000000000012024010120291231AABB';
+    const cuPublic =
+        '869820000126000001022000112233445566778820240101203012310000';
+    const tuTransaction = '0001000000000000C80612345678901220240501083000';
+    const cuTransaction = '00020000000000012C0612345678903420240502093000';
+    const cuRecharge = '0003000000000003E80212345678905620240503103000';
+    final holder = List<int>.filled(55, 0)..[0] = 1;
+    final management = List<int>.filled(60, 0)
+      ..[6] = 0x31
+      ..[10] = 1;
+    final replies = <String, Map<String, List<int>>>{
+      'TU': {
+        '00B0950000': bytes(tuPublic),
+        '00B0960000': holder,
+        '00B0970000': management,
+        '805C000204': bytes('00002710'),
+        '00B201C500': bytes(tuTransaction),
+      },
+      'CU': {
+        '00B095001E': bytes(cuPublic),
+        '00B201C400': bytes(cuTransaction),
+        '00B201D400': bytes(cuRecharge),
+        '805C000204': bytes('000001F4'),
+      },
+    };
+    const mf = '00A40000023F0000';
+    const tuSelect = '00A4040008A00000063201010500';
+    const cuSelect = '00A4040009A0000000038698070100';
+    final commands = <String>[];
+    final successfulReads = <String>[];
+    String? selected;
+    final parser = ShanghaiTransitUnionCardParser((apdu) async {
+      final command = hex(apdu);
+      commands.add(command);
+      if (command == mf) {
+        selected = null;
+        return [0x90, 0x00];
+      }
+      if (command == tuSelect || command == cuSelect) {
+        selected = command == tuSelect ? 'TU' : 'CU';
+        return [0x90, 0x00];
+      }
+      final data = replies[selected]?[command];
+      if (data != null) {
+        successfulReads.add('$selected:$command');
+        return [...data, 0x90, 0x00];
+      }
+      return apdu[1] == 0xB2 ? [0x6A, 0x83] : [0x6A, 0x82];
+    });
+
+    final result = await parser.read();
+
+    expect(successfulReads, [
+      'TU:00B0950000',
+      'TU:00B0960000',
+      'TU:00B0970000',
+      'TU:805C000204',
+      'TU:00B201C500',
+      'CU:00B095001E',
+      'CU:00B201C400',
+      'CU:00B201D400',
+      'CU:805C000204',
+    ]);
+    final cuStart = commands.indexOf(cuSelect);
+    expect(cuStart, greaterThan(commands.indexOf('00B201C500')));
+    expect(commands.first, mf);
+    expect(commands[1], tuSelect);
+    expect(commands[cuStart - 1], mf);
+    expect(commands.skip(cuStart), [
+      cuSelect,
+      '00B095001E',
+      '00B201C400',
+      '00B202C400',
+      '00B201D400',
+      '00B202D400',
+      '805C000204',
+    ]);
+    for (final side in [result.tu, result.cu]) {
+      expect(side.confirmed, isTrue);
+      expect(side.readSucceeded, isTrue);
+      expect(side.dataComplete, isTrue);
+      expect(side.available, isTrue);
+      expect(side.errors, isEmpty);
+      expect(side.warnings, isEmpty);
+    }
+    expect(result.status, ShanghaiTransitUnionStatus.bothAvailable);
+    expect(result.isShanghaiTransitUnion, isTrue);
+    expect(result.mergedCardInfo.isTU, isTrue);
+    expect(result.mergedCardInfo.isCU, isTrue);
+    expect(result.mergedCardInfo.cardKindLabel, contains('双应用'));
+    expect(result.tu.cardInfo.isCU, isFalse);
+    expect(result.cu.cardInfo.isTU, isFalse);
+    expect(result.tu.cardInfo.observedBalance, 10000);
+    expect(result.cu.cardInfo.observedBalance, 500);
+    final tu = result.tu.card!;
+    final cu = result.cu.card!;
+    final merged = result.mergedCard!;
+    expect(tu.selectedAidHex, 'A000000632010105');
+    expect(cu.selectedAidHex, 'A00000000386980701');
+    expect(tu.info.applicationSerial, '0$_shanghaiSerial');
+    expect(tu.info.balanceFen, 10000);
+    expect(cu.info.balanceFen, 500);
+    expect(tu.transactions.single.rawHex, tuTransaction);
+    expect(tu.transactions.single.amountFen, 200);
+    expect(tu.cityUnionFiles, isEmpty);
+    expect(cu.transactions, isEmpty);
+    expect(cu.cityUnionFiles.map((f) => compact(f.rawHex)), [
+      cuPublic,
+      cuTransaction,
+      cuRecharge,
+    ]);
+    expect(cu.cityUnionFiles.first, isA<CjT331PublicInfo>());
+    expect(cu.cityUnionFiles[1], isA<CjT331WalletLocalConsumption>());
+    expect(cu.cityUnionFiles[2], isA<CjT331WalletRecharge>());
+    expect(result.tu.records, hasLength(1));
+    expect(result.cu.records, hasLength(2));
+    expect(result.cu.records.map((r) => r.label), ['CU 0x18#2', 'CU 0x1A#3']);
+    expect(merged.dualApplication, isTrue);
+    expect(merged.info.balanceFen, 10000);
+    expect(merged.cityUnionBalanceFen, 500);
+    expect(merged.transactions, tu.transactions);
+    expect(merged.cityUnionFiles, cu.cityUnionFiles);
+    expect(result.readResult.records, hasLength(3));
   });
 
   test('TU 未命中时仍执行 CU 探测（双路独立，不跳过另一侧）', () async {

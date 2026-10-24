@@ -74,6 +74,41 @@ class CardInfo {
   bool specialLocal = false;
   int lastSeenRecordIndex = -1;
 
+  /// 独立汇总副本；未观察到的余额保持 null，原始字节也独立复制。
+  CardInfo copy() => CardInfo()
+    ..cardNumber = cardNumber
+    ..issuerCode = issuerCode
+    ..issuerCode2 = issuerCode2
+    ..cityCode = cityCode
+    ..terminalCode = terminalCode
+    .._observedBalance = _observedBalance
+    ..previousBalance = previousBalance
+    ..deposit = deposit
+    ..bonus = bonus
+    ..extraBalance = extraBalance
+    ..remainingTrips = remainingTrips
+    ..validFromDays = validFromDays
+    ..cardTypeCode = cardTypeCode
+    ..subtypeCode = subtypeCode
+    ..issueDate = issueDate
+    ..expiryDate = expiryDate
+    ..startDate = startDate
+    ..timezoneOffsetMinutes = timezoneOffsetMinutes
+    ..rawInfo = rawInfo == null ? null : List<int>.of(rawInfo!)
+    ..isSuzhou = isSuzhou
+    ..isTU = isTU
+    ..isCU = isCU
+    ..isBeijing = isBeijing
+    ..isWHCTC = isWHCTC
+    ..isTFT = isTFT
+    ..isSZT = isSZT
+    ..isYCT = isYCT
+    ..isSuxin = isSuxin
+    ..isCika = isCika
+    ..isCikaMode = isCikaMode
+    ..specialLocal = specialLocal
+    ..lastSeenRecordIndex = lastSeenRecordIndex;
+
   /// 是否属于地方卡（非通用 TU/CU）识别出的卡种 —— 供上层判定是否认领。
   bool get isLocalCard =>
       isBeijing || isWHCTC || isYCT || isSZT || isSuzhou || isTFT;
@@ -86,6 +121,7 @@ class CardInfo {
     if (isSZT) return '深圳通';
     if (isSuzhou) return isCika ? '苏州·计次卡' : '苏州·苏薪卡';
     if (isTFT) return '天府通';
+    if (isTU && isCU) return '交通联合 + 城市一卡通（双应用）';
     if (isTU) return '交通联合';
     if (isCU) return '城市一卡通';
     return '地方交通卡';

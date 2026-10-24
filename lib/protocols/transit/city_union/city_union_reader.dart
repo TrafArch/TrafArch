@@ -63,7 +63,8 @@ class CommonUnitCu {
   List<int>? get selectedAid => _selectedAid;
 
   Future<bool> select(CardInfo info, List<ApduRecord> records) async {
-    if (info.isCU) return true;
+    // 历史发现标记不能证明当前仍选中 CU，必须实际选择应用。
+    _selectedAid = null;
     if (!await _selectApplication()) return false;
     info.isCU = true;
     return true;
