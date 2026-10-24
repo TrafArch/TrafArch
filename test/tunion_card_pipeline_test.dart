@@ -1157,6 +1157,59 @@ void main() {
       expect(trip.lineLabel, isNull); // 0x1A 记录不产出线路（不猜测）
     });
 
+    for (final byPos in [false, true]) {
+      test('两来源独立关联、金额不等不产生余额锚点，POS=$byPos', () {
+        final time = DateTime(2024, 5, 1, 8, 30);
+        final extendedTime = byPos
+            ? time.add(const Duration(minutes: 10))
+            : time;
+        final process = _entryRecord(time: extendedTime, amountFen: 123);
+        final rail = TUnionProcessRecord(
+          sfi: 0x1A,
+          recordNumber: 1,
+          recordName: 'rail',
+          raw: const [],
+          railTransit: TransitRecord(
+            statusCode: 2,
+            entryTime: time.subtract(const Duration(hours: 1)),
+            exitTime: extendedTime,
+            exitTerminalId: '0000300089000340',
+            exitCityCode: '3910',
+            exitStationId: '0231',
+            exitAmountFen: 456,
+          ),
+        );
+        final card = ParsedCard(
+          parserName: 't',
+          info: const TUnionCardInfo(),
+          transactions: [
+            _txn(
+              seq: 1,
+              time: time,
+              amountFen: 999,
+              terminalId: byPos ? '300089000340' : '111111111111',
+            ),
+          ],
+          transitProcessRecords: [process, rail],
+          selectedAidHex: 'A000000632010105',
+        );
+        final trip = AnalysisEngine(kb).analyze(card).trips.single;
+        expect(trip.displayProcessKey, isNotNull);
+        expect(trip.displayApplicationKey, isNotNull);
+        expect(trip.time, time);
+        expect(trip.amountFen, 999);
+        expect(trip.matchedProcessTrip, isNull);
+        expect(trip.balanceAfterFen, isNull);
+        expect(trip.isEntry, isTrue); // 1E 优先于 1A 出站状态
+        final stream = buildTripStream(
+          trips: [trip],
+          rails: [rail.railTransit!],
+          processTrips: [process.trip!],
+        );
+        expect(stream, hasLength(2));
+        expect(stream.whereType<RailRecordEntry>().single.isEntry, isTrue);
+      });
+    }
     test('0x1A 与 0x1E 均可配对：0x1E 注解优先', () {
       final engine = AnalysisEngine(kb);
       final parsed = ParsedCard(
@@ -1180,7 +1233,7 @@ void main() {
       expect(trip.appTypeName, '城市轨道交通');
     });
 
-    test('0x1A 记录 1 进站交易金额非 0：不参与配对（不猜测）', () {
+    test('0x1A进站金额不同仍按时间融合，不改变基础金额', () {
       final engine = AnalysisEngine(kb);
       final parsed = ParsedCard(
         parserName: 't',
@@ -1199,8 +1252,10 @@ void main() {
       final result = engine.analyze(parsed, now: DateTime(2026, 10, 7));
 
       final trip = result.trips.single;
-      expect(trip.isEntry, isFalse);
-      expect(trip.stationLabel, isNull);
+      expect(trip.isEntry, isTrue);
+      expect(trip.displayApplicationKey, isNotNull);
+      expect(trip.amountFen, 0);
+      expect(trip.matchedProcessTrip, isNull);
     });
 
     test('0 元交易配对 0x1A 记录 2 上车：标记进站并补齐进站城市/站点', () {

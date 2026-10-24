@@ -159,14 +159,15 @@ void main() {
       });
     }
 
-    test('同分钟不同秒只补站点，不作为余额证据', () async {
+    test('同分钟不同秒且POS不匹配不融合、不作为余额证据', () async {
       final cycle = _cycleRecord()..[31] = 0x01;
       final app = await _scan(
         _FakeNfcChannel()
           ..enqueueWalletScript(record: _record(), cycleRecord: cycle),
       );
       final trip = app.analysis!.trips.single;
-      expect(trip.stationLabel, '苏洋');
+      expect(trip.stationLabel, isNull);
+      expect(trip.displayProcessKey, isNull);
       expect(trip.balanceAfterFen, 10000);
       expect(trip.balanceAfterIsRecorded, isFalse);
       expect(trip.matchedProcessTrip, isNull);
@@ -433,7 +434,7 @@ void main() {
           cycleRecord: _cycleRecord(), // 0x1E：城市轨道交通行业
         ),
       );
-      expect(app.railTransitRecord, isNull); // 0x1A 记录被抑制
+      expect(app.railTransitRecord, isNotNull); // 原始 1A 保留，按侧关联
       final trip = app.analysis!.trips.single;
       expect(trip.appTypeName, '城市轨道交通');
       expect(trip.cityName, '福州市');
@@ -441,7 +442,7 @@ void main() {
       expect(trip.balanceAfterFen, 5340);
     });
 
-    test('0x1A 与 0x1E 同时出现（公共汽电车）：同样抑制 0x1A', () async {
+    test('0x1A 与 0x1E 同时出现（公共汽电车）：不抑制未关联 0x1A', () async {
       final app = await _scan(
         _FakeNfcChannel()..enqueueWalletScript(
           record: _record(terminal: '123456789012'),
@@ -449,7 +450,7 @@ void main() {
           cycleRecord: _cycleRecord(appTypeCode: 0x02), // 0x1E：公共汽电车行业
         ),
       );
-      expect(app.railTransitRecord, isNull); // 跨行业同样隐藏
+      expect(app.railTransitRecord, isNotNull); // 不跨行业全量隐藏
       expect(app.analysis!.trips.single.appTypeName, '公共汽电车');
     });
 
@@ -492,13 +493,13 @@ void main() {
           cycleRecord: _cycleRecord(appTypeCode: 0x02), // 0x1E：公共汽电车行业
         ),
       );
-      expect(app.busTransitRecord, isNull); // 0x1A 记录 2 被抑制
+      expect(app.busTransitRecord, isNotNull); // 原始公交侧保留
       final trip = app.analysis!.trips.single;
       expect(trip.appTypeName, '公共汽电车');
       expect(trip.balanceAfterFen, 5340);
     });
 
-    test('0x1A 记录 2 与 0x1E（城市轨道）：同样抑制公交记录', () async {
+    test('0x1A 记录 2 与 0x1E（城市轨道）：不抑制未关联公交记录', () async {
       final app = await _scan(
         _FakeNfcChannel()..enqueueWalletScript(
           record: _record(terminal: '123456789012'),
@@ -506,7 +507,7 @@ void main() {
           cycleRecord: _cycleRecord(), // 0x1E：城市轨道交通行业
         ),
       );
-      expect(app.busTransitRecord, isNull); // 跨行业同样隐藏
+      expect(app.busTransitRecord, isNotNull); // 不跨行业全量隐藏
       expect(app.analysis!.trips.single.appTypeName, '城市轨道交通');
     });
 

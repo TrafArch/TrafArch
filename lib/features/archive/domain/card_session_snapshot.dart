@@ -387,6 +387,8 @@ class CardSessionSnapshot {
     'balanceAfterFen': t.balanceAfterFen,
     'rideStatusName': t.rideStatusName,
     'isEntry': t.isEntry,
+    'displayProcessKey': t.displayProcessKey,
+    'displayApplicationKey': t.displayApplicationKey,
     'currency': t.currency.code,
     'location': t.location == null
         ? null
@@ -466,6 +468,8 @@ class CardSessionSnapshot {
           : process != null && storedBalance == process.balanceFen,
       rideStatusName: _str(m['rideStatusName']),
       isEntry: m['isEntry'] == true,
+      displayProcessKey: _str(m['displayProcessKey']),
+      displayApplicationKey: _str(m['displayApplicationKey']),
       matchedProcessTrip: matched is Map<String, dynamic>
           ? _cycleFromJson(matched)
           : null,

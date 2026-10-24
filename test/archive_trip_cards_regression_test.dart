@@ -344,10 +344,10 @@ void main() {
       ),
     );
     await _open(tester, repository, id);
-    expect(find.byType(TripEntryCard), findsNWidgets(2));
-    expect(find.textContaining('人民广场'), findsNothing);
-    expect(find.textContaining('世纪大道'), findsNothing);
-    expect(find.text('交易 1 条 · 过程及应用记录 1 条'), findsOneWidget);
+    expect(find.byType(TripEntryCard), findsNWidgets(6));
+    expect(find.textContaining('人民广场'), findsWidgets);
+    expect(find.textContaining('世纪大道'), findsWidgets);
+    expect(find.text('交易 1 条 · 过程及应用记录 3 条'), findsOneWidget);
 
     await _filter(tester, '0x1E 过程');
     expect(find.byType(TripEntryCard), findsOneWidget);
@@ -357,13 +357,13 @@ void main() {
     expect(find.text('当前筛选条件下没有记录'), findsOneWidget);
     await _filter(tester, '全部方式');
     await _filter(tester, '0x1A 轨道');
-    // 同批次 1E 隐藏所有 1A，筛选也不能重新显示。
-    expect(find.byType(TripEntryCard), findsNothing);
+    // 未关联的 1A 两侧继续显示并参与筛选。
+    expect(find.byType(TripEntryCard), findsNWidgets(2));
     await _filter(tester, '全部来源');
     await _filter(tester, '公共汽电车');
-    expect(find.byType(TripEntryCard), findsOneWidget);
+    expect(find.byType(TripEntryCard), findsNWidgets(3));
     await _filter(tester, '全部方式');
-    expect(find.byType(TripEntryCard), findsNWidgets(2));
+    expect(find.byType(TripEntryCard), findsNWidgets(6));
     _expectNoJson();
     await _close(tester);
   });
@@ -413,8 +413,9 @@ void main() {
       ),
     );
     await _open(tester, repository, id);
-    expect(find.byType(TripEntryCard), findsOneWidget);
-    expect(find.text('交易 1 条 · 过程及应用记录 0 条（1 条已并入 0x18 交易）'), findsOneWidget);
+    expect(find.byType(TripEntryCard), findsNWidgets(3));
+    expect(find.text('交易 1 条 · 过程及应用记录 1 条（1 条已并入 0x18 交易）'), findsOneWidget);
+    await _filter(tester, '0x18 交易');
     await tester.tap(find.byType(TripEntryCard));
     await tester.pumpAndSettle();
     expect(find.textContaining('保存时已关联 0x1E 过程记录'), findsOneWidget);

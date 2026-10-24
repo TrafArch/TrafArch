@@ -1,6 +1,7 @@
 import '../reference_data/domain/station_codes.dart';
 import '../reference_data/domain/tunion_terminal_decoder.dart';
 import '../../protocols/transit/tunion/tunion_models.dart';
+import '../../protocols/transit/tunion/tunion_trip_matcher.dart';
 
 /// 交易后余额倒推口径的起始解析版本：该版本起 `balanceAfterFen`
 /// 优先取 0x1E 记录余额、缺失处按连续交易倒推（未配对 0x1E 的交易
@@ -9,7 +10,7 @@ const int kBalanceReconstructionParseVersion = 6;
 
 /// 行程解析口径版本：解析 / 关联规则变更时递增，随读取批次持久化，
 /// 历史数据据此识别产出批次所用的解析口径。
-const int kTripParseVersion = kBalanceReconstructionParseVersion;
+const int kTripParseVersion = kBalanceReconstructionParseVersion + 1;
 
 /// 识别证据：来源、说明与权重（0 表示"出场但未命中"）。
 class Evidence {
@@ -175,6 +176,10 @@ class TransitTrip {
   /// 与 0x18 双向唯一配对的 0x1E 原始证据；无来源时不得推断 1A 去重。
   final TUnionTripRecord? matchedProcessTrip;
 
+  /// 独立展示关联证据；不得用于恢复记录余额。
+  final String? displayProcessKey;
+  final String? displayApplicationKey;
+
   /// 站点名称匹配置信级别（精确 / 歧义 / 未匹配；已取消站名推测）；
   /// 名称来自站点库命中时非 null，回退原始编码时为 null（不猜测）。
   final StationMatchConfidence? stationConfidence;
@@ -206,6 +211,8 @@ class TransitTrip {
     this.rideStatusName,
     this.isEntry = false,
     this.matchedProcessTrip,
+    this.displayProcessKey,
+    this.displayApplicationKey,
     this.stationConfidence,
     this.rawHex,
     this.currency = Currency.cny,
@@ -375,93 +382,57 @@ final class ProcessTripEntry extends TripEntry {
 /// 0x1E 过程记录为按时间倒序的行程流：
 /// - 已与交易配对的 0x1E 由交易条目代表；无法配对的 0x1E 保留为
 ///   [ProcessTripEntry]（独立过程事件，不丢弃）；
-/// - 同次读取存在已解析 1E（含已并入交易的证据）时，轨道和公交 1A
-///   均隐藏，不要求行业或事件对应；原始记录不变。
+/// - 1A 仅隐藏已保存展示关联的具体侧；不隐藏基础交易或未匹配侧。
 List<TripEntry> buildTripStream({
   required List<TransitTrip> trips,
   List<TransitRecord> rails = const [],
   List<BusTransitRecord> buses = const [],
   List<TUnionTripRecord> processTrips = const [],
 }) {
-  // Inputs belong to one read. Suppress only the display inputs so hidden 1A
-  // timestamps cannot also suppress composite 0x18 transactions.
-  if (processTrips.isNotEmpty ||
-      trips.any((trip) => trip.matchedProcessTrip != null)) {
-    rails = const [];
-    buses = const [];
-  }
+  // 仅消费分析阶段保存的关联；不按存在某类文件全局压制事件。
   final halves = <TripEntry>[
     for (final rail in rails) ..._railHalves(rail),
     for (final bus in buses) ..._busHalves(bus),
   ];
-  // 0x1A 进 / 出站记录时间戳全集（两侧各计）：复合消费去重依据。
-  final recordTimes = <DateTime>{
-    for (final rail in rails) ...[
-      if (rail.entryTime != null) rail.entryTime!,
-      if (rail.exitTime != null) rail.exitTime!,
-    ],
-    for (final bus in buses) ...[
-      if (bus.entryTime != null) bus.entryTime!,
-      if (bus.exitTime != null) bus.exitTime!,
-    ],
-  };
-  // 复合消费（0x09）交易时间戳与某条 0x1A 进 / 出站记录完全一致时，该行程
-  // 已由更完整的 0x1A 明细表达，屏蔽 0x18 复合消费条目避免重复。例外：该
-  // 交易已唯一关联城市轨道 0x1E 时，18+1E 混合行程才是最终展示，18 保留。
-  final shownTrips = <TransitTrip>[
+  final applicationKeys = [
     for (final t in trips)
-      if (!(t.isCompositeConsume &&
-          t.matchedProcessTrip?.isCityRail != true &&
-          recordTimes.contains(t.time)))
-        t,
+      if (t.displayApplicationKey != null) t.displayApplicationKey!,
   ];
-  // 已与 18 唯一关联的城市轨道 1E：对应 1A 记录的进 / 出两侧都并入
-  // 18+1E 混合行程，整条 1A 记录隐藏；未获证据证实的 1A 保持展示。
-  final hiddenRails = _hiddenRailRecords(shownTrips, rails);
-  final matches = <TransitTrip, List<TripEntry>>{
-    for (final trip in shownTrips)
-      trip: halves.where((side) => _matchesProcessSide(trip, side)).toList(),
-  };
-  // 两边均唯一才去重；默认 isEntry=false、显示文本或时间金额相似不是来源证据。
-  final hidden = <TripEntry>{};
-  for (final candidates in matches.values) {
-    if (candidates.length != 1) continue;
-    final side = candidates.single;
-    if (matches.values.where((list) => list.contains(side)).length == 1) {
-      hidden.add(side);
-    }
+  final processKeys = [
+    for (final t in trips)
+      if (t.displayProcessKey != null) t.displayProcessKey!,
+  ];
+  bool consume(List<String> keys, String key) {
+    final index = keys.indexOf(key);
+    if (index < 0) return false;
+    keys.removeAt(index);
+    return true;
   }
-  // 已关联到交易的 0x1E 记录（配对证据随快照保存，按值比对）不再单独展示。
-  // 被屏蔽的复合消费交易仍计入关联集，避免其配对 0x1E 重新以独立事件出现。
-  final linked = trips
-      .map((t) => t.matchedProcessTrip)
-      .whereType<TUnionTripRecord>()
-      .toList();
-  return <TripEntry>[
-    for (final t in shownTrips) TransactionTripEntry(t),
-    ...halves.where(
-      (side) =>
-          !hidden.contains(side) &&
-          !(side is RailRecordEntry && hiddenRails.contains(side.record)),
-    ),
-    for (final p in processTrips)
-      if (!linked.any((l) => sameProcessRecord(l, p))) ProcessTripEntry(p),
-  ]..sort((a, b) => b.time.compareTo(a.time));
-}
 
-Set<TransitRecord> _hiddenRailRecords(
-  List<TransitTrip> trips,
-  List<TransitRecord> rails,
-) {
-  final hidden = <TransitRecord>{};
-  for (final trip in trips) {
-    final process = trip.matchedProcessTrip;
-    if (process == null || !trip.isConsume || !process.isCityRail) continue;
-    for (final rail in rails) {
-      if (railRecordMatchesProcess(rail, process)) hidden.add(rail);
-    }
-  }
-  return hidden;
+  String sideKey(TripEntry side) => switch (side) {
+    RailRecordEntry(:final record, :final isEntry) => TunionApplicationSide(
+      rail: record,
+      isEntry: isEntry,
+    ).key,
+    BusRecordEntry(:final record, :final isEntry) => TunionApplicationSide(
+      bus: record,
+      isEntry: isEntry,
+    ).key,
+    _ => '',
+  };
+  // 已关联到交易的 0x1E 记录（配对证据随快照保存，按值比对）不再单独展示。
+  // 旧快照只兼容其严格关联；新展示证据存在时不再额外消费余额关联。
+  processKeys.addAll([
+    for (final t in trips)
+      if (t.displayProcessKey == null && t.matchedProcessTrip != null)
+        cycleDisplayKey(t.matchedProcessTrip!),
+  ]);
+  return <TripEntry>[
+    for (final t in trips) TransactionTripEntry(t),
+    ...halves.where((side) => !consume(applicationKeys, sideKey(side))),
+    for (final p in processTrips)
+      if (!consume(processKeys, cycleDisplayKey(p))) ProcessTripEntry(p),
+  ]..sort((a, b) => b.time.compareTo(a.time));
 }
 
 /// 0x1A 城市轨道记录是否与 0x1E 过程记录描述同一进 / 出站侧：
@@ -486,7 +457,7 @@ bool? _processEntrySide(int typeCode) => switch (typeCode) {
   _ => null,
 };
 
-bool _matchesProcessSide(TransitTrip trip, TripEntry side) {
+bool matchesLegacyProcessSide(TransitTrip trip, TripEntry side) {
   final source = trip.matchedProcessTrip;
   if (source == null || !trip.isConsume) return false;
   switch (side) {
