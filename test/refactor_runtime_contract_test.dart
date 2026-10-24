@@ -39,7 +39,7 @@ void main() {
       expect(kb.cities.lookup('1210')!.name, contains('石家庄'));
       expect(kb.cuCities!.lookup('1210')!.name, contains('锦州'));
       expect(kb.cuRepository!.busRouteCount, 13852);
-      expect(kb.tuStations!.stationCount, 7480);
+      expect(kb.tuStations!.stationCount, 7485);
     } finally {
       kb.close();
     }

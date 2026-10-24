@@ -57,6 +57,18 @@ the independent pre-refactor audit; rebuilding never regenerates that baseline.
 Do not overwrite a frozen snapshot. A later source revision gets a new directory,
 explicit source manifest changes and a reviewed baseline change.
 
+The current TU revision is `sources/user-tu-afdaca5f8ff3-source-v3/`, derived from
+user upload SHA256 `afdaca5f8ff314437f82f8fd0bc06fb70575409e467457e2186e281ac834fcd3`.
+All uploaded station rows are preserved. Only Fuzhou two-line source metadata,
+transport summary and provenance are corrected, along with the upload's accidental
+Chuzhou summary count (121 restored to its actual 14); stale package tables are removed
+from the new source copy and recreated by the CLI. This does not independently
+verify official station codes or operating status. The new baseline retains the
+original CU inventory. LF copies of `card_prefixes.json` and `tu-lookup-20261021.json`
+retain their existing pinned hashes without modifying CRLF checkout originals.
+The local ignored `tools/revise_uploaded_tu.py` reproduces the source revision;
+run it with the upload path before the normal build workflow in a clean checkout.
+
 The TU prefix projection includes all **429** rows in `card_prefixes`, **428**
 JSON supplement entries and **347** `issuer_city_codes` rows. All 1,204 input
 records and their raw keys are preserved in manifest provenance; the original

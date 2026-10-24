@@ -12,6 +12,7 @@
 .swiftpm/
 /tool/
 /tools/
+/data/
 migrate_working_dir/
 
 # IntelliJ related

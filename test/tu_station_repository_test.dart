@@ -82,6 +82,102 @@ CREATE TABLE "region_北京_1000"(
     db.close();
   });
 
+  test('发布库保留用户上传的福州两线全部编码及新增站', () {
+    final published = sqlite3.open(
+      'assets/data/TrafArch_Database_TU.sqlite',
+      mode: OpenMode.readOnly,
+    );
+    addTearDown(published.close);
+    final repository = TuStationRepository(published, userDatabase: db);
+    for (final region in {31: 14, 32: 121}.entries) {
+      expect(
+        published.select(
+          'SELECT station_count FROM region_${region.key}_transport_summary '
+          "WHERE transport_type = 'metro'",
+        ).single['station_count'],
+        region.value,
+      );
+    }
+    const lines = {
+      '06': [
+        '潘墩',
+        '林浦',
+        '樟岚',
+        '梁厝',
+        '下洋',
+        '营前',
+        '航城',
+        '郑和',
+        '十洋',
+        '吴航',
+        '鹤上',
+        '沙京',
+        '莲花',
+        '下吴',
+        '壶井',
+        '万寿',
+      ],
+      '15': [
+        '福州火车站',
+        '东门',
+        '闽都',
+        '南公园',
+        '三叉街',
+        '盖山',
+        '帝封江',
+        '祥谦',
+        '首占',
+        '莲花山',
+        '滨海西',
+        '大数据',
+        '滨海中央商务区',
+        '机场',
+        '文岭',
+      ],
+    };
+    for (final line in lines.entries) {
+      final lineName = line.key == '06' ? '6号线' : '滨海快线';
+      expect(
+        published.select('SELECT * FROM "region_福州_3910" WHERE line_name = ?', [
+          lineName,
+        ]),
+        hasLength(line.value.length),
+      );
+      for (var i = 0; i < line.value.length; i++) {
+        final code = '3910${line.key}${31 + i}';
+        final matches = repository.findStations(
+          regionCode: '3910',
+          sourceKey: code,
+        );
+        expect(matches, hasLength(1), reason: code);
+        expect(matches.single.stationName, line.value[i], reason: code);
+        expect(matches.single.lineName, lineName);
+        final fragments = repository.fragLineStation(
+          '3910',
+          line.key,
+          '${31 + i}',
+        );
+        expect(fragments, hasLength(1), reason: code);
+        expect(fragments.single.stationName, line.value[i]);
+      }
+    }
+    final bigData = published.select(
+      'SELECT source_key FROM "region_福州_3910" WHERE station_name = ?',
+      ['大数据'],
+    );
+    expect(bigData, hasLength(1));
+    expect(bigData.single['source_key'], '39101542');
+    expect(
+      published.select(
+        'SELECT s.station_id FROM "region_福州_3910" s '
+        'LEFT JOIN record_provenance p ON p.table_name = ? '
+        'AND p.station_id = s.station_id WHERE p.station_id IS NULL',
+        ['region_福州_3910'],
+      ),
+      isEmpty,
+    );
+  });
+
   group('地区定位', () {
     test('按编码唯一定位地区', () {
       final region = repo.findRegion(regionCode: '2900');
