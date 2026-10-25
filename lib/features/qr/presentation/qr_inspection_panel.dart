@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import 'expert_widgets.dart';
-import 'expert_formatters.dart';
-import '../qr/presentation/jt_t1179_qr_display.dart';
-import '../../protocols/transit/qr/jt_t1179_qr_parser.dart';
+import '../../expert/expert_widgets.dart';
+import '../../expert/expert_formatters.dart';
+import 'jt_t1179_qr_display.dart';
+import '../../../protocols/transit/qr/jt_t1179_qr_parser.dart';
 
 class QrInspectionPanel extends StatelessWidget {
   const QrInspectionPanel({
@@ -23,7 +23,6 @@ class QrInspectionPanel extends StatelessWidget {
   Widget build(BuildContext context) => Column(children: _qrSection(context));
   List<Widget> _qrSection(BuildContext context) {
     if (qr == null) {
-      // 外层（_infoGetTabBody）已排除空态：qr 为 null 时必有解析失败原因
       return [
         ExpertField('状态', '解析失败'),
         ExpertField('原因', expertValue(error)),
@@ -31,7 +30,7 @@ class QrInspectionPanel extends StatelessWidget {
         const SizedBox(height: 6),
         if (raw != null) ExpertHex(hexBytes(raw!)),
         const SizedBox(height: 12),
-        ExpertHomeHint('可返回首页重新扫描或从相册导入乘车码'),
+        ExpertHint('可在本页重新扫描二维码或从相册导入'),
         const SizedBox(height: 12),
         _qrClearButton(),
       ];

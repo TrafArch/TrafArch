@@ -4,6 +4,7 @@ import '../../shared/presentation/ui_constants.dart';
 import '../archive/data/app_database.dart';
 import '../../app/app_dependencies.dart';
 import '../archive/domain/card_name_extension.dart';
+import '../qr/presentation/qr_action_button.dart';
 import '../settings/presentation/settings_action_button.dart';
 import '../archive/presentation/card_detail_page.dart';
 
@@ -24,6 +25,7 @@ class CardsPage extends StatelessWidget {
             title: const Text('卡片列表'),
             actions: [
               _ExportCardsButton(app: app),
+              QrActionButton(app: app),
               SettingsActionButton(app: app),
             ],
           ),

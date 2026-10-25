@@ -1,8 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.NFC" />
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- 应用内相机扫码（mobile_scanner）需要相机权限（动态申请）；
-         系统扫码（Google Play 服务）无需相机权限 -->
+    <!-- 应用内相机扫码（mobile_scanner）需要相机权限（动态申请） -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
@@ -47,10 +46,5 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-        <!-- Google Play 服务在从应用商店安装时预下载扫码器模块（barcode_ui），
-             使 GMS 扫码首次使用即可用、无需等待模块下载 -->
-        <meta-data
-            android:name="com.google.mlkit.vision.DEPENDENCIES"
-            android:value="barcode_ui" />
     </application>
 </manifest>

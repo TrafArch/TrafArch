@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../protocols/transit/card_parser.dart';
-import '../qr/presentation/jt_t1179_qr_display.dart';
+import '../qr/presentation/qr_action_button.dart';
 import '../../app/app_dependencies.dart';
 import '../home/presentation/bank_summary_panel.dart';
 import '../home/presentation/felica_summary_panel.dart';
@@ -12,7 +12,6 @@ import 'compliance_panel.dart';
 import 'expert_formatters.dart';
 import 'expert_widgets.dart';
 import 'identity_panel.dart';
-import 'qr_inspection_panel.dart';
 import 'raw_data_panel.dart';
 import 'tunion_panel.dart';
 
@@ -37,7 +36,6 @@ class _ExpertPageState extends State<ExpertPage> {
     final app = widget.app;
     _selection = RecentResultSelection(
       card: app.lastResult,
-      qr: app.qrData,
       bank: app.lastBankCardResult,
     );
     app.addListener(_refresh);
@@ -61,11 +59,7 @@ class _ExpertPageState extends State<ExpertPage> {
   void _refresh() {
     if (!mounted) return;
     final app = widget.app;
-    _selection.observe(
-      card: app.lastResult,
-      qr: app.qrData,
-      bank: app.lastBankCardResult,
-    );
+    _selection.observe(card: app.lastResult, bank: app.lastBankCardResult);
     setState(() {});
   }
 
@@ -89,7 +83,10 @@ class _ExpertPageState extends State<ExpertPage> {
             SliverAppBar(
               title: const Text('专家分析'),
               pinned: true,
-              actions: [SettingsActionButton(app: app)],
+              actions: [
+                QrActionButton(app: app),
+                SettingsActionButton(app: app),
+              ],
               bottom: TabBar(
                 isScrollable: true,
                 tabAlignment: TabAlignment.start,
@@ -134,13 +131,11 @@ class _ExpertPageState extends State<ExpertPage> {
         (!app.parsing && app.lastResult != null && bank == null);
     final available = <RecentResultKind>[
       if (hasCard) RecentResultKind.card,
-      if (app.hasQrData || app.qrError != null) RecentResultKind.qr,
       if (bank != null) RecentResultKind.bank,
     ];
     if (available.isEmpty) {
       return _tab('expert-info-get', const [
         ExpertHomeHint('尚未读取卡片，请先在首页贴卡读取'),
-        ExpertHomeHint('尚未获取乘车码，请先在首页扫描二维码或从相册导入'),
         ExpertHomeHint('尚未读取银行卡：在首页贴卡读取后自动分析（交通应用未命中时按 EMV / PBOC 只读解析）'),
       ], showReadHint: false);
     }
@@ -154,7 +149,6 @@ class _ExpertPageState extends State<ExpertPage> {
                 value: item,
                 label: Text(switch (item) {
                   RecentResultKind.card => '卡片识别',
-                  RecentResultKind.qr => '二维码',
                   RecentResultKind.bank => '银行卡',
                 }),
               ),
@@ -172,15 +166,6 @@ class _ExpertPageState extends State<ExpertPage> {
               ? FelicaSummaryPanel(felica: app.felicaResult!)
               : IdentityPanel(app: app),
         RecentResultKind.bank => BankSummaryPanel(bank: bank!, detailed: true),
-        RecentResultKind.qr => QrInspectionPanel(
-          qr: app.qrData,
-          error: app.qrError,
-          raw: app.qrRaw,
-          issuerName:
-              app.cardPrefixByIssuerId(app.qrData?.issuerIdText)?.cardName ??
-              '未知',
-          onClear: app.clearQr,
-        ),
       },
     ], showReadHint: false);
   }

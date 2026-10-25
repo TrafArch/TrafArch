@@ -24,7 +24,6 @@ import 'package:transit_card_analyzer/features/home/home_page.dart';
 import 'package:transit_card_analyzer/features/cards/cards_page.dart';
 import 'package:transit_card_analyzer/features/trips/trip_entry_card.dart';
 import 'package:transit_card_analyzer/app/app_dependencies.dart';
-import 'package:transit_card_analyzer/platform/qr/gms_qr_scanner.dart';
 
 /// 行程模块链路测试：
 /// - 模型级：假 NFC 通道 + 假资产包驱动完整管道（scanOnce → TUnionParser
@@ -58,14 +57,10 @@ void main() {
       '苏洋',
     );
     stations.close();
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(gmsQrScannerChannel, (_) async => false);
   });
   tearDown(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(pathProvider, null);
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(gmsQrScannerChannel, null);
   });
   // 每个测试各开一个内存数据库：关闭多数据库调试警告。
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;

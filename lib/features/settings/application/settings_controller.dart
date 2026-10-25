@@ -13,14 +13,12 @@ class SettingsController extends OwnedNotifier {
   String? persistenceError;
 
   bool get loggingEnabled => _values[SettingsKeys.loggingEnabled] ?? false;
-  bool get gmsScanEnabled => _values[SettingsKeys.gmsScanEnabled] ?? false;
   bool get autoSaveEnabled => _values[SettingsKeys.autoSaveEnabled] ?? false;
   bool get monetEnabled => _values[SettingsKeys.monetEnabled] ?? true;
 
   Future<void> initialize() => _initialization ??= () async {
     for (final key in [
       SettingsKeys.loggingEnabled,
-      SettingsKeys.gmsScanEnabled,
       SettingsKeys.autoSaveEnabled,
       SettingsKeys.monetEnabled,
     ]) {
@@ -52,8 +50,6 @@ class SettingsController extends OwnedNotifier {
     await logger.flush();
   }
 
-  Future<void> setGmsScanEnabled(bool value) =>
-      _set(SettingsKeys.gmsScanEnabled, value);
   Future<void> setAutoSaveEnabled(bool value) =>
       _set(SettingsKeys.autoSaveEnabled, value);
   Future<void> setMonetEnabled(bool value) =>

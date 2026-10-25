@@ -2,7 +2,6 @@ package com.kajolno.TrafArch
 
 import android.content.Intent
 import com.kajolno.TrafArch.nfc.NfcChannelHandler
-import com.kajolno.TrafArch.qr.GmsQrHandler
 import com.kajolno.TrafArch.qr.QrImageHandler
 import com.kajolno.TrafArch.storage.FileExportHandler
 import io.flutter.embedding.android.FlutterActivity
@@ -12,7 +11,6 @@ import io.flutter.embedding.engine.FlutterEngine
 class MainActivity : FlutterActivity() {
     private var nfc: NfcChannelHandler? = null
     private var qrImage: QrImageHandler? = null
-    private var gmsQr: GmsQrHandler? = null
     private var fileExport: FileExportHandler? = null
     private var foreground = false
 
@@ -22,7 +20,6 @@ class MainActivity : FlutterActivity() {
         val messenger = flutterEngine.dartExecutor.binaryMessenger
         nfc = NfcChannelHandler(this, messenger)
         qrImage = QrImageHandler(this, messenger)
-        gmsQr = GmsQrHandler(this, messenger)
         fileExport = FileExportHandler(this, messenger)
         if (foreground) nfc?.onResume()
     }
@@ -65,11 +62,9 @@ class MainActivity : FlutterActivity() {
     private fun disposeHandlers() {
         nfc?.dispose()
         qrImage?.dispose()
-        gmsQr?.dispose()
         fileExport?.dispose()
         nfc = null
         qrImage = null
-        gmsQr = null
         fileExport = null
     }
 }

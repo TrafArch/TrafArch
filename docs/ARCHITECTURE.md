@@ -20,7 +20,7 @@ lib/
     reference_data/             发布包、用户库、查询接口、覆盖范围页面
     archive/                    档案模型、Drift、快照、统一历史查询、详情
     settings/                   设置与诊断控制器及页面
-    qr/                         扫码获取和展示
+    qr/                         独立扫码页、相机 / 相册获取、字段 / 证书 / 原始数据展示
     transit_analysis/           识别、交易解码、行程分析
     home/                       各卡族独立面板
     expert/                     各文件和原始数据面板
@@ -32,7 +32,7 @@ android/app/src/main/kotlin/com/kajolno/TrafArch/
   MainActivity.kt
   nfc/                          会话、连接、FIFO 调度、元数据
   platform/                     OnceResult
-  qr/                           GMS 扫码与图片选择
+  qr/                           图片选择
   storage/                      下载目录导出
 ```
 

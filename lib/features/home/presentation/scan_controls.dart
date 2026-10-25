@@ -8,16 +8,12 @@ class ScanControls extends StatelessWidget {
     required this.progress,
     required this.statusText,
     required this.buttonLabel,
-    required this.useGmsScanner,
-    required this.importing,
     required this.onScanCard,
-    required this.onScanQr,
-    required this.onImportGallery,
   });
-  final bool scanning, useGmsScanner, importing;
+  final bool scanning;
   final int? progress;
   final String statusText, buttonLabel;
-  final VoidCallback onScanCard, onScanQr, onImportGallery;
+  final VoidCallback onScanCard;
   @override
   Widget build(BuildContext context) => Card(
     child: Padding(
@@ -52,43 +48,6 @@ class ScanControls extends StatelessWidget {
               label: Text(buttonLabel),
             ),
           ],
-          const SizedBox(height: 24),
-          const Divider(height: 1),
-          const SizedBox(height: 24),
-          Text('扫码读取乘车码', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Text(
-            useGmsScanner
-                ? '支持 JT/T 1179 交通一卡通乘车码，可系统扫码或从相册导入'
-                : '支持 JT/T 1179 交通一卡通乘车码，可相机扫描或从相册导入',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall
-                ?.copyWith(color: Theme.of(context).colorScheme.outline),
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 12,
-            runSpacing: 8,
-            alignment: WrapAlignment.center,
-            children: [
-              FilledButton.tonalIcon(
-                onPressed: onScanQr,
-                icon: const Icon(Icons.qr_code_scanner),
-                label: const Text('扫描二维码'),
-              ),
-              OutlinedButton.icon(
-                onPressed: importing ? null : onImportGallery,
-                icon: importing
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.photo_library_outlined),
-                label: Text(importing ? '正在识别…' : '从相册导入'),
-              ),
-            ],
-          ),
         ],
       ),
     ),

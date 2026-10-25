@@ -95,22 +95,6 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
             Card(
-              child: SwitchListTile(
-                secondary: const Icon(Icons.qr_code_scanner),
-                title: const Text('使用系统扫码'),
-                subtitle: Text(
-                  app.gmsScanEnabled
-                      ? app.gmsAvailable
-                            ? '已开启：应用内相机扫码已屏蔽，改由 Google Play 服务扫码（无需相机权限）'
-                            : '已开启：应用内相机扫码已屏蔽；未检测到 Google Play 服务，'
-                                  '扫码将不可用（可关闭开关恢复相机扫码）'
-                      : '默认停用：使用应用内相机扫码（需要相机权限）',
-                ),
-                value: app.gmsScanEnabled,
-                onChanged: (value) => app.setGmsScanEnabled(value),
-              ),
-            ),
-            Card(
               child: ListTile(
                 leading: const Icon(Icons.menu_book_outlined),
                 title: const Text('知识库'),

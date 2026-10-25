@@ -98,11 +98,7 @@ class AppDependencies extends OwnedNotifier {
 
   Future<void> init() => _initializing ??= Future.wait([
     references.initialize(),
-    settings.initialize().then(
-      (_) => disposed
-          ? Future<void>.value()
-          : qr.detect(warmUp: settings.gmsScanEnabled),
-    ),
+    settings.initialize(),
   ]);
 
   Future<void> _complete(
@@ -197,12 +193,9 @@ class AppDependencies extends OwnedNotifier {
   bool get exportingLog => diagnostics.exportingLog;
   String? get logExportMessage => diagnostics.logExportMessage;
   bool get logExportFailed => diagnostics.logExportFailed;
-  bool get gmsScanEnabled => settings.gmsScanEnabled;
   bool get autoSaveEnabled => settings.autoSaveEnabled;
   bool get monetEnabled => settings.monetEnabled;
   String? get autoSaveNotice => archive.autoSaveNotice;
-  bool get gmsAvailable => qr.gmsAvailable;
-  bool get useGmsScanner => settings.gmsScanEnabled;
   List<String> get apduLog => scan.trace;
   JtT1179QrData? get qrData => qr.qrData;
   List<int>? get qrRaw => qr.qrRaw;
@@ -263,8 +256,6 @@ class AppDependencies extends OwnedNotifier {
   void clearQr() => qr.clearQr();
   Future<void> setLoggingEnabled(bool enabled) =>
       settings.setLoggingEnabled(enabled);
-  Future<void> setGmsScanEnabled(bool enabled) =>
-      settings.setGmsScanEnabled(enabled);
   Future<void> setAutoSaveEnabled(bool enabled) =>
       settings.setAutoSaveEnabled(enabled);
   Future<void> setMonetEnabled(bool enabled) =>
