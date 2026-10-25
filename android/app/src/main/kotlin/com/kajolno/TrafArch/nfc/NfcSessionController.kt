@@ -7,6 +7,7 @@ import android.nfc.tech.TagTechnology
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import com.kajolno.TrafArch.BuildConfig
 import com.kajolno.TrafArch.platform.OnceResult
 import java.util.UUID
 
@@ -151,17 +152,22 @@ internal class NfcSessionController(private val activity: Activity) {
                 if (!connection.isConnected) {
                     complete(session, result) { disconnected(felica, result) }
                 } else {
+                    if (BuildConfig.DEBUG) Log.d("TrafArchNfcRaw", ">> ${bytes.toHex()}")
                     val response = connection.transceive(bytes)
+                    if (BuildConfig.DEBUG) Log.d("TrafArchNfcRaw", "<< ${response.toHex()}")
                     // ByteArray preserves Dart Uint8List (unsigned bytes), including SW1/SW2 and LEN.
                     complete(session, result) { result.success(response) }
                 }
             } catch (error: Exception) {
+                if (BuildConfig.DEBUG) Log.e("TrafArchNfcRaw", "transceive failed", error)
                 complete(session, result) {
                     result.error("TRANSCEIVE_FAILED", error.message, details(session, error))
                 }
             }
         })
     }
+
+    private fun ByteArray.toHex(): String = joinToString("") { "%02X".format(it.toInt() and 0xFF) }
 
     private fun complete(session: Session, result: OnceResult, reply: () -> Unit) {
         main.post {

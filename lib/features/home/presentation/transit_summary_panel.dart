@@ -94,11 +94,12 @@ class TransitSummaryPanel extends StatelessWidget {
       // 仅读到 NFC 标签（未解析成功）时补充 UID，与模块文档说明一致。
       if (parsed == null && result != null)
         summaryField(context, 'UID', result.uid),
-      if (isLocal && local != null && local.info.balance != 0)
+      if (isLocal && local?.info.observedBalance != null)
         summaryField(
           context,
           '余额',
-          '${(local.info.balance / 100).toStringAsFixed(2)} 元',
+          '${app.cardCurrency.symbol}'
+              '${(local!.info.balance / 100).toStringAsFixed(2)}',
         ),
       if (separateObservation) ...[
         summaryField(context, '余额', interpretation!.accountBalanceText),

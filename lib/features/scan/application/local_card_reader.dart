@@ -7,6 +7,7 @@ import 'bank_card_probe.dart';
 import '../../../protocols/bank/domain/models/bank_card_result.dart';
 import '../../../protocols/transit/local/cards/beijing_local_card.dart';
 import '../../../protocols/transit/local/cards/common_card_info.dart';
+import '../../../protocols/transit/local/cards/macau_pass_card.dart';
 import '../../../protocols/transit/local/cards/shenzhentong.dart';
 import '../../../protocols/transit/local/cards/shanghai_transit_union_card.dart';
 import '../../../protocols/transit/local/cards/shanghai_transit_union_models.dart';
@@ -182,6 +183,17 @@ class LocalCardReader {
 
       // 3~7) 地方交通卡探测（通用单元均未命中时）
       callback.onProgress(25);
+
+      // 澳门通以专属钱包应用名认领，不套用国内地方卡的金额及余额重建规则。
+      final macauPass = MacauPassCard(apdu);
+      if (await macauPass.select(info, records)) {
+        callback.onProgress(35);
+        await macauPass.readBalanceAndRecords(info, records);
+        callback.onProgress(95);
+        return _localOutcome(
+          ReadResult(info: info, records: records, extras: extras),
+        );
+      }
 
       // 3) 老版武汉通（AP1.WHCTC）：先于 PBOC 探测完成应用确认；
       //    一旦确认，即使后续流水读取失败也按地方卡返回，不再回退银行卡。

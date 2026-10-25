@@ -69,7 +69,9 @@ class ScanPresentation {
 
   CityUnionCardInfo? get cityUnionCard =>
       knowledge.cityUnionCards.lookup(cityUnionPublicInfo?.cityCode);
-  Currency get cardCurrency => analysis?.currency ?? Currency.cny;
+  Currency get cardCurrency =>
+      analysis?.currency ??
+      Currency.fromCode(localReadResult?.info.currencyCode);
   BalanceInterpretation? get balanceInterpretation => parsedCard == null
       ? null
       : BalanceInterpretation.fromParsedCard(

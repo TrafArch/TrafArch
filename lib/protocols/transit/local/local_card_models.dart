@@ -37,6 +37,7 @@ class CardInfo {
   String cardNumber = '';
   String issuerCode = '';
   String issuerCode2 = '';
+  String? currencyCode;
   int cityCode = 0;
   int terminalCode = 0;
   int? _observedBalance;
@@ -66,6 +67,7 @@ class CardInfo {
   bool isBeijing = false;
   bool isWHCTC = false;
   bool isTFT = false;
+  bool isMacauPass = false;
   bool isSZT = false;
   bool isYCT = false;
   bool isSuxin = false;
@@ -76,7 +78,13 @@ class CardInfo {
 
   /// 是否属于地方卡（非通用 TU/CU）识别出的卡种 —— 供上层判定是否认领。
   bool get isLocalCard =>
-      isBeijing || isWHCTC || isYCT || isSZT || isSuzhou || isTFT;
+      isBeijing ||
+      isWHCTC ||
+      isYCT ||
+      isSZT ||
+      isSuzhou ||
+      isTFT ||
+      isMacauPass;
 
   /// 卡种可读名（用于展示层回退标题）。
   String get cardKindLabel {
@@ -86,6 +94,7 @@ class CardInfo {
     if (isSZT) return '深圳通';
     if (isSuzhou) return isCika ? '苏州·计次卡' : '苏州·苏薪卡';
     if (isTFT) return '天府通';
+    if (isMacauPass) return '澳门通';
     if (isTU) return '交通联合';
     if (isCU) return '城市一卡通';
     return '地方交通卡';

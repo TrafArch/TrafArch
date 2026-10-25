@@ -98,6 +98,9 @@ android {
     namespace = "com.kajolno.TrafArch"
     compileSdk = 37
     ndkVersion = "30.0.16248370"
+    buildFeatures {
+        buildConfig = true
+    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -126,6 +129,7 @@ android {
 
     buildTypes {
         debug {
+            manifestPlaceholders["appLabel"] = "TrafArch"
             if (unsignedApk) {
                 signingConfig = null
             }
