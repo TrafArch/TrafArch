@@ -79,6 +79,11 @@ void main() {
         expect(public.applicationSerialNumberRawHex, '11223344499602D2');
         expect(public.issuerCode, '0123');
         expect(public.rawHex.replaceAll(' ', ''), _hex(data));
+        expect(
+          public.withCityDisplayNumber('000000000001').toJson(),
+          public.toJson(),
+        );
+        expect(public.toJson()['applicationSerialNumber'], '11223344499602D2');
       });
     }
     test('默认纯数字 HEX、无效城市与零校验位', () async {
@@ -131,6 +136,112 @@ void main() {
         (result.$1.cityUnionFiles[1] as CjT331WalletLocalConsumption).amountHex,
         '010003E8',
       );
+    });
+    test('卡号末四字节按无符号大端处理，保留前导零', () async {
+      for (final entry in [
+        ([0, 0, 0, 0], '0000000000'),
+        ([0, 0, 0, 1], '0000000001'),
+        ([0, 0xFF, 0xFF, 0xFF], '0016777215'),
+        ([0x80, 0, 0, 0], '2147483648'),
+        ([0xFF, 0xFF, 0xFF, 0xFF], '4294967295'),
+      ]) {
+        final data = _publicFile()
+          ..[2] = 0x71
+          ..[3] = 0x00
+          ..setRange(16, 20, entry.$1);
+        expect((await _strictCu(data)).$2.cardNumber, entry.$2);
+      }
+    });
+    test('默认 BCD 判断仅限末四字节，城市必须严格 BCD', () async {
+      for (final city in [0x0000, 0x0099, 0x9999, 0x0A01, 0x1A60, 0xFFFF]) {
+        final data = _publicFile(serial: [0, 0xAB, 0, 1, 0, 0, 0, 9])
+          ..[2] = city >> 8
+          ..[3] = city & 0xFF;
+        final result = await _strictCu(data);
+        final public = result.$1.cityUnionFiles.first as CjT331PublicInfo;
+        expect(public.cityCardNumber, '00AB000100000009');
+        expect(
+          public.displayCityCode,
+          city == 0x0A01 || city == 0x1A60 || city == 0xFFFF
+              ? isNull
+              : int.parse(city.toRadixString(16)),
+        );
+      }
+    });
+    test('短数据与非法原始 HEX 的展示回退不抛异常', () async {
+      for (final raw in ['', '00' * 19, '00' * 16 + 'GG000001']) {
+        final public = CjT331PublicInfo(
+          cityCode: '2000',
+          applicationSerialNumber: '00123',
+          fields: const [],
+          rawHex: raw,
+        );
+        expect(public.cityCardNumber, '0000000000000123');
+      }
+      for (final data in [
+        <int>[],
+        List.filled(19, 1),
+        List.filled(29, 1),
+        List.filled(30, 0),
+        List.filled(30, 0xFF),
+      ]) {
+        final result = await _strictCu(data);
+        expect(result.$1.cityUnionFiles, isEmpty);
+        expect(result.$2.cardNumber, isEmpty);
+      }
+    });
+    test('上海成对反转及右起加倍校验，含非全零的零校验位', () async {
+      for (final entry in [
+        ([0, 0, 0, 1], '80100000000'),
+        ([0, 0, 0, 0x13], '01900000000'),
+        ([0xFF, 0xFF, 0xFF, 0xFF], '29572969442'),
+      ]) {
+        final data = _publicFile()
+          ..[2] = 0x20
+          ..[3] = 0
+          ..setRange(16, 20, entry.$1);
+        expect((await _strictCu(data)).$2.cardNumber, entry.$2);
+      }
+    });
+    test('2120 额外读取失败、短数据及非法 ASCII 回退并恢复 CU', () async {
+      for (final response in [
+        [0x6A, 0x82],
+        _sw9000(List.filled(43, 1)),
+        _sw9000([...List.filled(32, 1), ...List.filled(12, 0xFF)]),
+      ]) {
+        for (final restore in [true, false]) {
+          final data = _publicFile()
+            ..[2] = 0x21
+            ..[3] = 0x20;
+          final result = await _strictCu(
+            data,
+            restore: restore,
+            extraResponse: response,
+            balance: [0, 0, 0, 1],
+          );
+          final public = result.$1.cityUnionFiles.first as CjT331PublicInfo;
+          expect(result.$2.cardNumber, '1122334455667788');
+          expect(public.cityDisplayNumber, isNull);
+          expect(result.$2.observedBalance, restore ? 1 : isNull);
+          expect(public.applicationSerialNumberRawHex, '1122334455667788');
+        }
+      }
+    });
+    test('2120 MF 失败仍恢复，恢复 CLA 80 成功继续读取', () async {
+      final data = _publicFile()
+        ..[2] = 0x21
+        ..[3] = 0x20;
+      final result = await _strictCu(
+        data,
+        restore: true,
+        mfFailure: true,
+        restoreFallback: true,
+        rows: [_localRecord()],
+        balance: [0, 0, 0, 1],
+      );
+      expect(result.$2.cardNumber, '1122334455667788');
+      expect(result.$3, hasLength(1));
+      expect(result.$2.observedBalance, 1);
     });
     test('2120 ASCII 及恢复失败停止后续读取', () async {
       for (final restore in [true, false]) {
@@ -293,6 +404,9 @@ Future<(ParsedCard, CardInfo, List<ApduRecord>)> _strictCu(
   List<int>? balance,
   List<List<int>> rows = const [],
   bool? restore,
+  List<int>? extraResponse,
+  bool mfFailure = false,
+  bool restoreFallback = false,
   bool balanceFallback = false,
   bool balanceFailure = false,
 }) async {
@@ -301,14 +415,20 @@ Future<(ParsedCard, CardInfo, List<ApduRecord>)> _strictCu(
     ('00A4040009A0000000038698070100', [0x90, 0]),
     ('00B095001E', _sw9000(data)),
     if (restore != null) ...[
+      ('00A40000023F0000', mfFailure ? [0x6A, 0x82] : [0x90, 0]),
+      if (!mfFailure)
+        (
+          '00B085002C',
+          extraResponse ??
+              _sw9000([...List.filled(32, 0), ...'123456789012'.codeUnits]),
+        ),
       ('00A40000023F0000', [0x90, 0]),
       (
-        '00B085002C',
-        _sw9000([...List.filled(32, 0), ...'123456789012'.codeUnits]),
+        '00A4040009A0000000038698070100',
+        restore && !restoreFallback ? [0x90, 0] : [0x6A, 0x82],
       ),
-      ('00A40000023F0000', [0x90, 0]),
-      ('00A4040009A0000000038698070100', restore ? [0x90, 0] : [0x6A, 0x82]),
-      if (!restore) ('80A4040009A0000000038698070100', [0x6A, 0x82]),
+      if (!restore || restoreFallback)
+        ('80A4040009A0000000038698070100', restore ? [0x90, 0] : [0x6A, 0x82]),
     ],
     if (restore != false) ...[
       for (var i = 0; i < rows.length; i++)

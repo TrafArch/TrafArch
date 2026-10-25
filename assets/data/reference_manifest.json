@@ -1,5 +1,5 @@
 {
-  "baseline_sha256": "77bc31403fc6eb693c888b94bf829bb0c5bc2fe37de1c3b24521c479666833f4",
+  "baseline_sha256": "9f5d16b0e86ca026b6890f16a8fa2c57d853d2250170aa5f8ef51f97b713a904",
   "format_version": 1,
   "normalization": {
     "conflicts": [
@@ -81495,13 +81495,18 @@
   },
   "packages": {
     "CU": {
-      "bytes": 5029888,
-      "content_version": "b46d2a14e1770c45133c3ea873ad3c7d7eb8cba618f521329e9e1f04e124a17e",
+      "bytes": 5099520,
+      "content_version": "c0d8eb2c6db519cb0c0a0836794dd092a3019fe67609c84f3da333dd39039437",
       "file": "TrafArch_Database_CU.sqlite",
-      "sha256": "ab06ee0dd36fb6c5e1295a035b4e9b7cce419547844cb5c53b53db4afa4a3430",
+      "sha256": "accae2741cc8ddc5e518c14096be2131234da4c24a28ef0b0d58daf950c0e6d0",
       "tables": {
         "bus_routes": 13852,
+        "cu_card_names": 36,
+        "cu_card_number_rules": 17,
+        "cu_name_metadata": 10,
+        "cu_name_overrides": 1,
         "cu_prefix_dictionary": 1122,
+        "cu_recognition_steps": 7,
         "cu_terminal_mappings": 4902,
         "cu_terminal_rules": 13,
         "metadata": 26,
@@ -81526,9 +81531,9 @@
     },
     "TU": {
       "bytes": 5996544,
-      "content_version": "93e2147ac067ece859295c1138fceff80d9692eb7f1d405faff7cee44c19f901",
+      "content_version": "40bb29d355224c0ad4aeb7e3b81fa8fac5b2e26ca286176b50ad08428d3d2ca5",
       "file": "TrafArch_Database_TU.sqlite",
-      "sha256": "6632ff0aa4511eeb0d85cfe97da28203045aa2782f9d065c69eb8178ae4a517c",
+      "sha256": "b52b8b785c6e07aed4782149c8f65ea9f07fd6592a1bea1ef4ba770bdebe2c5e",
       "tables": {
         "card_prefixes": 429,
         "issuer_city_codes": 347,
@@ -81641,15 +81646,15 @@
       "sha256": "a00bf971219d40e56502413fc86f1104f3ff077837a2e218a2f14c72719093be"
     },
     {
-      "bytes": 5001216,
-      "content_version": "original-20261020",
-      "file": "sources/original-20261020/TrafArch_Database_CU.sqlite",
+      "bytes": 5062656,
+      "content_version": "cu-card-names-zh-cn-20261025",
+      "file": "sources/cu-card-names-zh-cn-20261025/TrafArch_Database_CU.sqlite",
       "id": "cu_database",
       "kind": "sqlite",
-      "origin": "Original project asset assets/data/TrafArch_Database_CU.sqlite frozen before package build; historical attribution and raw source metadata retained inside snapshot.",
+      "origin": "zh-CN-only CU naming projection of cu-card-names-20261025, sha256=ac92674f6a43e50a9983e6a2b21547927560e36816bbe6019720e252dc4400bf; 36 names and 1 override retained verbatim with provenance; other business tables unchanged. Previous frozen snapshot retained for audit.",
       "priority": 200,
       "protocol": "CU",
-      "sha256": "66579e2c1aa4a96105ed92679d22d3517f3583eafa1dfac1f646309291ef468d"
+      "sha256": "27595f5ac48a07be110f0f4954b7b428408957dbc8381b025ae2c69d27a761d9"
     },
     {
       "bytes": 45772,
@@ -81732,6 +81737,6 @@
     }
   ],
   "sqlite_version": "3.53.4",
-  "tool_sha256": "819cea76147160db7ea9d95f54a9ad86583b416dfc5ebd46c06fe5a33d68f809",
+  "tool_sha256": "5cbe962a2227602fbc3b668c885f4bb00edb9219dcc5358c637a14c22dcd0302",
   "tool_version": "1.0.0"
 }

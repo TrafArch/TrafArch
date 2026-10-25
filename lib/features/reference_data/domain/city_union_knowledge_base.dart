@@ -1,11 +1,7 @@
 import 'dart:convert';
 
-/// 城市一卡通（City Union / CJ/T 331-2016）本地卡名称参考信息。
-///
-/// 数据源为 CU 发布包的 card_catalog 文档：
-/// 城市代码（邮政编码前四位 / CU 城市项目代码）→ 城市名 / 省份 /
-/// 本地交通卡名称参考。cardName 为公开资料查到的名称参考，不代表
-/// 已确认该卡种带 City Union 应用，可信度由 [cardNameStatus] 标注。
+/// CU 城市参考或卡片识别结果；lookup 的卡名仅为参考，
+/// resolveCard 的卡名来自发行标识匹配，可信度由 [cardNameStatus] 标注。
 class CityUnionCardInfo {
   /// 邮政编码前四位（参考值，可选）。
   final String? postalPrefix;
@@ -50,19 +46,21 @@ class CityUnionCardInfo {
   bool get isCardNameSupported => cardNameStatus == 'source_supported';
 }
 
-/// 城市一卡通卡片识别库：城市代码（4 位）→ 本地卡信息。
-///
-/// 城市代码取自公共应用基本信息文件（SFI 0x15）字节 03-04 的 HEX 解码
-/// 4 位数字（等同 BCD 编码的邮编前四位）。索引同时登记 postalPrefix 与
-/// cuCityProjectCode 两个键；缺 city 或无任何代码的条目不参与匹配，
-/// 未收录代码保持未知（返回 null，不猜测）。
+/// CU 城市参考目录与公共信息前四字节发行标识名称表。
 class CityUnionCardTable {
   final Map<String, CityUnionCardInfo> _byCode;
   final List<CityUnionCardInfo> _entries;
+  final Map<String, String> _issuerNames;
+  final List<Map<String, Object?>> _nameOverrides;
 
-  const CityUnionCardTable._(this._byCode, this._entries);
+  const CityUnionCardTable._(
+    this._byCode,
+    this._entries,
+    this._issuerNames,
+    this._nameOverrides,
+  );
 
-  static const empty = CityUnionCardTable._({}, []);
+  static const empty = CityUnionCardTable._({}, [], {}, []);
 
   factory CityUnionCardTable.fromJson(Object? json) {
     final byCode = <String, CityUnionCardInfo>{};
@@ -93,7 +91,85 @@ class CityUnionCardTable {
         }
       }
     }
-    return CityUnionCardTable._(byCode, entries);
+    final issuerNames = <String, String>{};
+    final overrides = <Map<String, Object?>>[];
+    if (json is Map) {
+      final names = json['issuerNames'];
+      if (names is List) {
+        for (final row in names) {
+          if (row is! Map) continue;
+          final code = row['issuer_code']?.toString().toUpperCase();
+          final name = row['name_zh_cn']?.toString().trim();
+          if (code != null &&
+              RegExp(r'^[0-9A-F]{8}$').hasMatch(code) &&
+              name != null &&
+              name.isNotEmpty) {
+            issuerNames[code] = name;
+          }
+        }
+      }
+      final rules = json['nameOverrides'];
+      if (rules is List) {
+        for (final rule in rules) {
+          if (rule is Map<String, dynamic>) overrides.add(Map.of(rule));
+        }
+      }
+    }
+    return CityUnionCardTable._(byCode, entries, issuerNames, overrides);
+  }
+
+  /// 以原始公共信息的完整四字节发行标识识别卡名；城市仅提供地区参考。
+  CityUnionCardInfo? resolveCard({String? cityCode, String? rawHex}) {
+    final region = lookup(cityCode);
+    final raw = rawHex?.toUpperCase();
+    String? name;
+    if (raw != null &&
+        raw.length >= 8 &&
+        raw.length.isEven &&
+        RegExp(r'^[0-9A-F]+$').hasMatch(raw)) {
+      final issuer = raw.substring(0, 8);
+      name = _issuerNames[issuer];
+      if (name != null) {
+        for (final rule in _nameOverrides) {
+          final minimum = rule['min_raw_length'];
+          final index = rule['byte_index'];
+          final nibble = rule['high_nibble'];
+          final overrideName = rule['name_zh_cn'];
+          if (rule['issuer_code'] != issuer ||
+              rule['requires_map_match'] != 1 ||
+              minimum is! int ||
+              minimum < 4 ||
+              index is! int ||
+              index < 0 ||
+              nibble is! int ||
+              nibble < 0 ||
+              nibble > 15 ||
+              overrideName is! String ||
+              overrideName.trim().isEmpty) {
+            continue;
+          }
+          if (raw.length ~/ 2 >= minimum &&
+              index < raw.length ~/ 2 &&
+              int.parse(raw[index * 2], radix: 16) == nibble) {
+            name = overrideName.trim();
+            break;
+          }
+        }
+      }
+    }
+    if (region == null && name == null) return null;
+    return CityUnionCardInfo(
+      city: region?.city ?? '',
+      province: region?.province,
+      postalPrefix: region?.postalPrefix,
+      cuCityProjectCode: region?.cuCityProjectCode,
+      areaType: region?.areaType,
+      codeStatus: region?.codeStatus,
+      cardName: name,
+      cardNameStatus: name == null
+          ? 'not_found_or_unverified'
+          : 'source_supported',
+    );
   }
 
   /// 归一化为纯数字代码；无有效数字时返回 null。
@@ -112,8 +188,7 @@ class CityUnionCardTable {
   /// 全部条目（只读，供设置页统计或调试）。
   List<CityUnionCardInfo> get entries => List.unmodifiable(_entries);
 
-  /// 城市代码（SFI 0x15 字节 03-04 的 HEX 解码 4 位数字）→ 本地卡信息；
-  /// 未收录返回 null（不猜测）。
+  /// 查询城市目录参考，不用于确认实际卡名；未收录返回 null。
   CityUnionCardInfo? lookup(String? code) {
     if (code == null) return null;
     final key = code.trim();

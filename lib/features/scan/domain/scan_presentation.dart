@@ -67,8 +67,10 @@ class ScanPresentation {
     return null;
   }
 
-  CityUnionCardInfo? get cityUnionCard =>
-      knowledge.cityUnionCards.lookup(cityUnionPublicInfo?.cityCode);
+  CityUnionCardInfo? get cityUnionCard => knowledge.cityUnionCards.resolveCard(
+    cityCode: cityUnionPublicInfo?.cityCode,
+    rawHex: cityUnionPublicInfo?.rawHex,
+  );
   Currency get cardCurrency => analysis?.currency ?? Currency.cny;
   BalanceInterpretation? get balanceInterpretation => parsedCard == null
       ? null

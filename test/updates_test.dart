@@ -6,6 +6,9 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sqlite3/sqlite3.dart';
+import 'package:transit_card_analyzer/features/reference_data/data/reference_package.dart';
+import 'package:transit_card_analyzer/features/reference_data/data/reference_updates.dart';
 import 'package:transit_card_analyzer/features/settings/presentation/about_page.dart';
 import 'package:transit_card_analyzer/features/updates/update_service.dart';
 import 'package:transit_card_analyzer/features/updates/update_prompt.dart';
@@ -165,6 +168,141 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  for (final variant in [
+    'missing document',
+    'missing both fields',
+    'missing issuerNames',
+    'missing nameOverrides',
+    'issuerNames not list',
+    'empty issuerNames',
+    'nameOverrides not list',
+    'empty nameOverrides',
+  ]) {
+    test('CU naming contract and restore: $variant', () async {
+      final directory = await Directory.systemTemp.createTemp('cu-contract-');
+      const paths = MethodChannel('plugins.flutter.io/path_provider');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(paths, (_) async => directory.path);
+      final controller = ReferenceDataController(rootBundle);
+      try {
+        // Change only the catalog in a copy of the published package, then
+        // recompute the digest so rejection cannot be caused by corruption.
+        final manifest = jsonDecode(
+          await rootBundle.loadString('assets/data/reference_manifest.json'),
+        ) as Map<String, dynamic>;
+        final builtinSpec = Map<String, dynamic>.from(
+          (manifest['packages'] as Map)['CU'] as Map,
+        );
+        final data = await rootBundle.load('assets/data/${builtinSpec['file']}');
+        final candidate = File('${directory.path}/candidate.sqlite');
+        await candidate.writeAsBytes(
+          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+        );
+        final db = sqlite3.open(candidate.path);
+        try {
+          final catalog = jsonDecode(
+            db.select(
+              "SELECT json FROM reference_documents WHERE name = 'card_catalog'",
+            ).single['json'] as String,
+          ) as Map<String, dynamic>;
+          switch (variant) {
+            case 'missing both fields':
+              catalog.remove('issuerNames');
+              catalog.remove('nameOverrides');
+            case 'missing issuerNames':
+              catalog.remove('issuerNames');
+            case 'missing nameOverrides':
+              catalog.remove('nameOverrides');
+            case 'issuerNames not list':
+              catalog['issuerNames'] = {};
+            case 'empty issuerNames':
+              catalog['issuerNames'] = [];
+            case 'nameOverrides not list':
+              catalog['nameOverrides'] = {};
+            case 'empty nameOverrides':
+              catalog['nameOverrides'] = [];
+          }
+          if (variant == 'missing document') {
+            db.execute(
+              "DELETE FROM reference_documents WHERE name = 'card_catalog'",
+            );
+          } else {
+            db.execute(
+              "UPDATE reference_documents SET json = ? WHERE name = 'card_catalog'",
+              [jsonEncode(catalog)],
+            );
+          }
+        } finally {
+          db.close();
+        }
+        final bytes = await candidate.readAsBytes();
+        final spec = {
+          ...builtinSpec,
+          'bytes': bytes.length,
+          'sha256': sha256.convert(bytes).toString(),
+        };
+        (manifest['packages'] as Map)['CU'] = spec;
+        final bundle = FixtureBundle({
+          'assets/data/reference_manifest.json': Uint8List.fromList(
+            utf8.encode(jsonEncode(manifest)),
+          ),
+          'assets/data/${spec['file']}': bytes,
+        });
+        final valid = variant == 'empty nameOverrides';
+        if (valid) {
+          final package = await ReferencePackage.open('CU', bundle: bundle);
+          package.close();
+        } else {
+          await expectLater(
+            ReferencePackage.open('CU', bundle: bundle),
+            throwsFormatException,
+          );
+        }
+
+        // Simulate a package persisted by an older app, bypassing stage's
+        // current validation. Keep its metadata/content version unchanged.
+        final stored = await Directory(
+          '${directory.path}/trafarch_reference_updates',
+        ).create();
+        final oldFile = File('${stored.path}/${spec['sha256']}.sqlite');
+        await oldFile.writeAsBytes(bytes);
+        final record = File('${stored.path}/CU.json');
+        final recordText = jsonEncode({
+          'url': 'https://example.com/CU.sqlite',
+          'package': spec,
+        });
+        await record.writeAsString(recordText);
+        final updates = ReferenceUpdates(rootBundle);
+        await updates.restore();
+        expect(updates.active.containsKey('CU'), valid);
+        await controller.initialize();
+        expect(controller.error, isNull);
+        expect(controller.knowledge!.loadIssues, isEmpty);
+        expect(
+          controller.knowledge!.packageHashes['CU'],
+          valid ? spec['sha256'] : builtinSpec['sha256'],
+        );
+        expect(
+          controller.knowledge!.packageHashes['TU'],
+          (manifest['packages'] as Map)['TU']['sha256'],
+        );
+        expect(
+          controller.knowledge!.cityUnionCards
+              .resolveCard(rawHex: '86982000${'00' * 26}')
+              ?.cardName,
+          '上海公共交通卡',
+        );
+        expect(await record.readAsString(), recordText);
+        expect(await oldFile.readAsBytes(), bytes);
+      } finally {
+        controller.dispose();
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(paths, null);
+        await directory.delete(recursive: true);
+      }
+    });
+  }
 
   test('CU independent install and restart preserve TU', () async {
     final directory = await Directory.systemTemp.createTemp('cu-updates-test-');

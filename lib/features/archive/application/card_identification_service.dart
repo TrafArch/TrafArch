@@ -109,10 +109,7 @@ class CardIdentificationService {
     );
   }
 
-  /// 城市一卡通（CJ/T 331-2016）：卡片标识取自公共应用基本信息文件
-  /// （SFI 0x15）；正式卡名与发卡地取自 CU 卡片识别库（城市代码 =
-  /// 邮编前四位 / CU 城市项目代码 → 本地卡名称参考 / 城市），识别库
-  /// 未收录城市时只回退 CU 城市码表；CU 表缺失或未命中时保持未知。
+  /// CU 卡名按公共信息四字节发行标识识别；城市目录仅提供地区参考。
   IdentifiedCard? _identifyCityUnion(ParsedCard card, {String? cardType}) {
     CjT331PublicInfo? publicInfo;
     for (final view in card.cityUnionFiles) {
@@ -121,9 +118,15 @@ class CardIdentificationService {
         break;
       }
     }
-    final catalog = knowledge.cityUnionCards.lookup(publicInfo?.cityCode);
+    final catalog = knowledge.cityUnionCards.resolveCard(
+      cityCode: publicInfo?.cityCode,
+      rawHex: publicInfo?.rawHex,
+    );
     final officialName = catalog?.cardName;
-    final cityName = catalog?.city ?? _cuCityNameOf(publicInfo?.cityCode);
+    final catalogCity = catalog?.city.trim();
+    final cityName = catalogCity != null && catalogCity.isNotEmpty
+        ? catalogCity
+        : _cuCityNameOf(publicInfo?.cityCode);
     final source = officialName != null
         ? CardIdentificationSources.cardCatalog
         : cityName != null

@@ -211,7 +211,9 @@ class CjT331PublicInfo implements CityUnionFileView {
   String? get cityCardNumber {
     final city = displayCityCode;
     final hex = rawHex.replaceAll(' ', '');
-    if (city == null || hex.length < 40) {
+    if (city == null ||
+        hex.length < 40 ||
+        !RegExp(r'^[0-9A-Fa-f]{40}$').hasMatch(hex.substring(0, 40))) {
       return displayApplicationSerialNumber;
     }
     String part(int start) => hex.substring(start * 2, 40);

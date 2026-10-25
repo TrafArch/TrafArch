@@ -273,6 +273,23 @@ class ReferencePackage {
           }
         }
       }
+      if (protocol == 'CU') {
+        final rows = db.select(
+          'SELECT json FROM reference_documents WHERE name = ?',
+          ['card_catalog'],
+        );
+        final catalog = rows.isEmpty
+            ? null
+            : jsonDecode(rows.single['json'] as String);
+        // These names are required by the runtime, even for otherwise valid
+        // older packages. Overrides may legitimately be empty.
+        if (catalog is! Map ||
+            catalog['issuerNames'] is! List ||
+            (catalog['issuerNames'] as List).isEmpty ||
+            catalog['nameOverrides'] is! List) {
+          throw const FormatException('CU invalid card_catalog naming contract');
+        }
+      }
       final counts = <String, int>{
         for (final item in (spec['tables'] as Map).entries)
           item.key as String: (item.value as num).toInt(),
