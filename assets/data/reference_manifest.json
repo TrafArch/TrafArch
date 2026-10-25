@@ -1,5 +1,5 @@
 {
-  "baseline_sha256": "4f847c849896cf92121d6ea3b039304b2522a87a108f01978b089509e666032e",
+  "baseline_sha256": "77bc31403fc6eb693c888b94bf829bb0c5bc2fe37de1c3b24521c479666833f4",
   "format_version": 1,
   "normalization": {
     "conflicts": [
@@ -48,6 +48,44 @@
         "id": "prefix_cardName:31050608",
         "resolution": "configured_decision",
         "winner": "tu_database/issuer_city_codes/274"
+      },
+      {
+        "candidates": [
+          {
+            "channel": "tu_city_issuer",
+            "priority": 200,
+            "ref": "tu_database/issuer_city_codes/117",
+            "value": {
+              "code": "5840",
+              "name": "深圳",
+              "province": null
+            }
+          },
+          {
+            "channel": "tu_city_region",
+            "priority": 300,
+            "ref": "tu_database/regions/40",
+            "value": {
+              "code": "5840",
+              "name": "深圳",
+              "province": "广东"
+            }
+          },
+          {
+            "channel": "tu_city_json",
+            "priority": 100,
+            "ref": "tu_prefixes/entries/121",
+            "value": {
+              "code": "5840",
+              "name": "深圳",
+              "province": null
+            }
+          }
+        ],
+        "candidates_sha256": "a8c3c39c83156917722f4ff97db5bdd45182684d60c9c7f3f3b2d84b13d2235d",
+        "id": "city:5840",
+        "resolution": "configured_source_priority",
+        "winner": "tu_database/regions/40"
       },
       {
         "candidates": [
@@ -61774,6 +61812,16 @@
             }
           },
           {
+            "channel": "tu_city_region",
+            "priority": 300,
+            "ref": "tu_database/regions/40",
+            "value": {
+              "code": "5840",
+              "name": "深圳",
+              "province": "广东"
+            }
+          },
+          {
             "channel": "tu_city_json",
             "priority": 100,
             "ref": "tu_prefixes/entries/121",
@@ -61786,7 +61834,7 @@
         ],
         "key": "5840",
         "scope": "city",
-        "winner": "tu_database/issuer_city_codes/117"
+        "winner": "tu_database/regions/40"
       },
       {
         "candidates": [
@@ -81477,15 +81525,15 @@
       }
     },
     "TU": {
-      "bytes": 5664768,
-      "content_version": "7f3de8119b62ebbdfd4f1446f870d1930fd1c1ae986c10de45c342a7cfcd992f",
+      "bytes": 5996544,
+      "content_version": "93e2147ac067ece859295c1138fceff80d9692eb7f1d405faff7cee44c19f901",
       "file": "TrafArch_Database_TU.sqlite",
-      "sha256": "773b10bb3cfe35ec0c52bd8a13d24ce85092bcf194c19a613e0f055c81e99dab",
+      "sha256": "6632ff0aa4511eeb0d85cfe97da28203045aa2782f9d065c69eb8178ae4a517c",
       "tables": {
         "card_prefixes": 429,
         "issuer_city_codes": 347,
         "protocol_region_codes": 3224,
-        "record_provenance": 7485,
+        "record_provenance": 7811,
         "reference_documents": 6,
         "reference_package": 4,
         "region_10_transport_summary": 4,
@@ -81522,13 +81570,14 @@
         "region_3_transport_summary": 4,
         "region_40_transport_summary": 4,
         "region_41_transport_summary": 4,
+        "region_42_transport_summary": 4,
         "region_4_transport_summary": 4,
         "region_5_transport_summary": 4,
         "region_6_transport_summary": 4,
         "region_7_transport_summary": 4,
         "region_8_transport_summary": 4,
         "region_9_transport_summary": 4,
-        "region_aliases": 45,
+        "region_aliases": 46,
         "region_code_info": 40,
         "region_上海_2900": 1024,
         "region_东莞_6020": 15,
@@ -81558,6 +81607,7 @@
         "region_沈阳_2210": 136,
         "region_洛阳_4930": 19,
         "region_济南_4510": 48,
+        "region_深圳_5840": 326,
         "region_温州_3330": 41,
         "region_滁州_3750": 14,
         "region_福州_3910": 121,
@@ -81570,10 +81620,10 @@
         "region_金华_3380": 27,
         "region_长沙_5510": 208,
         "region_青岛_4520": 179,
-        "regions": 40,
-        "source_metadata": 34,
-        "source_regions": 41,
-        "supplemental_sources": 1
+        "regions": 41,
+        "source_metadata": 44,
+        "source_regions": 42,
+        "supplemental_sources": 2
       }
     }
   },
@@ -81581,14 +81631,14 @@
   "sources": [
     {
       "bytes": 5656576,
-      "content_version": "user-tu-afdaca5f8ff3-source-v3",
-      "file": "sources/user-tu-afdaca5f8ff3-source-v3/TrafArch_Database_TU.sqlite",
+      "content_version": "tu-shenzhen-compat-20261025",
+      "file": "sources/tu-shenzhen-compat-20261025/TrafArch_Database_TU.sqlite",
       "id": "tu_database",
       "kind": "sqlite",
-      "origin": "User-provided TrafArch_Database_TU.sqlite; sha256=afdaca5f8ff314437f82f8fd0bc06fb70575409e467457e2186e281ac834fcd3; station rows preserved verbatim; no independent official-code or service-status verification. Audit-only metadata, summary and two-line provenance corrected in this revision.",
+      "origin": "Shenzhen compatibility revision based on TU sha256=edeb62fe24fb26e49719c8db19e4f8e82f6a4d31c536750cf0eed8ef76e67fbc; input tu-shenzhen-5840.sqlite sha256=2bea9a453673e5a32615abc561f424722539878721860f7046989d8c5af5852e; 326 rows preserved verbatim (295 station names, 31 prefix/operator records, 9 unknown transport types). TripReader-1.7.17-cn C0597u0.java:592-596: TU city=5840; POS must be 16 HEX characters and POS.substring(0,8)=00000002; lookup key=5180+POS.substring(8); longest matching prefix length>=5. M0.y.b is a local terminal/route compatibility dictionary belonging to 5180, not native TU station codes; input source_region_code=5840 is preserved verbatim. No transport type or station name is inferred.",
       "priority": 200,
       "protocol": "TU",
-      "sha256": "edeb62fe24fb26e49719c8db19e4f8e82f6a4d31c536750cf0eed8ef76e67fbc"
+      "sha256": "a00bf971219d40e56502413fc86f1104f3ff077837a2e218a2f14c72719093be"
     },
     {
       "bytes": 5001216,

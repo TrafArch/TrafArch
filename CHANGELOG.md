@@ -23,6 +23,7 @@
 
 ### Build / Docs
 
+- 新增深圳 TU 5840 兼容字典冻结修订 `tu-shenzhen-compat-20261025`：原样保留 M0.y.b 的 326 条记录及 5180 原始键（295 条有站名、31 条前缀／运营商，9 条交通类型未知），逐行标注兼容副本而非原生 TU。来源记录限定 C0597u0.java:592-596 的 16HEX POS `00000002` → `5180 + POS.substring(8)`、最长前缀至少 5 字符规则；补齐地区、来源、汇总及 provenance，原 40 城市表与 CU 基线不变。独立目录构建与校验通过；正式资产替换被 Navicat 文件占用阻止，关闭数据库后仍需执行正常 build / validate，尚未完成正式资产发布。
 - 新增项目根 `AGENTS.md` 维护约束：以后每次修改均固定显示名称 `TrafArch` 和包名 `com.kajolno.TrafArch`，适用于 Debug、Release 和验证构建。
 - 增加显式 `unsignedApk=true`，同时支持 Release / Debug 输出未签名 APK，交由开发者使用原密钥签名。保留 `repairBuild=true` 的不递增和不要求私有 Firebase 配置行为；它不再改变应用身份。
 - 已核对原 APK 的正式证书 SHA256，记录版本、包名、签名要求和签名命令。用户选择由开发者使用原密钥签名；本地没有原密钥，未将测试签名冒充可覆盖原应用的签名。

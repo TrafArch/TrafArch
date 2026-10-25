@@ -1,5 +1,7 @@
 import 'package:transit_card_analyzer/features/reference_data/data/tu_region_live_source.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:transit_card_analyzer/features/reference_data/domain/tu_lookup_service.dart';
+import 'package:transit_card_analyzer/features/reference_data/data/tunion_bus_location.dart';
 import 'package:sqlite3/sqlite3.dart';
 
 import 'package:transit_card_analyzer/features/reference_data/domain/station_codes.dart';
@@ -82,6 +84,125 @@ CREATE TABLE "region_北京_1000"(
     db.close();
   });
 
+  group('Shenzhen compatibility terminal through real repository', () {
+    const terminal = '00000002ABCDEF12';
+    late TuLookupService service;
+    void insert(String key, String field, String station) {
+      db.execute(
+        'INSERT INTO sz(transport_type,line_name,station_name,source_field,'
+        'source_key,source_region_code,raw_value_json) VALUES(?,?,?,?,?,?,?)',
+        [
+          'bus',
+          '兼容线路',
+          station,
+          field,
+          key,
+          '5180',
+          '["公交","兼容线路","$station"]',
+        ],
+      );
+      repo.invalidate();
+    }
+
+    StationMatch cycle({
+      String? city = '5840',
+      String? id = terminal,
+      int? app = 1,
+    }) => service.resolveCycle(
+      city: city,
+      field: '00000000000000',
+      terminalId: id,
+      appType: app,
+    );
+    TunionBusLocation bus() => resolveTunionBusLocation(
+      stations: StationCodeTable.empty.withLive(TuRegionLiveSource(repo)),
+      cityCode: '5840',
+      field: '00000000000000',
+      context: const TunionBusDecodeContext(terminalId: terminal),
+    );
+    setUp(() {
+      db.execute('CREATE TABLE sz AS SELECT * FROM "region_上海_2900" WHERE 0');
+      db.execute("INSERT INTO regions VALUES(3,'5840','深圳','广东','sz','tu')");
+      service = TuLookupService(repo);
+      insert('5180A', 'M0.y.b', '短前缀');
+      insert('5180ABCDEF', 'M0.y.b', '长前缀');
+      insert('5180ABCDEF12', 'M0.S.c', '异源不可命中');
+      insert('5840000000000000', 'M0.i0.a', '轨道兜底');
+    });
+    test(
+      'longest restricted prefix preserves keys, owner and raw evidence',
+      () {
+        final hit = cycle();
+        expect(hit.stationName, '长前缀');
+        expect(hit.entry?.sourceKey, '5180ABCDEF');
+        expect(hit.entry?.sourceField, 'M0.y.b');
+        expect(hit.entry?.rawValueJson, '["公交","兼容线路","长前缀"]');
+        expect(bus().stationLabel, '长前缀');
+        expect(cycle(id: terminal.toLowerCase()).stationName, '长前缀');
+        expect(
+          repo.findByKey('5840', '5180ABCDEF').single.sourceRegionCode,
+          '5180',
+        );
+        expect(repo.findByKey('5180', '5180ABCDEF'), isEmpty);
+        expect(repo.findByKey('5840', '5840ABCDEF'), isEmpty);
+      },
+    );
+    test('same longest prefix ambiguity stops shorter and broad fallbacks', () {
+      insert('5180ABCDEF', 'M0.y.b', '冲突站');
+      expect(cycle().confidence, StationMatchConfidence.ambiguous);
+      expect(bus().match.confidence, StationMatchConfidence.ambiguous);
+      expect(bus().stationLabel, isNull);
+    });
+    test('process exact wins before compatibility branch', () {
+      insert('5840$terminal', 'M0.S.a', '过程精确');
+      expect(cycle().stationName, '过程精确');
+    });
+    test('city, terminal length, hex and application boundaries', () {
+      for (final city in [null, '5180', '5830']) {
+        expect(
+          service
+              .resolveShenzhenTerminal(city: city, terminal: terminal)
+              .isUnmatched,
+          isTrue,
+        );
+      }
+      for (final id in [
+        null,
+        '',
+        '00000002ABCDEF1',
+        '00000002ABCDEF123',
+        '00000003ABCDEF12',
+        '00000002ABCDEFGH',
+      ]) {
+        expect(
+          service
+              .resolveShenzhenTerminal(city: '5840', terminal: id)
+              .isUnmatched,
+          isTrue,
+        );
+      }
+      for (final app in [null, 0, 2, 255]) {
+        expect(cycle(app: app).isUnmatched, isTrue);
+      }
+      db.execute("DELETE FROM sz WHERE source_field='M0.y.b'");
+      insert('5180', 'M0.y.b', '不足五位');
+      expect(
+        service
+            .resolveShenzhenTerminal(city: '5840', terminal: terminal)
+            .isUnmatched,
+        isTrue,
+      );
+      insert('5180A', 'M0.y.b', '五位可用');
+      expect(cycle().stationName, '五位可用');
+    });
+    test('unavailable query stops rail and bus fallback', () {
+      repo.queryIssue = 'test failure';
+      expect(cycle().confidence, StationMatchConfidence.unavailable);
+      expect(bus().match.confidence, StationMatchConfidence.unavailable);
+      expect(bus().lineLabel, isNull);
+    });
+  });
+
   test('发布库保留用户上传的福州两线全部编码及新增站', () {
     final published = sqlite3.open(
       'assets/data/TrafArch_Database_TU.sqlite',
@@ -91,10 +212,12 @@ CREATE TABLE "region_北京_1000"(
     final repository = TuStationRepository(published, userDatabase: db);
     for (final region in {31: 14, 32: 121}.entries) {
       expect(
-        published.select(
-          'SELECT station_count FROM region_${region.key}_transport_summary '
-          "WHERE transport_type = 'metro'",
-        ).single['station_count'],
+        published
+            .select(
+              'SELECT station_count FROM region_${region.key}_transport_summary '
+              "WHERE transport_type = 'metro'",
+            )
+            .single['station_count'],
         region.value,
       );
     }

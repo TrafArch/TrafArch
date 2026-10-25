@@ -114,6 +114,7 @@ class ReferenceDataController extends OwnedNotifier {
     if (field == null || field.isEmpty) {
       return StationMatch.unmatched;
     }
+    if (appType != 0x01) return StationMatch.unmatched;
     final city = _lookupCityCode(cityCode);
     final lookup = kb.tuLookup;
     if (lookup != null) {

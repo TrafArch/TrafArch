@@ -27,7 +27,7 @@ class TuStationRecord {
   final String regionCode;
   final String regionName;
   final int stationId;
-  final String rawTransportType;
+  final String? rawTransportType;
 
   /// 规范化交通类型：metro / brt / bus / bike / intercity_rail / other。
   final String transportType;

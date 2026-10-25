@@ -385,6 +385,7 @@ class AnalysisEngine {
   }
 
   StationMatch _matchRailCycle(TUnionTripRecord trip, String? cityCode) {
+    if (trip.appTypeCode != 0x01) return StationMatch.unmatched;
     final service = knowledge.tuLookup;
     if (service != null && cityCode != null) {
       final source = service.resolveCycle(

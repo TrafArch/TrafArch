@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/tu_region_live_source.dart';
+import 'package:transit_card_analyzer/features/reference_data/data/tunion_bus_location.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/tu_station_repository.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/tunion_knowledge_base.dart';
 import 'package:transit_card_analyzer/features/reference_data/domain/station_codes.dart';
@@ -41,6 +42,45 @@ void main() {
   });
 
   tearDownAll(() => db.close());
+
+  test('Shenzhen compatibility POS resolves without rewriting its key', () {
+    final trip = _analyze(
+      knowledge,
+      cityCode: '5840',
+      terminalId: '0000000262016000',
+      field: '00000000000000',
+    );
+    expect(trip.lineLabel, '4号线');
+    expect(trip.stationLabel, '深圳北站');
+    expect(trip.stationConfidence, StationMatchConfidence.exact);
+    final match = knowledge.tuLookup!.resolveShenzhenTerminal(
+      city: '5840',
+      terminal: '0000000262016000',
+    );
+    expect(match.entry!.sourceKey, '518062016');
+    expect(match.entry!.sourceField, 'M0.y.b');
+    final provenance = db.select(
+      "SELECT copy_role FROM all_records WHERE region_code='5840' "
+      "AND source_key='518062016'",
+    );
+    expect(provenance, hasLength(1));
+    expect(provenance.single['copy_role'], isNot('native'));
+  });
+
+  test('Shenzhen operator prefixes preserve dated bus route decoding', () {
+    final hit = resolveTunionBusLocation(
+      stations: knowledge.stationCodes,
+      cityCode: '5840',
+      field: '00150000000000',
+      context: TunionBusDecodeContext(
+        terminalId: '0000000224000002',
+        carrierCode: 1,
+        transactionTime: DateTime.fromMillisecondsSinceEpoch(1735675199999),
+      ),
+    );
+    expect(hit.lineLabel, 'M292');
+    expect(hit.match.entry!.sourceKey, '518024');
+  });
 
   test('packaged Chengdu terminal layout is used by the trip engine', () {
     final trip = _analyze(

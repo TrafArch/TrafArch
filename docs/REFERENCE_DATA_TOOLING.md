@@ -57,7 +57,7 @@ the independent pre-refactor audit; rebuilding never regenerates that baseline.
 Do not overwrite a frozen snapshot. A later source revision gets a new directory,
 explicit source manifest changes and a reviewed baseline change.
 
-The current TU revision is `sources/user-tu-afdaca5f8ff3-source-v3/`, derived from
+The preceding TU revision is `sources/user-tu-afdaca5f8ff3-source-v3/`, derived from
 user upload SHA256 `afdaca5f8ff314437f82f8fd0bc06fb70575409e467457e2186e281ac834fcd3`.
 All uploaded station rows are preserved. Only Fuzhou two-line source metadata,
 transport summary and provenance are corrected, along with the upload's accidental
@@ -68,6 +68,42 @@ original CU inventory. LF copies of `card_prefixes.json` and `tu-lookup-20261021
 retain their existing pinned hashes without modifying CRLF checkout originals.
 The local ignored `tools/revise_uploaded_tu.py` reproduces the source revision;
 run it with the upload path before the normal build workflow in a clean checkout.
+
+The current source revision is `sources/tu-shenzhen-compat-20261025/`. It copies
+that preceding frozen TU database and freezes `tu-shenzhen-5840.sqlite` (SHA256
+`2bea9a453673e5a32615abc561f424722539878721860f7046989d8c5af5852e`).
+The local ignored `tools/import_shenzhen_tu_compat.py` reproduces the import from
+the pre-import `sources.json`; it refuses to overwrite an existing revision:
+
+```powershell
+python -X utf8 -m tools.import_shenzhen_tu_compat D:\iteam\TripReader-1.7.17-cn\analysis\reference-data\tu-shenzhen-5840.sqlite
+python -X utf8 -m tools.reference_data build
+python -X utf8 -m tools.reference_data validate
+```
+
+All 326 simplified-Chinese rows and raw values are preserved, including
+`source_field=M0.y.b`, `source_key=5180...`, and `source_region_code=5840`.
+There are 295 named station records and 31 prefix/operator records; nine unknown
+transport types remain NULL. These are **compatibility data, not native TU codes**.
+The reviewed rule from `C0597u0.java:592-596` applies only to TU city `5840`, a
+16-HEX POS beginning `00000002`, and longest-prefix lookup (minimum length 5)
+of `5180 + POS.substring(8)`. Region 42 identifies 深圳 / 广东 / 5840 while
+`region_aliases` explicitly retains dictionary ownership under 5180.
+Per-row provenance uses `copy_role=compatibility_copy` and
+`native_namespace=lookup_key_namespace=local_terminal_or_route`.
+`all_records` appends the provenance-joined rows; `native_records` filters
+`copy_role='native'` so compatibility entries cannot be presented as native.
+The transport summary retains the four known types; unknown counts are recorded
+separately in metadata. Global counts are recomputed from actual records (41
+regions, 7,811 dictionary records), correcting stale inherited totals without
+changing the original 40 city tables. The CU baseline is retained unchanged.
+
+Publication verification on 2026-10-25: after the user closed Navicat's database
+connection, the normal `build` and `validate` commands successfully published to
+`assets/data/`. Integrity, foreign keys and manifest provenance checks passed.
+The TU package SHA256 is
+`6632ff0aa4511eeb0d85cfe97da28203045aa2782f9d065c69eb8178ae4a517c`.
+The separate `assets/shenzhen-compat-verification/` output is not used at runtime.
 
 The TU prefix projection includes all **429** rows in `card_prefixes`, **428**
 JSON supplement entries and **347** `issuer_city_codes` rows. All 1,204 input
