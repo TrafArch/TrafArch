@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 
+import 'app_info.dart';
+import '../features/updates/update_service.dart';
 import '../features/transit_analysis/tunion_analysis_models.dart';
 import '../protocols/transit/card_parser.dart';
 import '../features/reference_data/data/tunion_knowledge_base.dart';
@@ -49,7 +51,11 @@ class AppDependencies extends OwnedNotifier {
     AppLogger? logger,
     LogExporter? logExporter,
     AppDatabase? database,
+    UpdateService? updateService,
   }) {
+    updates =
+        updateService ??
+        UpdateService(currentBuild: int.parse(AppInfo.buildNumber));
     final assets = bundle ?? rootBundle;
     _logger = logger ?? AppLogger();
     final exporter = logExporter ?? const MethodChannelLogExporter();
@@ -83,6 +89,7 @@ class AppDependencies extends OwnedNotifier {
       child.addListener(notifyListeners);
     }
   }
+  late final UpdateService updates;
   late final SettingsController settings;
   late final ReferenceDataController references;
   late final QrController qr;

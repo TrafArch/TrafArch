@@ -101,7 +101,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 subtitle: Text(app.knowledgeSummary),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => KnowledgeBasePage(app: app)),
+                  MaterialPageRoute(
+                    builder: (_) => KnowledgeBasePage(app: app),
+                  ),
                 ),
               ),
             ),
@@ -194,7 +196,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 subtitle: Text('版本 ${AppInfo.version}'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const AboutPage()),
+                  MaterialPageRoute(
+                    builder: (_) => AboutPage(updates: app.updates),
+                  ),
                 ),
               ),
             ),
