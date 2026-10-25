@@ -1,6 +1,7 @@
 // test/shanghai_transit_union_test.dart
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:transit_card_analyzer/features/scan/application/local_card_reader.dart';
 import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/city_union/city_union_models.dart';
 import 'package:transit_card_analyzer/protocols/transit/local/cards/shanghai_transit_union_card.dart';
@@ -72,6 +73,77 @@ ShanghaiTransitApplication _application({
 );
 
 void main() {
+  for (final serial in [
+    '03104770000000000001',
+    '00310477000000000001',
+    '03100000000000000001',
+    '99104770000000000001',
+    '0310477000000000000A',
+    null,
+  ]) {
+    for (final unified in [false, true]) {
+      test('门控及独立 fallback serial=$serial unified=$unified', () async {
+        final link = _GateLink(serial: serial);
+        final isShanghai =
+            serial != null &&
+            RegExp(r'^[0-9]+$').hasMatch(serial) &&
+            serial.replaceFirst(RegExp(r'^0+'), '').startsWith('31047700');
+        final ordinaryTu = serial == '03100000000000000001';
+        if (unified) {
+          final result = await LocalCardReader(link.call).read();
+          expect(
+            result!.parsedCard!.parserId,
+            isShanghai
+                ? CardParserIds.shanghaiTunion
+                : ordinaryTu
+                ? CardParserIds.tunion
+                : CardParserIds.cityUnion,
+          );
+          expect(result.shanghai != null, isShanghai);
+        } else {
+          final result = await ShanghaiTransitUnionCardParser(link.call).read();
+          expect(result.isShanghaiTransitUnion, isShanghai);
+          expect(result.cu.probed, isShanghai);
+          if (!isShanghai) {
+            expect(result.cu.errors, isEmpty);
+            expect(result.cu.records, isEmpty);
+          }
+        }
+        final shouldCu = isShanghai || (unified && !ordinaryTu);
+        expect(link.cuSelects, shouldCu ? 1 : 0);
+        expect(link.cuReads, shouldCu ? 1 : 0);
+        expect(link.tuReads, serial == null ? 0 : 1);
+        expect(link.mfCount, shouldCu ? 2 : 1);
+      });
+    }
+  }
+  for (final unified in [false, true]) {
+    for (final failCu in [false, true]) {
+      test(
+        '部分上海 TU 余额异常仍读 CU，CU失败保留TU unified=$unified failCu=$failCu',
+        () async {
+          final link = _GateLink(
+            serial: '00310477000000000001',
+            failBalance: true,
+            failCu: failCu,
+          );
+          final result = unified
+              ? (await LocalCardReader(link.call).read())!.shanghai!
+              : await ShanghaiTransitUnionCardParser(link.call).read();
+          expect(result.tu.confirmed, isTrue);
+          expect(result.tu.dataComplete, isFalse);
+          expect(result.tu.errors, isNotEmpty);
+          expect(result.mergedCard!.info.applicationSerial, link.serial);
+          expect(result.mergedCard!.info.balanceFen, isNull);
+          expect(result.cu.probed, isTrue);
+          expect(result.cu.errors.isNotEmpty, failCu);
+          expect(link.tuReads, 1);
+          expect(link.cuSelects, 1);
+          expect(link.cuReads, failCu ? 0 : 1);
+        },
+      );
+    }
+  }
   group('ShanghaiTransitUnionResult', () {
     test('来源隔离：CU 卡号和 TU 发行方不能替代对应来源', () {
       for (final raw in ['', '86 98', '02 00 29 00', '00 86 98 20 00']) {
@@ -178,7 +250,7 @@ void main() {
       expect(result.mergedCard!.cityUnionBalanceFen, isNull);
     });
 
-    test('仅 CU 可用 → cuOnlyAvailable，统一卡信息回退 CU 0x15', () {
+    test('仅 CU 可用：保留辅助前缀但不认定上海 TU', () {
       final tu = _application(
         system: ShanghaiTransitUnionIds.tuSystem,
         confirmed: false,
@@ -194,10 +266,9 @@ void main() {
       final result = ShanghaiTransitUnionResult.build(tu: tu, cu: cu);
 
       expect(result.status, ShanghaiTransitUnionStatus.cuOnlyAvailable);
-      expect(result.isShanghaiTransitUnion, isTrue);
-      expect(result.mergedCard!.info.displayCardNumber, _shanghaiSerial);
-      expect(result.mergedCard!.info.balanceFen, 500);
-      expect(result.mergedCard!.selectedAidHex, 'A00000000386980701');
+      expect(result.matchedPrefix, ShanghaiTransitUnionIds.issuerIdPrefix);
+      expect(result.isShanghaiTransitUnion, isFalse);
+      expect(result.mergedCard, isNull);
     });
 
     test('应用已确认但数据不可读 → recognizedButUnreadable', () {
@@ -480,9 +551,9 @@ void main() {
       'TU:805C000204',
       'TU:00B201C500',
       'CU:00B095001E',
+      'CU:805C000204',
       'CU:00B201C417',
       'CU:00B201D417',
-      'CU:805C000204',
     ]);
     final cuStart = commands.indexOf(cuSelect);
     expect(cuStart, greaterThan(commands.indexOf('00B201C500')));
@@ -492,11 +563,11 @@ void main() {
     expect(commands.skip(cuStart), [
       cuSelect,
       '00B095001E',
+      '805C000204',
       '00B201C417',
       '00B202C417',
       '00B201D417',
       '00B202D417',
-      '805C000204',
     ]);
     for (final side in [result.tu, result.cu]) {
       expect(side.confirmed, isTrue);
@@ -546,7 +617,7 @@ void main() {
     expect(result.readResult.records, hasLength(3));
   });
 
-  test('TU 未命中时仍执行 CU 探测（双路独立，不跳过另一侧）', () async {
+  test('专用入口 TU 未命中时 CU 未探测，不伪造 SELECT 失败', () async {
     final apdus = <List<int>>[];
     final parser = ShanghaiTransitUnionCardParser((apdu) async {
       apdus.add(List<int>.of(apdu));
@@ -564,12 +635,68 @@ void main() {
     );
     expect(
       apdus.any((apdu) => _contains(apdu, _cuAid)),
-      isTrue,
-      reason: 'TU 未命中后 CU 侧仍必须执行',
+      isFalse,
+      reason: 'TU 未命中不得进入上海 CU',
     );
     expect(result.tu.errors, isNotEmpty);
-    expect(result.cu.errors, isNotEmpty);
+    expect(result.cu.errors, isEmpty);
+    expect(result.cu.probed, isFalse);
+    expect(result.cu.stateText, '应用未探测');
   });
+}
+
+// Synthetic application-aware channel: only APDU transport is substituted.
+class _GateLink {
+  _GateLink({this.serial, this.failBalance = false, this.failCu = false});
+  final String? serial;
+  final bool failBalance;
+  final bool failCu;
+  String? selected;
+  int tuReads = 0;
+  int cuReads = 0;
+  int cuSelects = 0;
+  int mfCount = 0;
+
+  Future<List<int>> call(List<int> apdu) async {
+    final hex = apdu
+        .map((b) => b.toRadixString(16).padLeft(2, '0'))
+        .join()
+        .toUpperCase();
+    List<int> ok(String data) => [
+      for (var i = 0; i < data.length; i += 2)
+        int.parse(data.substring(i, i + 2), radix: 16),
+      0x90,
+      0,
+    ];
+    if (hex == '00A40000023F0000') {
+      mfCount++;
+      selected = null;
+      return ok('');
+    }
+    if (_contains(apdu, _tuWalletAid) && serial != null) {
+      selected = 'TU';
+      return ok('');
+    }
+    if (_contains(apdu, _cuAid)) {
+      cuSelects++;
+      if (failCu) throw Exception('CU select failed');
+      selected = 'CU';
+      return ok('');
+    }
+    if (selected == 'TU' && hex == '00B0950000') {
+      tuReads++;
+      return ok('02002900123456780101${serial!}2024010120291231AABB');
+    }
+    if (selected == 'CU' && hex == '00B095001E') {
+      cuReads++;
+      return ok('869820000126000001022000112233445566778820240101203012310000');
+    }
+    if (apdu[1] == 0x5C) {
+      if (selected == 'TU' && failBalance) throw Exception('TU balance failed');
+      return ok('000001F4');
+    }
+    return [0x6A, 0x82];
+  }
 }
 
 const _tuWalletAid = <int>[0xA0, 0x00, 0x00, 0x06, 0x32, 0x01, 0x01, 0x05];

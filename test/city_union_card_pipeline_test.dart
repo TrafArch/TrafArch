@@ -17,6 +17,189 @@ Future<ParsedCard?> _parseCu(LocalTransceive link) async {
 }
 
 void main() {
+  group('CU SELECT 兼容严格 APDU（合成状态字）', () {
+    const commands = [
+      '00A40000023F0000',
+      '00A40000023F00',
+      '00A4040009A0000000038698070100',
+      '00A4040009A00000000386980701',
+      '80A4040009A0000000038698070100',
+      '80A4040009A00000000386980701',
+    ];
+    // 仅复现已知 SELECT 状态字，不含实卡卡号或交易数据。
+    const rejected = [
+      [0x6A, 0x86],
+      [0x6A, 0x86],
+      [0x6A, 0x82],
+      [0x6A, 0x82],
+      [0x6E, 0x00],
+      [0x6E, 0x00],
+    ];
+    for (final successAt in [2, 3, 4, 5, -1]) {
+      test('日志失败分支有界选择 successAt=$successAt', () async {
+        await _selectExact([
+          for (var i = 0; i < (successAt < 0 ? 6 : successAt + 1); i++)
+            (commands[i], i == successAt ? [0x90, 0] : rejected[i]),
+        ], succeeds: successAt >= 0);
+      });
+    }
+    test('MF 无Le恢复后 CU 主策略成功', () async {
+      await _selectExact([
+        (commands[0], rejected[0]),
+        (commands[1], [0x90, 0]),
+        (commands[2], [0x90, 0]),
+      ], succeeds: true);
+    });
+    test('原成功路径没有额外尝试', () async {
+      await _selectExact([
+        (commands[0], [0x90, 0]),
+        (commands[2], [0x90, 0]),
+      ], succeeds: true);
+    });
+    for (var failAt = 0; failAt < commands.length; failAt++) {
+      test('SELECT 传输异常立即停止 step=$failAt', () async {
+        await _selectExact([
+          for (var i = 0; i <= failAt; i++)
+            (
+              commands[i],
+              i == failAt ? StateError('disconnected') : rejected[i],
+            ),
+        ], transportFailure: true);
+      });
+    }
+    for (final sw2 in [0x00, 0x10]) {
+      test('无Le MF及两种CLA SELECT遇6C不改写FID/AID sw2=$sw2', () async {
+        await _selectExact([
+          for (var i = 0; i < commands.length; i++)
+            (commands[i], i.isOdd ? [0x6C, sw2] : rejected[i]),
+        ]);
+      });
+    }
+    test('2120 补充及恢复共用 MF 无Le兼容并继续读余额', () async {
+      final data = _publicFile()
+        ..[2] = 0x21
+        ..[3] = 0x20;
+      final result = await _runExact([
+        ('00B095001E', _sw9000(data)),
+        (commands[0], rejected[0]),
+        (commands[1], [0x90, 0]),
+        (
+          '00B085002C',
+          _sw9000([...List.filled(32, 0), ...'000000000001'.codeUnits]),
+        ),
+        (commands[0], rejected[0]),
+        (commands[1], [0x90, 0]),
+        (commands[2], rejected[2]),
+        (commands[3], [0x90, 0]),
+        ('805C000204', _sw9000([0, 0, 0, 5])),
+        ('00B201C417', [0x6A, 0x83]),
+        ('00B201D417', [0x6A, 0x83]),
+      ], balance: true);
+      expect(result.$1.parsedCard!.info.balanceFen, 5);
+      expect(
+        (result.$1.parsedCard!.cityUnionFiles.first as CjT331PublicInfo)
+            .cityDisplayNumber,
+        '000000000001',
+      );
+    });
+  });
+  group('CU 读取修复严格 APDU', () {
+    test('32 字节公共信息按前30解析并保留完整证据', () async {
+      final data = [..._publicFile(), 0xAB, 0xCD];
+      final result = await _strictCu(data);
+      final public = result.$1.cityUnionFiles.first as CjT331PublicInfo;
+      expect(public.applicationSerialNumber, '1122334455667788');
+      expect(public.rawHex.replaceAll(' ', ''), _hex(data.sublist(0, 30)));
+      final raw = result.$1.cityUnionFiles.last as CityUnionRawFileView;
+      expect(raw.rawHex.replaceAll(' ', ''), _hex(data));
+      expect(raw.errors.single, contains('前 30 字节'));
+    });
+    for (final sw in [0x67, 0x6C]) {
+      for (final succeeds in [true, false]) {
+        test('${sw.toRadixString(16)}00 记录校正一次 success=$succeeds', () async {
+          final result = await _runExact([
+            ('00B095001E', _sw9000(_publicFile())),
+            ('00B201C417', [sw, 0]),
+            ('00B201C400', succeeds ? _sw9000(_localRecord()) : [sw, 0]),
+            if (succeeds) ('00B202C417', [0x6A, 0x83]),
+            ('00B201D417', _sw9000(_rechargeRecord())),
+            ('00B202D417', [0x6A, 0x83]),
+          ]);
+          expect(result.$2, hasLength(succeeds ? 2 : 1));
+          expect(result.$2.last.fileSelector, 0x1A);
+        });
+      }
+    }
+    test('公共信息与余额只读指令也支持长度校正', () async {
+      final result = await _runExact([
+        ('00B095001E', [0x67, 0]),
+        ('00B0950000', _sw9000(_publicFile())),
+        ('805C000204', [0x6C, 0]),
+        ('805C000200', _sw9000([0, 0, 0, 5])),
+        ('00B201C417', [0x6A, 0x83]),
+        ('00B201D417', [0x6A, 0x83]),
+      ], balance: true);
+      expect(result.$1.parsedCard!.info.balanceFen, 5);
+    });
+    for (final balance in [0, 5]) {
+      test('记录传输异常保留已读余额 $balance 并停止', () async {
+        final result = await _runExact(
+          [
+            ('00B095001E', _sw9000(_publicFile())),
+            ('805C000204', _sw9000([0, 0, 0, balance])),
+            ('00B201C417', _sw9000(_localRecord())),
+            ('00B202C417', StateError('disconnected')),
+          ],
+          balance: true,
+          fails: true,
+        );
+        expect(result.$1.parsedCard!.info.balanceFen, balance);
+        expect(result.$2, hasLength(1));
+      });
+    }
+    test('余额状态字失败保留后续消费与充值', () async {
+      final result = await _runExact([
+        ('00B095001E', _sw9000(_publicFile())),
+        ('805C000204', [0x6A, 0x81]),
+        ('005C000204', [0x6A, 0x81]),
+        ('00B201C417', _sw9000(_localRecord())),
+        ('00B202C417', [0x6A, 0x83]),
+        ('00B201D417', _sw9000(_rechargeRecord())),
+        ('00B202D417', [0x6A, 0x83]),
+      ], balance: true);
+      expect(result.$1.parsedCard!.info.balanceFen, isNull);
+      expect(result.$2.map((r) => r.fileSelector), [0x18, 0x1A]);
+    });
+    test('2120 MF补充读取断连不再恢复SELECT', () async {
+      final data = _publicFile()
+        ..[2] = 0x21
+        ..[3] = 0x20;
+      final result = await _runExact(
+        [
+          ('00B095001E', _sw9000(data)),
+          ('00A40000023F0000', [0x90, 0]),
+          ('00B085002C', StateError('disconnected')),
+        ],
+        balance: true,
+        fails: true,
+      );
+      expect(result.$1.parsedCard!.cityUnionFiles, hasLength(1));
+      expect(result.$2, isEmpty);
+    });
+    test('余额传输异常不尝试另一CLA或记录', () async {
+      final result = await _runExact(
+        [
+          ('00B095001E', _sw9000(_publicFile())),
+          ('805C000204', StateError('disconnected')),
+        ],
+        balance: true,
+        fails: true,
+      );
+      expect(result.$1.parsedCard!.info.balanceFen, isNull);
+      expect(result.$1.parsedCard!.cityUnionFiles, hasLength(1));
+      expect(result.$2, isEmpty);
+    });
+  });
   group('TripReader CU 完整 APDU 回归', () {
     test('部分记录失败保留证据、无效时间不猜测、余额 CLA 回退', () async {
       for (final fail in [false, true]) {
@@ -186,7 +369,14 @@ void main() {
         List.filled(30, 0xFF),
       ]) {
         final result = await _strictCu(data);
-        expect(result.$1.cityUnionFiles, isEmpty);
+        if (data.length < 30) {
+          final raw = result.$1.cityUnionFiles.single;
+          expect(raw, isA<CityUnionRawFileView>());
+          expect(raw.rawHex.replaceAll(' ', ''), _hex(data));
+          expect(raw.errors.single, contains('实际 ${data.length} 字节'));
+        } else {
+          expect(result.$1.cityUnionFiles, isEmpty);
+        }
         expect(result.$2.cardNumber, isEmpty);
       }
     });
@@ -328,7 +518,8 @@ void main() {
     test('CLA 0x00 选择失败后回退 CLA 0x80 选择成功', () async {
       final link = _ScriptedLink();
       link.enqueue(0xA4, const [0x90, 0x00]); // 选择主文件 MF
-      link.enqueue(0xA4, const [0x6A, 0x82]); // AID CLA 00 失败
+      link.enqueue(0xA4, const [0x6A, 0x82]); // AID CLA 00 带 Le 失败
+      link.enqueue(0xA4, const [0x6A, 0x82]); // AID CLA 00 无 Le 失败
       link.enqueue(0xA4, _sw9000(const [])); // AID CLA 80 成功
       link.enqueue(0xB0, _sw9000(_publicFile()));
       link.enqueue(0xB2, const [0x6A, 0x83]); // 0x18 记录未找到
@@ -396,6 +587,74 @@ void main() {
   });
 }
 
+Future<void> _selectExact(
+  List<(String, Object)> script, {
+  bool succeeds = false,
+  bool transportFailure = false,
+}) async {
+  var index = 0;
+  final cu = CommonUnitCu(
+    ApduExchange(
+      transceive: (command) async {
+        expect(index, lessThan(script.length));
+        final step = script[index++];
+        expect(_hex(command), step.$1);
+        if (step.$2 is! List<int>) throw step.$2;
+        return step.$2 as List<int>;
+      },
+    ),
+  );
+  final info = CardInfo();
+  final records = <ApduRecord>[];
+  final selection = cu.select(info, records);
+  if (transportFailure) {
+    await expectLater(selection, throwsA(isA<ApduTransportException>()));
+  } else {
+    expect(await selection, succeeds);
+  }
+  expect(cu.selectedAid, succeeds ? CommonUnitCu.walletAid : isNull);
+  if (!succeeds) {
+    expect(await cu.read(info, records, readBalance: true), isNull);
+  }
+  expect(index, script.length);
+}
+
+Future<(CommonUnitCu, List<ApduRecord>)> _runExact(
+  List<(String, Object)> reads, {
+  bool balance = false,
+  bool fails = false,
+}) async {
+  final script = <(String, Object)>[
+    ('00A40000023F0000', [0x90, 0]),
+    ('00A4040009A0000000038698070100', [0x90, 0]),
+    ...reads,
+  ];
+  var index = 0;
+  final cu = CommonUnitCu(
+    ApduExchange(
+      transceive: (command) async {
+        expect(index, lessThan(script.length));
+        final step = script[index++];
+        expect(_hex(command), step.$1);
+        if (step.$2 is! List<int>) throw step.$2;
+        return step.$2 as List<int>;
+      },
+    ),
+  );
+  final info = CardInfo();
+  final records = <ApduRecord>[];
+  expect(await cu.select(info, records), isTrue);
+  final read = cu.read(info, records, readBalance: balance);
+  if (fails) {
+    await expectLater(read, throwsA(isA<ApduTransportException>()));
+  } else {
+    await read;
+  }
+  expect(index, script.length);
+  expect(info.observedBalance, cu.parsedCard!.info.balanceFen);
+  return (cu, records);
+}
+
 String _hex(List<int> bytes) =>
     bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join().toUpperCase();
 
@@ -416,6 +675,7 @@ Future<(ParsedCard, CardInfo, List<ApduRecord>)> _strictCu(
     ('00B095001E', _sw9000(data)),
     if (restore != null) ...[
       ('00A40000023F0000', mfFailure ? [0x6A, 0x82] : [0x90, 0]),
+      if (mfFailure) ('00A40000023F00', [0x6A, 0x82]),
       if (!mfFailure)
         (
           '00B085002C',
@@ -427,21 +687,13 @@ Future<(ParsedCard, CardInfo, List<ApduRecord>)> _strictCu(
         '00A4040009A0000000038698070100',
         restore && !restoreFallback ? [0x90, 0] : [0x6A, 0x82],
       ),
-      if (!restore || restoreFallback)
+      if (!restore || restoreFallback) ...[
+        ('00A4040009A00000000386980701', [0x6A, 0x82]),
         ('80A4040009A0000000038698070100', restore ? [0x90, 0] : [0x6A, 0x82]),
+        if (!restore) ('80A4040009A00000000386980701', [0x6A, 0x82]),
+      ],
     ],
     if (restore != false) ...[
-      for (var i = 0; i < rows.length; i++)
-        (
-          '00B2${(i + 1).toRadixString(16).padLeft(2, '0').toUpperCase()}C417',
-          _sw9000(rows[i]),
-        ),
-      if (rows.length < 31)
-        (
-          '00B2${(rows.length + 1).toRadixString(16).padLeft(2, '0').toUpperCase()}C417',
-          [0x6A, 0x83],
-        ),
-      ('00B201D417', [0x6A, 0x83]),
       if (balance != null) ...[
         (
           '805C00${data[2] == 0x21 && data[3] == 0x50 ? '01' : '02'}04',
@@ -453,6 +705,17 @@ Future<(ParsedCard, CardInfo, List<ApduRecord>)> _strictCu(
             balanceFailure ? [0x6A, 0x82] : _sw9000(balance),
           ),
       ],
+      for (var i = 0; i < rows.length; i++)
+        (
+          '00B2${(i + 1).toRadixString(16).padLeft(2, '0').toUpperCase()}C417',
+          _sw9000(rows[i]),
+        ),
+      if (rows.length < 31)
+        (
+          '00B2${(rows.length + 1).toRadixString(16).padLeft(2, '0').toUpperCase()}C417',
+          [0x6A, 0x83],
+        ),
+      ('00B201D417', [0x6A, 0x83]),
     ],
   ];
   final info = CardInfo();

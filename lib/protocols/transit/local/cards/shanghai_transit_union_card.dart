@@ -10,15 +10,9 @@ import 'shanghai_transit_union_models.dart';
 
 /// 上海交通卡（交通联合版）专用识别器。
 ///
-/// 该卡种默认按 TU（JT/T 978.2）+ CU（CJ/T 331-2016）双标卡处理：
-/// 1) 先独立执行交通联合应用识读（应用确认 → 读取 → 数据完整性判定）；
-/// 2) 再独立执行城市一卡通应用识读（同一套三态判定）；
-/// 3) 两路结果交给 [ShanghaiTransitUnionResult] 合并（含行程去重）。
-///
-/// 任一侧失败都不会跳过另一侧：两侧各自持有独立的 [CardInfo] /
-/// [ApduRecord] / 错误列表，合并时只做数据汇聚，不互相覆盖。
-/// 已确认 TU 的卡号前缀 31047700 / 已确认 CU 的 0x15 原始前四字节
-/// 86982000 仅作各自来源的辅助线索（见 [ShanghaiTransitUnionResult]）。
+/// 先读取 TU（JT/T 978.2），仅已确认 TU 且规范化卡号前缀为
+/// 31047700 时读取 CU（CJ/T 331-2016）。余额缺失不阻断上海身份确认。
+/// 两侧独立保留数据与错误；CU 失败不丢弃 TU，CU 发行标识不能替代 TU 证据。
 class ShanghaiTransitUnionCardParser implements CardParser {
   ShanghaiTransitUnionCardParser(
     this._transceive, {
@@ -45,7 +39,7 @@ class ShanghaiTransitUnionCardParser implements CardParser {
 
   void _report(double progress) => onProgress?.call(progress.clamp(0.0, 1.0));
 
-  /// 双路识读入口：始终两路都执行，返回合并结果（不在此处判定卡种）。
+  /// 先确认上海 TU，再读取 CU；未命中时保留真实的 CU 未探测状态。
   Future<ShanghaiTransitUnionResult> read() async {
     final apdu = ApduExchange(transceive: _transceive);
     _report(0);
@@ -53,7 +47,14 @@ class ShanghaiTransitUnionCardParser implements CardParser {
     final tu = await _readTu(apdu);
     _report(0.5);
 
-    final cu = await _readCu(apdu);
+    final cu = tu.isShanghaiTu
+        ? await _readCu(apdu)
+        : ShanghaiTransitApplication(
+            system: ShanghaiTransitUnionIds.cuSystem,
+            probed: false,
+            cardInfo: CardInfo(),
+            records: const [],
+          );
     _report(1);
 
     return ShanghaiTransitUnionResult.build(tu: tu, cu: cu);

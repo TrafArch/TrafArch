@@ -70,6 +70,7 @@ class ShanghaiTransitApplication {
     required this.system,
     required this.cardInfo,
     required this.records,
+    this.probed = true,
     this.confirmed = false,
     this.readSucceeded = false,
     this.dataComplete = false,
@@ -82,8 +83,27 @@ class ShanghaiTransitApplication {
   /// 应用名（[ShanghaiTransitUnionIds.tuSystem] / [ShanghaiTransitUnionIds.cuSystem]）。
   final String system;
 
+  /// 是否实际探测过应用；门控跳过时为 false，不产生 SELECT 失败。
+  final bool probed;
+
   /// 应用是否确认（AID 选择成功）。
   final bool confirmed;
+
+  /// 上海 TU 证据只来自已确认 TU 的纯数字卡号，不依赖余额或 CU。
+  bool get isShanghaiTu =>
+      system == ShanghaiTransitUnionIds.tuSystem &&
+      confirmed &&
+      [
+        identity?.displayCardNumber,
+        card?.info.displayCardNumber,
+        cardInfo.cardNumber,
+      ].any((value) {
+        final digits = value?.trim() ?? '';
+        return RegExp(r'^[0-9]+$').hasMatch(digits) &&
+            digits
+                .replaceFirst(RegExp(r'^0+'), '')
+                .startsWith(ShanghaiTransitUnionIds.cardNumberPrefix);
+      });
 
   /// 读取是否成功（TU：完整识读返回结果；CU：读到非空标准文件）。
   final bool readSucceeded;
@@ -150,10 +170,11 @@ class ShanghaiTransitApplication {
   }
 
   /// 状态摘要（专家模式 / 运行日志）。
-  String get stateText =>
-      '应用${confirmed ? '已确认' : '未确认'} · '
-      '读取${readSucceeded ? '成功' : '未成功'} · '
-      '数据${dataComplete ? '完整' : '不完整'}';
+  String get stateText => !probed
+      ? '应用未探测'
+      : '应用${confirmed ? '已确认' : '未确认'} · '
+            '读取${readSucceeded ? '成功' : '未成功'} · '
+            '数据${dataComplete ? '完整' : '不完整'}';
 }
 
 /// 行程合并结果：去重后的记录 + 去掉的重复条数。
@@ -266,7 +287,7 @@ abstract final class ShanghaiTransitTripMerger {
 ///
 /// - [tu] / [cu]：两套数据分别保留（含各自的原始记录与解析错误）；
 /// - [status]：由两侧实际读取结果判定；
-/// - [isShanghaiTransitUnion]：卡号 / 发卡机构辅助前缀 + 应用结构双重确认；
+/// - [isShanghaiTransitUnion]：已确认 TU + TU 来源上海卡号前缀；
 /// - [mergedRecords]：去重后的行程流水；
 /// - [mergedCard]：仅在本卡种成立时产出的统一 [ParsedCard]
 ///   （parserId = [CardParserIds.shanghaiTunion]）。
@@ -298,7 +319,7 @@ class ShanghaiTransitUnionResult {
   /// 是否至少一侧应用结构已被确认（AID 选择成功）。
   final bool structureConfirmed;
 
-  /// 是否为上海交通卡（交通联合版）：辅助前缀 + 应用结构双重确认。
+  /// 是否为上海交通卡（交通联合版）：只依赖 [tu] 的上海 TU 证据。
   final bool isShanghaiTransitUnion;
 
   /// 合并后的行程流水（TU 在前，CU 独有记录在后，已去重）。
@@ -332,7 +353,7 @@ class ShanghaiTransitUnionResult {
   }) {
     final structureConfirmed = tu.confirmed || cu.confirmed;
     final matchedPrefix = _matchPrefix(tu, cu);
-    final isShanghaiTransitUnion = matchedPrefix != null && structureConfirmed;
+    final isShanghaiTransitUnion = tu.isShanghaiTu;
 
     final status = switch ((tu.available, cu.available)) {
       (true, true) => ShanghaiTransitUnionStatus.bothAvailable,
@@ -374,20 +395,12 @@ class ShanghaiTransitUnionResult {
   }
 
   /// 辅助前缀匹配：卡号 IIN 优先，回退发卡机构标识。
-  /// 命中只说明「像上海卡」，是否成立仍取决于 [structureConfirmed]。
+  /// CU 发行标识只保留为辅助线索，不能替代 [ShanghaiTransitApplication.isShanghaiTu]。
   static String? _matchPrefix(
     ShanghaiTransitApplication tu,
     ShanghaiTransitApplication cu,
   ) {
-    if (tu.confirmed) {
-      for (final candidate in tu.cardNumberCandidates) {
-        final digits = _digitsOnly(candidate);
-        if (digits != null &&
-            digits.startsWith(ShanghaiTransitUnionIds.cardNumberPrefix)) {
-          return ShanghaiTransitUnionIds.cardNumberPrefix;
-        }
-      }
-    }
+    if (tu.isShanghaiTu) return ShanghaiTransitUnionIds.cardNumberPrefix;
     if (cu.confirmed) {
       // CjT331PublicInfo 保留完整原始文件的 HEX；按 TripReader subList(0, 4)
       // 取四字节，不拼接解码字段，也不使用 TU 发行方作为 CU 证据。
@@ -400,12 +413,6 @@ class ShanghaiTransitUnionResult {
       }
     }
     return null;
-  }
-
-  static String? _digitsOnly(String value) {
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) return null;
-    return RegExp(r'^[0-9]+$').hasMatch(trimmed) ? trimmed : null;
   }
 
   /// 统一解析结果：TU 侧优先承载卡信息 / 交易 / 过程记录，CU 侧承载

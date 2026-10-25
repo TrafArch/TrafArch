@@ -20,8 +20,8 @@ import '../local/local_card_models.dart';
 /// - 同步回填新架构 [CardInfo] 与交易流水（[ApduRecord.type] == 2）。
 ///
 /// CU 记录金额的单位标准未定义（表 7 / 表 9），流水仅保留原始字段，
-/// 不折算余额差额（不猜测）。逐条 APDU 序列与原 `CityUnionParser.parse()`
-/// 保留既有读取顺序；失败证据与部分数据分别保存。
+/// 不折算余额差额（不猜测）。公共信息后优先读取可选余额，再读取记录；
+/// 失败证据与部分数据分别保存。
 class CommonUnitCu {
   CommonUnitCu(this._apdu, {this.onProgress});
 
@@ -85,13 +85,19 @@ class CommonUnitCu {
     final files = <CityUnionFileView>[];
     int? balance;
     try {
-      await _readFiles(files);
-      _report(0.9);
+      await _readPublicInfo(files);
       balance = readBalance && _selectedAid != null
           ? await _readBalance(
               files.whereType<CjT331PublicInfo>().firstOrNull?.displayCityCode,
             )
           : null;
+      // 状态字拒绝不妨碍读取记录；传输异常必须终止会话并保留已读数据。
+      if (_selectedAid != null) {
+        await _readRecords(CityUnionFileIds.walletLocalConsumption, files);
+        _report(0.65);
+        await _readRecords(CityUnionFileIds.walletRecharge, files);
+        _report(0.9);
+      }
       _report(1);
     } finally {
       parsedCard = ParsedCard(
@@ -113,12 +119,26 @@ class CommonUnitCu {
 
   // ---- CU 应用与文件读取 ----
 
-  /// 应用选择：先选择主文件（MF 3F00）复位（失败忽略），
-  /// 然后按 CLA 0x00 / 0x80 尝试城市一卡通 AID。
+  /// CU 专用 SELECT 兼容：保留带 Le 主路径，状态字拒绝后仅尝试一次
+  /// 无 Le case 3。共享 exchange 按 hasLe 校正 6C，不会改写 FID/AID。
+  /// 传输异常直接传播，不能继续尝试下一条命令。
+  Future<List<int>> _selectWithCompatibility(List<int> withLe) async {
+    final response = await _exchange(withLe);
+    if (_isSuccess(response)) return response;
+    return _exchange(withLe.sublist(0, withLe.length - 1));
+  }
+
+  Future<List<int>> _selectMf() =>
+      _selectWithCompatibility(TUnionApdu.selectFile(const [0x3F, 0x00]));
+
+  /// MF 状态字拒绝不阻止按 AID 选择；CLA 00 带/无 Le 后才尝试
+  /// CLA 80 带/无 Le，每次成功立即停止，不改变 TU 的命令构建默认值。
   Future<bool> _selectApplication() async {
-    await _exchange(TUnionApdu.selectFile(const [0x3F, 0x00]));
+    await _selectMf();
     for (final cla in const [0x00, 0x80]) {
-      final resp = await _exchange(TUnionApdu.select(walletAid, cla: cla));
+      final resp = await _selectWithCompatibility(
+        TUnionApdu.select(walletAid, cla: cla),
+      );
       if (_isSuccess(resp)) {
         _selectedAid = walletAid;
         return true;
@@ -127,14 +147,30 @@ class CommonUnitCu {
     return false;
   }
 
-  /// 读取标准文件并返回统一视图列表：0x15 / 0x18 / 0x1A。
-  Future<void> _readFiles(List<CityUnionFileView> out) async {
+  /// 读取公共信息及城市补充信息，恢复应用后再读取余额与记录。
+  Future<void> _readPublicInfo(List<CityUnionFileView> out) async {
     final public = await _readTransparentFile(
       CityUnionFileIds.publicBasicInfo,
       _publicFileSize,
     );
     if (public != null) {
-      out.add(_parseSafely(CityUnionFileIds.publicBasicInfo, public));
+      if (public.length > _publicFileSize) {
+        out.add(
+          _parseSafely(
+            CityUnionFileIds.publicBasicInfo,
+            public.sublist(0, _publicFileSize),
+          ),
+        );
+        out.add(
+          CityUnionRawFileView(
+            sfi: CityUnionFileIds.publicBasicInfo,
+            raw: public,
+            reason: '公共信息响应 ${public.length} 字节：按前 30 字节解析，完整响应保留',
+          ),
+        );
+      } else {
+        out.add(_parseSafely(CityUnionFileIds.publicBasicInfo, public));
+      }
     }
     _report(0.3); // 0x15 公共应用基本信息读取完成
 
@@ -142,16 +178,14 @@ class CommonUnitCu {
     if (publicInfo?.displayCityCode == 2120) {
       _selectedAid = null;
       List<int>? extra;
-      try {
-        final mf = await _exchange(TUnionApdu.selectFile(const [0x3F, 0x00]));
-        if (_isSuccess(mf)) {
-          extra = await _readTransparentFile(0x05, 0x2C);
-        }
-      } finally {
-        // 即使 MF 读取失败也必须恢复 CU；失败时不能在 MF 下继续读记录。
-        await _selectApplication();
+      // 传输异常直接终止会话，不能在 finally 中再次发送 SELECT。
+      final mf = await _selectMf();
+      if (_isSuccess(mf)) {
+        extra = await _readTransparentFile(0x05, 0x2C);
       }
-      if (extra != null) {
+      // 状态字失败仍恢复 CU；恢复失败时不能在 MF 下读取余额或记录。
+      await _selectApplication();
+      if (extra != null && extra.length >= 44) {
         final ascii = extra.sublist(32, 44);
         if (ascii.every((b) => b >= 0x20 && b <= 0x7E)) {
           out[out.indexOf(publicInfo!)] = publicInfo.withCityDisplayNumber(
@@ -161,11 +195,6 @@ class CommonUnitCu {
       }
       if (_selectedAid == null) return;
     }
-
-    await _readRecords(CityUnionFileIds.walletLocalConsumption, out);
-    _report(0.65); // 0x18 本地消费交易读取完成
-    await _readRecords(CityUnionFileIds.walletRecharge, out);
-    _report(0.9); // 0x1A 充值交易读取完成
   }
 
   /// 逐条 READ RECORD 读取记录文件（0x18、0x1A 循环记录）。
@@ -195,21 +224,32 @@ class CommonUnitCu {
   /// READ BINARY 读取透明（二进制）文件；全空数据返回 null。
   ///
   /// 首次读取使用明确长度（不再用 Le=0x00，避免部分卡片对“读到文件尾”
-  /// 的解释不一致导致数据起点偏移）；长度不足时不再静默拼接，直接失败，
-  /// 由上层保留原始数据。
+  /// 的解释不一致导致数据起点偏移）；成功响应不按长度丢弃或静默拼接，
+  /// 由上层解析标准前缀并保留超长/短响应证据。
   Future<List<int>?> _readTransparentFile(int sfi, int length) async {
     final whole = await _exchange(
       TUnionApdu.readBinary(sfi, offset: 0, le: length),
     );
     if (!_isSuccess(whole)) return null;
     final data = _stripSw(whole);
-    if (data.length != length) return null;
-    if (data.every((b) => b == 0x00 || b == 0xFF)) return null;
+    // 短成功响应也交给上层保存原始证据，不伪造有效公共信息。
+    if (data.length >= length && data.every((b) => b == 0x00 || b == 0xFF)) {
+      return null;
+    }
     return data;
   }
 
-  /// 收发 APDU：自动处理 6CXX 重发与 61XX 链式响应（段数上限 32）。
-  Future<List<int>> _exchange(List<int> apdu) => _apdu.exchangeTransit(apdu);
+  /// 仅 CU 只读指令允许一次 6700 / 6C00 长度校正；SELECT 策略不变。
+  Future<List<int>> _exchange(List<int> apdu) async {
+    if (apdu[1] != 0xB0 && apdu[1] != 0xB2 && apdu[1] != 0x5C) {
+      return _apdu.exchangeTransit(apdu);
+    }
+    final result = await _apdu.exchange(
+      apdu,
+      policy: const ExchangePolicy(correct6c00: true, retry6700: true),
+    );
+    return result.response?.raw ?? const [];
+  }
 
   bool _isSuccess(List<int> resp) => ApduSw.isSuccess(resp);
 
