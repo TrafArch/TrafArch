@@ -6,7 +6,7 @@ import '../../app/app_info.dart';
 import '../../app/app_dependencies.dart';
 import 'presentation/pending_save_presenter.dart';
 import 'presentation/scan_controls.dart';
-import '../qr/presentation/qr_acquire.dart';
+import '../qr/presentation/qr_action_button.dart';
 import '../settings/presentation/settings_action_button.dart';
 import 'recent_scan_section.dart';
 
@@ -20,9 +20,6 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  /// 相册导入进行中（选图 / 图片识别），用于禁用按钮并展示进度。
-  bool _qrImporting = false;
-
   AppDependencies get app => widget.app;
   bool get scanning => app.scanning;
 
@@ -54,7 +51,12 @@ class _HomePageState extends State<HomePage> {
       _scheduleAutoScan();
     }
     if (oldWidget.active && !widget.active) {
-      app.stop();
+      // stop() 会同步广播状态变更，而 didUpdateWidget 运行在 build 阶段，
+      // 直接调用会让 app 的监听者（TripsPage / ExpertPage）在 build 中
+      // setState 触发断言；挪到本帧结束后执行。
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) app.stop();
+      });
     } else if (!oldWidget.active && widget.active) {
       _scheduleAutoScan();
     }
@@ -81,18 +83,6 @@ class _HomePageState extends State<HomePage> {
       ? '再次读取'
       : '开始读取';
 
-  /// 从相册导入二维码：原生相册选图 → MLKit 识别 → 内置纯 Dart 解码兜底，
-  /// 成功后解析并写入 [app]。
-  Future<void> _importQrFromGallery() async {
-    if (_qrImporting) return;
-    setState(() => _qrImporting = true);
-    try {
-      await importQrFromGalleryAndParse(context, app);
-    } finally {
-      if (mounted) setState(() => _qrImporting = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return PendingSavePresenter(
@@ -106,7 +96,10 @@ class _HomePageState extends State<HomePage> {
             SliverAppBar(
               pinned: true,
               title: Text(AppInfo.appName),
-              actions: [SettingsActionButton(app: app)],
+              actions: [
+                QrActionButton(app: app),
+                SettingsActionButton(app: app),
+              ],
             ),
             SliverToBoxAdapter(
               child: Padding(
@@ -118,37 +111,17 @@ class _HomePageState extends State<HomePage> {
                 ),
                 child: Column(
                   children: [
-                    // 贴卡读取与乘车码获取合并为同一模块展示
                     ScanControls(
                       scanning: scanning,
                       progress: app.readProgress,
                       statusText: _statusText,
                       buttonLabel: _buttonLabel,
-                      useGmsScanner: app.useGmsScanner,
-                      importing: _qrImporting,
                       onScanCard: () {
                         if (widget.active && !scanning) app.scanOnce();
                       },
-                      onScanQr: () => scanQrAndParse(context, app),
-                      onImportGallery: _importQrFromGallery,
                     ),
-                    if (app.qrError != null) ...[
-                      const SizedBox(height: 12),
-                      Card(
-                        child: ListTile(
-                          leading: const Icon(Icons.error_outline),
-                          title: const Text('二维码解析失败'),
-                          subtitle: Text(app.qrError!),
-                          trailing: TextButton(
-                            onPressed: app.clearQr,
-                            child: const Text('清除'),
-                          ),
-                        ),
-                      ),
-                    ],
                     const SizedBox(height: 12),
-                    // 最近扫描：卡片（TU / CU / EMV-PBOC 自动切换）与
-                    // 乘车码（内嵌展示，自动 / 手动切换）
+                    // 最近扫描：NFC 卡片与银行卡只读分析。
                     RepaintBoundary(child: RecentScanSection(app: app)),
                   ],
                 ),

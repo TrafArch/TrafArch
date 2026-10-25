@@ -1,6 +1,7 @@
 library;
 
 import '../../../protocols/transit/card_parser.dart';
+import '../../../protocols/transit/city_union/city_union_reader.dart';
 import '../../../protocols/transit/tunion/tunion_models.dart';
 import '../../../protocols/transit/local/apdu_exchange.dart';
 import 'bank_card_probe.dart';
@@ -71,14 +72,10 @@ class LocalReadOutcome {
 
 /// 交通卡 / 银行卡统一识读编排主体（新模块为主）：按优先级串联各读法，
 /// 命中即返回。
-/// 0) 上海交通卡（交通联合版）独立卡种：默认按 TU + CU 双标卡处理，
-///    TU / CU 两路独立识读、独立状态、合并结果（见
-///    [ShanghaiTransitUnionCardParser]）；命中时以其合并产物为准；
-/// 1) 非上海卡的交通联合（JT/T 978.2）富识读 [CommonUnitTu]（复用 0 阶段
-///    已读到的 TU 结果，不重复读卡）；
-/// 2) 城市一卡通（CJ/T 331-2016）富识读（同样复用 0 阶段结果），
-///    交通联合命中且同时读到城市一卡通时合并为双应用结果
-///    （[ParsedCard.dualApplication]，见 _mergeDual）；
+/// 0) [ShanghaiTransitUnionCardParser] 先读 TU，仅确认上海 TU 才读 CU，
+///    命中上海时返回合并结果；
+/// 1) 普通 TU 复用已读结果直接返回，不探测 CU；
+/// 2) TU 无可返回结果时独立回退普通 CU，不冒认上海 TU、不重复探测；
 /// 3) 地方交通卡逐城市探测（武汉通 / 北京 / 羊城通 / 深圳通 /
 ///    苏州(苏薪·计次) / 天府通），命中后读取共用卡信息与行程 / 扩展记录，
 ///    最后余额重建 + 换乘去重；
@@ -138,10 +135,7 @@ class LocalCardReader {
     try {
       callback.onProgress(5);
 
-      // 1) 上海交通卡（交通联合版）独立卡种：默认按 TU + CU 双标卡处理，
-      //    TU / CU 两路独立执行（一侧失败不跳过另一侧）。命中后以独立
-      //    parserId（shanghaiTunion）产出合并结果；未命中（普通 TU 卡 /
-      //    普通 CU 卡 / 非交通卡）时复用本次已读到的应用结果，避免二次读卡。
+      // 1) 先读取 TU，上海 TU 确认后才探测 CU；复用产物避免二次读取。
       callback.onProgress(10);
       final shanghai = await ShanghaiTransitUnionCardParser(
         _transceive,
@@ -160,18 +154,35 @@ class LocalCardReader {
         );
       }
 
-      // 2) 非上海交通卡：沿用原有优先级——交通联合优先（同时读到 CU 时
-      //    合并为双应用结果），仅 CU 时使用 CU 结果。
+      // 2) 普通 TU 直接复用（含部分数据），不再探测 CU。
       if (tuCard != null) {
         callback.onProgress(95);
         return _outcome(
           shanghai.tu.cardInfo,
           shanghai.tu.records,
           extras,
-          cuCard != null ? _mergeDual(tuCard, cuCard) : tuCard,
+          tuCard,
         );
       }
-      if (cuCard != null) {
+
+      // TU 无可返回结果时独立尝试普通 CU；上海分支已探测过则不重读。
+      if (!shanghai.cu.probed) {
+        onStage?.call(CommonUnitCu.moduleName);
+        final cu = CommonUnitCu(apdu);
+        ParsedCard? card;
+        try {
+          if (await cu.select(info, records)) {
+            card = await cu.read(info, records, readBalance: true);
+          }
+        } on Exception catch (e) {
+          card = cu.parsedCard;
+          callback.onError(_mapError(e));
+        }
+        if (card != null && card.cityUnionFiles.isNotEmpty) {
+          callback.onProgress(95);
+          return _outcome(info, records, extras, card);
+        }
+      } else if (cuCard != null) {
         callback.onProgress(95);
         return _outcome(
           shanghai.cu.cardInfo,
@@ -381,23 +392,6 @@ class LocalCardReader {
   ) => LocalReadOutcome.transit(
     readResult: ReadResult(info: info, records: records, extras: extras),
     parsedCard: parsed,
-  );
-
-  /// 双应用卡合并：以交通联合（部互联互通）应用为主产出（parserId 保持
-  /// [CardParserIds.tunion]，驱动既有分析与展示链路），并入城市一卡通
-  /// （住建部）应用的标准文件视图与钱包余额，标记 [ParsedCard.dualApplication]。
-  /// 两套钱包余额分属不同网络，互不覆盖。
-  static ParsedCard _mergeDual(ParsedCard tu, ParsedCard cu) => ParsedCard(
-    parserId: CardParserIds.tunion,
-    parserName: '${tu.parserName} + ${cu.parserName}（双应用）',
-    info: tu.info,
-    transactions: tu.transactions,
-    transactionFileObserved: tu.transactionFileObserved,
-    transitProcessRecords: tu.transitProcessRecords,
-    cityUnionFiles: cu.cityUnionFiles,
-    cityUnionBalanceFen: cu.info.balanceFen,
-    dualApplication: true,
-    selectedAidHex: tu.selectedAidHex,
   );
 
   /// 收尾（对应 L8911-8923）：余额重建 + 换乘去重 + 进度 100。

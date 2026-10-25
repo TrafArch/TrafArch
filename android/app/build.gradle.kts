@@ -174,8 +174,4 @@ dependencies {
     // Add the dependencies for any other desired Firebase products
     // https://firebase.google.com/docs/android/setup#available-libraries
 
-    // Google Code Scanner（GMS 扫码）：扫码界面与相机由 Google Play 服务提供，
-    // 此模式无需相机权限；系统扫码需用户开启，关闭后使用应用内相机
-    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
-
 }

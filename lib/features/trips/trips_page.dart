@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../transit_analysis/tunion_analysis_models.dart';
 import '../../shared/presentation/ui_constants.dart';
 import '../../app/app_dependencies.dart';
+import '../qr/presentation/qr_action_button.dart';
 import '../settings/presentation/settings_action_button.dart';
 import 'trip_stream_view.dart';
 
@@ -24,7 +25,10 @@ class TripsPage extends StatelessWidget {
             SliverAppBar(
               pinned: true,
               title: const Text('行程'),
-              actions: [SettingsActionButton(app: app)],
+              actions: [
+                QrActionButton(app: app),
+                SettingsActionButton(app: app),
+              ],
             ),
             SliverToBoxAdapter(
               child: Padding(

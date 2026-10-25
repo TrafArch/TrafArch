@@ -14,8 +14,8 @@ abstract final class AppTheme {
   );
 
   /// SnackBar 统一样式：默认的 fixed 贴底黑条会压住悬浮底栏，改为浮动式
-  /// 钉在底栏上方（底栏高 + 底边距 + 12 间隙），左右与底栏对齐、圆角
-  /// 与整体卡片风格统一，保证任何页面弹出的提示都不遮挡底栏。
+  /// 钉在底栏上方（底栏高 + 底边距 + 12 间隙），左右留出与底栏同级的
+  /// 安全边距、圆角与整体卡片风格统一，保证任何页面弹出的提示都不遮挡底栏。
   static const snackBarTheme = SnackBarThemeData(
     behavior: SnackBarBehavior.floating,
     insetPadding: EdgeInsets.fromLTRB(

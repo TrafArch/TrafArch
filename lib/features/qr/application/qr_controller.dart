@@ -1,21 +1,11 @@
 import 'dart:convert';
 
 import '../../../protocols/transit/qr/jt_t1179_qr_parser.dart';
-import '../../../platform/qr/gms_qr_scanner.dart';
 import '../../../shared/application/owned_notifier.dart';
 
 class QrController extends OwnedNotifier {
   QrController({required this.log});
   final void Function(String) log;
-  bool gmsAvailable = false;
-  Future<void> detect({required bool warmUp}) async {
-    final available = await isGmsQrScanAvailable();
-    if (disposed) return;
-    gmsAvailable = available;
-    notifyListeners();
-    if (available && warmUp) warmUpGmsQrScanner();
-  }
-
   JtT1179QrData? _qrData;
 
   /// 最近一次解析成功的 JT/T 1179 二维码数据；解析失败或清除后为 null。

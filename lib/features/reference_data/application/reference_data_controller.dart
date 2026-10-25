@@ -1,13 +1,18 @@
 import 'package:flutter/services.dart';
 
+import '../../updates/update_service.dart';
+import '../data/reference_updates.dart';
 import '../data/tunion_knowledge_base.dart';
 import '../data/tunion_bus_location.dart';
 import '../domain/station_codes.dart';
 import '../../../shared/application/owned_notifier.dart';
 
 class ReferenceDataController extends OwnedNotifier {
-  ReferenceDataController(this.bundle);
+  ReferenceDataController(this.bundle) : _updates = ReferenceUpdates(bundle);
   final AssetBundle bundle;
+  final ReferenceUpdates _updates;
+  final List<KnowledgeBase> _retired = [];
+  bool _installing = false;
   KnowledgeBase? _kb;
   KnowledgeBase? get knowledge => _kb;
   String? error;
@@ -15,7 +20,30 @@ class ReferenceDataController extends OwnedNotifier {
   Future<void> initialize() => _loading ??= _load();
   Future<void> _load() async {
     try {
-      final loaded = await KnowledgeBase.load(bundle);
+      try {
+        await _updates.restore();
+      } catch (_) {
+        // Storage unavailable: built-in assets remain usable.
+      }
+      var loaded = await KnowledgeBase.load(
+        _updates.active.isEmpty
+            ? bundle
+            : await _updates.bundleFor(_updates.active),
+      );
+      final failed = _updates.active.keys
+          .where(loaded.loadIssues.containsKey)
+          .toList();
+      if (failed.isNotEmpty) {
+        loaded.close();
+        for (final protocol in failed) {
+          _updates.active.remove(protocol);
+        }
+        loaded = await KnowledgeBase.load(
+          _updates.active.isEmpty
+              ? bundle
+              : await _updates.bundleFor(_updates.active),
+        );
+      }
       if (disposed) {
         loaded.close();
         return;
@@ -27,11 +55,54 @@ class ReferenceDataController extends OwnedNotifier {
     notifyListeners();
   }
 
+  /// Explicit opt-in only. Concurrent installs are rejected, never interleaved.
+  Future<void> installUpdate(
+    String protocol,
+    ReferenceUpdate update, {
+    UpdateFetch fetch = fetchUpdate,
+  }) async {
+    if (!['TU', 'CU'].contains(protocol)) throw ArgumentError.value(protocol);
+    if (disposed || _installing) {
+      throw StateError('Reference controller unavailable');
+    }
+    _installing = true;
+    KnowledgeBase? candidate;
+    try {
+      await initialize();
+      final bytes = await fetch(update.url, update.spec['bytes'] as int);
+      if (disposed) throw StateError('Reference controller disposed');
+      final overlay = await _updates.stage(protocol, update, bytes);
+      candidate = await KnowledgeBase.load(overlay);
+      if (candidate.loadIssues.containsKey(protocol) ||
+          (_kb?.packageHashes.keys.any(candidate.loadIssues.containsKey) ??
+              false)) {
+        throw FormatException(
+          'Reference candidate failed: ${candidate.loadIssues}',
+        );
+      }
+      if (disposed) throw StateError('Reference controller disposed');
+      await _updates.activate(protocol, update);
+      if (disposed) throw StateError('Reference controller disposed');
+      if (_kb != null) _retired.add(_kb!);
+      _kb = candidate;
+      candidate = null;
+      error = null;
+      notifyListeners();
+    } finally {
+      candidate?.close();
+      _installing = false;
+    }
+  }
+
   String? cuCityNameOf(String? code) =>
       code == null ? null : _kb?.cuCities?.lookup(code)?.name;
   @override
   void dispose() {
     _kb?.close();
+    for (final old in _retired) {
+      old.close();
+    }
+    _retired.clear();
     super.dispose();
   }
 
@@ -114,6 +185,7 @@ class ReferenceDataController extends OwnedNotifier {
     if (field == null || field.isEmpty) {
       return StationMatch.unmatched;
     }
+    if (appType != 0x01) return StationMatch.unmatched;
     final city = _lookupCityCode(cityCode);
     final lookup = kb.tuLookup;
     if (lookup != null) {

@@ -1,5 +1,8 @@
 import 'dart:convert';
 
+import 'package:transit_card_analyzer/features/scan/domain/card_read_outcome.dart';
+import 'package:transit_card_analyzer/features/scan/domain/scan_presentation.dart';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
 import 'package:transit_card_analyzer/features/reference_data/domain/city_union_knowledge_base.dart';
@@ -43,6 +46,77 @@ void main() {
     });
   });
 
+  group('实际发行标识识别', () {
+    final table = CityUnionCardTable.fromJson(jsonDecode(_catalogJson));
+
+    test('同城市不同发行标识不按城市猜名', () {
+      expect(
+        table.resolveCard(cityCode: '3500', rawHex: _raw('544B3500'))!.cardName,
+        '榕城通',
+      );
+      final unknown = table.resolveCard(
+        cityCode: '3500',
+        rawHex: _raw('12343500'),
+      )!;
+      expect(unknown.city, '福州');
+      expect(unknown.province, '福建');
+      expect(unknown.cardName, isNull);
+      expect(unknown.isCardNameSupported, isFalse);
+      expect(
+        table.resolveCard(cityCode: '2000', rawHex: _raw('12342000'))!.cardName,
+        isNull,
+      );
+    });
+
+    test('完整八位标识保留前导零与 A-F，不依赖城市目录', () {
+      expect(table.resolveCard(rawHex: _raw('00012230'))!.cardName, '淮安交通卡');
+      final hex = table.resolveCard(rawHex: _raw('00abcdef'))!;
+      expect(hex.cardName, '十六进制测试卡');
+      expect(hex.city, isEmpty);
+      expect(table.resolveCard(rawHex: _raw('544b3500'))!.cardName, '榕城通');
+    });
+
+    test('上海覆盖要求命中发行表、30 字节且索引28高半字节4', () {
+      for (final marker in [0x40, 0x4f]) {
+        expect(
+          table.resolveCard(rawHex: _raw('86982000', marker: marker))!.cardName,
+          '上海都市旅游卡',
+        );
+      }
+      expect(
+        table
+            .resolveCard(rawHex: _raw('86982000', length: 29, marker: 0x40))!
+            .cardName,
+        '上海公共交通卡',
+      );
+      expect(
+        table.resolveCard(rawHex: _raw('86982000', marker: 0x50))!.cardName,
+        '上海公共交通卡',
+      );
+      expect(table.resolveCard(rawHex: _raw('12342000', marker: 0x40)), isNull);
+    });
+
+    test('未知、缺失、畸形原始数据不确认名称', () {
+      for (final raw in [
+        null,
+        '',
+        '544B',
+        '544B350',
+        '544B35000',
+        '544B3500GG',
+        ' 544B3500',
+        '544B3500\n',
+        _raw('FFFFFFFF'),
+      ]) {
+        expect(table.resolveCard(rawHex: raw), isNull);
+        expect(
+          table.resolveCard(cityCode: '3500', rawHex: raw)!.cardName,
+          isNull,
+        );
+      }
+    });
+  });
+
   group('CardIdentificationService 城市一卡通识别', () {
     final kb = KnowledgeBase.fromJsonStrings(cityUnionCatalog: _catalogJson);
 
@@ -57,6 +131,26 @@ void main() {
         CardIdentificationSources.cardCatalog,
       );
       expect(identified.cardNumber, 'AABBCCDD00112233');
+    });
+
+    test('扫描展示与归档使用相同实际名称，不提升候选名称', () {
+      for (final issuer in ['544B3500', '12343500', '00012230']) {
+        final card = _cityUnionCard('3500', rawHex: _raw(issuer));
+        final scan = ScanPresentation(TransitReadOutcome(card), kb);
+        final identified = CardIdentificationService(kb).identify(card)!;
+        expect(scan.cityUnionCard!.cardName, identified.identity.officialName);
+      }
+    });
+
+    test('名称升级不改变旧发行代码与序列号指纹，无城市时转 null', () {
+      final card = _cityUnionCard('9999', rawHex: _raw('00012230'));
+      final identified = CardIdentificationService(kb).identify(card)!;
+      final before = CardIdentificationService(KnowledgeBase.empty())
+          .identify(card)!;
+      expect(identified.identity.officialName, '淮安交通卡');
+      expect(identified.identity.cityName, isNull);
+      expect(identified.fingerprint, before.fingerprint);
+      expect(identified.fingerprint, 'city_union:0012:AABBCCDD00112233');
     });
 
     test('城市有记录但无卡名：仅城市，来源为城市代码', () {
@@ -83,7 +177,7 @@ void main() {
   });
 }
 
-ParsedCard _cityUnionCard(String cityCode) => ParsedCard(
+ParsedCard _cityUnionCard(String cityCode, {String? rawHex}) => ParsedCard(
   parserId: CardParserIds.cityUnion,
   parserName: '城市一卡通',
   info: const TUnionCardInfo(),
@@ -94,13 +188,35 @@ ParsedCard _cityUnionCard(String cityCode) => ParsedCard(
       cityCode: cityCode,
       applicationSerialNumber: 'AABBCCDD00112233',
       fields: const [],
-      rawHex: '',
+      rawHex: rawHex ?? _raw('544B$cityCode'),
     ),
   ],
 );
 
+String _raw(String issuer, {int length = 30, int marker = 0}) {
+  final bytes = List.filled(length, '00');
+  for (var i = 0; i < 4; i++) {
+    bytes[i] = issuer.substring(i * 2, i * 2 + 2);
+  }
+  const serial = 'AABBCCDD00112233';
+  for (var i = 0; i < 8 && i + 12 < length; i++) {
+    bytes[i + 12] = serial.substring(i * 2, i * 2 + 2);
+  }
+  if (length > 28) bytes[28] = marker.toRadixString(16).padLeft(2, '0');
+  return bytes.join();
+}
+
 const _catalogJson = '''
 {
+  "issuerNames": [
+    {"issuer_code":"544B3500","name_zh_cn":"榕城通","name_en":"Green Payment Card"},
+    {"issuer_code":"86982000","name_zh_cn":"上海公共交通卡"},
+    {"issuer_code":"00012230","name_zh_cn":"淮安交通卡"},
+    {"issuer_code":"00ABCDEF","name_zh_cn":"十六进制测试卡"}
+  ],
+  "nameOverrides": [
+    {"rule_id":"shanghai_city_tour","issuer_code":"86982000","requires_map_match":1,"min_raw_length":30,"byte_index":28,"high_nibble":4,"name_zh_cn":"上海都市旅游卡"}
+  ],
   "entries": [
     { "postalPrefix": "2000", "cuCityProjectCode": "2000", "city": "上海", "province": "上海", "type": "city", "cardName": "上海公共交通卡（紫色 CU 版）", "cardNameStatus": "source_supported", "codeStatus": "wiki_listed_code" },
     { "postalPrefix": "3500", "city": "福州", "province": "福建", "type": "city", "cardName": "榕城通", "cardNameStatus": "candidate_name", "codeStatus": "postal_prefix_reference_only" },

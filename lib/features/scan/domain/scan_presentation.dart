@@ -67,8 +67,10 @@ class ScanPresentation {
     return null;
   }
 
-  CityUnionCardInfo? get cityUnionCard =>
-      knowledge.cityUnionCards.lookup(cityUnionPublicInfo?.cityCode);
+  CityUnionCardInfo? get cityUnionCard => knowledge.cityUnionCards.resolveCard(
+    cityCode: cityUnionPublicInfo?.cityCode,
+    rawHex: cityUnionPublicInfo?.rawHex,
+  );
   Currency get cardCurrency =>
       analysis?.currency ??
       Currency.fromCode(localReadResult?.info.currencyCode);
@@ -93,7 +95,6 @@ class ScanPresentation {
   }
 
   TransitRecord? _deriveRail() {
-    if (cycleProcessTrips.any((r) => r.isCityRail)) return null;
     TUnionProcessRecord? whole;
     for (final r in transitProcessRecords) {
       if (r.sfi != 0x1A) continue;
@@ -106,7 +107,6 @@ class ScanPresentation {
   }
 
   BusTransitRecord? _deriveBus() {
-    if (cycleProcessTrips.any((r) => r.isBus)) return null;
     for (final r in transitProcessRecords) {
       if (r.sfi == 0x1A && r.recordNumber == 2) {
         return r.isBlank ? null : r.busTransit;

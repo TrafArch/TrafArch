@@ -179,16 +179,15 @@ belong to the parent Dart integration.
 | Channel | Methods | Preserved results |
 |---|---|---|
 | `transit_card_analyzer/qr_image` | `pickImage` | Cached absolute image path; null on user cancellation |
-| `transit_card_analyzer/gms_scan` | `isAvailable`, `warmUp`, `scan` | bool; null; raw QR Uint8List or null |
 | `transit_card_analyzer/export` | `saveToDownloads` with `fileName`, `content` | `Download/<actual name>` on API 29+; absolute path on older Android |
 
 Permission request codes remain storage **1001**, image picker **1002**. API 29+
 uses MediaStore Downloads; older supported Android requests the existing
-`WRITE_EXTERNAL_STORAGE` permission. Photo picker/GET_CONTENT fallback, QR-only GMS
-scanner with auto-zoom, module warm-up and rawBytes/ISO-8859-1 fallback are retained.
-All existing cancellation/failure codes/messages remain at these boundaries:
+`WRITE_EXTERNAL_STORAGE` permission. Photo picker/GET_CONTENT fallback is retained.
+Camera scanning uses the in-app scanner; the Google Code Scanner channel and module
+warm-up have been removed.
+Cancellation/failure codes/messages at these boundaries are:
 `PICK_IN_PROGRESS`, `PICKER_UNAVAILABLE`, `IMAGE_READ_FAILED`, `PICK_CANCELLED`,
-`GMS_UNAVAILABLE`, `SCAN_IN_PROGRESS`, `SCAN_FAILED`, `SCAN_CANCELLED`,
 `BAD_ARGUMENT`, `PERMISSION_DENIED`, `EXPORT_FAILED`, `EXPORT_CANCELLED`.
 
 `EXPORT_IN_PROGRESS` / `导出正在等待存储权限` is additive: a second permission-waiting
@@ -203,4 +202,4 @@ may finish after cancellation; cancellation is not a rollback of a completed wri
 This contract describes source implementation and required Dart integration. No
 unit tests, Gradle, Kotlin compilation, APK builds, emulator or device calls were
 run. Source lifecycle review and a syntax-only parse do not establish driver abort
-latency, real-card behavior, GMS availability or Android build compatibility.
+latency, real-card behavior or Android build compatibility.

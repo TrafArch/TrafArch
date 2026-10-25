@@ -1,5 +1,5 @@
 {
-  "baseline_sha256": "04a76d26b32e5386d2dba7af745c54df3bb4d9effd27fa086df839a440e55dba",
+  "baseline_sha256": "9f5d16b0e86ca026b6890f16a8fa2c57d853d2250170aa5f8ef51f97b713a904",
   "format_version": 1,
   "normalization": {
     "conflicts": [
@@ -48,6 +48,44 @@
         "id": "prefix_cardName:31050608",
         "resolution": "configured_decision",
         "winner": "tu_database/issuer_city_codes/274"
+      },
+      {
+        "candidates": [
+          {
+            "channel": "tu_city_issuer",
+            "priority": 200,
+            "ref": "tu_database/issuer_city_codes/117",
+            "value": {
+              "code": "5840",
+              "name": "深圳",
+              "province": null
+            }
+          },
+          {
+            "channel": "tu_city_region",
+            "priority": 300,
+            "ref": "tu_database/regions/40",
+            "value": {
+              "code": "5840",
+              "name": "深圳",
+              "province": "广东"
+            }
+          },
+          {
+            "channel": "tu_city_json",
+            "priority": 100,
+            "ref": "tu_prefixes/entries/121",
+            "value": {
+              "code": "5840",
+              "name": "深圳",
+              "province": null
+            }
+          }
+        ],
+        "candidates_sha256": "a8c3c39c83156917722f4ff97db5bdd45182684d60c9c7f3f3b2d84b13d2235d",
+        "id": "city:5840",
+        "resolution": "configured_source_priority",
+        "winner": "tu_database/regions/40"
       },
       {
         "candidates": [
@@ -61774,6 +61812,16 @@
             }
           },
           {
+            "channel": "tu_city_region",
+            "priority": 300,
+            "ref": "tu_database/regions/40",
+            "value": {
+              "code": "5840",
+              "name": "深圳",
+              "province": "广东"
+            }
+          },
+          {
             "channel": "tu_city_json",
             "priority": 100,
             "ref": "tu_prefixes/entries/121",
@@ -61786,7 +61834,7 @@
         ],
         "key": "5840",
         "scope": "city",
-        "winner": "tu_database/issuer_city_codes/117"
+        "winner": "tu_database/regions/40"
       },
       {
         "candidates": [
@@ -81447,13 +81495,18 @@
   },
   "packages": {
     "CU": {
-      "bytes": 5029888,
-      "content_version": "b701f32bd839051341ad5d7610c5ff99fc93488768f534e606ebfe02026ac8b7",
+      "bytes": 5099520,
+      "content_version": "c0d8eb2c6db519cb0c0a0836794dd092a3019fe67609c84f3da333dd39039437",
       "file": "TrafArch_Database_CU.sqlite",
-      "sha256": "7927b7d87149f0203ce65e6824fd5ac1a32a9ff7079b88fa38b0fa405320a80f",
+      "sha256": "accae2741cc8ddc5e518c14096be2131234da4c24a28ef0b0d58daf950c0e6d0",
       "tables": {
         "bus_routes": 13852,
+        "cu_card_names": 36,
+        "cu_card_number_rules": 17,
+        "cu_name_metadata": 10,
+        "cu_name_overrides": 1,
         "cu_prefix_dictionary": 1122,
+        "cu_recognition_steps": 7,
         "cu_terminal_mappings": 4902,
         "cu_terminal_rules": 13,
         "metadata": 26,
@@ -81477,15 +81530,15 @@
       }
     },
     "TU": {
-      "bytes": 5652480,
-      "content_version": "b0c5f2fb822dc861c1092eb96613d52ef05a964393b3aac23c1673a017b3a746",
+      "bytes": 5996544,
+      "content_version": "40bb29d355224c0ad4aeb7e3b81fa8fac5b2e26ca286176b50ad08428d3d2ca5",
       "file": "TrafArch_Database_TU.sqlite",
-      "sha256": "2523ade2313c8f562579116b0d488d3c66bb34a37ddfee34f9cf8f8c2c7dd3bb",
+      "sha256": "b52b8b785c6e07aed4782149c8f65ea9f07fd6592a1bea1ef4ba770bdebe2c5e",
       "tables": {
         "card_prefixes": 429,
         "issuer_city_codes": 347,
         "protocol_region_codes": 3224,
-        "record_provenance": 7480,
+        "record_provenance": 7811,
         "reference_documents": 6,
         "reference_package": 4,
         "region_10_transport_summary": 4,
@@ -81522,13 +81575,14 @@
         "region_3_transport_summary": 4,
         "region_40_transport_summary": 4,
         "region_41_transport_summary": 4,
+        "region_42_transport_summary": 4,
         "region_4_transport_summary": 4,
         "region_5_transport_summary": 4,
         "region_6_transport_summary": 4,
         "region_7_transport_summary": 4,
         "region_8_transport_summary": 4,
         "region_9_transport_summary": 4,
-        "region_aliases": 45,
+        "region_aliases": 46,
         "region_code_info": 40,
         "region_上海_2900": 1024,
         "region_东莞_6020": 15,
@@ -81558,9 +81612,10 @@
         "region_沈阳_2210": 136,
         "region_洛阳_4930": 19,
         "region_济南_4510": 48,
+        "region_深圳_5840": 326,
         "region_温州_3330": 41,
         "region_滁州_3750": 14,
-        "region_福州_3910": 116,
+        "region_福州_3910": 121,
         "region_绍兴_3370": 68,
         "region_芜湖_3620": 36,
         "region_苏州_3050": 277,
@@ -81570,36 +81625,36 @@
         "region_金华_3380": 27,
         "region_长沙_5510": 208,
         "region_青岛_4520": 179,
-        "regions": 40,
-        "source_metadata": 29,
-        "source_regions": 41,
-        "supplemental_sources": 1
+        "regions": 41,
+        "source_metadata": 44,
+        "source_regions": 42,
+        "supplemental_sources": 2
       }
     }
   },
-  "policy_sha256": "c901855c6b452e8cc2459d1c15f86b3db3a001c301d72501557e88d8e12b0c45",
+  "policy_sha256": "7fb85b04eb0f2c4a4937003862a3f3fe7347cb5385cdf49fe1338e9e9a928d14",
   "sources": [
     {
-      "bytes": 5394432,
-      "content_version": "original-20261020",
-      "file": "sources/original-20261020/TrafArch_Database_TU.sqlite",
+      "bytes": 5656576,
+      "content_version": "tu-shenzhen-compat-20261025",
+      "file": "sources/tu-shenzhen-compat-20261025/TrafArch_Database_TU.sqlite",
       "id": "tu_database",
       "kind": "sqlite",
-      "origin": "Original project asset assets/data/TrafArch_Database_TU.sqlite frozen before package build; historical attribution and raw source metadata retained inside snapshot.",
+      "origin": "Shenzhen compatibility revision based on TU sha256=edeb62fe24fb26e49719c8db19e4f8e82f6a4d31c536750cf0eed8ef76e67fbc; input tu-shenzhen-5840.sqlite sha256=2bea9a453673e5a32615abc561f424722539878721860f7046989d8c5af5852e; 326 rows preserved verbatim (295 station names, 31 prefix/operator records, 9 unknown transport types). TripReader-1.7.17-cn C0597u0.java:592-596: TU city=5840; POS must be 16 HEX characters and POS.substring(0,8)=00000002; lookup key=5180+POS.substring(8); longest matching prefix length>=5. M0.y.b is a local terminal/route compatibility dictionary belonging to 5180, not native TU station codes; input source_region_code=5840 is preserved verbatim. No transport type or station name is inferred.",
       "priority": 200,
       "protocol": "TU",
-      "sha256": "e2251edfa140dc05e8268f99408101d07c1658bbe38e8d54805fa56c93a1cbe9"
+      "sha256": "a00bf971219d40e56502413fc86f1104f3ff077837a2e218a2f14c72719093be"
     },
     {
-      "bytes": 5001216,
-      "content_version": "original-20261020",
-      "file": "sources/original-20261020/TrafArch_Database_CU.sqlite",
+      "bytes": 5062656,
+      "content_version": "cu-card-names-zh-cn-20261025",
+      "file": "sources/cu-card-names-zh-cn-20261025/TrafArch_Database_CU.sqlite",
       "id": "cu_database",
       "kind": "sqlite",
-      "origin": "Original project asset assets/data/TrafArch_Database_CU.sqlite frozen before package build; historical attribution and raw source metadata retained inside snapshot.",
+      "origin": "zh-CN-only CU naming projection of cu-card-names-20261025, sha256=ac92674f6a43e50a9983e6a2b21547927560e36816bbe6019720e252dc4400bf; 36 names and 1 override retained verbatim with provenance; other business tables unchanged. Previous frozen snapshot retained for audit.",
       "priority": 200,
       "protocol": "CU",
-      "sha256": "66579e2c1aa4a96105ed92679d22d3517f3583eafa1dfac1f646309291ef468d"
+      "sha256": "27595f5ac48a07be110f0f4954b7b428408957dbc8381b025ae2c69d27a761d9"
     },
     {
       "bytes": 45772,
@@ -81659,7 +81714,7 @@
     {
       "bytes": 20,
       "content_version": "1",
-      "file": "overrides/card_prefixes.json",
+      "file": "sources/user-tu-afdaca5f8ff3-source-v3/card_prefixes.json",
       "id": "tu_project_prefixes",
       "kind": "json",
       "origin": "Project-maintained explicit supplements; empty initial revision.",
@@ -81671,7 +81726,7 @@
     {
       "bytes": 495518,
       "content_version": "verified-20261021",
-      "file": "sources/tu-lookup-20261021.json",
+      "file": "sources/user-tu-afdaca5f8ff3-source-v3/tu-lookup-20261021.json",
       "id": "tu_lookup",
       "kind": "json",
       "origin": "Original TripReader JADX literal maps, independently compared by field and index with reference-data.sqlite. Reproduce using tools.reference_data.extract_tu_lookup; 4014 aliases, 270 missing line-only prefixes and 30 dated rail name keys. No Java/network runtime dependency.",
@@ -81681,7 +81736,7 @@
       "sha256": "a797c8be381808106894fbb59d3e767acb3b05400845505c2fa8865e3ebb6245"
     }
   ],
-  "sqlite_version": "3.50.4",
-  "tool_sha256": "9090c42aee9fa5dea1df10e40509dbd6201a56ddb0608e50b612cd7082d9ba5b",
+  "sqlite_version": "3.53.4",
+  "tool_sha256": "5cbe962a2227602fbc3b668c885f4bb00edb9219dcc5358c637a14c22dcd0302",
   "tool_version": "1.0.0"
 }

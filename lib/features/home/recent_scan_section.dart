@@ -2,20 +2,18 @@ import 'package:flutter/material.dart';
 
 import 'presentation/recent_result_selection.dart';
 import 'presentation/transit_summary_panel.dart';
-import 'presentation/qr_summary_panel.dart';
 import 'presentation/bank_summary_panel.dart';
 
 import '../../app/app_dependencies.dart';
 
-/// 「最近扫描」展示类型：NFC 卡片 / 乘车码二维码 / 银行卡只读分析。
+/// 「最近扫描」展示类型：NFC 卡片 / 银行卡只读分析。
 
 /// 首页「最近扫描」模块（版式：模块标题 → 卡片名称 → 分隔线 → 字段列表）。
 ///
 /// - 卡片视图按最新一次读取自动切换类型：交通联合（TU）与城市一卡通
 ///   （CU）按解析结果展示对应字段；交通应用未命中时自动展示 EMV / PBOC
 ///   银行卡只读分析结果，无需手动切换；
-/// - 乘车码（JT/T 1179）保持原有逻辑：获取成功后模块内嵌展示二维码字段，
-///   卡片与二维码等多类数据并存时由顶部分段按钮手动切换（不跳转子页面）；
+/// - 卡片与银行卡数据并存时由顶部分段按钮手动切换；
 /// - 无任何数据时不占用页面空间（返回空尺寸）。数据获取入口在首页
 ///   上方模块，本模块只负责展示，不发起任何读取 / 扫描操作。
 class RecentScanSection extends StatefulWidget {
@@ -40,7 +38,6 @@ class _RecentScanSectionState extends State<RecentScanSection> {
     final app = widget.app;
     _selection = RecentResultSelection(
       card: app.lastResult,
-      qr: app.qrData,
       bank: app.lastBankCardResult,
     );
     app.addListener(_onAppChanged);
@@ -64,11 +61,7 @@ class _RecentScanSectionState extends State<RecentScanSection> {
   void _onAppChanged() {
     if (!mounted) return;
     final app = widget.app;
-    _selection.observe(
-      card: app.lastResult,
-      qr: app.qrData,
-      bank: app.lastBankCardResult,
-    );
+    _selection.observe(card: app.lastResult, bank: app.lastBankCardResult);
     setState(() {});
   }
 
@@ -83,13 +76,11 @@ class _RecentScanSectionState extends State<RecentScanSection> {
         app.parsedCard != null ||
         app.felicaResult != null ||
         (!app.parsing && app.lastResult != null && bankResult == null);
-    final hasQr = app.qrData != null;
     final hasBank = bankResult != null;
-    if (!hasCard && !hasQr && !hasBank) return const SizedBox.shrink();
+    if (!hasCard && !hasBank) return const SizedBox.shrink();
 
     final available = <RecentResultKind>[
       if (hasCard) RecentResultKind.card,
-      if (hasQr) RecentResultKind.qr,
       if (hasBank) RecentResultKind.bank,
     ];
     final kind = _selection.resolve(available);
@@ -125,11 +116,6 @@ class _RecentScanSectionState extends State<RecentScanSection> {
                       value: RecentResultKind.card,
                       label: Text('NFC 卡片'),
                     ),
-                  if (hasQr)
-                    const ButtonSegment(
-                      value: RecentResultKind.qr,
-                      label: Text('乘车码二维码'),
-                    ),
                   if (hasBank)
                     const ButtonSegment(
                       value: RecentResultKind.bank,
@@ -152,7 +138,6 @@ class _RecentScanSectionState extends State<RecentScanSection> {
             ],
             switch (kind) {
               RecentResultKind.card => TransitSummaryPanel(app: app),
-              RecentResultKind.qr => QrSummaryPanel(app: app),
               RecentResultKind.bank => BankSummaryPanel(bank: bankResult!),
             },
           ],

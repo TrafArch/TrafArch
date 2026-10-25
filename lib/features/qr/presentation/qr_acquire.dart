@@ -5,11 +5,9 @@ import '../application/qr_acquisition.dart';
 import 'qr_scan_page.dart';
 
 /// Presentation coordinator: routes, parse-boundary handoff and notices.
-/// System policy and image decoder cleanup belong to QrAcquisition.
+/// Acquisition and image decoder cleanup belong to QrAcquisition.
 Future<void> scanQrAndParse(BuildContext context, AppDependencies app) async {
   final result = await const QrAcquisition().scan(
-    useSystemScanner: app.useGmsScanner,
-    systemAvailable: app.gmsAvailable,
     openCamera: () async {
       if (!context.mounted) return null;
       return Navigator.of(context).push<List<int>>(
@@ -42,7 +40,7 @@ void _present(
     case AcquiredQrPayload():
       message = app.parseQrBytes(result.bytes)
           ? '二维码解析成功'
-          : '二维码解析失败，请查看首页错误提示';
+          : '二维码解析失败，请查看本页读取信息';
   }
   ScaffoldMessenger.maybeOf(context)
       ?.showSnackBar(SnackBar(content: Text(message)));

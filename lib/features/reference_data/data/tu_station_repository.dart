@@ -124,13 +124,15 @@ class TuStationRepository implements TuLookupDataSource {
       'M0.E.a' => '3010',
       'M0.b.a' => '6510',
       'M0.C.b' => '3370',
+      'M0.y.b' => '5840',
       _ => null,
     };
     if (owner == null) return const [];
-    return findByKey(
-      owner,
-      terminal,
-    ).where((r) => r.sourceField == sourceField).map(entryForRecord).toList();
+    return findStations(
+      regionCode: owner,
+      sourceKey: terminal,
+      sourceField: sourceField,
+    ).map(entryForRecord).toList();
   }
 
   @override
@@ -772,7 +774,7 @@ station_id''';
       regionCode: region.regionCode,
       regionName: region.regionName,
       stationId: _asIntCell(row, 'station_id'),
-      rawTransportType: transport.trim(),
+      rawTransportType: row['transport_type'] == null ? null : transport.trim(),
       transportType: _kindOf(transport),
       lineName: _nullable(_cell(row, 'line_name')),
       stationName: _nullable(_cell(row, 'station_name')),

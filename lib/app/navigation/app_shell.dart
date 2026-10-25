@@ -27,8 +27,8 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     // 参考 flutter_floating_bottom_bar：底栏悬浮于内容之上，滚动时自动隐藏/
     // 回显（弹簧动画），底栏隐藏时提供“回到顶部”快捷按钮；
-    // 底栏本体参考 google_nav_bar（Telegram 式展开）：
-    // 未选中仅显示图标，选中项胶囊高亮 + 文字从图标旁展开/收起。
+    // 底栏本体为自绘的胶囊栏：未选中仅图标，选中项显示图标 + 文字，
+    // 点按后无过渡动画。
     //
     // PopScope：适配 Android 预测式返回（Predictive Back）并修正 Tab 返回逻辑。
     // canPop 必须提前确定（预测式返回在手势开始时就播放预览，无法事后拦截）：
@@ -44,8 +44,8 @@ class _AppShellState extends State<AppShell> {
       },
       child: Scaffold(
         body: BottomBar(
-          layout: BottomBarLayout.adaptive(
-            maxWidth: 520,
+          layout: BottomBarLayout(
+            width: UiConstants.floatingNavBarWidth,
             offset: UiConstants.floatingNavBarInset,
             borderRadius: BorderRadius.circular(
               UiConstants.floatingNavBarRadius,

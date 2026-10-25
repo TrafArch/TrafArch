@@ -1,4 +1,6 @@
 import '../domain/beijing_bus_decoder.dart';
+import '../domain/tu_lookup_service.dart';
+import 'tu_region_live_source.dart';
 import '../domain/station_codes.dart';
 import '../domain/taiyuan_bus_decoder.dart';
 import '../domain/tunion_city_bus_decoder.dart';
@@ -28,16 +30,36 @@ TunionBusLocation resolveTunionBusLocation({
   required String? field,
   TunionBusDecodeContext context = const TunionBusDecodeContext(),
 }) {
+  StationMatch? compatibility;
+  final live = stations.live;
+  if (live is TuRegionLiveSource) {
+    final special = TuLookupService(live.repository)
+        .resolveShenzhenTerminal(city: cityCode, terminal: context.terminalId);
+    if (!special.isUnmatched) {
+      // Operator-only prefixes must not suppress Shenzhen's dated route decoding.
+      if (special.confidence != StationMatchConfidence.exact ||
+          (special.stationName ?? '').isNotEmpty) {
+        return TunionBusLocation(
+          lineLabel: special.lineName,
+          stationLabel: special.stationName,
+          match: special,
+        );
+      }
+      compatibility = special;
+    }
+  }
   if (cityCode == null ||
       field == null ||
       !RegExp(r'^[0-9A-Fa-f]{14}$').hasMatch(field)) {
     return TunionBusLocation.unknown;
   }
-  final exact = stations.matchBusLineStationField(
-    field: field,
-    cityCode: cityCode,
-  );
-  final match = exact.entry != null
+  final exact =
+      compatibility ??
+      stations.matchBusLineStationField(field: field, cityCode: cityCode);
+  if (!exact.isUnmatched && exact.entry == null) {
+    return TunionBusLocation(match: exact);
+  }
+  final match = !exact.isUnmatched
       ? exact
       : _sourceBusPrefix(stations, cityCode, field) ?? exact;
   final fallbackAllowed = context.routeFallbackAllowed != false;
@@ -65,8 +87,12 @@ TunionBusLocation resolveTunionBusLocation({
         )
       : null;
   return TunionBusLocation(
-    lineLabel: match.lineName ?? line,
-    stationLabel: match.stationName ?? decoded?.stationLabel,
+    lineLabel: compatibility != null
+        ? line ?? match.lineName
+        : match.lineName ?? line,
+    stationLabel: compatibility != null
+        ? decoded?.stationLabel
+        : match.stationName ?? decoded?.stationLabel,
     match: match,
   );
 }

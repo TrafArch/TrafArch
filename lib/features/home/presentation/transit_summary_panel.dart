@@ -67,10 +67,10 @@ class TransitSummaryPanel extends StatelessWidget {
       final number = local?.info.cardNumber ?? '';
       parsedCardNumber = number.isEmpty ? null : number;
     } else if (isCityUnion) {
-      parsedCardNumber = publicInfo?.displayApplicationSerialNumber;
+      parsedCardNumber = publicInfo?.cityCardNumber;
     } else {
       parsedCardNumber =
-          info?.displayCardNumber ?? publicInfo?.displayApplicationSerialNumber;
+          info?.displayCardNumber ?? publicInfo?.cityCardNumber;
     }
     final cardNumber = identified?.cardNumber ?? parsedCardNumber ?? '未读取到卡号';
 
@@ -159,12 +159,12 @@ class TransitSummaryPanel extends StatelessWidget {
             '城市一卡通余额',
             '${(app.cityUnionBalanceFen! / 100).toStringAsFixed(2)} 元',
           ),
-        if (publicInfo?.displayApplicationSerialNumber != null &&
-            publicInfo!.displayApplicationSerialNumber!.isNotEmpty)
+        if (publicInfo?.cityCardNumber != null &&
+            publicInfo!.cityCardNumber!.isNotEmpty)
           summaryField(
             context,
             '城市一卡通卡号',
-            publicInfo.displayApplicationSerialNumber!,
+            publicInfo.cityCardNumber!,
           ),
         summaryField(
           context,

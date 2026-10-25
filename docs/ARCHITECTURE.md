@@ -20,7 +20,7 @@ lib/
     reference_data/             发布包、用户库、查询接口、覆盖范围页面
     archive/                    档案模型、Drift、快照、统一历史查询、详情
     settings/                   设置与诊断控制器及页面
-    qr/                         扫码获取和展示
+    qr/                         独立扫码页、相机 / 相册获取、字段 / 证书 / 原始数据展示
     transit_analysis/           识别、交易解码、行程分析
     home/                       各卡族独立面板
     expert/                     各文件和原始数据面板
@@ -32,7 +32,7 @@ android/app/src/main/kotlin/com/kajolno/TrafArch/
   MainActivity.kt
   nfc/                          会话、连接、FIFO 调度、元数据
   platform/                     OnceResult
-  qr/                           GMS 扫码与图片选择
+  qr/                           图片选择
   storage/                      下载目录导出
 ```
 
@@ -76,6 +76,14 @@ Android 主线程拥有 session 和回复集合，普通 I/O 走共享单线程�
 发布包在构建时完成来源合并，运行时校验 manifest、大小、SHA256、元数据和必需列，并按内容哈希文件名安装、以只读模式打开。TU / CU 分别加载，任一失败不会阻断另一包。TU 与 CU 的城市命名空间独立，CU 受约束规则必须有对应上下文。歧义、未知、不可用分别表达。
 
 档案有自己的数据库与生命周期。采集时上下文、余额观察、原始帧、解析版本、参考包版本和逐记录来源一起存入快照；展示层的记录抑制不决定归档。`ArchiveHistory` 同时服务详情与导出，不读取当前贴卡对象来补旧档案。时间 / 币种未知显式保留，详见 `MIGRATION.md`。
+
+## CDN 更新契约
+
+`features/updates` 的 `UpdateService` 由 AppDependencies 装配，`UpdatePrompt` 在首帧后检查一次；`--dart-define=UPDATE_MANIFEST_URL=https://cdn.example.com/manifest.json` 未配置则完全不请求。当前 build 使用与 pubspec 同步的 AppInfo（2086），测试可注入 build 与获取函数。整数 build 严格大于当前值才提示，version 仅展示；下载经 url_launcher 外部浏览器，不安装、不自动下载参考库。
+
+manifest v1 必须含 `format_version: 1` 和 `app: {build: 整数, version: 字符串, notes: 字符串, download_url: HTTPS}`。可选 `references` 对象以 `TU` / `CU` 为键，每项为 `{url: HTTPS, package: {...}}`；package 原样复制离线 CLI 发布的 reference_manifest.json 对应包条目（file、sha256、bytes、content_version、tables）。HTTPS 禁止凭据、片段和所有重定向；连接超时 10 秒，总下载超时 30 秒，manifest 上限 256 KiB，单库上限 128 MiB。只请求 CDN 公共内容，无用户数据上传；CDN 仍能看到通常的网络连接信息。SHA256 校验完整性，不替代 CDN 发布端的可信性管理。
+
+显式调用 `references.installUpdate('TU' 或 'CU', manifest.references[protocol]!)` 才下载并安装单库，可注入 fetch。复用 ReferencePackage 完整校验，并检查 KnowledgeBase.load 的 loadIssues 后才激活。并发安装拒绝；成功包和每协议独立的 JSON 激活记录存入应用支持目录 trafarch_reference_updates，临时激活记录写完后 rename 替换。启动独立验证激活包，坏包回退内置；失败不切换当前 KnowledgeBase。旧 KnowledgeBase 保留至控制器 dispose，避免 ScanPresentation 引用失效；代价是会话内多次更新占用额外句柄和空间，目前不自动清理历史哈希包。reference_user.sqlite 与档案库不属于此更新接口。
 
 ## 所有权与失败
 

@@ -118,6 +118,35 @@ class TuLookupService {
     );
   }
 
+  /// Shenzhen compatibility keys remain owned by TU city 5840, but retain
+  /// their original 5180 prefix and M0.y.b provenance. Never query rail maps.
+  StationMatch resolveShenzhenTerminal({
+    required String? city,
+    required String? terminal,
+  }) {
+    final q = terminal?.toUpperCase();
+    if (city != '5840' ||
+        q == null ||
+        !RegExp(r'^00000002[0-9A-F]{8}$').hasMatch(q)) {
+      return StationMatch.unmatched;
+    }
+    final key = '5180${q.substring(8)}';
+    for (var length = key.length; length >= 5; length--) {
+      final prefix = key.substring(0, length);
+      final rows = source.localTerminalCandidates('M0.y.b', prefix);
+      if (source.queryIssue != null) return StationMatch.unavailable;
+      final candidates = rows
+          .where(
+            (row) =>
+                row.sourceField == 'M0.y.b' &&
+                (row.sourceKey ?? row.code) == prefix,
+          )
+          .toList();
+      if (candidates.isNotEmpty) return StationMatch.fromCandidates(candidates);
+    }
+    return _miss;
+  }
+
   StationMatch resolveCycle({
     required String? city,
     required String field,
@@ -138,6 +167,8 @@ class TuLookupService {
       final exact = resolveProcess(city: city, terminal: q);
       if (!exact.isUnmatched) return exact;
     }
+    final shenzhen = resolveShenzhenTerminal(city: city, terminal: q);
+    if (!shenzhen.isUnmatched) return shenzhen;
     String? special;
     if (city == '3910' || city == '7010') {
       special = '$city${pos.substring(2, 4)}${pos.substring(6, 8)}';

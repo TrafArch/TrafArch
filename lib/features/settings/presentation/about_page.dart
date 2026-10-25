@@ -1,10 +1,44 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/app_info.dart';
+import '../../updates/update_prompt.dart';
+import '../../updates/update_service.dart';
 import 'acknowledgements_page.dart';
 
-class AboutPage extends StatelessWidget {
-  const AboutPage({super.key});
+class AboutPage extends StatefulWidget {
+  const AboutPage({super.key, required this.updates, this.openUrl});
+
+  final UpdateService updates;
+  final Future<bool> Function(Uri)? openUrl;
+
+  @override
+  State<AboutPage> createState() => _AboutPageState();
+}
+
+class _AboutPageState extends State<AboutPage> {
+  bool _checking = false;
+
+  Future<void> _checkUpdates() async {
+    if (_checking || !widget.updates.isConfigured) return;
+    setState(() => _checking = true);
+    try {
+      final manifest = await widget.updates.checkNow();
+      if (!mounted || manifest == null) return;
+      setState(() => _checking = false);
+      if (manifest.isNewerThan(widget.updates.currentBuild)) {
+        await showUpdateDialog(context, manifest, openUrl: widget.openUrl);
+      } else {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('暂无更新')));
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('检查更新失败，请稍后重试')));
+    } finally {
+      if (mounted) setState(() => _checking = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,6 +74,21 @@ class AboutPage extends StatelessWidget {
               color: theme.colorScheme.outline,
             ),
           ),
+          if (widget.updates.isConfigured) ...[
+            const SizedBox(height: 16),
+            Center(
+              child: OutlinedButton.icon(
+                onPressed: _checking ? null : _checkUpdates,
+                icon: _checking
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.system_update_outlined),
+                label: Text(_checking ? '正在检查…' : '检查更新'),
+              ),
+            ),
+          ],
           const SizedBox(height: 24),
           Card(
             child: ListTile(

@@ -32,7 +32,7 @@ Runtime documents are canonical compact JSON:
 | TU | `issuers` | Existing issuer-fingerprint JSON, including metadata and `entries` |
 | TU | `terminal_rules` | Existing terminal-rule JSON, including metadata and `rules` |
 | TU | `card_meta` | Existing card-kind/currency metadata JSON |
-| CU | `card_catalog` | Existing CU card catalog with confidence/status fields and all entries |
+| CU | `card_catalog` | Existing CU catalog (all entries/status fields unchanged), plus `issuerNames` and `nameOverrides` arrays of verbatim snake_case row objects from `cu_card_names` and `cu_name_overrides` |
 
 The manifest has required top-level `format_version:1`, `tool_version`,
 `sources:[...]`, and `packages:{TU:{...},CU:{...}}`. Each package contains `file`
@@ -56,6 +56,120 @@ every build/validation. The baseline copy under `sources/` is byte-identical to
 the independent pre-refactor audit; rebuilding never regenerates that baseline.
 Do not overwrite a frozen snapshot. A later source revision gets a new directory,
 explicit source manifest changes and a reviewed baseline change.
+
+The preceding TU revision is `sources/user-tu-afdaca5f8ff3-source-v3/`, derived from
+user upload SHA256 `afdaca5f8ff314437f82f8fd0bc06fb70575409e467457e2186e281ac834fcd3`.
+All uploaded station rows are preserved. Only Fuzhou two-line source metadata,
+transport summary and provenance are corrected, along with the upload's accidental
+Chuzhou summary count (121 restored to its actual 14); stale package tables are removed
+from the new source copy and recreated by the CLI. This does not independently
+verify official station codes or operating status. The new baseline retains the
+original CU inventory. LF copies of `card_prefixes.json` and `tu-lookup-20261021.json`
+retain their existing pinned hashes without modifying CRLF checkout originals.
+The local ignored `tools/revise_uploaded_tu.py` reproduces the source revision;
+run it with the upload path before the normal build workflow in a clean checkout.
+
+The current TU source revision is `sources/tu-shenzhen-compat-20261025/`. It copies
+that preceding frozen TU database and freezes `tu-shenzhen-5840.sqlite` (SHA256
+`2bea9a453673e5a32615abc561f424722539878721860f7046989d8c5af5852e`).
+The local ignored `tools/import_shenzhen_tu_compat.py` reproduces the import from
+the pre-import `sources.json`; it refuses to overwrite an existing revision:
+
+```powershell
+python -X utf8 -m tools.import_shenzhen_tu_compat D:\iteam\TripReader-1.7.17-cn\analysis\reference-data\tu-shenzhen-5840.sqlite
+python -X utf8 -m tools.reference_data build
+python -X utf8 -m tools.reference_data validate
+```
+
+All 326 simplified-Chinese rows and raw values are preserved, including
+`source_field=M0.y.b`, `source_key=5180...`, and `source_region_code=5840`.
+There are 295 named station records and 31 prefix/operator records; nine unknown
+transport types remain NULL. These are **compatibility data, not native TU codes**.
+The reviewed rule from `C0597u0.java:592-596` applies only to TU city `5840`, a
+16-HEX POS beginning `00000002`, and longest-prefix lookup (minimum length 5)
+of `5180 + POS.substring(8)`. Region 42 identifies 深圳 / 广东 / 5840 while
+`region_aliases` explicitly retains dictionary ownership under 5180.
+Per-row provenance uses `copy_role=compatibility_copy` and
+`native_namespace=lookup_key_namespace=local_terminal_or_route`.
+`all_records` appends the provenance-joined rows; `native_records` filters
+`copy_role='native'` so compatibility entries cannot be presented as native.
+The transport summary retains the four known types; unknown counts are recorded
+separately in metadata. Global counts are recomputed from actual records (41
+regions, 7,811 dictionary records), correcting stale inherited totals without
+changing the original 40 city tables. The CU baseline is retained unchanged.
+
+Publication verification on 2026-10-25: after the user closed Navicat's database
+connection, the normal `build` and `validate` commands successfully published to
+`assets/data/`. Integrity, foreign keys and manifest provenance checks passed.
+The TU package SHA256 is
+`6632ff0aa4511eeb0d85cfe97da28203045aa2782f9d065c69eb8178ae4a517c`.
+The separate `assets/shenzhen-compat-verification/` output is not used at runtime.
+
+The preceding multilingual CU revision is `sources/cu-card-names-20261025/`. It copies the
+original frozen CU file without changing any of its 20 tables, indexes, views or
+user_version, then adds five tables. The baseline updates CU only; TU's source
+and baseline inventory remain unchanged. The frozen incoming `cu-card-names.sqlite`
+SHA256 is `82ca546ab9f16106b672bfc03641319a0cde046c406f3c11e78ec4fc7aa49ff8`.
+The ignored local importer refuses to overwrite revisions:
+
+```powershell
+python -X utf8 -m tools.import_cu_card_names D:\iteam\TripReader-1.7.17-cn\analysis\reference-data\cu-card-names.sqlite
+python -X utf8 -m tools.reference_data build
+python -X utf8 -m tools.reference_data validate
+```
+
+Reproduce the import from the pre-import `sources.json` in a separate checkout.
+`tools/` is ignored by git: retain/distribute the importer and modified
+`tools/reference_data/normalize.py` separately when handing off the data.
+
+The current CU revision is `sources/cu-card-names-zh-cn-20261025/`.
+From the preceding revision's `sources.json`, reproduce it with:
+
+```powershell
+python -X utf8 -m tools.import_cu_card_names --simplify-zh-cn
+python -X utf8 -m tools.reference_data build
+python -X utf8 -m tools.reference_data validate
+```
+
+The importer refuses to overwrite an existing revision and retains the old frozen
+multilingual snapshot. It drops only `name_zh_tw`, `name_en`, `name_ja` from the two
+naming tables, preserving all 36 Chinese names, the Shanghai rule, and provenance
+verbatim. The new baseline changes CU only. All 20 original tables and the 17
+ordinary-CU number rules remain unchanged. Current schema:
+
+* `cu_card_names` (36): `issuer_code TEXT PRIMARY KEY CHECK(length(issuer_code)=8)`,
+  `name_zh_cn`, `source_field`, `source_path`
+  (all TEXT NOT NULL), `source_line INTEGER NOT NULL`.
+* `cu_name_overrides` (1): `rule_id TEXT PRIMARY KEY`, `issuer_code TEXT NOT NULL`
+  references `cu_card_names(issuer_code)`; `requires_map_match`, `min_raw_length`,
+  `byte_index`, `high_nibble` (INTEGER NOT NULL); `name_zh_cn` and `source_path`
+  (TEXT NOT NULL), `source_line INTEGER NOT NULL`. The Shanghai override retains
+  issuer `86982000`, map-match flag 1, minimum raw length 30, byte index 28 and
+  high nibble 4. Indices are zero-based.
+* `cu_recognition_steps` (7): `step_order INTEGER PRIMARY KEY`, `stage`, `logic`,
+  `source_path` (TEXT NOT NULL), `source_line INTEGER NOT NULL`.
+* `cu_name_metadata` (10): `key TEXT PRIMARY KEY, value TEXT NOT NULL`.
+* `cu_card_number_rules` (17): `rule_id TEXT PRIMARY KEY`, nullable
+  `city_code TEXT`, `branch_scope`, `logic`, `source_path`, `source_method`
+  (TEXT NOT NULL), `source_line_start`, `source_line_end` (INTEGER NOT NULL).
+  These are source-attributed ordinary-CU switch rules from TripReader 1.7.17-cn
+  `C0304d.java:4582-4768`, method `m791g`: 16 city cases plus a NULL-city default.
+  Helper names and branch exclusions are retained explicitly; these are metadata,
+  not personal card numbers, executable runtime rules or an official CU registry.
+
+`cu_name_metadata.language_order` is now `zh-CN (source language index 1)`.
+Recognition step 6 describes the fixed Chinese projection, and step 5 uses the
+retained Chinese override label. Other source-attributed technical English,
+recognition steps and metadata are not UI translations and remain unchanged.
+The generated `card_catalog.issuerNames` / `nameOverrides` contain only
+`name_zh_cn` plus their existing identifiers, bounds and provenance.
+Normalization validates exact naming field sets (rejecting removed language
+fields), uppercase eight-hex issuer strings, uniqueness, nonempty Chinese names,
+source locations, integer bounds and override issuer references. It neither
+renames snake_case fields nor adds these names to legacy `entries`. No new runtime
+JSON document is introduced. Rules and recognition metadata remain SQLite tables.
+The shared normalizer tool hash changes both package content versions, so a CU-only
+data revision also rebuilds TU bytes; this does not imply changes to TU dictionaries.
 
 The TU prefix projection includes all **429** rows in `card_prefixes`, **428**
 JSON supplement entries and **347** `issuer_city_codes` rows. All 1,204 input

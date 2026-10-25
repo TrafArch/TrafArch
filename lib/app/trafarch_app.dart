@@ -6,6 +6,7 @@ import 'app_info.dart';
 import 'app_dependencies.dart';
 import 'theme/app_theme.dart';
 import 'navigation/app_shell.dart';
+import '../features/updates/update_prompt.dart';
 
 export 'navigation/app_shell.dart' show AppShell;
 
@@ -61,7 +62,10 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp> {
         return ValueListenableBuilder<bool>(
           valueListenable: _monetEnabled,
           // AppShell 作为 child 传入，避免莫奈开关翻转时重建整棵子树
-          child: AppShell(app: _app),
+          child: UpdatePrompt(
+            service: _app.updates,
+            child: AppShell(app: _app),
+          ),
           builder: (context, monet, child) {
             return MaterialApp(
               title: AppInfo.appName,

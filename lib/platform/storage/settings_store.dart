@@ -7,10 +7,6 @@ abstract final class SettingsKeys {
   /// 「启用运行日志」开关（'true' / 'false'；缺省视为关闭）。
   static const loggingEnabled = 'logging_enabled';
 
-  /// 「使用系统扫码（Google Play 服务）」开关（'true' / 'false'；
-  /// 缺省视为关闭，使用应用内相机扫码）。
-  static const gmsScanEnabled = 'gms_scan_enabled';
-
   /// 「读取后自动保存」开关（'true' / 'false'；缺省视为关闭）。
   static const autoSaveEnabled = 'auto_save_enabled';
 

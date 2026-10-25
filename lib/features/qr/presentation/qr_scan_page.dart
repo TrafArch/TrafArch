@@ -3,11 +3,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../domain/qr_barcode_payload.dart';
 
-/// 二维码扫描页：读取二维码内的原始二进制数据（8 bit byte 模式），
-/// 通过 [Navigator.pop] 返回 `List<int>`；返回（取消）时结果为 null。
-/// 相册导入入口位于首页获取卡片（本页仅相机扫描）。
-/// 「使用系统扫码」开关开启时本页被整体屏蔽（就当不存在），扫码统一
-/// 由 GMS 扫码界面完成（见 qr_acquire.dart）；本页仅在开关关闭时使用。
+/// 保留二进制载荷，通过 Navigator.pop 返回原始字节而非解码文本。
 class QrScanPage extends StatefulWidget {
   const QrScanPage({super.key});
 
@@ -140,7 +136,7 @@ class _ScanErrorView extends StatelessWidget {
             const SizedBox(height: 8),
             const Text(
               '请检查相机权限后重试。也可用系统相机拍下二维码后，'
-              '回到首页点击「从相册导入」进行识别',
+              '返回扫码页点击「从相册导入」进行识别',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.white54, fontSize: 12),
             ),

@@ -6,10 +6,7 @@ import 'dart:ui' as ui;
 
 import 'package:zxing2/qrcode.dart';
 
-/// 纯 Dart 二维码解码结果。
-///
-/// 用于 MLKit 不可用（无 Google Play 服务 / 无法联网 / 模型未下载）时
-/// 作为相册导入的兜底解码路径，全程无网络、无平台依赖。
+/// MLKit 无法识别或不可用时，相册导入使用的纯 Dart 本地解码结果。
 class QrDartDecode {
   const QrDartDecode(this.payload);
 

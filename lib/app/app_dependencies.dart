@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 
+import 'app_info.dart';
+import '../features/updates/update_service.dart';
 import '../features/transit_analysis/tunion_analysis_models.dart';
 import '../protocols/transit/card_parser.dart';
 import '../features/reference_data/data/tunion_knowledge_base.dart';
@@ -49,7 +51,11 @@ class AppDependencies extends OwnedNotifier {
     AppLogger? logger,
     LogExporter? logExporter,
     AppDatabase? database,
+    UpdateService? updateService,
   }) {
+    updates =
+        updateService ??
+        UpdateService(currentBuild: int.parse(AppInfo.buildNumber));
     final assets = bundle ?? rootBundle;
     _logger = logger ?? AppLogger();
     final exporter = logExporter ?? const MethodChannelLogExporter();
@@ -83,6 +89,7 @@ class AppDependencies extends OwnedNotifier {
       child.addListener(notifyListeners);
     }
   }
+  late final UpdateService updates;
   late final SettingsController settings;
   late final ReferenceDataController references;
   late final QrController qr;
@@ -98,11 +105,7 @@ class AppDependencies extends OwnedNotifier {
 
   Future<void> init() => _initializing ??= Future.wait([
     references.initialize(),
-    settings.initialize().then(
-      (_) => disposed
-          ? Future<void>.value()
-          : qr.detect(warmUp: settings.gmsScanEnabled),
-    ),
+    settings.initialize(),
   ]);
 
   Future<void> _complete(
@@ -197,12 +200,9 @@ class AppDependencies extends OwnedNotifier {
   bool get exportingLog => diagnostics.exportingLog;
   String? get logExportMessage => diagnostics.logExportMessage;
   bool get logExportFailed => diagnostics.logExportFailed;
-  bool get gmsScanEnabled => settings.gmsScanEnabled;
   bool get autoSaveEnabled => settings.autoSaveEnabled;
   bool get monetEnabled => settings.monetEnabled;
   String? get autoSaveNotice => archive.autoSaveNotice;
-  bool get gmsAvailable => qr.gmsAvailable;
-  bool get useGmsScanner => settings.gmsScanEnabled;
   List<String> get apduLog => scan.trace;
   JtT1179QrData? get qrData => qr.qrData;
   List<int>? get qrRaw => qr.qrRaw;
@@ -263,8 +263,6 @@ class AppDependencies extends OwnedNotifier {
   void clearQr() => qr.clearQr();
   Future<void> setLoggingEnabled(bool enabled) =>
       settings.setLoggingEnabled(enabled);
-  Future<void> setGmsScanEnabled(bool enabled) =>
-      settings.setGmsScanEnabled(enabled);
   Future<void> setAutoSaveEnabled(bool enabled) =>
       settings.setAutoSaveEnabled(enabled);
   Future<void> setMonetEnabled(bool enabled) =>

@@ -39,7 +39,68 @@ void main() {
       expect(kb.cities.lookup('1210')!.name, contains('石家庄'));
       expect(kb.cuCities!.lookup('1210')!.name, contains('锦州'));
       expect(kb.cuRepository!.busRouteCount, 13852);
-      expect(kb.tuStations!.stationCount, 7480);
+      expect(kb.tuStations!.stationCount, 7811);
+      expect(kb.cities.lookup('5840')!.name, '深圳');
+      final package = await ReferencePackage.open('CU', bundle: rootBundle);
+      try {
+        final document = package.document('card_catalog') as Map;
+        final names = document['issuerNames'] as List;
+        expect(names, hasLength(36));
+        final overrides = document['nameOverrides'] as List;
+        expect(overrides, hasLength(1));
+        for (final row in [...names, ...overrides].cast<Map>()) {
+          expect(row['name_zh_cn'], isNotEmpty);
+          for (final removed in ['name_zh_tw', 'name_en', 'name_ja']) {
+            expect(row.containsKey(removed), isFalse);
+          }
+        }
+        for (final table in ['cu_card_names', 'cu_name_overrides']) {
+          final columns = package.db.select('PRAGMA table_info($table)')
+              .map((row) => row['name']).toList();
+          expect(columns, contains('name_zh_cn'));
+          for (final removed in ['name_zh_tw', 'name_en', 'name_ja']) {
+            expect(columns, isNot(contains(removed)));
+          }
+        }
+        expect(
+          package.db.select(
+            "SELECT value FROM cu_name_metadata WHERE key='language_order'",
+          ).single['value'],
+          'zh-CN (source language index 1)',
+        );
+        for (final row in names.cast<Map>()) {
+          expect(
+            kb.cityUnionCards
+                .resolveCard(rawHex: '${row['issuer_code']}${'00' * 26}')
+                ?.cardName,
+            row['name_zh_cn'],
+            reason: '发行标识 ${row['issuer_code']} 必须经 KnowledgeBase.load 消费',
+          );
+        }
+        expect(
+          kb.cityUnionCards
+              .resolveCard(cityCode: '2000', rawHex: '86982000${'00' * 26}')!
+              .cardName,
+          '上海公共交通卡',
+        );
+        expect(
+          kb.cityUnionCards
+              .resolveCard(
+                cityCode: '2000',
+                rawHex: '86982000${'00' * 24}4F00',
+              )!
+              .cardName,
+          '上海都市旅游卡',
+        );
+        expect(
+          kb.cityUnionCards
+              .resolveCard(cityCode: '2000', rawHex: '12342000${'00' * 26}')!
+              .cardName,
+          isNull,
+        );
+      } finally {
+        package.close();
+      }
     } finally {
       kb.close();
     }

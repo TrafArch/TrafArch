@@ -30,6 +30,9 @@ class TUnionCardInfo {
   // GET BALANCE 动态读取
   final int? balanceFen; // 电子钱包余额（分）
 
+  /// P1=03 成功响应的数据体 HEX：透支相关原始观察，不是钱包余额。
+  final String? overdraftQueryRawHex;
+
   const TUnionCardInfo({
     this.issuerId,
     this.appTypeId,
@@ -49,6 +52,7 @@ class TUnionCardInfo {
     this.interopCardType,
     this.cardKind,
     this.balanceFen,
+    this.overdraftQueryRawHex,
   });
 
   /// 逻辑卡号，即应用序列号。
@@ -84,26 +88,28 @@ class TUnionCardInfo {
   }
 
   /// 替换余额字段（余额为动态读取，不随文件解析）。
-  TUnionCardInfo withBalance(int? balanceFen) => TUnionCardInfo(
-    issuerId: issuerId,
-    appTypeId: appTypeId,
-    appVersion: appVersion,
-    applicationSerial: applicationSerial,
-    effectiveDate: effectiveDate,
-    expireDate: expireDate,
-    issuerFci: issuerFci,
-    cardTypeId: cardTypeId,
-    employeeFlag: employeeFlag,
-    holderName: holderName,
-    idNumber: idNumber,
-    idType: idType,
-    countryCode: countryCode,
-    provinceCode: provinceCode,
-    cityCode: cityCode,
-    interopCardType: interopCardType,
-    cardKind: cardKind,
-    balanceFen: balanceFen,
-  );
+  TUnionCardInfo withBalance(int? balanceFen, {String? overdraftQueryRawHex}) =>
+      TUnionCardInfo(
+        issuerId: issuerId,
+        appTypeId: appTypeId,
+        appVersion: appVersion,
+        applicationSerial: applicationSerial,
+        effectiveDate: effectiveDate,
+        expireDate: expireDate,
+        issuerFci: issuerFci,
+        cardTypeId: cardTypeId,
+        employeeFlag: employeeFlag,
+        holderName: holderName,
+        idNumber: idNumber,
+        idType: idType,
+        countryCode: countryCode,
+        provinceCode: provinceCode,
+        cityCode: cityCode,
+        interopCardType: interopCardType,
+        cardKind: cardKind,
+        balanceFen: balanceFen,
+        overdraftQueryRawHex: overdraftQueryRawHex ?? this.overdraftQueryRawHex,
+      );
 }
 
 class TUnionTransaction {
@@ -113,6 +119,11 @@ class TUnionTransaction {
   final int rawType; // 交易类型原始值（0x02 充值 / 0x06 消费 / 0x09 复合消费）
   final String terminalId; // 交易终端编号（BCD 字符串）
   final DateTime time; // 交易时间
+
+  /// 0x18 原始槽位号（从 1 开始），读取器始终提供，坏槽位不会重编号。
+  /// null 为兼容直接构造的旧调用：调用者声明列表从最新记录起且无遗漏；
+  /// 不是读取器的“未知槽位”。混合有/无槽位证据不能证明相邻。
+  final int? recordNumber;
 
   /// 记录体原始字节 HEX（详情页原始数据展示 / 重解析依据）；未保留时为 null。
   final String? rawHex;
@@ -127,6 +138,7 @@ class TUnionTransaction {
     required this.terminalId,
     required this.time,
     this.rawHex,
+    this.recordNumber,
   });
 
   /// 是否为消费类交易（0x06 消费 / 0x09 复合消费）。
@@ -214,7 +226,7 @@ class TUnionProcessRecord {
 /// - [0x0A-0x0B] 线路代码（BCD，4 位）　[0x0C-0x0D] 站点代码（BCD，4 位）
 ///   [0x0E-0x0F] 运营代码（BCD，4 位）　[0x10] 预留字段；
 /// - [0x11-0x14] 交易金额（大端无符号，单位：分）；
-/// - [0x15-0x18] 交易后余额（大端无符号，单位：分）；
+/// - [0x15-0x18] 记录余额（大端无符号，单位：分）；
 /// - [0x19-0x1F] 交易日期时间（BCD YYYYMMDDhhmmss）；
 /// - [0x20-0x21] 受理方城市代码（HEX）；
 /// - [0x22-0x29] 受理方机构标识（HEX）；
@@ -227,7 +239,7 @@ class TUnionTripRecord {
   final int appTypeCode; // [0x09] 应用分类码原始值
   final String lineStationCode; // [0x0A-0x10] 线路和站点代码（BCD）
   final int amountFen; // [0x11-0x14] 交易金额（分）
-  final int balanceFen; // [0x15-0x18] 交易后余额（分）
+  final int balanceFen; // [0x15-0x18] 记录余额（分）
   final DateTime time; // [0x19-0x1F] 交易日期时间
   final String? cityCode; // [0x20-0x21] 受理方城市代码（HEX）
   final String? acquirerId; // [0x22-0x29] 受理方机构标识（HEX）
@@ -266,6 +278,11 @@ class TUnionTripRecord {
 
   /// 是否公共汽电车行业记录（[0x09] 应用分类码标准值 0x02）。
   bool get isBus => appTypeCode == 0x02;
+
+  /// 仅适用于 0x1E 的消费与充值类型，不复用 0x18 的类型码。
+  bool get isConsume =>
+      const {0x02, 0x04, 0x05, 0x06, 0x07, 0x08}.contains(typeCode);
+  bool get isRecharge => typeCode == 0x09 || typeCode == 0x0A;
 
   /// 是否入站/上车/进场类记录（EC 0x01 / EP 0x03）：不承载扣费金额，
   /// 不参与与交易明细（0x18）的行程配对。
