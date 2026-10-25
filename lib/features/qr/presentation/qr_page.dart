@@ -35,7 +35,7 @@ class _QrPageState extends State<QrPage> {
   Widget build(BuildContext context) {
     final app = widget.app;
     return Scaffold(
-      appBar: AppBar(title: const Text('扫码')),
+      appBar: AppBar(title: const Text('乘车码解析')),
       body: SafeArea(
         child: AnimatedBuilder(
           animation: app,

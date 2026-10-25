@@ -162,6 +162,7 @@ void main() {
       expect(app.scanning, isFalse);
       await pendingScan;
       expect(find.byType(QrPage), findsOneWidget);
+      expect(find.widgetWithText(AppBar, '乘车码解析'), findsOneWidget);
       expect(find.textContaining('尚未获取二维码'), findsOneWidget);
       expect(find.text('扫描二维码'), findsOneWidget);
       expect(find.text('从相册导入'), findsOneWidget);
