@@ -182,7 +182,7 @@ class _SettingsPageState extends State<SettingsPage> {
               child: ListTile(
                 leading: const Icon(Icons.feedback_outlined),
                 title: const Text('反馈'),
-                subtitle: const Text('QQ 群与问卷反馈渠道'),
+                subtitle: const Text('QQ 群、邮箱与问卷反馈渠道'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => FeedbackPage(app: app)),
@@ -197,7 +197,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => AboutPage(updates: app.updates),
+                    builder: (_) => AboutPage(
+                      updates: app.updates,
+                      openPrivacyPolicy: app.openPrivacyPolicy,
+                    ),
                   ),
                 ),
               ),
