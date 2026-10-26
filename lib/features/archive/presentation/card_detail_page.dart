@@ -10,6 +10,7 @@ import '../application/cu_archive_projection.dart';
 import '../../trips/cu_transaction_list.dart';
 import '../../trips/trip_cards_view.dart';
 import 'archive_trip_presenter.dart';
+import 'imported_archive_records.dart';
 
 /// Archive-only detail: captured evidence/context is independent of live scans.
 class CardDetailPage extends StatefulWidget {
@@ -90,6 +91,10 @@ class _CardDetailBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final summaryCount = history.batches
+        .where((batch) => batch.origin == 'imported_summary')
+        .length;
+    final readBatchCount = history.batches.length - summaryCount;
     final cityUnion = projectCuArchive(history);
     final trips = presentArchiveTrips(
       history.records,
@@ -125,13 +130,18 @@ class _CardDetailBody extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         Text(
-          '行程记录 · ${history.batches.length} 个已保存批次',
+          '行程记录 · $readBatchCount 个已保存批次'
+          '${summaryCount == 0 ? '' : ' · $summaryCount 份导入摘要'}',
           style: Theme.of(context).textTheme.titleSmall,
         ),
         if (history.hasDiagnostics)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8),
-            child: Text('部分历史记录无法完整显示，已保留原始记录，可在批次诊断中查看。'),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              summaryCount == 0
+                  ? '部分历史记录无法完整显示，已保留原始记录，可在批次诊断中查看。'
+                  : '部分历史记录无法完整显示，已保留原始记录，可在批次与摘要诊断中查看。',
+            ),
           ),
         const SizedBox(height: 8),
         if (cityUnion.transactions.isNotEmpty)
@@ -144,13 +154,18 @@ class _CardDetailBody extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Text(issue),
           ),
-        if (trips.entries.isNotEmpty || cityUnion.transactions.isEmpty)
+        if (trips.entries.isNotEmpty ||
+            (cityUnion.transactions.isEmpty && history.importedRecords.isEmpty))
           TripCardsView(
             key: ValueKey(history.card!.id),
             entries: trips.entries,
             sourceLabels: archiveTripSourceLabels,
             summaryText: trips.summaryText,
           ),
+        if (history.importedRecords.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          ImportedArchiveRecords(records: history.importedRecords),
+        ],
         const SizedBox(height: 16),
         TextButton.icon(
           onPressed: () => Navigator.of(context).push(
@@ -159,7 +174,7 @@ class _CardDetailBody extends StatelessWidget {
             ),
           ),
           icon: const Icon(Icons.bug_report_outlined),
-          label: const Text('批次诊断与原始快照'),
+          label: Text(_archiveDiagnosticsTitle(history)),
         ),
       ],
     );
@@ -173,12 +188,15 @@ class _ArchiveDiagnosticsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('批次诊断与原始快照')),
+    appBar: AppBar(title: Text(_archiveDiagnosticsTitle(history))),
     body: ListView(
       children: [
         for (final batch in history.batches)
           ExpansionTile(
-            title: Text('批次 · ${batch.decoded.status.name}'),
+            title: Text(
+              '${batch.origin == 'imported_summary' ? '导入时保留的摘要' : '批次'}'
+              ' · ${batch.decoded.status.name}',
+            ),
             subtitle: Text(
               '${batch.id}\n${batch.origin} · ${batch.timeSource}',
             ),
@@ -186,9 +204,16 @@ class _ArchiveDiagnosticsPage extends StatelessWidget {
               for (final issue in batch.issues)
                 ListTile(title: Text(issue.toString())),
               TextButton(
-                onPressed: () =>
-                    _showEvidence(context, '批次原文', batch.decoded.rawJson),
-                child: const Text('查看完整原始快照'),
+                onPressed: () => _showEvidence(
+                  context,
+                  batch.origin == 'imported_summary' ? '保留摘要中的原始快照' : '批次原文',
+                  batch.decoded.rawJson,
+                ),
+                child: Text(
+                  batch.origin == 'imported_summary'
+                      ? '查看摘要中的原始快照'
+                      : '查看完整原始快照',
+                ),
               ),
             ],
           ),
@@ -196,6 +221,11 @@ class _ArchiveDiagnosticsPage extends StatelessWidget {
     ),
   );
 }
+
+String _archiveDiagnosticsTitle(ArchiveHistoryResult history) =>
+    history.batches.any((batch) => batch.origin == 'imported_summary')
+    ? '批次、摘要与原始快照'
+    : '批次诊断与原始快照';
 
 void _showEvidence(BuildContext context, String title, String raw) {
   showDialog<void>(

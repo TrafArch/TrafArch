@@ -7,6 +7,7 @@ import '../archive/domain/card_name_extension.dart';
 import '../qr/presentation/qr_action_button.dart';
 import '../settings/presentation/settings_action_button.dart';
 import '../archive/presentation/card_detail_page.dart';
+import '../archive/presentation/archive_transfer_dialogs.dart';
 
 /// 卡片列表页：展示已保存的卡片档案摘要，
 /// 数据流监听数据库（重复读取与改名后自动刷新），最近读取的在前。
@@ -24,7 +25,7 @@ class CardsPage extends StatelessWidget {
             pinned: true,
             title: const Text('卡片列表'),
             actions: [
-              _ExportCardsButton(app: app),
+              ArchiveTransferButtons(app: app),
               QrActionButton(app: app),
               SettingsActionButton(app: app),
             ],
@@ -180,11 +181,23 @@ class _SavedCardTile extends StatelessWidget {
                 onSelected: (action) {
                   if (action == _SavedCardAction.delete) {
                     _delete(context);
+                  } else if (action == _SavedCardAction.export) {
+                    exportArchiveJson(context, app, card: card);
                   }
                 },
                 itemBuilder: (context) {
                   final error = Theme.of(context).colorScheme.error;
                   return [
+                    const PopupMenuItem(
+                      value: _SavedCardAction.export,
+                      child: Row(
+                        children: [
+                          Icon(Icons.download_outlined),
+                          SizedBox(width: 12),
+                          Text('导出此卡 JSON'),
+                        ],
+                      ),
+                    ),
                     PopupMenuItem(
                       value: _SavedCardAction.delete,
                       child: Row(
@@ -248,43 +261,4 @@ class _SavedCardTile extends StatelessWidget {
 }
 
 /// 卡片列表项的操作菜单项。
-enum _SavedCardAction { delete }
-
-/// 「导出卡片记录」按钮：将全部已保存卡片（含行程快照）导出为文本文件
-/// 到手机下载目录；导出进行中禁用按钮并展示进度，完成后以 SnackBar
-/// 反馈保存路径 / 失败原因 / 无卡片提示。
-class _ExportCardsButton extends StatefulWidget {
-  final AppDependencies app;
-  const _ExportCardsButton({required this.app});
-
-  @override
-  State<_ExportCardsButton> createState() => _ExportCardsButtonState();
-}
-
-class _ExportCardsButtonState extends State<_ExportCardsButton> {
-  bool _busy = false;
-
-  Future<void> _export() async {
-    if (_busy) return;
-    setState(() => _busy = true);
-    final messenger = ScaffoldMessenger.of(context);
-    final message = await widget.app.exportCards();
-    messenger.showSnackBar(SnackBar(content: Text(message)));
-    if (mounted) setState(() => _busy = false);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      tooltip: '导出卡片记录',
-      onPressed: _busy ? null : _export,
-      icon: _busy
-          ? const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : const Icon(Icons.download_outlined),
-    );
-  }
-}
+enum _SavedCardAction { export, delete }

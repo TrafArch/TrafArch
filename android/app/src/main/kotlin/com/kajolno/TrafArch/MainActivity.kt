@@ -5,6 +5,7 @@ import com.kajolno.TrafArch.browser.CustomTabsHandler
 import com.kajolno.TrafArch.nfc.NfcChannelHandler
 import com.kajolno.TrafArch.qr.QrImageHandler
 import com.kajolno.TrafArch.storage.FileExportHandler
+import com.kajolno.TrafArch.storage.ArchiveDocumentHandler
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 
@@ -14,6 +15,7 @@ class MainActivity : FlutterActivity() {
     private var qrImage: QrImageHandler? = null
     private var fileExport: FileExportHandler? = null
     private var browser: CustomTabsHandler? = null
+    private var archiveDocuments: ArchiveDocumentHandler? = null
     private var foreground = false
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -24,6 +26,7 @@ class MainActivity : FlutterActivity() {
         qrImage = QrImageHandler(this, messenger)
         fileExport = FileExportHandler(this, messenger)
         browser = CustomTabsHandler(this, messenger)
+        archiveDocuments = ArchiveDocumentHandler(this, messenger)
         if (foreground) nfc?.onResume()
     }
 
@@ -50,6 +53,7 @@ class MainActivity : FlutterActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         qrImage?.onActivityResult(requestCode, resultCode, data)
+        archiveDocuments?.onActivityResult(requestCode, resultCode, data)
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
@@ -67,9 +71,11 @@ class MainActivity : FlutterActivity() {
         qrImage?.dispose()
         fileExport?.dispose()
         browser?.dispose()
+        archiveDocuments?.dispose()
         nfc = null
         qrImage = null
         fileExport = null
         browser = null
+        archiveDocuments = null
     }
 }

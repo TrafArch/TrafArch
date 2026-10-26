@@ -1,6 +1,9 @@
 /// 卡片档案卡型取值（写入数据库的稳定标识，已启用取值勿修改；
 /// 新增卡型在此登记，并由 CardIdentificationService 负责识别产出）。
 abstract final class CardTypes {
+  /// User-imported selected JSON fields, with no implied NFC capture evidence.
+  static const String importedJson = 'imported_json';
+
   /// 交通联合电子钱包（JT/T 978.2）。
   static const String chinaTunion = 'china_tunion';
 
@@ -23,6 +26,7 @@ abstract final class CardTypes {
 /// 兜底名称仅在对应卡型经可靠识别确认后使用；未识别卡型显示
 /// 「未识别交通卡」，不猜测具体卡名。
 String cardTypeLabel(String cardType) => switch (cardType) {
+  CardTypes.importedJson => 'JSON 导入记录',
   CardTypes.chinaTunion => '交通联合卡',
   CardTypes.cityUnion => '城市一卡通',
   CardTypes.octopusTunion => '八达通全国通卡',

@@ -41,6 +41,8 @@ import '../features/settings/application/settings_controller.dart';
 import '../features/settings/application/diagnostics_controller.dart';
 import '../features/qr/application/qr_controller.dart';
 import '../features/archive/application/archive_controller.dart';
+import '../features/archive/application/archive_transfer_controller.dart';
+import '../platform/storage/archive_document_store.dart';
 
 /// Composition root and presentation facade. Controllers own mutable state and
 /// resources; this object wires their lifetimes and propagates UI notifications.
@@ -55,6 +57,7 @@ class AppDependencies extends OwnedNotifier {
     AppDatabase? database,
     UpdateService? updateService,
     FeedbackBrowser? feedbackBrowser,
+    ArchiveDocumentStore? archiveDocumentStore,
   }) {
     updates =
         updateService ??
@@ -77,6 +80,10 @@ class AppDependencies extends OwnedNotifier {
       exporter,
       _logger.log,
     );
+    archiveTransfer = ArchiveTransferController(
+      archive.repository,
+      archiveDocumentStore ?? const MethodChannelArchiveDocumentStore(),
+    );
     scan = ScanController(
       channel: channel ?? const MethodChannelNfcChannel(),
       felicaChannel: felicaChannel ?? const MethodChannelFelicaChannel(),
@@ -88,7 +95,15 @@ class AppDependencies extends OwnedNotifier {
       archive.clearSession();
     };
     scan.onCompleted = _complete;
-    _children = [settings, references, qr, diagnostics, archive, scan];
+    _children = [
+      settings,
+      references,
+      qr,
+      diagnostics,
+      archive,
+      archiveTransfer,
+      scan,
+    ];
     for (final child in _children) {
       child.addListener(notifyListeners);
     }
@@ -99,6 +114,7 @@ class AppDependencies extends OwnedNotifier {
   late final QrController qr;
   late final DiagnosticsController diagnostics;
   late final ArchiveController archive;
+  late final ArchiveTransferController archiveTransfer;
   late final ScanController scan;
   late final AppLogger _logger;
   late final AppDatabase _database;
@@ -286,6 +302,7 @@ class AppDependencies extends OwnedNotifier {
 
   Future<void> _closeStorage() async {
     await archive.finishWrites();
+    await archiveTransfer.finishWrites();
     if (_ownsDatabase) await _database.close();
     await _logger.flush();
   }
@@ -297,6 +314,7 @@ class AppDependencies extends OwnedNotifier {
     }
     scan.dispose();
     archive.dispose();
+    archiveTransfer.dispose();
     references.dispose();
     settings.dispose();
     qr.dispose();

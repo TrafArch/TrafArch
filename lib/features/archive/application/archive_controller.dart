@@ -325,6 +325,7 @@ class ArchiveController extends OwnedNotifier {
                 .write(SavedCardsCompanion(sessionDataJson: Value(updated)));
           }
         }
+        await repository.refreshDocument(saved.id);
       });
       return true;
     } catch (e) {
