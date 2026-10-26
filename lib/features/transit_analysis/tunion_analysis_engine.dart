@@ -96,8 +96,8 @@ class AnalysisEngine {
       sides,
       sideLinks,
     );
-    // 交易后余额：0x1E 记录余额优先，缺失处按账本顺序从当前钱包余额倒推；
-    // 无法证明连续（类型未知 / 顺序不明 / 无读取锚点）时保持未知。
+    // 交易后余额由当前钱包沿连续账本倒推；1E 保留原始记录余额，
+    // 不能覆盖已证明的交易后余额，也不能在断链后恢复推算。
     final balanceMatches = _buildBalanceMatches(card);
     final interpretation = BalanceInterpretation.fromParsedCard(card);
     final balances = reconstructTransactionBalances(
@@ -352,7 +352,7 @@ class AnalysisEngine {
 
   /// 余额证据与宽松的站点注解分开：类型方向已知、金额及秒级时间一致，
   /// 且两侧唯一才接受。两文件没有可证明时间偏差的关联流水号，不能仅凭
-  /// 同分钟（或终端片段）把不同秒的记录升级为余额锚点。
+  /// 同分钟（或终端片段）把不同秒的记录作为该交易的记录余额。
   Map<TUnionTransaction, TUnionTripRecord> _buildBalanceMatches(
     ParsedCard card,
   ) {

@@ -105,7 +105,7 @@ TripEntryInfo _describeEntry(TripEntry entry, TripPresentationContext display) {
         isConsume: trip.isConsume,
         subText: trip.balanceAfterText == null
             ? null
-            : '余额 ${trip.balanceAfterText}',
+            : '${trip.balanceAfterLabel} ${trip.balanceAfterText}',
         category: trip.appTypeName,
         badges: badges,
         related: trip.matchedProcessTrip != null

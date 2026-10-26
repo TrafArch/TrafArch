@@ -65,7 +65,13 @@ bool validateSnapshotRecord(
     'appTypeCode',
     'balanceFen',
   };
-  const boolFields = {'consume', 'composite', 'isEntry', 'hasRecordHeader'};
+  const boolFields = {
+    'consume',
+    'composite',
+    'isEntry',
+    'hasRecordHeader',
+    'balanceAfterIsRecorded',
+  };
   const stringFields = {
     'typeName',
     'terminalId',

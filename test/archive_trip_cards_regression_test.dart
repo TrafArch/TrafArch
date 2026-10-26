@@ -68,7 +68,7 @@ void main() {
           final info = presentArchiveTrips([
             record,
           ], onDiagnostics: (_) {}).entries.single.info;
-          expect(info.subText, '余额 ${record.context.formatAmount(expected)}');
+          expect(info.subText, '记录余额 ${record.context.formatAmount(expected)}');
           expect(
             info.fields.where((f) => f.$1 == '记录余额').single.$2,
             record.context.formatAmount(expected),
@@ -112,7 +112,7 @@ void main() {
       computedRecord,
     ], onDiagnostics: (_) {}).entries.single.info;
     expect(computedInfo.fields, contains(('交易后余额', '¥ 90.00')));
-    expect(computedInfo.subText, '余额 ¥ 90.00');
+    expect(computedInfo.subText, '交易后余额 ¥ 90.00');
 
     final process = {..._process, 'balanceFen': 100};
     final recordedRecord = record({
@@ -545,7 +545,7 @@ void main() {
     await _open(tester, repository, id, size: const Size(390, 1100));
     expect(tester.takeException(), isNull);
     expect(find.text('-币种未知 4.50'), findsOneWidget);
-    expect(find.text('余额 币种未知 12.34'), findsOneWidget);
+    expect(find.text('记录余额 币种未知 12.34'), findsOneWidget);
     await _close(tester);
   });
 

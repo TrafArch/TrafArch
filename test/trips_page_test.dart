@@ -173,7 +173,7 @@ void main() {
       expect(trip.amountText, '+¥46.60');
     });
 
-    test('充值交易配对 0x1E：补充记录余额与行业', () async {
+    test('充值交易配对 0x1E：保留原始记录余额，钱包优先', () async {
       final app = await _scan(
         _FakeNfcChannel()..enqueueWalletScript(
           record: _record(terminal: '123456789012', rawType: 0x02),
@@ -182,10 +182,11 @@ void main() {
       );
       final trip = app.analysis!.trips.single;
       expect(trip.typeName, '充值');
-      expect(trip.balanceAfterFen, 5340);
-      expect(trip.balanceAfterText, '¥53.40');
-      expect(trip.balanceAfterLabel, '记录余额');
-      expect(trip.balanceAfterIsRecorded, isTrue);
+      expect(trip.balanceAfterFen, 10000);
+      expect(trip.matchedProcessTrip!.balanceFen, 5340);
+      expect(trip.balanceAfterText, '¥100.00');
+      expect(trip.balanceAfterLabel, '交易后余额');
+      expect(trip.balanceAfterIsRecorded, isFalse);
       expect(trip.appTypeName, '城市轨道交通');
     });
 
@@ -240,8 +241,9 @@ void main() {
         ),
       );
       final trip = app.analysis!.trips.single;
-      expect(trip.balanceAfterFen, 5340);
-      expect(trip.balanceAfterIsRecorded, isTrue);
+      expect(trip.balanceAfterFen, 10000);
+      expect(trip.matchedProcessTrip!.balanceFen, 5340);
+      expect(trip.balanceAfterIsRecorded, isFalse);
       expect(trip.matchedProcessTrip!.time.second, 0);
     });
 
@@ -288,7 +290,8 @@ void main() {
       expect(trip.stationLabel, '苏洋');
       expect(trip.stationType, '地铁');
       expect(trip.appTypeName, '城市轨道交通');
-      expect(trip.balanceAfterFen, 5340);
+      expect(trip.balanceAfterFen, 10000);
+      expect(trip.matchedProcessTrip!.balanceFen, 5340);
     });
 
     test('无 0x1E：按钱包余额与交易金额倒推交易后余额', () async {
@@ -497,7 +500,8 @@ void main() {
       expect(trip.appTypeName, '城市轨道交通');
       expect(trip.cityName, '福州市');
       expect(trip.timeText, '2024-05-01 08:30:00');
-      expect(trip.balanceAfterFen, 5340);
+      expect(trip.balanceAfterFen, 10000);
+      expect(trip.matchedProcessTrip!.balanceFen, 5340);
     });
 
     test('0x1A 与 0x1E 同时出现（公共汽电车）：不抑制未关联 0x1A', () async {
@@ -554,7 +558,8 @@ void main() {
       expect(app.busTransitRecord, isNotNull); // 原始公交侧保留
       final trip = app.analysis!.trips.single;
       expect(trip.appTypeName, '公共汽电车');
-      expect(trip.balanceAfterFen, 5340);
+      expect(trip.balanceAfterFen, 10000);
+      expect(trip.matchedProcessTrip!.balanceFen, 5340);
     });
 
     test('0x1A 记录 2 与 0x1E（城市轨道）：不抑制未关联公交记录', () async {
