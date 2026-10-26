@@ -197,7 +197,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => AboutPage(updates: app.updates),
+                    builder: (_) => AboutPage(
+                      updates: app.updates,
+                      openPrivacyPolicy: app.openPrivacyPolicy,
+                    ),
                   ),
                 ),
               ),

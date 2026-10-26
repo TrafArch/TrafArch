@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/app/app_dependencies.dart';
 import 'package:transit_card_analyzer/features/settings/presentation/feedback_page.dart';
+import 'package:transit_card_analyzer/features/settings/presentation/about_page.dart';
 import 'package:transit_card_analyzer/features/settings/presentation/survey_page.dart';
 import 'package:transit_card_analyzer/platform/storage/app_logger.dart';
 import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
@@ -172,6 +173,65 @@ void main() {
       expect(find.byType(FeedbackPage), findsOneWidget);
     });
   }
+
+  testWidgets('隐私政策复用问卷浏览器通道且防止重复启动', (tester) async {
+    final pending = Completer<String>();
+    final calls = <MethodCall>[];
+    messenger.setMockMethodCallHandler(browserChannel, (call) {
+      calls.add(call);
+      return pending.future;
+    });
+    final app = createApp();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AboutPage(
+          updates: app.updates,
+          openPrivacyPolicy: app.openPrivacyPolicy,
+        ),
+      ),
+    );
+    await tester.scrollUntilVisible(find.text('隐私政策'), 150);
+    await tester.tap(find.text('隐私政策'));
+    await tester.pump();
+    final tile = tester.widget<ListTile>(
+      find.ancestor(of: find.text('隐私政策'), matching: find.byType(ListTile)),
+    );
+    expect(tile.onTap, isNull);
+    expect(calls, hasLength(1));
+    expect(calls.single.method, 'openCustomTab');
+    expect(calls.single.arguments, {
+      'url': 'https://www.trafarch.top/privacy.html',
+    });
+    pending.complete('com.microsoft.emmx');
+    await tester.pumpAndSettle();
+    expect(find.byType(AboutPage), findsOneWidget);
+    expect(find.byType(SurveyPage), findsNothing);
+  });
+
+  testWidgets('隐私政策浏览器启动失败可重试', (tester) async {
+    var calls = 0;
+    messenger.setMockMethodCallHandler(browserChannel, (_) async {
+      if (++calls == 1) throw PlatformException(code: 'BROWSER_UNAVAILABLE');
+      return 'com.android.chrome';
+    });
+    final app = createApp();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AboutPage(
+          updates: app.updates,
+          openPrivacyPolicy: app.openPrivacyPolicy,
+        ),
+      ),
+    );
+    await tester.scrollUntilVisible(find.text('隐私政策'), 150);
+    await tester.tap(find.text('隐私政策'));
+    await tester.pumpAndSettle();
+    expect(find.text('无法打开隐私政策，请安装或启用 Edge 或 Chrome 后重试。'), findsOneWidget);
+    await tester.tap(find.text('隐私政策'));
+    await tester.pumpAndSettle();
+    expect(calls, 2);
+    expect(find.byType(AboutPage), findsOneWidget);
+  });
 
   testWidgets('QQ 群号仍可复制', (tester) async {
     String? copied;

@@ -293,6 +293,7 @@ class AppDependencies extends OwnedNotifier {
       settings.setMonetEnabled(enabled);
   Future<bool> openFeedbackEmail(String address) =>
       settings.openFeedbackEmail(address);
+  Future<void> openPrivacyPolicy() => settings.openPrivacyPolicy();
   Future<void> openFeedbackSurvey(Uri url) => settings.openFeedbackSurvey(url);
   Future<void> exportLog() => diagnostics.exportLog();
   Future<String> exportCards() => archive.exportCards();

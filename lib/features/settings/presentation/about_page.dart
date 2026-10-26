@@ -6,7 +6,14 @@ import '../../updates/update_service.dart';
 import 'acknowledgements_page.dart';
 
 class AboutPage extends StatefulWidget {
-  const AboutPage({super.key, required this.updates, this.openUrl});
+  const AboutPage({
+    super.key,
+    required this.updates,
+    required this.openPrivacyPolicy,
+    this.openUrl,
+  });
+
+  final Future<void> Function() openPrivacyPolicy;
 
   final UpdateService updates;
   final Future<bool> Function(Uri)? openUrl;
@@ -17,6 +24,22 @@ class AboutPage extends StatefulWidget {
 
 class _AboutPageState extends State<AboutPage> {
   bool _checking = false;
+  bool _openingPrivacy = false;
+
+  Future<void> _openPrivacyPolicy() async {
+    if (_openingPrivacy) return;
+    setState(() => _openingPrivacy = true);
+    try {
+      await widget.openPrivacyPolicy();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('无法打开隐私政策，请安装或启用 Edge 或 Chrome 后重试。')),
+      );
+    } finally {
+      if (mounted) setState(() => _openingPrivacy = false);
+    }
+  }
 
   Future<void> _checkUpdates() async {
     if (_checking || !widget.updates.isConfigured) return;
@@ -117,6 +140,15 @@ class _AboutPageState extends State<AboutPage> {
               subtitle: const Text('查看本应用使用的开源软件与许可'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => _openLicenses(context),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.privacy_tip_outlined),
+              title: const Text('隐私政策'),
+              enabled: !_openingPrivacy,
+              onTap: _openingPrivacy ? null : _openPrivacyPolicy,
             ),
           ),
           const SizedBox(height: 24),

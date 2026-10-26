@@ -37,6 +37,9 @@ class SettingsController extends OwnedNotifier {
     }
   }
 
+  Future<void> openPrivacyPolicy() =>
+      _browser.open(Uri.parse('https://www.trafarch.top/privacy.html'));
+
   Future<void> openFeedbackSurvey(Uri url) async {
     if (disposed || openingFeedbackSurvey) return;
     openingFeedbackSurvey = true;

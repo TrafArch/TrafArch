@@ -66,7 +66,11 @@ void main() {
           },
         );
         expect(await service.checkOnce(), isNull);
-        await tester.pumpWidget(MaterialApp(home: AboutPage(updates: service)));
+        await tester.pumpWidget(
+          MaterialApp(
+            home: AboutPage(updates: service, openPrivacyPolicy: () async {}),
+          ),
+        );
         await tester.tap(find.text('检查更新'));
         await tester.pumpAndSettle();
         expect(find.text('检查更新失败，请稍后重试'), findsOneWidget);
@@ -90,7 +94,11 @@ void main() {
         throw StateError('must not fetch');
       },
     );
-    await tester.pumpWidget(MaterialApp(home: AboutPage(updates: service)));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AboutPage(updates: service, openPrivacyPolicy: () async {}),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.text('检查更新'), findsNothing);
     expect(await service.checkNow(), isNull);
@@ -113,6 +121,7 @@ void main() {
         MaterialApp(
           home: AboutPage(
             updates: service,
+            openPrivacyPolicy: () async {},
             openUrl: (uri) async {
               opened = uri;
               return true;
@@ -152,7 +161,11 @@ void main() {
           return pending.future;
         },
       );
-      await tester.pumpWidget(MaterialApp(home: AboutPage(updates: service)));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AboutPage(updates: service, openPrivacyPolicy: () async {}),
+        ),
+      );
       final button = find.byType(OutlinedButton);
       await tester.tap(button);
       await tester.tap(button);
@@ -194,7 +207,9 @@ void main() {
         final builtinSpec = Map<String, dynamic>.from(
           (manifest['packages'] as Map)['CU'] as Map,
         );
-        final data = await rootBundle.load('assets/data/${builtinSpec['file']}');
+        final data = await rootBundle.load(
+          'assets/data/${builtinSpec['file']}',
+        );
         final candidate = File('${directory.path}/candidate.sqlite');
         await candidate.writeAsBytes(
           data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
@@ -202,9 +217,12 @@ void main() {
         final db = sqlite3.open(candidate.path);
         try {
           final catalog = jsonDecode(
-            db.select(
-              "SELECT json FROM reference_documents WHERE name = 'card_catalog'",
-            ).single['json'] as String,
+            db
+                    .select(
+                      "SELECT json FROM reference_documents WHERE name = 'card_catalog'",
+                    )
+                    .single['json']
+                as String,
           ) as Map<String, dynamic>;
           switch (variant) {
             case 'missing both fields':
