@@ -60,9 +60,9 @@ class ParsedCard {
   /// B.2.5 SFI 0x1E 循环记录），供专家模式展示。
   final List<TUnionProcessRecord> transitProcessRecords;
 
-  /// City Union（CJ/T 331-2016）标准文件解析视图（SFI 0x15 公共应用
-  /// 基本信息 / 0x17 复合交易记录 / 0x10 异地消费交易明细 / 0x1A 充值
-  /// 交易明细）；由城市一卡通解析器产出，交通联合解析器产出时为空。
+  /// City Union 文件解析视图，保留实际 SFI 与运行时读取角色。
+  /// 标准表格默认 SFI 与 Trip Reader 应用读取 profile 分别定义，
+  /// 不单凭 SFI 推测充值或异地消费；上海双应用也可携带此视图。
   final List<CityUnionFileView> cityUnionFiles;
 
   /// 地方交通卡识读结果（卡信息 + 乘车流水 + 扩展槽位）；

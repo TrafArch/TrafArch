@@ -13,10 +13,14 @@
 
     <!-- Android 11+（targetSdk 30+）包可见性 -->
     <queries>
-        <!-- url_launcher：允许查询并唤起可处理 https 链接的浏览器（反馈问卷） -->
+        <!-- 外部应用链接查询（QQ 加群和更新下载等） -->
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="https" />
+        </intent>
+        <!-- 反馈问卷：检测 Edge / Chrome 的 Custom Tabs 服务。 -->
+        <intent>
+            <action android:name="android.support.customtabs.action.CustomTabsService" />
         </intent>
     </queries>
 

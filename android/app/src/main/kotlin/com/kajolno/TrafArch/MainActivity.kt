@@ -1,6 +1,7 @@
 package com.kajolno.TrafArch
 
 import android.content.Intent
+import com.kajolno.TrafArch.browser.CustomTabsHandler
 import com.kajolno.TrafArch.nfc.NfcChannelHandler
 import com.kajolno.TrafArch.qr.QrImageHandler
 import com.kajolno.TrafArch.storage.FileExportHandler
@@ -12,6 +13,7 @@ class MainActivity : FlutterActivity() {
     private var nfc: NfcChannelHandler? = null
     private var qrImage: QrImageHandler? = null
     private var fileExport: FileExportHandler? = null
+    private var browser: CustomTabsHandler? = null
     private var foreground = false
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -21,6 +23,7 @@ class MainActivity : FlutterActivity() {
         nfc = NfcChannelHandler(this, messenger)
         qrImage = QrImageHandler(this, messenger)
         fileExport = FileExportHandler(this, messenger)
+        browser = CustomTabsHandler(this, messenger)
         if (foreground) nfc?.onResume()
     }
 
@@ -63,8 +66,10 @@ class MainActivity : FlutterActivity() {
         nfc?.dispose()
         qrImage?.dispose()
         fileExport?.dispose()
+        browser?.dispose()
         nfc = null
         qrImage = null
         fileExport = null
+        browser = null
     }
 }

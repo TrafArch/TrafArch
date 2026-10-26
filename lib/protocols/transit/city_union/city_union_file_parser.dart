@@ -13,6 +13,45 @@ import 'cj_t331_wallet_recharge_parser.dart';
 class CityUnionFileParser {
   CityUnionFileParser._();
 
+  /// TripReader CU application channels use explicit roles: 0x18 consumption,
+  /// 0x10 recharge, 0x06 (Shanghai/Kunshan) or 0x1A foreign consumption.
+  /// Keep [parse] available for the standalone CJ/T standard table layouts.
+  static CityUnionWalletTransaction parseWalletRecord(
+    int sfi,
+    List<int> data, {
+    required CityUnionTransactionKind kind,
+    required int recordNumber,
+  }) {
+    if (kind == CityUnionTransactionKind.recharge) {
+      return CjT331WalletRechargeParser.parseRecord(
+        data,
+        sourceSfi: sfi,
+        recordNumber: recordNumber,
+      );
+    }
+    final record = CjT331WalletLocalConsumptionParser.parseRecord(
+      data,
+      sourceSfi: sfi,
+      recordNumber: recordNumber,
+    );
+    if (kind == CityUnionTransactionKind.consumption) return record;
+    return CjT331WalletOfflineTransaction(
+      sourceSfi: sfi,
+      recordNumber: recordNumber,
+      sequence: record.sequence,
+      sequenceHex: record.sequenceHex,
+      reservedHex: record.reservedHex,
+      amountRaw: record.amountRaw,
+      amountHex: record.amountHex,
+      transactionType: record.transactionType,
+      terminalNumber: record.terminalNumber,
+      transactionDate: record.transactionDate,
+      transactionTime: record.transactionTime,
+      fields: record.fields,
+      rawHex: record.rawHex,
+    );
+  }
+
   /// 按 SFI 分发解析。
   ///
   /// 已接入的 SFI 返回对应解析结果；未接入的 SFI 返回

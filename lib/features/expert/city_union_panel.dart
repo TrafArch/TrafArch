@@ -35,14 +35,20 @@ class CityUnionPanel extends StatelessWidget {
       return [
         ExpertHint(
           '已命中城市一卡通应用，但未读取到标准文件数据'
-          '（0x15 / 0x18 / 0x1A）',
+          '（公共信息 / 消费 / 充值 / 异地记录）',
         ),
       ];
     }
     final public = files.where((f) => f.sfi == 0x15).toList();
     final local = files.where((f) => f.sfi == 0x18).toList();
-    final recharge = files.where((f) => f.sfi == 0x1A).toList();
-    // CU 城市代码（0x15 字节 03-04 HEX 解码 4 位）：用于终端索引同地区优先匹配。
+    final recharge = files.whereType<CjT331WalletRecharge>().toList();
+    final foreign = files.whereType<CjT331WalletOfflineTransaction>().toList();
+    final unparsed = files
+        .whereType<CityUnionRawFileView>()
+        .where((file) => file.sfi != 0x15 && file.sfi != 0x18)
+        .toList();
+    // Issuer metadata remains available for display; transaction lookup derives
+    // its own accepting region from independently recognized terminal evidence.
     final cuCityCode = public
         .whereType<CjT331PublicInfo>()
         .firstOrNull
@@ -62,11 +68,27 @@ class CityUnionPanel extends StatelessWidget {
       ),
       _cjRecordGroupTile(
         context,
-        title: '电子钱包充值交易明细（0x1A）',
+        title: '电子钱包充值交易明细',
         storageKey: 'cj-recharge',
         records: recharge,
         emptyHint: '未读取到充值交易明细（文件不存在或记录未写入）',
       ),
+      _cjRecordGroupTile(
+        context,
+        title: '电子钱包异地消费交易明细',
+        storageKey: 'cj-foreign',
+        records: foreign,
+        cityCode: cuCityCode,
+        emptyHint: '未读取到异地消费交易明细（文件不存在或记录未写入）',
+      ),
+      if (unparsed.isNotEmpty)
+        _cjRecordGroupTile(
+          context,
+          title: '未解析记录（保留原始数据）',
+          storageKey: 'cj-unparsed',
+          records: unparsed,
+          emptyHint: '',
+        ),
     ];
   }
 
@@ -171,7 +193,9 @@ class CityUnionPanel extends StatelessWidget {
         Row(
           children: [
             Text(
-              '记录 ${index + 1}',
+              record is CityUnionWalletTransaction
+                  ? '0x${record.sfi.toRadixString(16).toUpperCase().padLeft(2, '0')} · 记录 ${record.recordNumber ?? index + 1}'
+                  : '记录 ${index + 1}',
               style: Theme.of(context).textTheme.labelLarge,
             ),
             const SizedBox(width: 8),
@@ -200,10 +224,10 @@ class CityUnionPanel extends StatelessWidget {
 
   /// CU 本地消费记录（0x18）→ 站点名：以交易终端编号经 CU terminal_index
   String? _cuStationName(CityUnionFileView record, String? cityCode) {
-    if (record is CjT331WalletLocalConsumption) {
+    if (record is CityUnionWalletTransaction &&
+        record.kind != CityUnionTransactionKind.recharge) {
       final identity = CityUnionLookupRules.identifyTerminal(
-        record.terminalNumber,
-        cardCityCode: cityCode,
+        record.terminalHex,
         profile: terminalProfile,
       );
       if (identity == null) return null;

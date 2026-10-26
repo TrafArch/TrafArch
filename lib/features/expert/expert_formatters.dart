@@ -20,10 +20,7 @@ String expertTime(DateTime? t) {
 }
 
 String cuRecordSubtitle(CityUnionFileView record) => switch (record) {
-  CjT331WalletLocalConsumption r =>
-    '${r.transactionDate ?? '未知日期'} ${r.transactionTime ?? ''} · '
-        '${r.transactionTypeName}',
-  CjT331WalletRecharge r =>
+  CityUnionWalletTransaction r =>
     '${r.transactionDate ?? '未知日期'} ${r.transactionTime ?? ''} · '
         '${r.transactionTypeName}',
   _ => '${record.rawHex.split(' ').length} 字节 · 未按标准解析',

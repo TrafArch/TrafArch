@@ -5,10 +5,12 @@ import 'package:flutter/services.dart';
 import 'app_info.dart';
 import '../features/updates/update_service.dart';
 import '../features/transit_analysis/tunion_analysis_models.dart';
+import '../features/transit_analysis/cu_transaction_analysis.dart';
 import '../protocols/transit/card_parser.dart';
 import '../features/reference_data/data/tunion_knowledge_base.dart';
 import '../features/reference_data/domain/city_union_knowledge_base.dart';
 import '../platform/storage/settings_store.dart';
+import '../platform/browser/feedback_browser.dart';
 import '../features/reference_data/domain/station_codes.dart';
 import '../features/reference_data/data/tunion_bus_location.dart';
 import '../protocols/felica/felica.dart';
@@ -52,6 +54,7 @@ class AppDependencies extends OwnedNotifier {
     LogExporter? logExporter,
     AppDatabase? database,
     UpdateService? updateService,
+    FeedbackBrowser? feedbackBrowser,
   }) {
     updates =
         updateService ??
@@ -64,6 +67,7 @@ class AppDependencies extends OwnedNotifier {
     settings = SettingsController(
       settingsStore ?? FileSettingsStore(),
       _logger,
+      browser: feedbackBrowser ?? const MethodChannelFeedbackBrowser(),
     );
     references = ReferenceDataController(assets);
     qr = QrController(log: _logger.log);
@@ -183,6 +187,8 @@ class AppDependencies extends OwnedNotifier {
   int? get cityUnionBalanceFen => _view?.cityUnionBalanceFen;
   List<CityUnionFileView> get cityUnionFiles =>
       _view?.cityUnionFiles ?? const [];
+  List<CuTransactionView> get cityUnionTransactions =>
+      _view?.cityUnionTransactions ?? const [];
   CjT331PublicInfo? get cityUnionPublicInfo => _view?.cityUnionPublicInfo;
   CityUnionCardInfo? get cityUnionCard => _view?.cityUnionCard;
   Currency get cardCurrency => _view?.cardCurrency ?? Currency.cny;
@@ -202,6 +208,8 @@ class AppDependencies extends OwnedNotifier {
   bool get logExportFailed => diagnostics.logExportFailed;
   bool get autoSaveEnabled => settings.autoSaveEnabled;
   bool get monetEnabled => settings.monetEnabled;
+  bool get openingFeedbackSurvey => settings.openingFeedbackSurvey;
+  String? get feedbackBrowserError => settings.feedbackBrowserError;
   String? get autoSaveNotice => archive.autoSaveNotice;
   List<String> get apduLog => scan.trace;
   JtT1179QrData? get qrData => qr.qrData;
@@ -267,6 +275,7 @@ class AppDependencies extends OwnedNotifier {
       settings.setAutoSaveEnabled(enabled);
   Future<void> setMonetEnabled(bool enabled) =>
       settings.setMonetEnabled(enabled);
+  Future<void> openFeedbackSurvey(Uri url) => settings.openFeedbackSurvey(url);
   Future<void> exportLog() => diagnostics.exportLog();
   Future<String> exportCards() => archive.exportCards();
   Future<void> scanOnce() => scan.scanOnce();

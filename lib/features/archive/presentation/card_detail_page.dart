@@ -6,6 +6,8 @@ import '../data/app_database.dart';
 import '../domain/card_name_extension.dart';
 import '../data/card_repository.dart';
 import '../application/archive_history.dart';
+import '../application/cu_archive_projection.dart';
+import '../../trips/cu_transaction_list.dart';
 import '../../trips/trip_cards_view.dart';
 import 'archive_trip_presenter.dart';
 
@@ -88,6 +90,7 @@ class _CardDetailBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cityUnion = projectCuArchive(history);
     final trips = presentArchiveTrips(
       history.records,
       onDiagnostics: (record) => _showEvidence(
@@ -131,12 +134,23 @@ class _CardDetailBody extends StatelessWidget {
             child: Text('部分历史记录无法完整显示，已保留原始记录，可在批次诊断中查看。'),
           ),
         const SizedBox(height: 8),
-        TripCardsView(
-          key: ValueKey(history.card!.id),
-          entries: trips.entries,
-          sourceLabels: archiveTripSourceLabels,
-          summaryText: trips.summaryText,
-        ),
+        if (cityUnion.transactions.isNotEmpty)
+          CuTransactionList(
+            transactions: cityUnion.transactions,
+            sourceLabels: cityUnion.sourceLabels,
+          ),
+        for (final issue in cityUnion.issues)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Text(issue),
+          ),
+        if (trips.entries.isNotEmpty || cityUnion.transactions.isEmpty)
+          TripCardsView(
+            key: ValueKey(history.card!.id),
+            entries: trips.entries,
+            sourceLabels: archiveTripSourceLabels,
+            summaryText: trips.summaryText,
+          ),
         const SizedBox(height: 16),
         TextButton.icon(
           onPressed: () => Navigator.of(context).push(

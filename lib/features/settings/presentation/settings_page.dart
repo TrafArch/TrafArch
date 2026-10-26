@@ -184,9 +184,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 title: const Text('反馈'),
                 subtitle: const Text('QQ 群与问卷反馈渠道'),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => const FeedbackPage())),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => FeedbackPage(app: app)),
+                ),
               ),
             ),
             Card(

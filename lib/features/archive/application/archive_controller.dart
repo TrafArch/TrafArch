@@ -8,6 +8,7 @@ import '../../../platform/nfc/nfc_models.dart';
 import '../../../protocols/transit/tunion/tunion_models.dart';
 import '../../../protocols/transit/tunion/tunion_process_parser.dart';
 import 'card_records_export.dart';
+import 'cu_archive_projection.dart';
 import '../domain/card_session_snapshot.dart';
 import '../domain/pending_card_save.dart';
 import '../data/card_repository.dart';
@@ -112,7 +113,10 @@ class ArchiveController extends OwnedNotifier {
         }
       }
       final transactionsObserved =
-          parsed.transactionFileObserved || parsed.transactions.isNotEmpty;
+          parsed.transactionFileObserved ||
+          parsed.transactions.isNotEmpty ||
+          (parsed.parserId == CardParserIds.cityUnion &&
+              view.cityUnionTransactions.isNotEmpty);
       final context = ArchiveContext(
         systemId: parsed.parserId,
         applicationId: parsed.selectedAidHex,
@@ -134,7 +138,11 @@ class ArchiveController extends OwnedNotifier {
       final snapshot = CardSessionSnapshot(
         parseVersion: kTripParseVersion,
         context: context,
-        extensions: {'captureAttemptId': attemptId},
+        extensions: {
+          'captureAttemptId': attemptId,
+          if (view.cityUnionTransactions.isNotEmpty)
+            'cuProjection': captureCuProjection(view.cityUnionTransactions),
+        },
         cardCityCode: view.cardCityCode,
         trips: view.analysis?.trips ?? const [],
         rails: rails,
@@ -214,7 +222,9 @@ class ArchiveController extends OwnedNotifier {
         balanceFen: parsed.info.balanceFen,
         currencyCode: currency,
         transactionCount: transactionsObserved
-            ? parsed.transactions.length
+            ? (parsed.parserId == CardParserIds.cityUnion
+                  ? view.cityUnionTransactions.length
+                  : parsed.transactions.length)
             : null,
         sessionDataJson: snapshot.encode(),
       );

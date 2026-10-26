@@ -40,7 +40,11 @@ class CjT331WalletLocalConsumptionParser {
   /// [input] 为单条记录内容（23 字节，0 起 Dart 数组下标）。
   /// 长度不符或字节值越界（读取层错误）时抛 [FormatException]；
   /// 字段级编码 / 日期 / 时间异常不抛异常，记录在对应 [CjField] 上。
-  static CjT331WalletLocalConsumption parseRecord(List<int> input) {
+  static CjT331WalletLocalConsumption parseRecord(
+    List<int> input, {
+    int? recordNumber,
+    int? sourceSfi,
+  }) {
     if (input.length != recordLength) {
       throw FormatException(
         '本地消费交易记录长度错误：期望单条记录 $recordLength 字节，'
@@ -99,6 +103,8 @@ class CjT331WalletLocalConsumptionParser {
     ];
 
     return CjT331WalletLocalConsumption(
+      recordNumber: recordNumber,
+      sourceSfi: sourceSfi ?? sfi,
       sequence: sequence,
       sequenceHex: sequenceHex,
       reservedHex: reservedHex,

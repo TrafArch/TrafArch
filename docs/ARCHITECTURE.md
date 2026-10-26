@@ -14,7 +14,7 @@ lib/
     transit/{tunion,city_union,local,qr}/
     bank/                       EMV / PBOC 枚举、读取、字典接口与领域模型
     felica/                     帧、协议、探测、卡适配器
-  platform/{nfc,qr,storage}/     MethodChannel、目录、设置、导出、日志
+  platform/{nfc,qr,storage,browser}/ MethodChannel、目录、设置、导出、日志、反馈浏览器
   features/
     scan/{application,domain}/  会话、采集、协议编排、当前读取展示
     reference_data/             发布包、用户库、查询接口、覆盖范围页面
@@ -30,6 +30,7 @@ lib/
   shared/                       生命周期基类和少量展示常量
 android/app/src/main/kotlin/com/kajolno/TrafArch/
   MainActivity.kt
+  browser/                      指定 Edge / Chrome 的 Custom Tabs
   nfc/                          会话、连接、FIFO 调度、元数据
   platform/                     OnceResult
   qr/                           图片选择
@@ -59,6 +60,8 @@ flowchart TD
 
 目录层次不等同于强制编译模块；边界由源码依赖清单和静态检查约束。协议有意保留本地卡特例，没有用同一组默认值抹平不同卡族行为。
 
+反馈问卷经 `FeedbackPage → AppDependencies → SettingsController → FeedbackBrowser` 调用独立的 `transit_card_analyzer/browser` 通道。原生逐个检测并启动 Edge、Chrome，启动 Intent 显式指定包名；失败回传页面，不隐式打开默认浏览器。QQ 加群页仍使用 `SurveyPage`。
+
 ## 采集和取消
 
 ScanController 在发现标签前分配 UUID，并把它传到 ISO-DEP / NFC-F 通道。每个异步完成重新核对当前代次；旧结果不能更新新读取。物理指令和响应在采集边界保存不可变副本，后续 APDU 拼接不替代原始帧。原生返回的非空 sessionId 必须匹配。
@@ -71,11 +74,17 @@ Android 主线程拥有 session 和回复集合，普通 I/O 走共享单线程�
 
 传输失败是 `TransportFailure`；只在平台层把准确的原生异常类映射为卡片离场，通用 TRANSCEIVE_FAILED 保持未知。银行卡保留应用发现证据和每个应用读取结果，终止性通信失败后停止物理 I/O。FeliCa 保留已读取数据、服务访问结果和终止失败；不发明未公开服务。
 
+上海双应用组合结果保留 TU、CU 各自的失败类型和已读内容；终止性错误阻断后续应用探测，APDU 状态字拒绝不等同于传输中断。主身份由已确认的 TU 身份决定，两侧余额的完整性分别表达。
+
+CU 读取按配置区分消费（18）、充值（10）和异地通道（上海 2000/2153 为 06，其余为 1A），原始 SFI、槽位、交易序号、终端 HEX 随记录保留。`cu_transaction_analysis.dart` 为 CU 建立独立显示投影，匹配只使用已核实的受理地区、运营分类和原始交易时间，未知值不以发卡城市或 TU 规则代填。
+
 ## 参考数据和档案
 
 发布包在构建时完成来源合并，运行时校验 manifest、大小、SHA256、元数据和必需列，并按内容哈希文件名安装、以只读模式打开。TU / CU 分别加载，任一失败不会阻断另一包。TU 与 CU 的城市命名空间独立，CU 受约束规则必须有对应上下文。歧义、未知、不可用分别表达。
 
 档案有自己的数据库与生命周期。采集时上下文、余额观察、原始帧、解析版本、参考包版本和逐记录来源一起存入快照；展示层的记录抑制不决定归档。`ArchiveHistory` 同时服务详情与导出，不读取当前贴卡对象来补旧档案。时间 / 币种未知显式保留，详见 `MIGRATION.md`。
+
+CU 在 v3 快照扩展 `cuProjection` 中保存独立记录与捕获时的匹配结果（内部版本 1），原始文件仍同时存入 `rawEvidence`。历史详情与导出恢复冻结结果，不按当前参考库重新解释旧数据；不支持或损坏的扩展保留原始快照并给出诊断，不改变 Drift 表结构。
 
 ## CDN 更新契约
 
