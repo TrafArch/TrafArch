@@ -8,9 +8,13 @@ import '../../protocols/transit/tunion/tunion_trip_matcher.dart';
 /// 也可能带余额）；更早版本只保存 0x1E 配对的记录余额。
 const int kBalanceReconstructionParseVersion = 6;
 
+/// v8 起钱包连续倒推优先；1E 仅回退展示原始记录余额、不恢复倒推链。
+/// 快照显式保存余额来源，避免用数值相等推断口径。
+const int kWalletAnchoredBalanceParseVersion = 8;
+
 /// 行程解析口径版本：解析 / 关联规则变更时递增，随读取批次持久化，
 /// 历史数据据此识别产出批次所用的解析口径。
-const int kTripParseVersion = kBalanceReconstructionParseVersion + 1;
+const int kTripParseVersion = kWalletAnchoredBalanceParseVersion;
 
 /// 识别证据：来源、说明与权重（0 表示"出场但未命中"）。
 class Evidence {
@@ -155,11 +159,12 @@ class TransitTrip {
   /// 由 0x1E 过程记录按"时间 + 金额"配对补充，未配对或未收录时为 null。
   final String? appTypeName;
 
-  /// 交易后余额（分）：0x1E 记录余额优先，缺失处按账本顺序从当前钱包
-  /// 余额倒推；无法证明连续或未读取到余额时为 null（不猜测）。
+  /// 交易余额（分）：优先从当前钱包沿连续账本倒推交易后余额；无法
+  /// 倒推时仅回退展示配对的 1E 原始记录余额，由来源字段区分口径。
   final int? balanceAfterFen;
 
-  /// 余额来源：true 为 0x1E 记录余额；false 为按连续交易倒推；
+  /// 余额来源：true 为 0x1E 记录余额（前后语义未知）；false 为当前钱包
+  /// 或按连续交易倒推的交易后余额；
   /// null 为旧数据 / 未标注（展示层按记录余额兼容）。
   final bool? balanceAfterIsRecorded;
 

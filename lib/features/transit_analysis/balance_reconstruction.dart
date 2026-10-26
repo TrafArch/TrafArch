@@ -1,17 +1,17 @@
 import '../../protocols/transit/tunion/tunion_models.dart';
 
-/// 交易后余额证据：金额（分）与来源（0x1E 记录 / 倒推）。
+/// 交易余额展示值：金额（分）与口径（0x1E 原始记录 / 交易后余额）。
 class TransactionBalance {
   final int fen;
 
-  /// true 表示来自 0x1E 过程记录（记录余额）；false 表示按后续交易
-  /// 余额与交易金额倒推得出。
+  /// true 表示来自 0x1E 过程记录，前后余额语义未确认；false 表示当前
+  /// 钱包余额或沿连续账本倒推的交易后余额。
   final bool isRecorded;
 
   const TransactionBalance(this.fen, {required this.isRecorded});
 }
 
-/// 按"记录余额优先、缺失处倒推"重建每条交易发生后的钱包余额。
+/// 从当前钱包沿连续账本重建交易后余额，无锚点时仅展示原始记录余额。
 ///
 /// [transactions] 必须保持卡内 0x18 文件的账本顺序（最新 → 最旧）；
 /// [openingBalanceFen] 为当前钱包余额（最新交易之后的余额）。
@@ -24,7 +24,8 @@ class TransactionBalance {
 /// - 仅原始 record 1（或旧调用者明确声明的完整列表）绑定钱包；
 /// - 槽位缺口、混合槽位证据、时间倒序被破坏、重复序号或消费序号反向时
 ///   停止推算，返回 null；
-/// - 已记录的 0x1E 余额始终采用并作为新的推算锚点，不因推算中断而丢弃；
+/// - 0x1E 的记录余额可能在扣费前写入，不覆盖钱包倒推值；无倒推值时
+///   保留为“记录余额”，不能据此恢复推算链；
 /// - 未读取到钱包余额且无记录余额时保持 null（不猜测）。
 List<TransactionBalance?> reconstructTransactionBalances(
   List<TUnionTransaction> transactions, {
@@ -46,13 +47,14 @@ List<TransactionBalance?> reconstructTransactionBalances(
     }
     final recorded = recordedBalanceFen?.call(transaction);
     final delta = _signedDeltaFen(transaction);
-    final balance = recorded != null
-        ? TransactionBalance(recorded, isRecorded: true)
-        : (running != null
-              ? TransactionBalance(running, isRecorded: false)
+    final balance = running != null
+        ? TransactionBalance(running, isRecorded: false)
+        : (recorded != null
+              ? TransactionBalance(recorded, isRecorded: true)
               : null);
     result[i] = balance;
-    running = balance != null && delta != null ? balance.fen - delta : null;
+    // 只延续钱包证明的链；匹配到 1E 不代表其余额是本笔交易之后的余额。
+    running = running != null && delta != null ? running - delta : null;
   }
   return result;
 }

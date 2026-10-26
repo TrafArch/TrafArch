@@ -46,7 +46,13 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+/android/build/
 /android/.kotlin/
 
 # Widget Preview related
 .widget_preview/
+
+# Signing material belongs outside the source checkout.
+key.properties
+*.jks
+*.keystore

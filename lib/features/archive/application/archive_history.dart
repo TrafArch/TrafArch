@@ -8,8 +8,7 @@ import '../domain/card_session_snapshot.dart';
 import '../data/card_repository.dart';
 import '../domain/archive_balance.dart';
 import '../../transit_analysis/balance_interpretation.dart';
-import '../../transit_analysis/tunion_analysis_models.dart'
-    show kBalanceReconstructionParseVersion;
+import '../domain/captured_transaction_balance.dart';
 
 enum ArchiveRecordKind { transaction, rail, bus, process }
 
@@ -388,16 +387,28 @@ class ArchiveHistory {
           );
           // Exact complete records + context only. Incomplete historical keys
           // must not collapse distinct raw bytes/currencies/operators/cities.
+          final balance = section.value == ArchiveRecordKind.transaction
+              ? capturedTransactionBalance(fields, snapshot.parseVersion)
+              : null;
           final key = jsonEncode(
             _canonical({
               'kind': section.key,
-              'fields': fields,
-              // Only split transactions whose balance value or source label
-              // changes across v6; unrelated records retain cross-version dedup.
-              if (section.value == ArchiveRecordKind.transaction &&
-                  _hasBalanceSemanticConflict(fields))
-                'reconstructedBalance':
-                    snapshot.parseVersion >= kBalanceReconstructionParseVersion,
+              // v8 persists a source flag that older writers omitted. Compare
+              // its interpreted meaning below, not its serialization shape.
+              'fields': section.value == ArchiveRecordKind.transaction
+                  ? {
+                      for (final entry in fields.entries)
+                        if (entry.key != 'balanceAfterIsRecorded')
+                          entry.key: entry.value,
+                    }
+                  : fields,
+              // Equal raw fields may have different balance semantics across
+              // parser versions. Unknown balances have no displayed source.
+              if (balance != null && balance.fen != null)
+                'balanceSemantics': {
+                  'fen': balance.fen,
+                  'isRecorded': balance.isRecorded,
+                },
               'context': {
                 'systemId': context.systemId,
                 'applicationId': context.applicationId,
@@ -412,7 +423,9 @@ class ArchiveHistory {
           final previous = records[key];
           records[key] = ArchiveHistoryRecord(
             kind: section.value,
-            fields: Map.unmodifiable(fields),
+            // Sources start with the newest capture. Keep its exact fields so
+            // the first source's parser version always interprets that capture.
+            fields: previous?.fields ?? Map.unmodifiable(fields),
             context: context,
             cardCityCode: snapshot.cardCityCode,
             sources: List.unmodifiable([
@@ -452,24 +465,6 @@ class ArchiveHistory {
       balanceObservedAt: balanceObservedAt,
     );
   }
-}
-
-bool _hasBalanceSemanticConflict(Map<String, dynamic> fields) {
-  final stored = fields['balanceAfterFen'];
-  final matched = fields['matchedProcess'];
-  final hasMatchedBalance =
-      matched is Map<String, dynamic> &&
-      [
-        'typeCode',
-        'appTypeCode',
-        'amountFen',
-        'balanceFen',
-        'time',
-      ].every((key) => matched[key] is int) &&
-      ['terminalId', 'lineStationCode'].every((key) => matched[key] is String);
-  // With evidence, differing values include v6's explicit unknown. Without
-  // evidence, a saved amount changes from recorded to reconstructed in v6.
-  return hasMatchedBalance ? stored != matched['balanceFen'] : stored is int;
 }
 
 Object? _canonical(Object? value) {

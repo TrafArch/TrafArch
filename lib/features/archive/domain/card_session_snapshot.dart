@@ -5,6 +5,7 @@ import '../../reference_data/domain/station_codes.dart';
 import '../../reference_data/domain/tunion_terminal_decoder.dart';
 import '../../../protocols/transit/tunion/tunion_models.dart';
 import 'archive_context.dart';
+import 'captured_transaction_balance.dart';
 import 'snapshot_diagnostics.dart';
 
 export 'archive_context.dart';
@@ -126,7 +127,7 @@ class CardSessionSnapshot {
       'v': formatVersion,
       'parseVersion': parseVersion,
       'cityCode': cardCityCode,
-      'trips': [for (final t in trips) _tripToJson(t)],
+      'trips': [for (final t in trips) _tripToJson(t, parseVersion)],
       if (formatVersion == 1) ...{
         'rail': railRecord == null ? null : _railToJson(railRecord!),
         'bus': busRecord == null ? null : _busToJson(busRecord!),
@@ -368,7 +369,7 @@ class CardSessionSnapshot {
       p.rawHex ??
       '${p.typeCode}|${p.time.millisecondsSinceEpoch}|${p.amountFen}|${p.terminalId}';
 
-  static Map<String, dynamic> _tripToJson(TransitTrip t) => {
+  static Map<String, dynamic> _tripToJson(TransitTrip t, int parseVersion) => {
     'time': t.time.millisecondsSinceEpoch,
     'capturedTimes': {'time': _civil(t.time)},
     'amountFen': t.amountFen,
@@ -385,6 +386,8 @@ class CardSessionSnapshot {
     'stationType': t.stationType,
     'appTypeName': t.appTypeName,
     'balanceAfterFen': t.balanceAfterFen,
+    if (parseVersion >= kWalletAnchoredBalanceParseVersion)
+      'balanceAfterIsRecorded': t.balanceAfterIsRecorded,
     'rideStatusName': t.rideStatusName,
     'isEntry': t.isEntry,
     'displayProcessKey': t.displayProcessKey,
@@ -411,28 +414,7 @@ class CardSessionSnapshot {
     final time = _date(m['time']);
     if (time == null) return null;
     final matched = m['matchedProcess'];
-    final process =
-        matched is Map<String, dynamic> &&
-            [
-              'typeCode',
-              'appTypeCode',
-              'amountFen',
-              'balanceFen',
-              'time',
-            ].every((key) => matched[key] is int) &&
-            [
-              'terminalId',
-              'lineStationCode',
-            ].every((key) => matched[key] is String)
-        ? _cycleFromJson(matched)
-        : null;
-    // v6 起 balanceAfterFen 可能是倒推值，以保存值为准；旧批次仍以
-    // 配对的 0x1E 记录余额为准（balanceAfterFen 只是其副本）。
-    final storedBalance = _int(m['balanceAfterFen']);
-    final reconstructed = parseVersion >= kBalanceReconstructionParseVersion;
-    final balanceAfterFen = reconstructed
-        ? storedBalance
-        : process?.balanceFen ?? storedBalance;
+    final balance = capturedTransactionBalance(m, parseVersion);
     final location = m['location'];
     return TransitTrip(
       time: time,
@@ -460,12 +442,8 @@ class CardSessionSnapshot {
       stationLabel: _str(m['stationLabel']),
       stationType: _str(m['stationType']),
       appTypeName: _str(m['appTypeName']),
-      balanceAfterFen: balanceAfterFen,
-      balanceAfterIsRecorded: balanceAfterFen == null
-          ? null
-          : !reconstructed
-          ? true
-          : process != null && storedBalance == process.balanceFen,
+      balanceAfterFen: balance.fen,
+      balanceAfterIsRecorded: balance.fen == null ? null : balance.isRecorded,
       rideStatusName: _str(m['rideStatusName']),
       isEntry: m['isEntry'] == true,
       displayProcessKey: _str(m['displayProcessKey']),

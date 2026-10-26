@@ -23,7 +23,7 @@ void main() {
   final day2 = DateTime(2024, 5, 2, 8);
   final earlier = DateTime(2024, 5, 1, 7);
 
-  test('缺口后的记录余额重新锚定，仅沿后续连续槽位倒推', () {
+  test('缺口后的1E仅为记录余额，不重新锚定更旧交易', () {
     final balances = reconstructTransactionBalances(
       [
         _txn(sequence: 5, time: day2, amountFen: 100, recordNumber: 2),
@@ -33,7 +33,8 @@ void main() {
       openingBalanceFen: 10000,
       recordedBalanceFen: (t) => t.recordNumber == 4 ? 5000 : null,
     );
-    expect(balances.map((b) => b?.fen), [null, 5000, 5300]);
+    expect(balances.map((b) => b?.fen), [null, 5000, null]);
+    expect(balances[1]?.isRecorded, isTrue);
   });
 
   test('混合旧构造与原始槽位不能证明连续', () {
@@ -73,7 +74,20 @@ void main() {
     expect([for (final b in balances) b?.fen], [10000, 9000]);
   });
 
-  test('0x1E 记录余额优先，并作为更旧记录的推算锚点', () {
+  test('充值的1E旧余额不能覆盖钱包，也不能改变更旧交易余额', () {
+    final balances = reconstructTransactionBalances(
+      [
+        _txn(sequence: 2, time: day2, amountFen: 1000, rawType: 0x02),
+        _txn(sequence: 20, time: day1, amountFen: 300),
+      ],
+      openingBalanceFen: 10000,
+      recordedBalanceFen: (txn) => txn.isRecharge ? 9000 : null,
+    );
+    expect(balances.map((b) => b?.fen), [10000, 9000]);
+    expect(balances.map((b) => b?.isRecorded), [false, false]);
+  });
+
+  test('无钱包时0x1E仅显示记录余额，不假定为交易后余额', () {
     final balances = reconstructTransactionBalances(
       [
         _txn(sequence: 3, time: day2, amountFen: 500),
@@ -86,9 +100,7 @@ void main() {
     expect(balances[0], isNull);
     expect(balances[1]?.fen, 5000);
     expect(balances[1]?.isRecorded, isTrue);
-    // 记录余额为消费 3.00 元之后；更旧一笔消费 1.00 元之后为 53.00 元。
-    expect(balances[2]?.fen, 5300);
-    expect(balances[2]?.isRecorded, isFalse);
+    expect(balances[2], isNull);
   });
 
   test('最新交易类型未知：给出最新余额，但不继续向更旧记录推算', () {
@@ -101,7 +113,7 @@ void main() {
     expect(balances[1], isNull);
   });
 
-  test('中间交易类型未知：已记录余额仍可重新锚定', () {
+  test('交易类型未知中断倒推后，记录余额不恢复推算链', () {
     final balances = reconstructTransactionBalances(
       [
         _txn(sequence: 3, time: day2, amountFen: 200, rawType: 0x07),
@@ -113,7 +125,8 @@ void main() {
     );
     expect(balances[0]?.fen, 10000);
     expect(balances[1]?.fen, 5000);
-    expect(balances[2]?.fen, 5300);
+    expect(balances[1]?.isRecorded, isTrue);
+    expect(balances[2], isNull);
   });
 
   test('未读到钱包余额且无记录余额：保持未知', () {

@@ -1,6 +1,6 @@
 import '../domain/archive_context.dart';
 import '../application/archive_history.dart';
-import '../../transit_analysis/tunion_analysis_models.dart';
+import '../domain/captured_transaction_balance.dart';
 import '../../../protocols/transit/tunion/tunion_models.dart';
 
 /// Shared detail/export text. No resolver may replace captured identifiers or
@@ -17,61 +17,28 @@ String archiveRecordTitle(ArchiveHistoryRecord record) => switch (record.kind) {
   ArchiveRecordKind.process => '0x1E 过程 · 类型 ${record.fields['typeCode']}',
 };
 
-/// 展示投影优先采用已保存的完整 1E 证据；无证据时保留旧缓存，不猜测修正。
+/// 按捕获版本展示保存的余额与来源；独立 1E 始终保留原始记录余额。
 int? archiveRecordBalanceFen(ArchiveHistoryRecord record) {
   final fields = record.fields;
   if (record.kind == ArchiveRecordKind.process) {
     return fields['balanceFen'] is int ? fields['balanceFen'] as int : null;
   }
   if (record.kind != ArchiveRecordKind.transaction) return null;
-  // v6 起保存值可能是倒推的交易后余额，不再按配对记录改写；旧批次仍以
-  // 配对 0x1E 记录余额为准（保存值只是其副本）。
-  if (_isReconstructedBalance(record)) {
-    final stored = fields['balanceAfterFen'];
-    return stored is int ? stored : null;
-  }
-  final matched = _matchedProcessBalanceFen(fields);
-  if (matched != null) return matched;
-  return fields['balanceAfterFen'] is int
-      ? fields['balanceAfterFen'] as int
-      : null;
+  return capturedTransactionBalance(fields, _parseVersion(record)).fen;
 }
 
-/// 交易余额口径是否仍为 0x1E 记录余额（false 表示按连续交易倒推）。
-/// 旧批次只保存配对记录余额；v6 起无配对 0x1E 的余额来自倒推。
+/// 交易余额是否为过程记录原值；v8 起以捕获时显式保存的来源为准。
 bool archiveRecordBalanceIsRecorded(ArchiveHistoryRecord record) {
   if (record.kind != ArchiveRecordKind.transaction) return true;
-  if (!_isReconstructedBalance(record)) return true;
-  final stored = record.fields['balanceAfterFen'];
-  final matched = _matchedProcessBalanceFen(record.fields);
-  return stored is int && matched != null && stored == matched;
+  return capturedTransactionBalance(
+    record.fields,
+    _parseVersion(record),
+  ).isRecorded;
 }
 
-int? _matchedProcessBalanceFen(Map<String, dynamic> fields) {
-  final matched = fields['matchedProcess'];
-  if (matched is Map<String, dynamic> &&
-      [
-        'typeCode',
-        'appTypeCode',
-        'amountFen',
-        'balanceFen',
-        'time',
-      ].every((key) => matched[key] is int) &&
-      [
-        'terminalId',
-        'lineStationCode',
-      ].every((key) => matched[key] is String)) {
-    return matched['balanceFen'] as int;
-  }
-  return null;
-}
-
-/// 该记录的捕获批次是否采用交易后余额倒推口径（[kTripParseVersion]
-/// 之前只保存 0x1E 记录余额）。
-bool _isReconstructedBalance(ArchiveHistoryRecord record) {
+int _parseVersion(ArchiveHistoryRecord record) {
   final sources = record.sources;
-  return sources.isNotEmpty &&
-      sources.first.capturedParseVersion >= kBalanceReconstructionParseVersion;
+  return sources.isEmpty ? 1 : sources.first.capturedParseVersion;
 }
 
 String archiveRecordText(ArchiveHistoryRecord record) {

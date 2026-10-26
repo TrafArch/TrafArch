@@ -15,4 +15,3 @@ class AppInfo {
   static const String buildNumber = '2101';
   static const String author = 'kajolno';
   static const String copyright = '© 2026 kajolno';
-}

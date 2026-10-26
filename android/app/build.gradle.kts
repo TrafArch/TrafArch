@@ -1,4 +1,4 @@
-import java.io.FileInputStream
+import java.io.File
 import java.util.Properties
 
 plugins {
@@ -88,10 +88,37 @@ check(!providers.gradleProperty("transitDbMasterDir").isPresent) {
         "and remove this Gradle property; see docs/MIGRATION.md."
 }
 
+// Signing secrets stay outside source checkouts. Explicit configuration must
+// fail if invalid instead of silently producing an APK with the debug key.
+val signingPropertiesPath = providers.gradleProperty("trafarchSigningProperties")
+    .orElse(providers.environmentVariable("TRAFARCH_SIGNING_PROPERTIES")).orNull
+val legacySigningFile = rootProject.file("key.properties")
+val userSigningFile = File(System.getProperty("user.home"), ".config/TrafArch/signing/key.properties")
+val keystorePropertiesFile = when {
+    unsignedApk -> legacySigningFile
+    signingPropertiesPath != null -> {
+        require(signingPropertiesPath.isNotBlank()) { "Signing properties path is empty" }
+        rootProject.file(signingPropertiesPath)
+    }
+    userSigningFile.exists() -> userSigningFile
+    else -> legacySigningFile
+}
 val keystoreProperties = Properties()
-val keystorePropertiesFile = rootProject.file("key.properties")
-if (keystorePropertiesFile.exists()) {
-    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+var signingStoreFile: File? = null
+if (!unsignedApk && (signingPropertiesPath != null || keystorePropertiesFile.exists())) {
+    require(keystorePropertiesFile.isFile) { "Signing properties file is missing or not a file" }
+    keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
+    for (name in listOf("keyAlias", "keyPassword", "storeFile", "storePassword")) {
+        require(!keystoreProperties.getProperty(name).isNullOrEmpty()) { "Missing signing property: $name" }
+    }
+    val configuredStore = File(keystoreProperties.getProperty("storeFile"))
+    val resolvedStore = when {
+        configuredStore.isAbsolute -> configuredStore
+        keystorePropertiesFile.canonicalFile == legacySigningFile.canonicalFile -> file(configuredStore.path)
+        else -> File(keystorePropertiesFile.parentFile, configuredStore.path)
+    }
+    require(resolvedStore.isFile) { "Configured signing keystore is missing or not a file" }
+    signingStoreFile = resolvedStore
 }
 
 android {
@@ -108,11 +135,11 @@ android {
     }
 
     signingConfigs {
-        if (keystorePropertiesFile.exists()) {
+        if (signingStoreFile != null) {
             create("release") {
                 keyAlias = keystoreProperties["keyAlias"] as String
                 keyPassword = keystoreProperties["keyPassword"] as String
-                storeFile = file(keystoreProperties["storeFile"] as String)
+                storeFile = signingStoreFile
                 storePassword = keystoreProperties["storePassword"] as String
             }
         }
@@ -132,12 +159,14 @@ android {
             manifestPlaceholders["appLabel"] = "TrafArch"
             if (unsignedApk) {
                 signingConfig = null
+            } else if (signingStoreFile != null) {
+                signingConfig = signingConfigs.getByName("release")
             }
         }
         release {
             signingConfig = if (unsignedApk) {
                 null
-            } else if (keystorePropertiesFile.exists()) {
+            } else if (signingStoreFile != null) {
                 signingConfigs.getByName("release")
             } else {
                 signingConfigs.getByName("debug")

@@ -270,6 +270,9 @@ class _ArchiveEvent {
         : rail && entry
         ? amount('entryBalanceFen')
         : null;
+    final balanceLabel = transaction || cycle != null
+        ? (archiveRecordBalanceIsRecorded(record) ? '记录余额' : '交易后余额')
+        : '余额';
     final station =
         text(side == null ? 'stationLabel' : '${side}StationName') ??
         (side == null ? null : text('${side}Station${rail ? 'Id' : 'Code'}'));
@@ -316,7 +319,7 @@ class _ArchiveEvent {
           ? '里程 ${fields['mileage']} 站'
           : balance == null || (side != null && !entry)
           ? null
-          : '余额 $balance',
+          : '$balanceLabel $balance',
       category:
           text('appTypeName') ??
           cycle?.appTypeLabel ??
