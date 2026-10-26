@@ -93,6 +93,7 @@ void main() {
         (commands[3], [0x90, 0]),
         ('805C000204', _sw9000([0, 0, 0, 5])),
         ('00B201C417', [0x6A, 0x83]),
+        ('00B2018417', [0x6A, 0x83]),
         ('00B201D417', [0x6A, 0x83]),
       ], balance: true);
       expect(result.$1.parsedCard!.info.balanceFen, 5);
@@ -122,11 +123,12 @@ void main() {
             ('00B201C417', [sw, 0]),
             ('00B201C400', succeeds ? _sw9000(_localRecord()) : [sw, 0]),
             if (succeeds) ('00B202C417', [0x6A, 0x83]),
-            ('00B201D417', _sw9000(_rechargeRecord())),
-            ('00B202D417', [0x6A, 0x83]),
+            ('00B2018417', _sw9000(_rechargeRecord())),
+            ('00B2028417', [0x6A, 0x83]),
+            ('00B201D417', [0x6A, 0x83]),
           ]);
           expect(result.$2, hasLength(succeeds ? 2 : 1));
-          expect(result.$2.last.fileSelector, 0x1A);
+          expect(result.$2.last.fileSelector, 0x10);
         });
       }
     }
@@ -137,6 +139,7 @@ void main() {
         ('805C000204', [0x6C, 0]),
         ('805C000200', _sw9000([0, 0, 0, 5])),
         ('00B201C417', [0x6A, 0x83]),
+        ('00B2018417', [0x6A, 0x83]),
         ('00B201D417', [0x6A, 0x83]),
       ], balance: true);
       expect(result.$1.parsedCard!.info.balanceFen, 5);
@@ -164,11 +167,12 @@ void main() {
         ('005C000204', [0x6A, 0x81]),
         ('00B201C417', _sw9000(_localRecord())),
         ('00B202C417', [0x6A, 0x83]),
-        ('00B201D417', _sw9000(_rechargeRecord())),
-        ('00B202D417', [0x6A, 0x83]),
+        ('00B2018417', _sw9000(_rechargeRecord())),
+        ('00B2028417', [0x6A, 0x83]),
+        ('00B201D417', [0x6A, 0x83]),
       ], balance: true);
       expect(result.$1.parsedCard!.info.balanceFen, isNull);
-      expect(result.$2.map((r) => r.fileSelector), [0x18, 0x1A]);
+      expect(result.$2.map((r) => r.fileSelector), [0x18, 0x10]);
     });
     test('2120 MF补充读取断连不再恢复SELECT', () async {
       final data = _publicFile()
@@ -446,7 +450,7 @@ void main() {
     });
   });
   group('城市一卡通（CU）解析管道', () {
-    test('完整读取：0x15 公共信息 + 0x18 本地消费 + 0x1A 充值', () async {
+    test('完整读取：0x15 公共信息 + 0x18 本地消费 + 0x10 充值', () async {
       final parsed = await _parseCu(_baseLink().call);
 
       expect(parsed, isNotNull);
@@ -487,7 +491,7 @@ void main() {
         ),
       );
       link.enqueue(0xB2, const [0x6A, 0x83]); // 0x18 未找到
-      link.enqueue(0xB2, const [0x6A, 0x83]); // 0x1A 未找到
+      link.enqueue(0xB2, const [0x6A, 0x83]); // 0x10 未找到
 
       final apdu = ApduExchange(transceive: link.call);
       final info = CardInfo();
@@ -523,7 +527,7 @@ void main() {
       link.enqueue(0xA4, _sw9000(const [])); // AID CLA 80 成功
       link.enqueue(0xB0, _sw9000(_publicFile()));
       link.enqueue(0xB2, const [0x6A, 0x83]); // 0x18 记录未找到
-      link.enqueue(0xB2, const [0x6A, 0x83]); // 0x1A 记录未找到
+      link.enqueue(0xB2, const [0x6A, 0x83]); // 0x10 记录未找到
 
       final parsed = await _parseCu(link.call);
       expect(parsed, isNotNull);
@@ -537,8 +541,8 @@ void main() {
       link.enqueue(0xB0, const [0x6A, 0x82]); // 0x15 整体读取失败
       link.enqueue(0xB0, const [0x6A, 0x82]); // 0x15 按偏移补读同样失败
       link.enqueue(0xB2, const [0x6A, 0x83]); // 0x18 记录未找到
-      link.enqueue(0xB2, _sw9000(_rechargeRecord())); // 0x1A 记录 1 命中
-      link.enqueue(0xB2, const [0x6A, 0x83]); // 0x1A 记录 2 未找到
+      link.enqueue(0xB2, _sw9000(_rechargeRecord())); // 0x10 记录 1 命中
+      link.enqueue(0xB2, const [0x6A, 0x83]); // 0x10 记录 2 未找到
 
       final parsed = await _parseCu(link.call);
       expect(parsed, isNotNull);
@@ -553,7 +557,7 @@ void main() {
       link.enqueue(0xB0, _sw9000(_publicFile()));
       link.enqueue(0xB2, _sw9000(List.filled(20, 0x5A))); // 0x18 记录 20 字节（非 23）
       link.enqueue(0xB2, const [0x6A, 0x83]); // 0x18 记录 2 未找到
-      link.enqueue(0xB2, const [0x6A, 0x83]); // 0x1A 未找到
+      link.enqueue(0xB2, const [0x6A, 0x83]); // 0x10 未找到
 
       final parsed = await _parseCu(link.call);
 
@@ -576,7 +580,7 @@ void main() {
       link.enqueue(0xB2, _sw9000(List.filled(23, 0x00))); // 0x18 记录 1 空白
       link.enqueue(0xB2, _sw9000(_localRecord())); // 0x18 记录 2 有效
       link.enqueue(0xB2, _sw9000(_localRecord())); // 0x18 记录 3 与记录 2 相同
-      link.enqueue(0xB2, const [0x6A, 0x83]); // 0x1A 未找到
+      link.enqueue(0xB2, const [0x6A, 0x83]); // 0x10 未找到
 
       final parsed = await _parseCu(link.call);
 
@@ -715,7 +719,15 @@ Future<(ParsedCard, CardInfo, List<ApduRecord>)> _strictCu(
           '00B2${(rows.length + 1).toRadixString(16).padLeft(2, '0').toUpperCase()}C417',
           [0x6A, 0x83],
         ),
-      ('00B201D417', [0x6A, 0x83]),
+      ('00B2018417', [0x6A, 0x83]),
+      (
+        data.length >= 30 &&
+                ((data[2] == 0x20 && data[3] == 0) ||
+                    (data[2] == 0x21 && data[3] == 0x53))
+            ? '00B2013417'
+            : '00B201D417',
+        [0x6A, 0x83],
+      ),
     ],
   ];
   final info = CardInfo();
@@ -756,7 +768,7 @@ class _ScriptedLink {
   }
 }
 
-/// 完整读取脚本：MF → AID → 0x15 → 0x18 (1 条) → 0x1A (1 条)。
+/// 完整读取脚本：MF → AID → 0x15 → 0x18 (1 条) → 0x10 (1 条)。
 _ScriptedLink _baseLink() {
   final link = _ScriptedLink();
   link.enqueue(0xA4, const [0x90, 0x00]); // 选择主文件 MF
@@ -764,8 +776,8 @@ _ScriptedLink _baseLink() {
   link.enqueue(0xB0, _sw9000(_publicFile())); // 0x15 整体读取
   link.enqueue(0xB2, _sw9000(_localRecord())); // 0x18 记录 1
   link.enqueue(0xB2, const [0x6A, 0x83]); // 0x18 记录 2 未找到
-  link.enqueue(0xB2, _sw9000(_rechargeRecord())); // 0x1A 记录 1
-  link.enqueue(0xB2, const [0x6A, 0x83]); // 0x1A 记录 2 未找到
+  link.enqueue(0xB2, _sw9000(_rechargeRecord())); // 0x10 记录 1
+  link.enqueue(0xB2, const [0x6A, 0x83]); // 0x10 记录 2 未找到
   return link;
 }
 

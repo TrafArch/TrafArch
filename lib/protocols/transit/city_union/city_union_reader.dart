@@ -14,7 +14,7 @@ import '../local/local_card_models.dart';
 /// 本单元已内联原 `CityUnionParser` 的全部读取实现（老模块移除）：
 /// - 应用选择：MF 3F00 复位 + 住建部 AID A00000000386980701
 ///   按 CLA 0x00 / 0x80 双尝试；
-/// - 文件读取：SFI 0x15 / 0x18 / 0x1A，产出带 [CityUnionFileView] 视图的
+/// - 文件读取：SFI 0x15 / 0x18 / 0x10 / 城市异地通道，产出带 [CityUnionFileView] 视图的
 ///   [ParsedCard]（parserId [CardParserIds.cityUnion]），继续供专家页与
 ///   卡片档案链路消费；
 /// - 同步回填新架构 [CardInfo] 与交易流水（[ApduRecord.type] == 2）。
@@ -93,10 +93,20 @@ class CommonUnitCu {
           : null;
       // 状态字拒绝不妨碍读取记录；传输异常必须终止会话并保留已读数据。
       if (_selectedAid != null) {
-        await _readRecords(CityUnionFileIds.walletLocalConsumption, files);
-        _report(0.65);
-        await _readRecords(CityUnionFileIds.walletRecharge, files);
-        _report(0.9);
+        await _readRecords(0x18, CityUnionTransactionKind.consumption, files);
+        _report(0.55);
+        await _readRecords(0x10, CityUnionTransactionKind.recharge, files);
+        _report(0.75);
+        final city = files
+            .whereType<CjT331PublicInfo>()
+            .firstOrNull
+            ?.displayCityCode;
+        await _readRecords(
+          city == 2000 || city == 2153 ? 0x06 : 0x1A,
+          CityUnionTransactionKind.foreignConsumption,
+          files,
+        );
+        _report(0.95);
       }
       _report(1);
     } finally {
@@ -197,8 +207,12 @@ class CommonUnitCu {
     }
   }
 
-  /// 逐条 READ RECORD 读取记录文件（0x18、0x1A 循环记录）。
-  Future<void> _readRecords(int sfi, List<CityUnionFileView> out) async {
+  /// The role comes from the CU read profile, not the numeric SFI alone.
+  Future<void> _readRecords(
+    int sfi,
+    CityUnionTransactionKind kind,
+    List<CityUnionFileView> out,
+  ) async {
     List<int>? firstData;
     for (var i = 1; i <= _maxRecordNumber; i++) {
       final resp = await _exchange(TUnionApdu.readRecord(sfi, i, le: 0x17));
@@ -208,7 +222,18 @@ class CommonUnitCu {
       if (_isBlankRecord(data)) continue;
       if (firstData != null && _listEquals(data, firstData)) break;
       firstData ??= data;
-      out.add(_parseSafely(sfi, data));
+      try {
+        out.add(
+          CityUnionFileParser.parseWalletRecord(
+            sfi,
+            data,
+            kind: kind,
+            recordNumber: i,
+          ),
+        );
+      } on FormatException catch (e) {
+        out.add(CityUnionRawFileView(sfi: sfi, raw: data, reason: e.message));
+      }
     }
   }
 
@@ -284,7 +309,7 @@ class CommonUnitCu {
         _dateTimeOf(public.applicationStartDate, null) ?? info.issueDate;
   }
 
-  /// 0x18 本地消费 / 0x1A 充值明细 → 新架构流水（type == 2）。
+  /// CU 消费、充值、异地通道 → 新架构流水（type == 2）。
   void _appendRecords(
     CardInfo info,
     List<ApduRecord> records,
@@ -296,39 +321,22 @@ class CommonUnitCu {
         for (var i = 0; i < hex.length; i += 2)
           int.parse(hex.substring(i, i + 2), radix: 16),
       ];
-      if (f is CjT331WalletLocalConsumption) {
+      if (f is CityUnionWalletTransaction) {
         records.add(
           ApduRecord()
             ..type = 2
-            ..label = 'CU 0x18#${f.sequence}'
+            ..label =
+                'CU ${CityUnionCodec.sfiLabel(f.sfi)}#${f.recordNumber ?? f.sequence}'
             ..timestamp =
                 (f.transactionTime == null
                     ? null
                     : _dateTimeOf(f.transactionDate, f.transactionTime)) ??
                 DateTime.fromMillisecondsSinceEpoch(0)
             ..response = [...raw, 0x90, 0x00]
-            ..recordNumber = f.sequence
+            ..recordNumber = f.recordNumber ?? f.sequence
             ..posType = f.transactionType
             ..fileSelector = f.sfi
-            ..terminalHex = CityUnionCodec.hex(raw.sublist(10, 16))
-            ..cityCode = info.cityCode,
-        );
-      } else if (f is CjT331WalletRecharge) {
-        records.add(
-          ApduRecord()
-            ..type = 2
-            ..label = 'CU 0x1A#${f.sequence}'
-            ..timestamp =
-                (f.transactionTime == null
-                    ? null
-                    : _dateTimeOf(f.transactionDate, f.transactionTime)) ??
-                DateTime.fromMillisecondsSinceEpoch(0)
-            ..response = [...raw, 0x90, 0x00]
-            ..recordNumber = f.sequence
-            ..posType = f.transactionType
-            ..fileSelector = f.sfi
-            ..terminalHex = CityUnionCodec.hex(raw.sublist(10, 16))
-            ..cityCode = info.cityCode,
+            ..terminalHex = f.terminalHex ?? '',
         );
       }
     }

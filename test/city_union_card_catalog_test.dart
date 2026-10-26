@@ -8,6 +8,7 @@ import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
 import 'package:transit_card_analyzer/features/reference_data/domain/city_union_knowledge_base.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/tunion_knowledge_base.dart';
 import 'package:transit_card_analyzer/protocols/transit/city_union/city_union_models.dart';
+import 'package:transit_card_analyzer/protocols/transit/city_union/cj_t331_public_info_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_models.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_archive_identity.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_types.dart';
@@ -119,6 +120,30 @@ void main() {
 
   group('CardIdentificationService 城市一卡通识别', () {
     final kb = KnowledgeBase.fromJsonStrings(cityUnionCatalog: _catalogJson);
+
+    test('字段视图的空格分隔原始字节可进入实际扫描和归档卡名识别', () {
+      final compact = _raw('544B3500');
+      final public = CjT331PublicInfoParser.parse([
+        for (var index = 0; index < compact.length; index += 2)
+          int.parse(compact.substring(index, index + 2), radix: 16),
+      ]);
+      expect(public.rawHex, contains(' '));
+      final card = ParsedCard(
+        parserId: CardParserIds.cityUnion,
+        parserName: '城市一卡通',
+        info: const TUnionCardInfo(),
+        transactions: const [],
+        cityUnionFiles: [public],
+      );
+      expect(
+        ScanPresentation(TransitReadOutcome(card), kb).cityUnionCard!.cardName,
+        '榕城通',
+      );
+      expect(
+        CardIdentificationService(kb).identify(card)!.identity.officialName,
+        '榕城通',
+      );
+    });
 
     test('命中 CU 识别库：正式卡名 + 城市 + 卡种目录来源', () {
       final identified = CardIdentificationService(kb)

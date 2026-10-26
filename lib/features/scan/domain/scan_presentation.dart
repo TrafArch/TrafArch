@@ -1,4 +1,5 @@
 import '../../transit_analysis/tunion_analysis_engine.dart';
+import '../../transit_analysis/cu_transaction_analysis.dart';
 import '../../transit_analysis/tunion_analysis_models.dart';
 import '../../transit_analysis/balance_interpretation.dart';
 import '../../../protocols/transit/card_parser.dart';
@@ -23,6 +24,10 @@ class ScanPresentation {
     analysis = card != null && CardParserIds.isTUnionFamily(card.parserId)
         ? AnalysisEngine(knowledge).analyze(card)
         : null;
+    cityUnionTransactions = analyzeCuTransactions(
+      card?.cityUnionFiles ?? const [],
+      knowledge,
+    );
     railTransitRecord = _deriveRail();
     busTransitRecord = _deriveBus();
   }
@@ -30,6 +35,7 @@ class ScanPresentation {
   final KnowledgeBase knowledge;
   final ParsedCard? parsedCard;
   late final CardAnalysisResult? analysis;
+  late final List<CuTransactionView> cityUnionTransactions;
   late final TransitRecord? railTransitRecord;
   late final BusTransitRecord? busTransitRecord;
   TUnionCardInfo? get cardInfo => parsedCard?.info;
@@ -69,7 +75,7 @@ class ScanPresentation {
 
   CityUnionCardInfo? get cityUnionCard => knowledge.cityUnionCards.resolveCard(
     cityCode: cityUnionPublicInfo?.cityCode,
-    rawHex: cityUnionPublicInfo?.rawHex,
+    rawHex: cityUnionPublicInfo?.rawHex.replaceAll(' ', ''),
   );
   Currency get cardCurrency =>
       analysis?.currency ??

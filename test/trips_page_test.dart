@@ -23,6 +23,8 @@ import 'package:transit_card_analyzer/features/archive/domain/card_types.dart';
 import 'package:transit_card_analyzer/features/home/home_page.dart';
 import 'package:transit_card_analyzer/features/cards/cards_page.dart';
 import 'package:transit_card_analyzer/features/trips/trip_entry_card.dart';
+import 'package:transit_card_analyzer/features/trips/trips_page.dart';
+import 'package:transit_card_analyzer/features/trips/trip_cards_view.dart';
 import 'package:transit_card_analyzer/app/app_dependencies.dart';
 
 /// 行程模块链路测试：
@@ -64,6 +66,67 @@ void main() {
   });
   // 每个测试各开一个内存数据库：关闭多数据库调试警告。
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+
+  testWidgets('10条交易与30条1E全部展示保存，摘要不以交易数截断记录数', (tester) async {
+    // 合成复现泉城通日志的容量差异；不包含用户卡号或真实行程。
+    final channel = _FakeNfcChannel()
+      ..enqueue(0xA4, [0x6A, 0x82])
+      ..enqueue(0xA4, [0x90, 0x00])
+      ..enqueue(0xB0, _sw9000(_publicFile()))
+      ..enqueue(0xB0, _sw9000(_holderFile()))
+      ..enqueue(0xB0, _sw9000(_managementFile()))
+      ..enqueue(0x5C, [0, 0, 0x27, 0x10, 0x90, 0])
+      ..enqueue(0xB2, [0x6A, 0x86]); // 18 不支持整文件读取
+    for (var i = 0; i < 10; i++) {
+      channel.enqueue(
+        0xB2,
+        _sw9000(_record(seq: 30 - i, day: _bcd2(30 - i), rawType: 0x09)),
+      );
+    }
+    channel
+      ..enqueue(0xB2, [0x6A, 0x83]) // 1A 逐条
+      ..enqueue(0xB2, [0x6A, 0x83]) // 1A 整体
+      ..enqueue(0xB2, [0x6A, 0x86]); // 1E 不支持整文件读取
+    for (var i = 0; i < 30; i++) {
+      channel.enqueue(0xB2, _sw9000(_cycleRecord(day: _bcd2(30 - i))));
+    }
+    channel.enqueue(0xB2, [0x6A, 0x83]); // 第31槽结束
+    final database = _memoryDatabase();
+    final app = (await tester.runAsync(
+      () => _scan(channel, database: database),
+    ))!;
+    expect(app.analysis!.trips, hasLength(10));
+    expect(app.cycleProcessTrips, hasLength(30));
+    expect(app.cycleProcessTrips.last.time, DateTime(2024, 5, 1, 8, 30));
+    expect(
+      channel.commands
+          .where((a) => a[1] == 0xB2 && a[3] == 0xF4)
+          .map((a) => a[2]),
+      orderedEquals(List.generate(31, (i) => i + 1)),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: TripsPage(app: app)),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final cards = tester.widget<TripCardsView>(
+      find.byWidgetPredicate((widget) => widget is TripCardsView),
+    );
+    expect(cards.entries, hasLength(30)); // 10条关联 + 20条独立，不丢失、不重复
+    expect(find.text('记录 30 条'), findsOneWidget);
+    await tester.runAsync(
+      () => app.acceptPendingSave(app.pendingCardSave!.pendingSaveId),
+    );
+    final rows = await database.select(database.savedCards).get();
+    final snapshot =
+        jsonDecode(rows.single.sessionDataJson!) as Map<String, dynamic>;
+    expect(snapshot['trips'], hasLength(10));
+    expect(snapshot['cycle'], hasLength(30));
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
 
   group('行程解析管道（模型级）', () {
     test('命中站点代码表：解析出城市 / 线路 / 站点 / 类型', () async {
@@ -995,6 +1058,7 @@ final Map<String, String> _octopusAssets = {
 /// 按 INS 脚本化的假 NFC 通道：队列耗尽后返回 6A82（记录未找到）。
 class _FakeNfcChannel implements NfcChannel {
   final Map<int, List<List<int>>> _queues = {};
+  final commands = <List<int>>[];
 
   void enqueue(int ins, List<int> response) =>
       _queues.putIfAbsent(ins, () => []).add(response);
@@ -1057,6 +1121,7 @@ class _FakeNfcChannel implements NfcChannel {
 
   @override
   Future<List<int>> transceive(List<int> apdu) async {
+    commands.add(List.of(apdu));
     final ins = apdu.length > 1 ? apdu[1] : -1;
     final queue = _queues[ins];
     if (queue == null || queue.isEmpty) return const [0x6A, 0x82];

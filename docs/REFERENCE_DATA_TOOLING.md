@@ -5,6 +5,11 @@ assets from frozen local inputs. It performs no network requests and invokes no
 Flutter, Gradle, Android, emulator, device, or test commands. Python 3.11 or newer
 is required. Run the examples from the repository root.
 
+The TU lookup regression uses the tracked frozen source in
+`test/fixtures/reference/tu-lookup-20261021.json`, with provenance documented
+beside it. Its hash is checked against the published manifest before assertions;
+running Flutter tests does not require the ignored local `data/` directory.
+
 ## Published contract
 
 Outputs retain the runtime asset names:

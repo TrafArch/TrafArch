@@ -47,7 +47,7 @@ class ShanghaiTransitUnionCardParser implements CardParser {
     final tu = await _readTu(apdu);
     _report(0.5);
 
-    final cu = tu.isShanghaiTu
+    final cu = tu.isShanghaiTu && tu.transportFailure?.stopsSession != true
         ? await _readCu(apdu)
         : ShanghaiTransitApplication(
             system: ShanghaiTransitUnionIds.cuSystem,
@@ -65,7 +65,7 @@ class ShanghaiTransitUnionCardParser implements CardParser {
 
   /// 交通联合应用识读（TU）。
   Future<ShanghaiTransitApplication> _readTu(ApduExchange apdu) async {
-    onStage?.call('$moduleName · ${ShanghaiTransitUnionIds.tuSystem}');
+    onStage?.call(CommonUnitTu.moduleName);
     final info = CardInfo();
     final records = <ApduRecord>[];
     final errors = <String>[];
@@ -74,6 +74,7 @@ class ShanghaiTransitUnionCardParser implements CardParser {
 
     var confirmed = false;
     ParsedCard? card;
+    Object? readError;
     try {
       confirmed = await unit.select(info, records);
       if (!confirmed) {
@@ -86,6 +87,7 @@ class ShanghaiTransitUnionCardParser implements CardParser {
       }
     } on Exception catch (e) {
       card = unit.parsedCard;
+      readError = e;
       errors.add('TU 读取异常：$e');
     }
 
@@ -110,6 +112,7 @@ class ShanghaiTransitUnionCardParser implements CardParser {
       identity: identity,
       cardInfo: info,
       records: records,
+      readError: readError,
       errors: errors,
       warnings: warnings,
     );
@@ -126,6 +129,7 @@ class ShanghaiTransitUnionCardParser implements CardParser {
 
     var confirmed = false;
     ParsedCard? card;
+    Object? readError;
     try {
       confirmed = await unit.select(info, records);
       if (!confirmed) {
@@ -143,6 +147,7 @@ class ShanghaiTransitUnionCardParser implements CardParser {
     } on Exception catch (e) {
       final partial = unit.parsedCard;
       if (partial != null && partial.cityUnionFiles.isNotEmpty) card = partial;
+      readError = e;
       errors.add('CU 读取异常：$e');
     }
 
@@ -152,9 +157,7 @@ class ShanghaiTransitUnionCardParser implements CardParser {
     final serial = public?.applicationSerialNumber;
     final hasWalletRecords =
         card?.cityUnionFiles.any(
-          (view) =>
-              view is CjT331WalletLocalConsumption ||
-              view is CjT331WalletRecharge,
+          (view) => view is CityUnionWalletTransaction,
         ) ??
         false;
     final dataComplete =
@@ -180,6 +183,7 @@ class ShanghaiTransitUnionCardParser implements CardParser {
       identity: card?.info,
       cardInfo: info,
       records: records,
+      readError: readError,
       errors: errors,
       warnings: warnings,
     );

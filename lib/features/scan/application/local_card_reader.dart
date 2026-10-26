@@ -162,7 +162,14 @@ class LocalCardReader {
           shanghai.tu.records,
           extras,
           tuCard,
+          readError: shanghai.tu.readError,
         );
+      }
+
+      // 已发生终止性传输错误时，无卡结果也不能被当成应用不匹配。
+      final tuFailure = shanghai.tu.transportFailure;
+      if (tuFailure != null && tuFailure.stopsSession) {
+        throw shanghai.tu.readError ?? tuFailure;
       }
 
       // TU 无可返回结果时独立尝试普通 CU；上海分支已探测过则不重读。
@@ -170,17 +177,23 @@ class LocalCardReader {
         onStage?.call(CommonUnitCu.moduleName);
         final cu = CommonUnitCu(apdu);
         ParsedCard? card;
+        Object? readError;
         try {
           if (await cu.select(info, records)) {
             card = await cu.read(info, records, readBalance: true);
           }
         } on Exception catch (e) {
           card = cu.parsedCard;
+          readError = e;
           callback.onError(_mapError(e));
+          if (_transportFailureOf(e)?.stopsSession == true &&
+              (card == null || card.cityUnionFiles.isEmpty)) {
+            rethrow;
+          }
         }
         if (card != null && card.cityUnionFiles.isNotEmpty) {
           callback.onProgress(95);
-          return _outcome(info, records, extras, card);
+          return _outcome(info, records, extras, card, readError: readError);
         }
       } else if (cuCard != null) {
         callback.onProgress(95);
@@ -189,6 +202,7 @@ class LocalCardReader {
           shanghai.cu.records,
           extras,
           cuCard,
+          readError: shanghai.cu.readError,
         );
       }
 
@@ -301,6 +315,7 @@ class LocalCardReader {
           ),
         );
       }
+      if (_transportFailureOf(e)?.stopsSession == true) rethrow;
       return null;
     }
   }
@@ -388,11 +403,25 @@ class LocalCardReader {
     CardInfo info,
     List<ApduRecord> records,
     CardExtras extras,
-    ParsedCard parsed,
-  ) => LocalReadOutcome.transit(
-    readResult: ReadResult(info: info, records: records, extras: extras),
+    ParsedCard parsed, {
+    Object? readError,
+  }) => LocalReadOutcome.transit(
+    readResult: ReadResult(
+      info: info,
+      records: records,
+      extras: extras,
+      readError: readError,
+      transportFailure: _transportFailureOf(readError),
+    ),
     parsedCard: parsed,
   );
+
+  static TransportFailure? _transportFailureOf(Object? error) =>
+      switch (error) {
+        ApduTransportException(:final failure) => failure,
+        TransportFailure() => error,
+        _ => null,
+      };
 
   /// 收尾（对应 L8911-8923）：余额重建 + 换乘去重 + 进度 100。
   Future<ReadResult> _finish(

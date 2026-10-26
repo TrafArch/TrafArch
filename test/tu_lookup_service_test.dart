@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/tu_lookup_live_source.dart';
@@ -23,9 +24,16 @@ void main() {
     repository = TuStationRepository(db);
     lookup = TuLookupService(repository);
     // Independent frozen source oracle, not a query over the published document.
-    supplement = jsonDecode(
-      File('data/reference/sources/tu-lookup-20261021.json').readAsStringSync(),
+    final sourceBytes = File('test/fixtures/reference/tu-lookup-20261021.json')
+        .readAsBytesSync();
+    final manifest = jsonDecode(
+      File('assets/data/reference_manifest.json').readAsStringSync(),
     ) as Map<String, dynamic>;
+    final source = (manifest['sources'] as List).singleWhere(
+      (entry) => entry['id'] == 'tu_lookup',
+    ) as Map<String, dynamic>;
+    expect(sha256.convert(sourceBytes).toString(), source['sha256']);
+    supplement = jsonDecode(utf8.decode(sourceBytes)) as Map<String, dynamic>;
   });
   tearDownAll(() => db.close());
 

@@ -1,20 +1,47 @@
+import '../../../platform/browser/feedback_browser.dart';
 import '../../../platform/storage/settings_store.dart';
 import '../../../platform/storage/app_logger.dart';
 import '../../../shared/application/owned_notifier.dart';
 
 class SettingsController extends OwnedNotifier {
-  SettingsController(this.store, this.logger);
+  SettingsController(
+    this.store,
+    this.logger, {
+    this._browser = const MethodChannelFeedbackBrowser(),
+  });
   final SettingsStore store;
   final AppLogger logger;
+  final FeedbackBrowser _browser;
   final Map<String, bool> _values = {};
   final Map<String, int> _revisions = {};
   Future<void>? _initialization;
   Future<void> _writes = Future.value();
   String? persistenceError;
+  bool openingFeedbackSurvey = false;
+  String? feedbackBrowserError;
 
   bool get loggingEnabled => _values[SettingsKeys.loggingEnabled] ?? false;
   bool get autoSaveEnabled => _values[SettingsKeys.autoSaveEnabled] ?? false;
   bool get monetEnabled => _values[SettingsKeys.monetEnabled] ?? true;
+
+  Future<void> openFeedbackSurvey(Uri url) async {
+    if (disposed || openingFeedbackSurvey) return;
+    openingFeedbackSurvey = true;
+    feedbackBrowserError = null;
+    notifyListeners();
+    try {
+      await _browser.open(url);
+    } on FeedbackBrowserException catch (error) {
+      if (!disposed) feedbackBrowserError = error.message;
+    } catch (_) {
+      if (!disposed) feedbackBrowserError = '问卷暂时无法打开，请重试或复制问卷链接。';
+    } finally {
+      if (!disposed) {
+        openingFeedbackSurvey = false;
+        notifyListeners();
+      }
+    }
+  }
 
   Future<void> initialize() => _initialization ??= () async {
     for (final key in [

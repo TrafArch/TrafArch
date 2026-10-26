@@ -5,6 +5,8 @@ import '../domain/card_name_extension.dart';
 import '../domain/card_types.dart';
 import '../data/card_repository.dart';
 import 'archive_history.dart';
+import 'cu_archive_projection.dart';
+import '../../../protocols/transit/city_union/city_union_models.dart';
 import '../presentation/archive_record_presenter.dart';
 
 /// Full-batch export uses precisely the same history query as archive detail.
@@ -57,6 +59,8 @@ String buildArchiveHistoryExport(
   for (final history in histories) {
     final card = history.card;
     if (card == null) continue;
+    final cityUnion = projectCuArchive(history);
+    final cuSourceLabels = cityUnion.sourceLabels;
     index++;
     buffer
       ..writeln()
@@ -77,11 +81,11 @@ String buildArchiveHistoryExport(
     for (final entry in history.latestObservedFields.entries) {
       if (!entry.value) buffer.writeln('本次未观察到：${entry.key}；摘要保留既往已观察值');
     }
-    if (history.records.isEmpty) {
+    if (history.records.isEmpty && cityUnion.transactions.isEmpty) {
       buffer.writeln(
         history.hasDiagnostics ? '行程记录：（无可解码记录，详见批次诊断）' : '行程记录：（无）',
       );
-    } else {
+    } else if (history.records.isNotEmpty) {
       buffer.writeln('行程记录（${history.records.length} 条）：');
     }
     for (final record in history.records) {
@@ -91,6 +95,21 @@ String buildArchiveHistoryExport(
         ..writeln(
           '    来源：${record.sources.map((s) => '${s.batchId}/${s.path} (parser ${s.capturedParseVersion})').join(', ')}',
         );
+    }
+    if (cityUnion.transactions.isNotEmpty) {
+      buffer.writeln('城市一卡通记录（${cityUnion.transactions.length} 条）：');
+    }
+    for (final transaction in cityUnion.transactions) {
+      buffer
+        ..writeln('  · ${transaction.kindLabel} · ${transaction.locationLabel}')
+        ..writeln('    ${transaction.timeLabel} | ${transaction.sourceLabel}')
+        ..writeln('    终端原始编码：${transaction.record.terminalHex ?? '未知'}')
+        ..writeln('    金额原始值：${transaction.record.amountRaw}（单位未确认）')
+        ..writeln('    来源：${cuSourceLabels[transaction]}')
+        ..writeln('    原始记录：${transaction.record.rawHex}');
+    }
+    for (final issue in cityUnion.issues) {
+      buffer.writeln('CU 诊断：$issue');
     }
     for (final batch in history.batches) {
       buffer

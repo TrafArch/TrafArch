@@ -21,7 +21,7 @@ dependencies:
   mobile_scanner: ^7.4.2
   # 调用系统默认浏览器/外部应用打开链接（QQ 加群跳转）
   url_launcher: ^6.3.3
-  # 应用内打开问卷（内嵌 WebView，不跳转外部浏览器）
+  # 应用内打开 QQ 加群页；反馈问卷使用 Edge / Chrome Custom Tabs
   webview_flutter: ^4.14.1
   # 纯 Dart 二维码解码（ZXing 移植）：MLKit 不可用（无 Google Play 服务 / 无法联网）时的兜底
   zxing2: ^0.2.4

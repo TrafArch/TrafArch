@@ -120,7 +120,7 @@ class CardIdentificationService {
     }
     final catalog = knowledge.cityUnionCards.resolveCard(
       cityCode: publicInfo?.cityCode,
-      rawHex: publicInfo?.rawHex,
+      rawHex: publicInfo?.rawHex.replaceAll(' ', ''),
     );
     final officialName = catalog?.cardName;
     final catalogCity = catalog?.city.trim();

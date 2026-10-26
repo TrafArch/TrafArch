@@ -1,0 +1,134 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:transit_card_analyzer/app/app_dependencies.dart';
+import 'package:transit_card_analyzer/features/settings/presentation/feedback_page.dart';
+import 'package:transit_card_analyzer/features/settings/presentation/survey_page.dart';
+import 'package:transit_card_analyzer/platform/storage/app_logger.dart';
+import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
+
+import 'support/test_database.dart';
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  const browserChannel = MethodChannel('transit_card_analyzer/browser');
+  final messenger =
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+
+  tearDown(() {
+    messenger.setMockMethodCallHandler(browserChannel, null);
+    messenger.setMockMethodCallHandler(SystemChannels.platform, null);
+  });
+
+  AppDependencies createApp() {
+    final app = AppDependencies(
+      database: testDatabase(),
+      settingsStore: MemorySettingsStore(),
+      logger: AppLogger(store: MemoryLogStore()),
+    );
+    addTearDown(app.dispose);
+    return app;
+  }
+
+  testWidgets('问卷启动浏览器且保留反馈页，不创建旧 WebView', (tester) async {
+    final launched = <String>[];
+    messenger.setMockMethodCallHandler(browserChannel, (call) async {
+      launched.add((call.arguments as Map)['url'] as String);
+      return 'com.microsoft.emmx';
+    });
+    await tester.pumpWidget(MaterialApp(home: FeedbackPage(app: createApp())));
+
+    await tester.tap(find.text('填写反馈问卷'));
+    await tester.pumpAndSettle();
+
+    expect(launched, [
+      'https://kajolno1.feishu.cn/share/base/form/shrcnHyB4j9cSYWcxpGrezjeg1e',
+    ]);
+    expect(find.byType(FeedbackPage), findsOneWidget);
+    expect(find.byType(SurveyPage), findsNothing);
+    expect(find.text('暂时无法打开问卷'), findsNothing);
+  });
+
+  testWidgets('无浏览器失败留页，可复制问卷地址并重新尝试', (tester) async {
+    var launches = 0;
+    String? copied;
+    messenger.setMockMethodCallHandler(browserChannel, (_) async {
+      launches++;
+      if (launches == 1) throw PlatformException(code: 'BROWSER_UNAVAILABLE');
+      return 'com.android.chrome';
+    });
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') {
+        copied = (call.arguments as Map)['text'] as String;
+      }
+      return null;
+    });
+    await tester.pumpWidget(MaterialApp(home: FeedbackPage(app: createApp())));
+
+    await tester.tap(find.text('填写反馈问卷'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(FeedbackPage), findsOneWidget);
+    expect(find.byType(SurveyPage), findsNothing);
+    expect(find.text('暂时无法打开问卷'), findsOneWidget);
+    expect(find.textContaining('Edge 或 Chrome'), findsWidgets);
+    await tester.ensureVisible(find.text('复制问卷链接'));
+    await tester.tap(find.text('复制问卷链接'));
+    await tester.pumpAndSettle();
+    expect(
+      copied,
+      'https://kajolno1.feishu.cn/share/base/form/shrcnHyB4j9cSYWcxpGrezjeg1e',
+    );
+
+    await tester.ensureVisible(find.text('重新打开问卷'));
+    await tester.tap(find.text('重新打开问卷'));
+    await tester.pumpAndSettle();
+    expect(launches, 2);
+    expect(find.text('暂时无法打开问卷'), findsNothing);
+    expect(find.byType(FeedbackPage), findsOneWidget);
+  });
+
+  testWidgets('浏览器调用未完成时防止重复启动', (tester) async {
+    final pending = Completer<String>();
+    var launches = 0;
+    messenger.setMockMethodCallHandler(browserChannel, (_) {
+      launches++;
+      return pending.future;
+    });
+    await tester.pumpWidget(MaterialApp(home: FeedbackPage(app: createApp())));
+
+    await tester.tap(find.text('填写反馈问卷'));
+    await tester.pump();
+    expect(
+      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+      isNull,
+    );
+    expect(launches, 1);
+
+    pending.complete('com.microsoft.emmx');
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+      isNotNull,
+    );
+  });
+
+  testWidgets('QQ 群号仍可复制', (tester) async {
+    String? copied;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') {
+        copied = (call.arguments as Map)['text'] as String;
+      }
+      return null;
+    });
+    await tester.pumpWidget(MaterialApp(home: FeedbackPage(app: createApp())));
+
+    await tester.tap(find.byTooltip('复制群号'));
+    await tester.pumpAndSettle();
+
+    expect(copied, '1106608008');
+    expect(find.text('QQ 群号已复制到剪贴板'), findsOneWidget);
+  });
+}

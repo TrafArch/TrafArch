@@ -120,6 +120,35 @@ abstract interface class CityUnionFileView {
   Map<String, dynamic> toJson();
 }
 
+/// The file role is selected by the confirmed CU application read profile.
+/// Standard CJ/T table SFI defaults remain available to standalone parsers.
+enum CityUnionTransactionKind { consumption, recharge, foreignConsumption }
+
+abstract interface class CityUnionWalletTransaction
+    implements CityUnionFileView {
+  int get sequence;
+  int get amountRaw;
+  String get amountHex;
+  int get transactionType;
+  String get transactionTypeName;
+  String? get terminalNumber;
+  String? get transactionDate;
+  String? get transactionTime;
+  int? get recordNumber;
+  CityUnionTransactionKind get kind;
+}
+
+extension CityUnionWalletTransactionEvidence on CityUnionWalletTransaction {
+  /// Matching uses original bytes even when the standards-view BCD is invalid.
+  String? get terminalHex {
+    final compact = rawHex.replaceAll(RegExp(r'\s'), '').toUpperCase();
+    if (compact.length >= 32 && RegExp(r'^[0-9A-F]+$').hasMatch(compact)) {
+      return compact.substring(20, 32);
+    }
+    return null;
+  }
+}
+
 /// CJ/T 331-2016 表 5：公共应用基本信息文件（SFI 0x15）解析结果。
 ///
 /// 字段布局（字节编号按标准表格 1 起计数）：
@@ -433,8 +462,9 @@ class CjT331CompositeTransaction implements CityUnionFileView {
 /// 而非 HEX（必须保留 12 位数字前导零）。BCD / 日期 / 时间非法时类型化
 /// 字段为 null（日期 / 时间非法保留 BCD 数字串），异常标记在 [fields]
 /// 对应条目上，其他字段照常解析。
-class CjT331WalletOfflineTransaction implements CityUnionFileView {
+class CjT331WalletOfflineTransaction implements CityUnionWalletTransaction {
   /// 字节01-02：电子钱包消费交易序号（HEX 大端解码值）。
+  @override
   final int sequence;
 
   /// 字节01-02：交易序号 HEX 原始值（4 位大写，如 "0001"）。
@@ -444,24 +474,30 @@ class CjT331WalletOfflineTransaction implements CityUnionFileView {
   final String reservedHex;
 
   /// 字节06-09：交易金额 HEX 大端解码值（金额单位未定义，不换算）。
+  @override
   final int amountRaw;
 
   /// 字节06-09：交易金额 HEX 原始值（8 位大写，如 "000003E8"）。
+  @override
   final String amountHex;
 
   /// 字节10：交易类型原始值（0x06 消费 / 0x09 复合消费）。
+  @override
   final int transactionType;
 
   /// 字节11-16：交易终端编号（BCD 12 位数字，保留前导零）；
   /// BCD 非法时为 null。
+  @override
   final String? terminalNumber;
 
   /// 字节17-20：交易日期（BCD）；合法时为 "YYYY-MM-DD"，日期非法时
   /// 保留 BCD 数字串并标记异常（不猜测修正），BCD 非法时为 null。
+  @override
   final String? transactionDate;
 
   /// 字节21-23：交易时间（BCD）；合法时为 "HH:MM:SS"，时刻非法时
   /// 保留 BCD 数字串并标记异常（不猜测修正），BCD 非法时为 null。
+  @override
   final String? transactionTime;
 
   @override
@@ -470,7 +506,20 @@ class CjT331WalletOfflineTransaction implements CityUnionFileView {
   @override
   final String rawHex;
 
+  /// Actual READ RECORD position; independent of the card transaction counter.
+  @override
+  final int? recordNumber;
+
+  /// Actual selected file, retained separately from its transaction role.
+  final int sourceSfi;
+
+  @override
+  CityUnionTransactionKind get kind =>
+      CityUnionTransactionKind.foreignConsumption;
+
   const CjT331WalletOfflineTransaction({
+    this.recordNumber,
+    this.sourceSfi = CityUnionFileIds.walletOfflineTransaction,
     required this.sequence,
     required this.sequenceHex,
     required this.reservedHex,
@@ -485,7 +534,7 @@ class CjT331WalletOfflineTransaction implements CityUnionFileView {
   });
 
   @override
-  int get sfi => CityUnionFileIds.walletOfflineTransaction;
+  int get sfi => sourceSfi;
 
   @override
   String get fileLabel => '电子钱包异地消费交易明细记录文件';
@@ -494,6 +543,7 @@ class CjT331WalletOfflineTransaction implements CityUnionFileView {
   String get transactionTypeHex => CityUnionCodec.hexByte(transactionType);
 
   /// 交易类型名称：06 消费 / 09 复合消费 / 其他未知类型。
+  @override
   String get transactionTypeName => transactionTypeLabel(transactionType);
 
   /// 交易类型取值 → 名称映射（解析层字段说明共用，保持单一来源）。
@@ -512,6 +562,9 @@ class CjT331WalletOfflineTransaction implements CityUnionFileView {
   @override
   Map<String, dynamic> toJson() => {
     'sfi': CityUnionCodec.sfiLabel(sfi),
+    'recordNumber': recordNumber,
+    'recordKind': kind.name,
+    'terminalHex': terminalHex,
     'fileLabel': fileLabel,
     'sequence': sequence,
     'sequenceHex': sequenceHex,
@@ -549,8 +602,9 @@ class CjT331WalletOfflineTransaction implements CityUnionFileView {
 /// 而非 HEX（必须保留 12 位数字前导零）。BCD / 日期 / 时间非法时类型化
 /// 字段为 null（日期 / 时间非法保留 BCD 数字串），异常标记在 [fields]
 /// 对应条目上，其他字段照常解析。
-class CjT331WalletLocalConsumption implements CityUnionFileView {
+class CjT331WalletLocalConsumption implements CityUnionWalletTransaction {
   /// 字节01-02：电子钱包消费交易序号（HEX 大端解码值）。
+  @override
   final int sequence;
 
   /// 字节01-02：交易序号 HEX 原始值（4 位大写，如 "0001"）。
@@ -560,24 +614,30 @@ class CjT331WalletLocalConsumption implements CityUnionFileView {
   final String reservedHex;
 
   /// 字节06-09：交易金额 HEX 大端解码值（金额单位未定义，不换算）。
+  @override
   final int amountRaw;
 
   /// 字节06-09：交易金额 HEX 原始值（8 位大写，如 "000003E8"）。
+  @override
   final String amountHex;
 
   /// 字节10：交易类型原始值（0x06 消费 / 0x09 复合消费）。
+  @override
   final int transactionType;
 
   /// 字节11-16：交易终端编号（BCD 12 位数字，保留前导零）；
   /// BCD 非法时为 null。
+  @override
   final String? terminalNumber;
 
   /// 字节17-20：交易日期（BCD）；合法时为 "YYYY-MM-DD"，日期非法时
   /// 保留 BCD 数字串并标记异常（不猜测修正），BCD 非法时为 null。
+  @override
   final String? transactionDate;
 
   /// 字节21-23：交易时间（BCD）；合法时为 "HH:MM:SS"，时刻非法时
   /// 保留 BCD 数字串并标记异常（不猜测修正），BCD 非法时为 null。
+  @override
   final String? transactionTime;
 
   @override
@@ -586,7 +646,19 @@ class CjT331WalletLocalConsumption implements CityUnionFileView {
   @override
   final String rawHex;
 
+  /// Actual READ RECORD position; independent of the card transaction counter.
+  @override
+  final int? recordNumber;
+
+  /// Actual selected file, retained separately from its transaction role.
+  final int sourceSfi;
+
+  @override
+  CityUnionTransactionKind get kind => CityUnionTransactionKind.consumption;
+
   const CjT331WalletLocalConsumption({
+    this.recordNumber,
+    this.sourceSfi = CityUnionFileIds.walletLocalConsumption,
     required this.sequence,
     required this.sequenceHex,
     required this.reservedHex,
@@ -601,7 +673,7 @@ class CjT331WalletLocalConsumption implements CityUnionFileView {
   });
 
   @override
-  int get sfi => CityUnionFileIds.walletLocalConsumption;
+  int get sfi => sourceSfi;
 
   @override
   String get fileLabel => '电子钱包本地消费交易明细记录文件';
@@ -610,6 +682,7 @@ class CjT331WalletLocalConsumption implements CityUnionFileView {
   String get transactionTypeHex => CityUnionCodec.hexByte(transactionType);
 
   /// 交易类型名称：06 消费 / 09 复合消费 / 其他未知类型。
+  @override
   String get transactionTypeName => transactionTypeLabel(transactionType);
 
   /// 交易类型取值 → 名称映射（解析层字段说明共用，保持单一来源）。
@@ -628,6 +701,9 @@ class CjT331WalletLocalConsumption implements CityUnionFileView {
   @override
   Map<String, dynamic> toJson() => {
     'sfi': CityUnionCodec.sfiLabel(sfi),
+    'recordNumber': recordNumber,
+    'recordKind': kind.name,
+    'terminalHex': terminalHex,
     'fileLabel': fileLabel,
     'sequence': sequence,
     'sequenceHex': sequenceHex,
@@ -665,8 +741,9 @@ class CjT331WalletLocalConsumption implements CityUnionFileView {
 /// 而非 HEX（必须保留 12 位数字前导零）。BCD / 日期 / 时间非法时类型化
 /// 字段为 null（日期 / 时间非法保留 BCD 数字串），异常标记在 [fields]
 /// 对应条目上，其他字段照常解析。
-class CjT331WalletRecharge implements CityUnionFileView {
+class CjT331WalletRecharge implements CityUnionWalletTransaction {
   /// 字节01-02：电子钱包充值交易序号（HEX 大端解码值）。
+  @override
   final int sequence;
 
   /// 字节01-02：充值交易序号 HEX 原始值（4 位大写，如 "0001"）。
@@ -676,24 +753,30 @@ class CjT331WalletRecharge implements CityUnionFileView {
   final String reservedHex;
 
   /// 字节06-09：交易金额 HEX 大端解码值（金额单位未定义，不换算）。
+  @override
   final int amountRaw;
 
   /// 字节06-09：交易金额 HEX 原始值（8 位大写，如 "000003E8"）。
+  @override
   final String amountHex;
 
   /// 字节10：交易类型原始值（0x02 充值）。
+  @override
   final int transactionType;
 
   /// 字节11-16：交易终端编号（BCD 12 位数字，保留前导零）；
   /// BCD 非法时为 null。
+  @override
   final String? terminalNumber;
 
   /// 字节17-20：交易日期（BCD）；合法时为 "YYYY-MM-DD"，日期非法时
   /// 保留 BCD 数字串并标记异常（不猜测修正），BCD 非法时为 null。
+  @override
   final String? transactionDate;
 
   /// 字节21-23：交易时间（BCD）；合法时为 "HH:MM:SS"，时刻非法时
   /// 保留 BCD 数字串并标记异常（不猜测修正），BCD 非法时为 null。
+  @override
   final String? transactionTime;
 
   @override
@@ -702,7 +785,19 @@ class CjT331WalletRecharge implements CityUnionFileView {
   @override
   final String rawHex;
 
+  /// Actual READ RECORD position; independent of the card transaction counter.
+  @override
+  final int? recordNumber;
+
+  /// Actual selected file, retained separately from its transaction role.
+  final int sourceSfi;
+
+  @override
+  CityUnionTransactionKind get kind => CityUnionTransactionKind.recharge;
+
   const CjT331WalletRecharge({
+    this.recordNumber,
+    this.sourceSfi = CityUnionFileIds.walletRecharge,
     required this.sequence,
     required this.sequenceHex,
     required this.reservedHex,
@@ -717,7 +812,7 @@ class CjT331WalletRecharge implements CityUnionFileView {
   });
 
   @override
-  int get sfi => CityUnionFileIds.walletRecharge;
+  int get sfi => sourceSfi;
 
   @override
   String get fileLabel => '电子钱包充值交易明细记录文件';
@@ -729,6 +824,7 @@ class CjT331WalletRecharge implements CityUnionFileView {
   String get transactionTypeHex => CityUnionCodec.hexByte(transactionType);
 
   /// 交易类型名称：02 充值 / 其他未知类型（保留原始记录便于排查）。
+  @override
   String get transactionTypeName => transactionTypeLabel(transactionType);
 
   /// 交易类型取值 → 名称映射（解析层字段说明共用，保持单一来源）。
@@ -746,6 +842,9 @@ class CjT331WalletRecharge implements CityUnionFileView {
   @override
   Map<String, dynamic> toJson() => {
     'sfi': CityUnionCodec.sfiLabel(sfi),
+    'recordNumber': recordNumber,
+    'recordKind': kind.name,
+    'terminalHex': terminalHex,
     'fileLabel': fileLabel,
     'sequence': sequence,
     'sequenceHex': sequenceHex,

@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../app/app_dependencies.dart';
 import 'survey_page.dart';
 
 /// 反馈页：提供 QQ 群与问卷两种反馈渠道。
 class FeedbackPage extends StatelessWidget {
-  const FeedbackPage({super.key});
+  const FeedbackPage({super.key, required this.app});
+
+  final AppDependencies app;
 
   /// 用户反馈 QQ 群号。
   static const String qqGroupNumber = '1106608008';
@@ -13,12 +16,17 @@ class FeedbackPage extends StatelessWidget {
   /// QQ 加群链接（应用内 WebView 直接打开加群页）。
   static const String qqGroupJoinUrl = 'https://qm.qq.com/q/I8Ba9gEise';
 
-  /// 反馈问卷地址（飞书问卷，应用内 WebView 直接打开）。
+  /// 反馈问卷地址（飞书问卷，Edge / Chrome Custom Tab 打开）。
   static const String surveyUrl =
       'https://kajolno1.feishu.cn/share/base/form/shrcnHyB4j9cSYWcxpGrezjeg1e';
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: app,
+    builder: (context, _) => _buildPage(context),
+  );
+
+  Widget _buildPage(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(title: const Text('反馈')),
@@ -71,27 +79,58 @@ class FeedbackPage extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) =>
-                      const SurveyPage(title: '反馈问卷', url: surveyUrl),
+              onPressed: app.openingFeedbackSurvey
+                  ? null
+                  : () => app.openFeedbackSurvey(Uri.parse(surveyUrl)),
+              icon: app.openingFeedbackSurvey
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.edit_note_outlined),
+              label: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text(
+                  app.openingFeedbackSurvey
+                      ? '正在打开问卷…'
+                      : app.feedbackBrowserError == null
+                      ? '填写反馈问卷'
+                      : '重新打开问卷',
                 ),
-              ),
-              icon: const Icon(Icons.edit_note_outlined),
-              label: const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
-                child: Text('填写反馈问卷'),
               ),
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            '问卷将在应用内直接打开',
+            '问卷在 Edge 或 Chrome 的应用内浏览器中打开',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.outline,
             ),
           ),
+          if (app.feedbackBrowserError case final String message) ...[
+            const SizedBox(height: 12),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('暂时无法打开问卷', style: theme.textTheme.titleSmall),
+                    const SizedBox(height: 8),
+                    Text(message),
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                      onPressed: () => _copySurveyLink(context),
+                      icon: const Icon(Icons.copy_outlined),
+                      label: const Text('复制问卷链接'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -102,5 +141,12 @@ class FeedbackPage extends StatelessWidget {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context)
         .showSnackBar(const SnackBar(content: Text('QQ 群号已复制到剪贴板')));
+  }
+
+  Future<void> _copySurveyLink(BuildContext context) async {
+    await Clipboard.setData(const ClipboardData(text: surveyUrl));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('问卷链接已复制到剪贴板')));
   }
 }

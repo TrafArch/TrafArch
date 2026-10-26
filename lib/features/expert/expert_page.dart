@@ -213,6 +213,7 @@ class _ExpertPageState extends State<ExpertPage> {
           CityUnionPanel(
             files: app.cityUnionFiles,
             resolveStationName: app.resolveCuStationName,
+            busLookupEnabled: true,
           ),
         ],
       ];
@@ -222,6 +223,7 @@ class _ExpertPageState extends State<ExpertPage> {
         CityUnionPanel(
           files: app.cityUnionFiles,
           resolveStationName: app.resolveCuStationName,
+          busLookupEnabled: true,
         ),
       ];
     }

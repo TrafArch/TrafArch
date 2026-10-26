@@ -164,6 +164,10 @@ flutter {
 }
 
 dependencies {
+    // Match url_launcher_android's version; the application directly uses this API.
+    implementation("androidx.browser:browser:1.9.0")
+    testImplementation("junit:junit:4.13.2")
+
     // Import the Firebase BoM
     implementation(platform("com.google.firebase:firebase-bom:35.0.0"))
 

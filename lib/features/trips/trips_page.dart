@@ -6,6 +6,7 @@ import '../../app/app_dependencies.dart';
 import '../qr/presentation/qr_action_button.dart';
 import '../settings/presentation/settings_action_button.dart';
 import 'trip_stream_view.dart';
+import 'cu_transaction_list.dart';
 
 /// 行程页：展示最近一次读卡解析出的行程流（0x18 交易明细为主干，
 /// 0x1A / 0x1E 过程记录逐条关联、确认重复合并、无法关联独立保留），
@@ -67,6 +68,7 @@ class _TripsBody extends StatelessWidget {
     final trips = analysis?.trips ?? const <TransitTrip>[];
     final rail = app.railTransitRecord;
     final bus = app.busTransitRecord;
+    final cuTransactions = app.cityUnionTransactions;
     // 0x18 交易明细为主干，0x1A 按侧拆分、0x1E 未关联记录独立保留，
     // 合并为按时间倒序的行程流。
     final stream = buildTripStream(
@@ -76,7 +78,7 @@ class _TripsBody extends StatelessWidget {
       processTrips: app.cycleProcessTrips,
     );
 
-    if (stream.isEmpty) {
+    if (stream.isEmpty && cuTransactions.isEmpty) {
       return Card(
         child: ListTile(
           leading: const Icon(Icons.directions_transit_outlined),
@@ -92,20 +94,32 @@ class _TripsBody extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (analysis != null) ...[
-          _SessionHeader(analysis: analysis, app: app),
+          _SessionHeader(
+            analysis: analysis,
+            app: app,
+            recordCount: stream.length,
+          ),
           const SizedBox(height: 12),
         ],
-        TripStreamView(stream: stream, app: app, isRemote: app.isRemoteUse),
+        if (stream.isNotEmpty)
+          TripStreamView(stream: stream, app: app, isRemote: app.isRemoteUse),
+        if (cuTransactions.isNotEmpty)
+          CuTransactionList(transactions: cuTransactions),
       ],
     );
   }
 }
 
-/// 本次读卡会话摘要：卡片名称、余额与交易笔数（0x18 口径）。
+/// 本次读卡会话摘要：卡片名称、余额与合并后可见记录总数。
 class _SessionHeader extends StatelessWidget {
   final CardAnalysisResult analysis;
   final AppDependencies app;
-  const _SessionHeader({required this.analysis, required this.app});
+  final int recordCount;
+  const _SessionHeader({
+    required this.analysis,
+    required this.app,
+    required this.recordCount,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -154,7 +168,7 @@ class _SessionHeader extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '交易 ${analysis.trips.length} 笔',
+                  '记录 $recordCount 条',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: scheme.outline,
                   ),

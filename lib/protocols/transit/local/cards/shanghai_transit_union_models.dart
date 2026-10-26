@@ -3,6 +3,8 @@ library;
 import '../../card_parser.dart';
 import '../../city_union/city_union_models.dart';
 import '../../tunion/tunion_models.dart';
+import '../../../transport/transport_failure.dart';
+import '../apdu_exchange.dart';
 import '../local_card_models.dart';
 
 /// 上海交通卡（交通联合版）识别常量。
@@ -76,6 +78,7 @@ class ShanghaiTransitApplication {
     this.dataComplete = false,
     this.card,
     this.identity,
+    this.readError,
     this.errors = const [],
     this.warnings = const [],
   });
@@ -122,6 +125,15 @@ class ShanghaiTransitApplication {
 
   /// 该侧原始记录（含行程流水），不与另一侧混用。
   final List<ApduRecord> records;
+
+  /// 保留原始异常及传输分类；文字错误只用于展示，不决定是否继续会话。
+  final Object? readError;
+
+  TransportFailure? get transportFailure => switch (readError) {
+    ApduTransportException(:final failure) => failure,
+    TransportFailure failure => failure,
+    _ => null,
+  };
 
   /// 该侧解析错误（应用未确认 / 读取失败 / 校验不通过等）。
   final List<String> errors;
@@ -272,8 +284,12 @@ abstract final class ShanghaiTransitTripMerger {
 
   static _TripKind _kindOf(ApduRecord record) {
     final label = record.label ?? '';
-    if (label.startsWith('CU 0x1A')) return _TripKind.recharge;
-    if (label.startsWith('CU 0x18')) return _TripKind.consume;
+    if (label.startsWith('CU 0x10')) return _TripKind.recharge;
+    if (label.startsWith('CU 0x18') ||
+        label.startsWith('CU 0x06') ||
+        label.startsWith('CU 0x1A')) {
+      return _TripKind.consume;
+    }
     if (record.balanceDelta > 0) return _TripKind.recharge;
     if (record.balanceDelta < 0) return _TripKind.consume;
     return _TripKind.unknown;
@@ -345,6 +361,8 @@ class ShanghaiTransitUnionResult {
     info: mergedCardInfo,
     records: mergedRecords,
     extras: CardExtras(),
+    readError: tu.readError ?? cu.readError,
+    transportFailure: tu.transportFailure ?? cu.transportFailure,
   );
 
   factory ShanghaiTransitUnionResult.build({
@@ -380,7 +398,9 @@ class ShanghaiTransitUnionResult {
       mergedRecords: merge.records,
       duplicateTripCount: merge.duplicateCount,
       mergedCardInfo:
-          (tu.available || (!cu.available && tu.readSucceeded)
+          (tu.isShanghaiTu ||
+                      tu.available ||
+                      (!cu.available && tu.readSucceeded)
                   ? tu.cardInfo
                   : cu.cardInfo)
               .copy()
