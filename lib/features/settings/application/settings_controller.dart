@@ -1,3 +1,5 @@
+import 'package:url_launcher/url_launcher.dart';
+
 import '../../../platform/browser/feedback_browser.dart';
 import '../../../platform/storage/settings_store.dart';
 import '../../../platform/storage/app_logger.dart';
@@ -23,6 +25,17 @@ class SettingsController extends OwnedNotifier {
   bool get loggingEnabled => _values[SettingsKeys.loggingEnabled] ?? false;
   bool get autoSaveEnabled => _values[SettingsKeys.autoSaveEnabled] ?? false;
   bool get monetEnabled => _values[SettingsKeys.monetEnabled] ?? true;
+
+  Future<bool> openFeedbackEmail(String address) async {
+    try {
+      return await launchUrl(
+        Uri(scheme: 'mailto', path: address),
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (_) {
+      return false;
+    }
+  }
 
   Future<void> openFeedbackSurvey(Uri url) async {
     if (disposed || openingFeedbackSurvey) return;

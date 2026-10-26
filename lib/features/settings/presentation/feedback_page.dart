@@ -4,11 +4,12 @@ import 'package:flutter/services.dart';
 import '../../../app/app_dependencies.dart';
 import 'survey_page.dart';
 
-/// 反馈页：提供 QQ 群与问卷两种反馈渠道。
 class FeedbackPage extends StatelessWidget {
   const FeedbackPage({super.key, required this.app});
 
   final AppDependencies app;
+
+  static const String emailAddress = 'support@trafarch.top';
 
   /// 用户反馈 QQ 群号。
   static const String qqGroupNumber = '1106608008';
@@ -18,7 +19,7 @@ class FeedbackPage extends StatelessWidget {
 
   /// 反馈问卷地址（飞书问卷，Edge / Chrome Custom Tab 打开）。
   static const String surveyUrl =
-      'https://kajolno1.feishu.cn/share/base/form/shrcnHyB4j9cSYWcxpGrezjeg1e';
+      'https://trafarch.feishu.cn/share/base/form/shrcniZ6QaPgqGazU1bpdmZyNPh';
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
@@ -73,6 +74,20 @@ class FeedbackPage extends StatelessWidget {
                       const SurveyPage(title: '加入 QQ 群', url: qqGroupJoinUrl),
                 ),
               ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.email_outlined),
+              title: const Text('邮箱'),
+              subtitle: const Text('$emailAddress\n点按即可打开邮件应用'),
+              trailing: IconButton(
+                icon: const Icon(Icons.copy_outlined),
+                tooltip: '复制邮箱',
+                onPressed: () => _copyEmail(context),
+              ),
+              onTap: () => _openEmail(context),
             ),
           ),
           const SizedBox(height: 12),
@@ -134,6 +149,21 @@ class FeedbackPage extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _openEmail(BuildContext context) async {
+    final opened = await app.openFeedbackEmail(emailAddress);
+    if (!context.mounted || opened) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('无法打开邮件应用，请安装或启用邮件应用，或复制邮箱地址。')),
+    );
+  }
+
+  Future<void> _copyEmail(BuildContext context) async {
+    await Clipboard.setData(const ClipboardData(text: emailAddress));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('邮箱地址已复制到剪贴板')));
   }
 
   Future<void> _copyQqGroup(BuildContext context) async {
