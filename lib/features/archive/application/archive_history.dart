@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:drift/drift.dart' show Variable;
 
 import '../data/app_database.dart';
@@ -72,6 +73,7 @@ class ArchiveHistoryResult {
   final SavedCard? card;
   final List<ArchiveBatchEvidence> batches;
   final List<ArchiveHistoryRecord> records;
+  final List<Map<String, dynamic>> importedRecords;
   final SnapshotDecodeResult? latestCapture;
   final int? balanceObservedAt;
 
@@ -79,6 +81,7 @@ class ArchiveHistoryResult {
     required this.card,
     this.batches = const [],
     this.records = const [],
+    this.importedRecords = const [],
     this.latestCapture,
     this.balanceObservedAt,
   });
@@ -90,6 +93,9 @@ class ArchiveHistoryResult {
   ArchiveBalanceSource? get balanceSource {
     final saved = card;
     if (saved == null || saved.balanceFen == null) return null;
+    // Retained summaries expose records but do not invent capture identities or
+    // establish the original batch that observed a balance.
+    final balanceBatches = batches.where((b) => b.origin != 'imported_summary');
     final latest = latestCapture?.snapshot;
     if (snapshotObservesBalance(latest)) {
       final at = saved.lastReadAt ?? saved.updatedAt;
@@ -99,7 +105,7 @@ class ArchiveHistoryResult {
       }
       final payload = latestCapture!.rawJson;
       String? id;
-      for (final batch in batches) {
+      for (final batch in balanceBatches) {
         if (batch.decoded.rawJson == payload) {
           id = batch.id;
           break;
@@ -119,14 +125,14 @@ class ArchiveHistoryResult {
             retained.observedAt == balanceObservedAt) &&
         retained.observedAt <= (saved.lastReadAt ?? saved.updatedAt) &&
         snapshotBalanceMatches(saved, retained.snapshot) &&
-        batches.any(
+        balanceBatches.any(
           (b) =>
               b.decoded.rawJson == retained.payloadJson &&
               (retained.batchId == null || b.id == retained.batchId),
         )) {
       return retained;
     }
-    final observed = batches.where(
+    final observed = balanceBatches.where(
       (b) => snapshotObservesBalance(b.decoded.snapshot),
     );
     final at =
@@ -304,6 +310,32 @@ class ArchiveHistory {
         timeSource: card.lastReadAt == null ? 'updated_at' : 'last_read_at',
       );
     }
+    for (final summary in rows.retainedSummaries) {
+      final fields = summary['card'];
+      if (fields is! Map<String, dynamic> ||
+          fields['cardFingerprint'] != card.cardFingerprint) {
+        continue;
+      }
+      final raw = fields['sessionDataJson'];
+      if (raw is! String) continue;
+      final timeField = [
+        'lastReadAt',
+        'updatedAt',
+        'createdAt',
+      ].firstWhere((key) => fields[key] is int, orElse: () => '');
+      if (timeField.isEmpty) continue;
+      final identity = sha256.convert(
+        utf8.encode(jsonEncode(_canonical(summary))),
+      );
+      add(
+        'retained-summary:$identity',
+        fields[timeField] as int,
+        CardSessionSnapshot.decodeResult(raw).snapshot?.parseVersion ?? 1,
+        raw,
+        origin: 'imported_summary',
+        timeSource: 'summary.$timeField',
+      );
+    }
     batches.sort((a, b) {
       final time = b.readAt.compareTo(a.readAt);
       return time != 0 ? time : b.id.compareTo(a.id);
@@ -413,6 +445,7 @@ class ArchiveHistory {
       card: card,
       batches: List.unmodifiable(batches),
       records: List.unmodifiable(sorted),
+      importedRecords: rows.importedRecords,
       latestCapture: scalar == null
           ? null
           : CardSessionSnapshot.decodeResult(scalar),

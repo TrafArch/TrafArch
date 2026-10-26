@@ -83,7 +83,7 @@ void main() {
               expect(
                 (await db.customSelect('PRAGMA user_version').getSingle())
                     .read<int>('user_version'),
-                6,
+                7,
               );
               final columns = await db
                   .customSelect('PRAGMA table_info(saved_cards)')

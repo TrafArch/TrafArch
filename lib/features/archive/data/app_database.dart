@@ -5,6 +5,7 @@ import 'package:drift_flutter/drift_flutter.dart';
 
 import 'tables/card_read_batches.dart';
 import 'tables/saved_cards.dart';
+import 'archive_document_store.dart';
 
 part 'app_database.g.dart';
 
@@ -20,7 +21,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -28,14 +29,16 @@ class AppDatabase extends _$AppDatabase {
     onUpgrade: (m, from, to) async {
       await transaction(() async {
         await _repairArchiveSchema();
-        await backfillLegacySnapshots();
+        await backfillLegacySnapshots(onlyWithoutDocument: true);
+        await ArchiveDocumentStore(this).backfill();
       });
     },
     // Also repairs files whose user_version was advanced by an older,
     // incomplete migration. Failure aborts opening; never replace the DB.
     beforeOpen: (_) => transaction(() async {
       await _repairArchiveSchema();
-      await backfillLegacySnapshots();
+      await backfillLegacySnapshots(onlyWithoutDocument: true);
+      await ArchiveDocumentStore(this).backfill();
     }),
   );
 
@@ -82,13 +85,43 @@ class AppDatabase extends _$AppDatabase {
         PRIMARY KEY (card_id, field_name)
       )
     ''');
+    await customStatement('''
+      CREATE TABLE IF NOT EXISTS archive_documents (
+        card_id TEXT NOT NULL PRIMARY KEY,
+        payload_json TEXT NOT NULL,
+        dirty INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
+    // A few legacy paths update the indexes directly. Mark their complete JSON
+    // document dirty in that same SQLite transaction; reads materialize it
+    // before exposing data, preserving any JSON-only imported rows/extensions.
+    for (final table in [
+      'saved_cards',
+      'card_read_batches',
+      'archive_field_observation_times',
+    ]) {
+      final key = table == 'saved_cards' ? 'id' : 'card_id';
+      for (final operation in ['INSERT', 'UPDATE', 'DELETE']) {
+        final name = 'archive_json_${table}_${operation.toLowerCase()}';
+        final reference = operation == 'DELETE' ? 'OLD' : 'NEW';
+        final statement = table == 'saved_cards' && operation == 'DELETE'
+            ? 'DELETE FROM archive_documents WHERE card_id=OLD.id;'
+            : 'UPDATE archive_documents SET dirty=1 WHERE card_id=$reference.$key;';
+        await customStatement(
+          'CREATE TRIGGER IF NOT EXISTS $name AFTER $operation ON $table BEGIN $statement END',
+        );
+      }
+    }
   }
 
   /// Caller must hold the same transaction as any scalar replacement. Exact
   /// text equality makes retries idempotent, even for empty/malformed payloads.
   /// The reserved ID prefix records origin and timestamp provenance without
   /// changing captured JSON or the generated Drift table contract.
-  Future<void> backfillLegacySnapshots({String? cardId}) async {
+  Future<void> backfillLegacySnapshots({
+    String? cardId,
+    bool onlyWithoutDocument = false,
+  }) async {
     final rows = await customSelect(
       '''
       SELECT s.id, s.card_fingerprint, s.session_data_json,
@@ -99,6 +132,9 @@ class AppDatabase extends _$AppDatabase {
       FROM saved_cards s
       WHERE s.session_data_json IS NOT NULL
         ${cardId == null ? '' : 'AND s.id = ?'}
+        ${onlyWithoutDocument ? '''AND NOT EXISTS (
+          SELECT 1 FROM archive_documents d WHERE d.card_id = s.id
+        )''' : ''}
         AND NOT EXISTS (
           SELECT 1 FROM card_read_batches b
           WHERE b.card_id = s.id AND b.payload_json = s.session_data_json

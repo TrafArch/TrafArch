@@ -1,6 +1,16 @@
 # 迁移与开发者接手说明
 
-当前 alpha 并装包显示名称为 `TrafArch Alpha 1`（非正式/测试发布命名）、applicationId `com.kajolno.trafarch.alpha`，Android versionCode 4066。后续修改继续遵守根目录 AGENTS.md 的名称 / 包名约束。该 APK 按用户要求使用 Android Debug 证书签名，不能覆盖原签名应用；旧 `com.kajolno.TrafArch` 升级记录见[历史交付](UPGRADE_HANDOFF_20261021.md)。`.repair` 并装包同样仅保留为历史。
+当前源码 applicationId / namespace 为 `com.kajolno.TrafArch`，后续修改遵守根目录 AGENTS.md 的应用身份约束。旧 alpha / `.repair` 并装方案仅为历史；新 APK 的实际版本码和签名需在交付时核验，不能从历史构建说明推定。
+
+## JSON 档案 v7 迁移
+
+本次数据库 schema 升至 7，新增 `archive_documents(card_id, payload_json, dirty)`；不会重建、删除旧卡片或重解析快照。迁移保留完整卡片摘要、原始批次 ID/文本、每字段观察时间。保存、重命名和导入与 JSON 文档更新在同一事务完成；旧路径写入索引由触发器置 dirty，读取前刷新。已存在的完整文档再次打开时不把摘要补造为新批次。
+
+完整备份导入保留原始批次标识，按卡指纹合并，同 ID 不同内容拒绝整批写入。自定义名称和较新的已观察字段保留；只含选定字段的 JSON 使用独立导入身份及原始行保存，不能当成完整 NFC 捕获。快照格式版本仍为 v1/v2/v3，CU 扩展仍为 v1，均与新外层 JSON 版本 1 独立。详细契约见 [JSON_ARCHIVE_FORMAT.md](JSON_ARCHIVE_FORMAT.md)。
+
+合并替换的原始摘要保留在 `retainedSummaries`，详情与字段导出仍能读取其中有效记录，不能算作新 NFC 批次。摘要空值与观察时间索引在同一事务同步，避免重开或重命名后恢复过时字段。卡片/批次未知扩展保留，完整备份最外层未知扩展明确拒绝导入。
+
+## 历史迁移验收记录
 
 日期：2026-10-21。本轮已运行真实 SQLite v1–v6 旧 DDL 的自动迁移、坏 / 未来快照、重复打开、字段新鲜度与删除重建回归，并纳入 611 项全量测试。未运行真实 Android 设备升级；正式版升级仍需备份和受控验收。
 

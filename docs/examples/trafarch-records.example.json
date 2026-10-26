@@ -1,0 +1,48 @@
+{
+  "format": "trafarch.records",
+  "version": 1,
+  "exportedAt": "2026-10-26T12:00:00.000Z",
+  "fields": ["card_name", "record_type", "source", "time", "entry_time", "exit_time", "time_basis", "entry_station", "exit_station", "entry_line", "exit_line", "station", "line", "amount", "currency", "amount_raw", "amount_unit", "entry_station_code"],
+  "records": [
+    {
+      "card_name": "示例通勤卡",
+      "record_type": "消费",
+      "source": "TU 0x18 + 0x1A",
+      "time": "2026-10-26T08:35:00",
+      "entry_time": "2026-10-26T08:10:00",
+      "exit_time": "2026-10-26T08:35:00",
+      "time_basis": "card_local_unverified",
+      "entry_station": "示例起点站",
+      "exit_station": "示例终点站",
+      "entry_line": "示例一号线",
+      "exit_line": "示例二号线",
+      "station": null,
+      "line": null,
+      "amount": "-3.00",
+      "currency": "CNY",
+      "amount_raw": "300",
+      "amount_unit": "10^-2 CNY",
+      "entry_station_code": "0001"
+    },
+    {
+      "card_name": "示例城市一卡通",
+      "record_type": "消费",
+      "source": "CU 0x18",
+      "time": "2026-10-26T09:00:00+08:00",
+      "entry_time": null,
+      "exit_time": null,
+      "time_basis": "UTC+08:00",
+      "entry_station": null,
+      "exit_station": null,
+      "entry_line": null,
+      "exit_line": null,
+      "station": "示例站",
+      "line": "示例线路",
+      "amount": null,
+      "currency": null,
+      "amount_raw": "300",
+      "amount_unit": "unknown",
+      "entry_station_code": null
+    }
+  ]
+}

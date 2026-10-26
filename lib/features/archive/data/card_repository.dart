@@ -4,6 +4,9 @@ import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
 import 'app_database.dart';
+import 'archive_observation_times.dart';
+import 'archive_document_store.dart';
+import '../domain/card_archive_document.dart';
 import '../domain/card_archive_identity.dart';
 import '../domain/card_session_snapshot.dart';
 
@@ -98,7 +101,7 @@ class CardRepository {
               variables: [Variable<String>(cardId)],
             )
             .get();
-        final observedAt = _observationTimes(
+        final observedAt = archiveObservationTimes(
           existing,
           previousBatches,
           retainedTimes: {
@@ -187,6 +190,7 @@ class CardRepository {
               );
         }
       }
+      await ArchiveDocumentStore(db).refresh(cardId);
     });
   }
 
@@ -208,12 +212,15 @@ class CardRepository {
   Future<void> renameCard(String id, String? customName) async {
     final name = customName?.trim();
 
-    await (db.update(db.savedCards)..where((t) => t.id.equals(id))).write(
-      SavedCardsCompanion(
-        customName: Value(name == null || name.isEmpty ? null : name),
-        updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
-      ),
-    );
+    await db.transaction(() async {
+      await (db.update(db.savedCards)..where((t) => t.id.equals(id))).write(
+        SavedCardsCompanion(
+          customName: Value(name == null || name.isEmpty ? null : name),
+          updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+        ),
+      );
+      await ArchiveDocumentStore(db).refresh(id);
+    });
   }
 
   /// 删除卡片档案及其全部读取批次（同一事务，避免残留孤儿批次数据）；
@@ -294,16 +301,41 @@ class CardRepository {
         OrderingTerm.desc(db.cardReadBatches.id),
       ]);
 
-  ArchiveRows _historyRows(List<TypedResult> rows) => ArchiveRows(
-    card: rows.isEmpty ? null : rows.first.readTable(db.savedCards),
-    batches: [for (final row in rows) ?row.readTableOrNull(db.cardReadBatches)],
-  );
-
   Stream<ArchiveRows> watchArchiveRows(String cardId) =>
-      _historyQuery(cardId).watch().map(_historyRows);
+      _historyQuery(cardId).watch().asyncMap((_) => getArchiveRows(cardId));
 
-  Future<ArchiveRows> getArchiveRows(String cardId) async =>
-      _historyRows(await _historyQuery(cardId).get());
+  Future<ArchiveRows> getArchiveRows(String cardId) => db.transaction(() async {
+    final document = await ArchiveDocumentStore(db).read(cardId);
+    return ArchiveRows(
+      card: document?.card,
+      batches: document?.batches ?? const [],
+      importedRecords: document?.importedRecords ?? const [],
+      retainedSummaries: document?.retainedSummaries ?? const [],
+    );
+  });
+
+  Future<void> refreshDocument(String cardId) => db.transaction(() async {
+    await ArchiveDocumentStore(db).refresh(cardId);
+  });
+
+  Future<List<CardArchiveDocument>> exportDocuments({Set<String>? cardIds}) =>
+      db.transaction(() async {
+        final documents = <CardArchiveDocument>[];
+        for (final card in await getAllCards()) {
+          if (cardIds != null && !cardIds.contains(card.id)) continue;
+          final document = await ArchiveDocumentStore(db).read(card.id);
+          if (document != null) documents.add(document);
+        }
+        return List.unmodifiable(documents);
+      });
+
+  Future<ArchiveImportResult> previewImportDocuments(
+    List<CardArchiveDocument> documents,
+  ) => db.transaction(() => ArchiveDocumentStore(db).preview(documents));
+
+  Future<ArchiveImportResult> importDocuments(
+    List<CardArchiveDocument> documents,
+  ) => db.transaction(() => ArchiveDocumentStore(db).import(documents));
 
   /// Captured parser versions are immutable. Re-parsing must produce a separate
   /// projection with its own version, never relabel a historical batch.
@@ -318,7 +350,14 @@ class CardRepository {
 class ArchiveRows {
   final SavedCard? card;
   final List<CardReadBatch> batches;
-  const ArchiveRows({required this.card, required this.batches});
+  final List<Map<String, dynamic>> importedRecords;
+  final List<Map<String, dynamic>> retainedSummaries;
+  const ArchiveRows({
+    required this.card,
+    required this.batches,
+    this.importedRecords = const [],
+    this.retainedSummaries = const [],
+  });
 }
 
 Value<T> _observed<T>(T? value) =>
@@ -378,49 +417,4 @@ String _capturePayload(
     'transactionCount': transactionCount,
   };
   return jsonEncode(json);
-}
-
-/// Legacy scalars have only a conservative capture-time bound. New captures
-/// carry observations explicitly, including confirmed zero values.
-Map<String, int> _observationTimes(
-  SavedCard card,
-  List<CardReadBatch> batches, {
-  required Map<String, int> retainedTimes,
-}) {
-  // Explicit persisted times and payload observations take precedence over
-  // the legacy bound. A later partial capture changes lastReadAt without
-  // observing retained fields, so it cannot advance their fallback times.
-  final result = Map<String, int>.of(retainedTimes);
-  void add(String? payload, int at) {
-    if (payload == null) return;
-    final values = CardSessionSnapshot.decodeResult(payload)
-        .snapshot
-        ?.extensions['observations'];
-    if (values is! Map) return;
-    for (final entry in values.entries) {
-      if (entry.value != null && entry.key is String) {
-        final key = entry.key as String;
-        if (at > (result[key] ?? -8640000000000000)) result[key] = at;
-      }
-    }
-  }
-
-  for (final batch in batches) {
-    add(batch.payloadJson, batch.readAt);
-  }
-  final latestAt = card.lastReadAt ?? card.updatedAt;
-  add(card.sessionDataJson, latestAt);
-  final retained = <String, Object?>{
-    'cardNumber': card.cardNumber,
-    'balanceFen': card.balanceFen,
-    'transactionCount': card.transactionCount,
-    'officialName': card.officialName,
-    'issuerName': card.issuerName,
-    'cityName': card.cityName,
-    'identity': card.identificationSource,
-  };
-  for (final entry in retained.entries) {
-    if (entry.value != null) result.putIfAbsent(entry.key, () => latestAt);
-  }
-  return result;
 }
