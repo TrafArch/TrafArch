@@ -95,6 +95,19 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
             Card(
+              child: SwitchListTile(
+                secondary: const Icon(Icons.account_balance_wallet_outlined),
+                title: const Text('上海交通卡可透支余额'),
+                subtitle: Text(
+                  app.includeShanghaiOverdraft
+                      ? '已开启：总余额包含固定的 8 元可透支额度，城市一卡通余额保持原值'
+                      : '默认关闭：总余额和相关记录余额扣除 8 元，城市一卡通余额不重复扣除',
+                ),
+                value: app.includeShanghaiOverdraft,
+                onChanged: (value) => app.setIncludeShanghaiOverdraft(value),
+              ),
+            ),
+            Card(
               child: ListTile(
                 leading: const Icon(Icons.menu_book_outlined),
                 title: const Text('知识库'),

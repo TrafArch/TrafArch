@@ -18,7 +18,7 @@ export '../domain/tu_station_models.dart';
 /// - 用户覆盖与未知站点上报写入两张 App 自有表，不改原始数据；
 /// - 单地区表规模在数百到数千行量级，片段查询走原表扫描并做进程内缓存，
 ///   不物化整表。
-class TuStationRepository implements TuLookupDataSource {
+class TuStationRepository implements TuLookupDataSource, TuCityRailFieldSource {
   TuStationRepository(this.db, {Database? userDatabase})
     : _userDb = userDatabase;
 
@@ -111,6 +111,29 @@ class TuStationRepository implements TuLookupDataSource {
         datasetFile: 'tu:lookup',
         rawValueJson: jsonEncode(raw),
       );
+    }
+  }
+
+  /// Developer-maintained location keys live in their owning city table.
+  /// Source fields retain the existing city-specific rail namespace. Local
+  /// 0x18 aliases never become 1E position fields.
+  @override
+  Iterable<StationCodeEntry> cityRailFieldCandidates(String city) sync* {
+    final field = StationCodeTable.tuRailSourceField(city);
+    const railKinds = {'metro', 'tram', 'light_rail', 'intercity_rail'};
+    for (final record in entriesOfRegion(city)) {
+      if (record.sourceField != field ||
+          !railKinds.contains(record.rawTransportType) ||
+          (record.sourceRegionCode != null &&
+              record.sourceRegionCode != city) ||
+          !RegExp(r'^[0-9A-F]{4,16}$').hasMatch(record.sourceKey)) {
+        continue;
+      }
+      if (const ['3310', '3350', '3370'].contains(city) &&
+          terminalAliases(record.sourceKey).isNotEmpty) {
+        continue;
+      }
+      yield entryForRecord(record);
     }
   }
 
@@ -879,6 +902,8 @@ station_id''';
     'bus' || 'coach' => 'bus',
     'bike' || 'bicycle' => 'bike',
     'intercity_rail' || 'railway' => 'intercity_rail',
+    'tram' => 'tram',
+    'light_rail' => 'light_rail',
     _ => 'other',
   };
 

@@ -4,6 +4,7 @@ import '../../../protocols/transit/tunion/tunion_models.dart';
 import '../../../protocols/transit/tunion/tunion_trip_matcher.dart';
 import '../../transit_analysis/tunion_record_context.dart';
 import '../../transit_analysis/balance_interpretation.dart';
+import '../../transit_analysis/shanghai_balance_display.dart';
 import '../../transit_analysis/tunion_analysis_models.dart'
     show kWalletAnchoredBalanceParseVersion;
 import '../../trips/journey_presentation.dart';
@@ -48,7 +49,22 @@ class ArchiveTripProjection {
 ArchiveTripProjection presentArchiveTrips(
   List<ArchiveHistoryRecord> records, {
   required void Function(ArchiveHistoryRecord) onDiagnostics,
+  bool includeShanghaiOverdraft = true,
+  String? cardType,
 }) {
+  _ArchiveEvent eventFor(ArchiveHistoryRecord record, {String? side}) {
+    final display = record.context.minorUnitDigits != 2
+        ? const ShanghaiBalanceDisplay()
+        : ShanghaiBalanceDisplay.forCard(
+            includeShanghaiOverdraft: includeShanghaiOverdraft,
+            parserId: record.context.systemId,
+            applicationId: record.context.applicationId,
+            cardType: cardType,
+            currencyCode: record.context.currencyCode,
+          );
+    return _ArchiveEvent(record, side: side, balanceDisplay: display);
+  }
+
   // 保存时生成的关联按来源批次消费；不跨批次重新按 POS 配对。
   final links = <String, List<String>>{};
   for (final record in records) {
@@ -105,7 +121,7 @@ ArchiveTripProjection presentArchiveTrips(
           if (record.fields['${side}Time'] is int) side,
       ];
       if (sides.isEmpty) {
-        events.add(_ArchiveEvent(record));
+        events.add(eventFor(record));
       } else {
         final visible = sides
             .where(
@@ -116,10 +132,10 @@ ArchiveTripProjection presentArchiveTrips(
           processRecordCount--;
           mergedRecordCount++;
         }
-        events.addAll(visible.map((side) => _ArchiveEvent(record, side: side)));
+        events.addAll(visible.map((side) => eventFor(record, side: side)));
       }
     } else {
-      events.add(_ArchiveEvent(record));
+      events.add(eventFor(record));
     }
   }
   // Keep history order on ties, but place each side on its own event date.
@@ -456,9 +472,14 @@ Map<ArchiveHistoryRecord, Map<String, int>> _archiveProcessPositions(
 }
 
 class _ArchiveEvent {
-  const _ArchiveEvent(this.record, {this.side});
+  const _ArchiveEvent(
+    this.record, {
+    this.side,
+    this.balanceDisplay = const ShanghaiBalanceDisplay(),
+  });
   final ArchiveHistoryRecord record;
   final String? side;
+  final ShanghaiBalanceDisplay balanceDisplay;
   Map<String, dynamic> get fields => record.fields;
   bool get entry => side == 'entry';
   bool get rail => record.kind == ArchiveRecordKind.rail;
@@ -678,6 +699,7 @@ class _ArchiveEvent {
       currencyCode: record.context.currencyCode,
       currencySymbol: '¥ ',
       positions: Map.unmodifiable(positions),
+      balanceOffsetFen: balanceDisplay.offsetFen,
     );
   }
 
@@ -713,11 +735,14 @@ class _ArchiveEvent {
   String? amount(String key, {bool debit = false}) {
     final value = fields[key];
     if (value is! int) return null;
-    return '${debit && value > 0 ? '-' : ''}${record.context.formatAmount(value)}';
+    final displayed = key == 'entryBalanceFen'
+        ? balanceDisplay.balanceFen(value)!
+        : value;
+    return '${debit && value > 0 ? '-' : ''}${record.context.formatAmount(displayed)}';
   }
 
   String? get recordBalanceText {
-    final balance = archiveRecordBalanceFen(record);
+    final balance = balanceDisplay.balanceFen(archiveRecordBalanceFen(record));
     return balance == null ? null : record.context.formatAmount(balance);
   }
 

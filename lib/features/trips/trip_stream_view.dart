@@ -35,6 +35,7 @@ class TripStreamView extends StatelessWidget {
         presentationContext ??
         TripPresentationContext(
           currency: app.cardCurrency,
+          balanceDisplay: app.balanceDisplay,
           cityNameOf: app.cityUnionDetected ? app.cuCityNameOf : app.cityNameOf,
           resolveStationMatch: app.resolveStationMatch,
           resolveCycleStationMatch: app.resolveCycleStationMatch,

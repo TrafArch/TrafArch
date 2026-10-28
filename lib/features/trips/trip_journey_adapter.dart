@@ -55,7 +55,7 @@ JourneyEvent<TripEntryInfo> describeJourneyEvent(
       fareFen = trip.amountFen;
       isConsume = trip.isConsume;
       if (trip.balanceAfterIsRecorded == false) {
-        balanceAfterText = trip.balanceAfterText;
+        balanceAfterText = display.formatBalance(trip.balanceAfterFen);
         confirmedBalanceFen = trip.balanceAfterFen;
       }
       balanceProcess = process;
@@ -209,6 +209,7 @@ JourneyEvent<TripEntryInfo> describeJourneyEvent(
             processPositions.isNotEmpty
         ? JourneyProcessBalanceEvidence(
             recordedFen: balanceProcess.balanceFen,
+            balanceOffsetFen: display.balanceDisplay.offsetFen,
             amountFen: balanceProcess.amountFen,
             currencyCode: display.currency.code,
             currencySymbol: display.currency.symbol,

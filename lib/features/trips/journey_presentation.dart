@@ -55,6 +55,7 @@ class JourneyProcessBalanceEvidence {
     required this.currencySymbol,
     required this.positions,
     this.minorUnitDigits = 2,
+    this.balanceOffsetFen = 0,
   });
 
   final int recordedFen;
@@ -64,7 +65,11 @@ class JourneyProcessBalanceEvidence {
   final Map<String, int> positions;
   final int minorUnitDigits;
 
-  String format(int fen) => '$currencySymbol${(fen / 100).toStringAsFixed(2)}';
+  /// Presentation offset only; ledger checks continue to use captured values.
+  final int balanceOffsetFen;
+
+  String format(int fen) =>
+      '$currencySymbol${((fen + balanceOffsetFen) / 100).toStringAsFixed(2)}';
 }
 
 /// Display-only event; [payload] retains the authoritative details and actions.
@@ -461,6 +466,7 @@ JourneyEvent<T> _operationEvent<T>(List<JourneyEvent<T>> sides) {
           currencyCode: originalBalance.currencyCode,
           currencySymbol: originalBalance.currencySymbol,
           minorUnitDigits: originalBalance.minorUnitDigits,
+          balanceOffsetFen: originalBalance.balanceOffsetFen,
           positions: Map.unmodifiable({
             for (final slot in originalBalance.positions.entries)
               if (balanceOwner!.sourceIds.contains(slot.key) &&

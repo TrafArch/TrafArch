@@ -96,7 +96,11 @@ void main() {
       channel: channel,
       bundle: MissingTestAssets(),
       logger: AppLogger(store: MemoryLogStore()),
-      settingsStore: MemorySettingsStore(),
+      // This regression verifies newly read raw balances. Enable the display
+      // allowance explicitly; the default exclusion has separate coverage.
+      settingsStore: MemorySettingsStore({
+        SettingsKeys.includeShanghaiOverdraft: 'true',
+      }),
     );
     addTearDown(app.dispose);
     await tester.runAsync(() async {
