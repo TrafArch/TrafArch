@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:drift/drift.dart' show Variable;
 
+import '../../../protocols/transit/card_parser.dart' show CardParserIds;
 import '../data/app_database.dart';
 import '../domain/card_session_snapshot.dart';
 import '../data/card_repository.dart';
@@ -75,6 +76,7 @@ class ArchiveHistoryResult {
   final List<Map<String, dynamic>> importedRecords;
   final SnapshotDecodeResult? latestCapture;
   final int? balanceObservedAt;
+  final Object? documentReadIssue;
 
   const ArchiveHistoryResult({
     required this.card,
@@ -83,6 +85,7 @@ class ArchiveHistoryResult {
     this.importedRecords = const [],
     this.latestCapture,
     this.balanceObservedAt,
+    this.documentReadIssue,
   });
 
   bool get missing => card == null;
@@ -345,6 +348,10 @@ class ArchiveHistory {
       if (snapshot == null) continue;
       final envelope =
           jsonDecode(batch.decoded.rawJson) as Map<String, dynamic>;
+      final recoveredProcessSlots = _recoverPhysicalProcessSlots(
+        snapshot,
+        envelope,
+      );
       for (final section in const {
         'trips': ArchiveRecordKind.transaction,
         'rails': ArchiveRecordKind.rail,
@@ -395,13 +402,16 @@ class ArchiveHistory {
               'kind': section.key,
               // v8 persists a source flag that older writers omitted. Compare
               // its interpreted meaning below, not its serialization shape.
-              'fields': section.value == ArchiveRecordKind.transaction
-                  ? {
-                      for (final entry in fields.entries)
-                        if (entry.key != 'balanceAfterIsRecorded')
-                          entry.key: entry.value,
-                    }
-                  : fields,
+              // Display captures can improve between reads of the same raw
+              // record. Keep them in fields and original batches, but they do
+              // not establish a distinct record identity.
+              'fields': {
+                for (final entry in fields.entries)
+                  if (entry.key != 'capturedDisplay' &&
+                      !(section.value == ArchiveRecordKind.transaction &&
+                          entry.key == 'balanceAfterIsRecorded'))
+                    entry.key: entry.value,
+              },
               // Equal raw fields may have different balance semantics across
               // parser versions. Unknown balances have no displayed source.
               if (balance != null && balance.fen != null)
@@ -421,25 +431,32 @@ class ArchiveHistory {
             }),
           );
           final previous = records[key];
+          final capturedProvenance =
+              snapshot.recordProvenance[path] ??
+              {
+                'capture': snapshot.recordProvenance,
+                'recordPath': path,
+                'location': fields['location'],
+                'stationConfidence': fields['stationConfidence'],
+              };
           records[key] = ArchiveHistoryRecord(
             kind: section.value,
             // Sources start with the newest capture. Keep its exact fields so
             // the first source's parser version always interprets that capture.
             fields: previous?.fields ?? Map.unmodifiable(fields),
-            context: context,
+            context: previous?.context ?? context,
             cardCityCode: snapshot.cardCityCode,
             sources: List.unmodifiable([
               ...?previous?.sources,
               ArchiveRecordSource(batch.id, path, snapshot.parseVersion, {
                 'referencePackages': captured.referencePackages,
-                'record':
-                    snapshot.recordProvenance[path] ??
-                    {
-                      'capture': snapshot.recordProvenance,
-                      'recordPath': path,
-                      'location': fields['location'],
-                      'stationConfidence': fields['stationConfidence'],
-                    },
+                'record': section.value == ArchiveRecordKind.process
+                    ? _withPhysicalProcessSlot(
+                        capturedProvenance,
+                        fields,
+                        recoveredProcessSlots[_evidenceHex(fields['rawHex'])],
+                      )
+                    : capturedProvenance,
               }),
             ]),
           );
@@ -463,9 +480,179 @@ class ArchiveHistory {
           ? null
           : CardSessionSnapshot.decodeResult(scalar),
       balanceObservedAt: balanceObservedAt,
+      documentReadIssue: rows.documentReadIssue,
     );
   }
 }
+
+typedef _PhysicalProcessSlot = ({
+  int number,
+  String rawHex,
+  String sessionId,
+  int frameIndex,
+});
+
+/// Old cycle[] arrays omitted physical coordinates. A complete captured SELECT
+/// and single-record exchange can recover them without modifying the snapshot.
+/// Decoded array positions and legacy tu_process_record indexes are not proof.
+Map<String, _PhysicalProcessSlot> _recoverPhysicalProcessSlots(
+  CardSessionSnapshot snapshot,
+  Map<String, dynamic> envelope,
+) {
+  final aid = _evidenceHex(snapshot.context.applicationId);
+  if (snapshot.formatVersion != 3 ||
+      !CardParserIds.isTUnionFamily(snapshot.context.systemId) ||
+      aid == null ||
+      aid.length < 10 ||
+      aid.length > 32) {
+    return const {};
+  }
+  final frames = snapshot.rawEvidence
+      .where((item) => item['kind'] == 'physical_frame')
+      .toList();
+  if (frames.isEmpty) return const {};
+  final session = frames.first['sessionId'];
+  final attempt = snapshot.extensions['captureAttemptId'];
+  if (session is! String ||
+      session.trim().isEmpty ||
+      (attempt != null && attempt != session)) {
+    return const {};
+  }
+  // ScanController records every exchange in one session, starting at index 0.
+  // A missing frame may hide a SELECT; do not extend context across that gap.
+  for (var index = 0; index < frames.length; index++) {
+    if (frames[index]['index'] is! int ||
+        frames[index]['index'] != index ||
+        frames[index]['sessionId'] != session) {
+      return const {};
+    }
+  }
+
+  var selected = false;
+  final slotCounts = <int, int>{};
+  final rawCounts = <String, int>{};
+  final candidates = <_PhysicalProcessSlot>[];
+  for (final frame in frames) {
+    final command = _evidenceBytes(frame['command']);
+    if (command == null || command.length < 2) return const {};
+    final response = _evidenceBytes(frame['response']);
+    if (frame['transport'] != 'iso-dep' ||
+        frame['errorCode'] != null ||
+        frame['error'] != null) {
+      selected = false;
+      continue;
+    }
+    final success =
+        response != null &&
+        response.length >= 2 &&
+        response[response.length - 2] == 0x90 &&
+        response.last == 0;
+    if (command[1] == 0xA4) {
+      // Any SELECT, including a failed one or an MF selection, invalidates the
+      // previous application. Only an exact successful by-name SELECT restores it.
+      selected = false;
+      if (success &&
+          command.length >= 5 &&
+          (command[0] == 0 || command[0] == 0x80) &&
+          command[2] == 4 &&
+          command[3] == 0) {
+        final length = command[4];
+        if (length > 0 &&
+            (command.length == 5 + length || command.length == 6 + length)) {
+          selected = _bytesHex(command.sublist(5, 5 + length)) == aid;
+        }
+      }
+      continue;
+    }
+    if (!selected ||
+        command.length != 5 ||
+        command[0] != 0 ||
+        command[1] != 0xB2 ||
+        command[2] <= 0 ||
+        command[3] != 0xF4 ||
+        !success) {
+      continue;
+    }
+    final number = command[2];
+    slotCounts[number] = (slotCounts[number] ?? 0) + 1;
+    // 6C retries contribute only their eventual 9000 response. Bulk reads,
+    // wrappers and truncated records cannot give one physical 48-byte slot.
+    if (response.length != 50) continue;
+    final raw = _bytesHex(response.sublist(0, 48));
+    if (RegExp(r'^(?:00)+$|^(?:FF)+$').hasMatch(raw)) continue;
+    rawCounts[raw] = (rawCounts[raw] ?? 0) + 1;
+    candidates.add((
+      number: number,
+      rawHex: raw,
+      sessionId: session,
+      frameIndex: frame['index'] as int,
+    ));
+  }
+
+  final cycleCounts = <String, int>{};
+  final cycles = envelope['cycle'];
+  if (cycles is! List) return const {};
+  for (final cycle in cycles) {
+    final raw = cycle is Map ? _evidenceHex(cycle['rawHex']) : null;
+    if (raw != null) cycleCounts[raw] = (cycleCounts[raw] ?? 0) + 1;
+  }
+  return Map.unmodifiable({
+    for (final candidate in candidates)
+      if (slotCounts[candidate.number] == 1 &&
+          rawCounts[candidate.rawHex] == 1 &&
+          cycleCounts[candidate.rawHex] == 1)
+        candidate.rawHex: candidate,
+  });
+}
+
+Object _withPhysicalProcessSlot(
+  Object original,
+  Map<String, dynamic> fields,
+  _PhysicalProcessSlot? slot,
+) {
+  if (slot == null || original is! Map<String, dynamic>) return original;
+  // Preserve explicit reliability decisions and conflicting captured provenance.
+  if (original.containsKey('recordNumberIsReliable') ||
+      (original['sfi'] != null && original['sfi'] != 0x1E) ||
+      (original['recordNumber'] != null &&
+          original['recordNumber'] != slot.number) ||
+      (original['rawHex'] != null &&
+          _evidenceHex(original['rawHex']) != slot.rawHex)) {
+    return original;
+  }
+  return Map<String, dynamic>.unmodifiable({
+    ...original,
+    'sfi': 0x1E,
+    'recordNumber': slot.number,
+    'recordNumberIsReliable': true,
+    'rawHex': original['rawHex'] ?? fields['rawHex'],
+    'slotRecovery': {
+      'kind': 'physical_frame',
+      'sessionId': slot.sessionId,
+      'frameIndex': slot.frameIndex,
+    },
+  });
+}
+
+String? _evidenceHex(Object? value) {
+  if (value is! String) return null;
+  final hex = value.replaceAll(RegExp(r'\s+'), '').toUpperCase();
+  return hex.isNotEmpty &&
+          hex.length.isEven &&
+          RegExp(r'^[0-9A-F]+$').hasMatch(hex)
+      ? hex
+      : null;
+}
+
+List<int>? _evidenceBytes(Object? value) =>
+    value is List &&
+        value.every((byte) => byte is int && byte >= 0 && byte <= 255)
+    ? List<int>.from(value)
+    : null;
+
+String _bytesHex(List<int> bytes) => bytes
+    .map((byte) => byte.toRadixString(16).padLeft(2, '0').toUpperCase())
+    .join();
 
 Object? _canonical(Object? value) {
   if (value is Map<String, dynamic>) {

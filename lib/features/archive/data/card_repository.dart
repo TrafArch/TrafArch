@@ -304,6 +304,96 @@ class CardRepository {
   Stream<ArchiveRows> watchArchiveRows(String cardId) =>
       _historyQuery(cardId).watch().asyncMap((_) => getArchiveRows(cardId));
 
+  JoinedSelectStatement<HasResultSet, dynamic> _allHistoryQuery() =>
+      db.select(db.savedCards).join([
+        leftOuterJoin(
+          db.cardReadBatches,
+          db.cardReadBatches.cardId.equalsExp(db.savedCards.id),
+        ),
+      ])..orderBy([
+        OrderingTerm(
+          expression: db.savedCards.lastReadAt,
+          mode: OrderingMode.desc,
+          nulls: NullsOrder.last,
+        ),
+        OrderingTerm.desc(db.savedCards.updatedAt),
+        OrderingTerm.asc(db.savedCards.id),
+        OrderingTerm.desc(db.cardReadBatches.readAt),
+        OrderingTerm.desc(db.cardReadBatches.id),
+      ]);
+
+  /// A single subscription tracks both indexes. Re-read the joined rows and
+  /// JSON-only fields in one transaction so imports and batch-only writes cannot
+  /// mix observations. Bulk reads avoid a separate history query per list tile.
+  Stream<List<ArchiveRows>> watchAllArchiveRows() =>
+      _allHistoryQuery().watch().asyncMap(
+        (_) => db.transaction(() async {
+          final joined = await _allHistoryQuery().get();
+          final cards = <String, SavedCard>{};
+          final batches = <String, List<CardReadBatch>>{};
+          for (final row in joined) {
+            final card = row.readTable(db.savedCards);
+            cards.putIfAbsent(card.id, () => card);
+            final batch = row.readTableOrNull(db.cardReadBatches);
+            if (batch != null) {
+              batches.putIfAbsent(card.id, () => []).add(batch);
+            }
+          }
+          final documents = await db.customSelect('''
+            SELECT d.card_id,d.payload_json,d.dirty FROM archive_documents d
+            INNER JOIN saved_cards s ON s.id=d.card_id
+          ''').get();
+          final stored = <String, QueryRow>{
+            for (final row in documents) row.read<String>('card_id'): row,
+          };
+          return List<ArchiveRows>.unmodifiable([
+            for (final card in cards.values)
+              _archiveRowsForList(
+                card,
+                List<CardReadBatch>.unmodifiable(batches[card.id] ?? const []),
+                stored[card.id],
+              ),
+          ]);
+        }),
+      );
+
+  ArchiveRows _archiveRowsForList(
+    SavedCard indexedCard,
+    List<CardReadBatch> indexedBatches,
+    QueryRow? stored,
+  ) {
+    if (stored == null) {
+      return ArchiveRows(card: indexedCard, batches: indexedBatches);
+    }
+    try {
+      final document = CardArchiveDocument.decode(
+        stored.read<String>('payload_json'),
+      );
+      if (document.card.id != indexedCard.id ||
+          document.card.cardFingerprint != indexedCard.cardFingerprint) {
+        throw const FormatException('卡片 JSON 档案与索引身份不一致');
+      }
+      // Mirror ArchiveDocumentStore.read: a clean complete document is
+      // authoritative. A dirty document preserves JSON-only fields while its
+      // current card/batch indexes supply the same rows refresh would expose.
+      final clean = stored.read<int>('dirty') == 0;
+      return ArchiveRows(
+        card: clean ? document.card : indexedCard,
+        batches: clean ? document.batches : indexedBatches,
+        importedRecords: document.importedRecords,
+        retainedSummaries: document.retainedSummaries,
+      );
+    } on FormatException catch (issue) {
+      // Keep this card reachable (including its delete action) and let other
+      // cards load. Never present an incomplete index count as the full count.
+      return ArchiveRows(
+        card: indexedCard,
+        batches: const [],
+        documentReadIssue: issue,
+      );
+    }
+  }
+
   Future<ArchiveRows> getArchiveRows(String cardId) => db.transaction(() async {
     final document = await ArchiveDocumentStore(db).read(cardId);
     return ArchiveRows(
@@ -352,11 +442,13 @@ class ArchiveRows {
   final List<CardReadBatch> batches;
   final List<Map<String, dynamic>> importedRecords;
   final List<Map<String, dynamic>> retainedSummaries;
+  final Object? documentReadIssue;
   const ArchiveRows({
     required this.card,
     required this.batches,
     this.importedRecords = const [],
     this.retainedSummaries = const [],
+    this.documentReadIssue,
   });
 }
 

@@ -177,6 +177,9 @@ class TUnionTransaction {
 class TUnionProcessRecord {
   final int sfi; // 0x1A 变长记录文件 / 0x1E 循环记录文件
   final int recordNumber; // 记录号（从 1 开始；整体读取兜底时为 0）
+  /// False when a compatibility wrapper renumbered decoded items rather than
+  /// preserving physical source slots. Such indexes cannot prove adjacency.
+  final bool recordNumberIsReliable;
   final String recordName; // 记录名称（0x1A 按记录号对照表，0x1E 为“循环记录 N”）
   final List<int> raw; // 原始记录字节
 
@@ -195,6 +198,7 @@ class TUnionProcessRecord {
   const TUnionProcessRecord({
     required this.sfi,
     required this.recordNumber,
+    this.recordNumberIsReliable = true,
     required this.recordName,
     required this.raw,
     this.trip,

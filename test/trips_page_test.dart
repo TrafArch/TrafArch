@@ -768,9 +768,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('行程记录 · 1 个已保存批次'), findsOneWidget);
-      expect(find.text('消费 · 苏洋 · 序号 1'), findsOneWidget);
+      expect(find.text('苏洋'), findsOneWidget);
       final savedTransactionCard = find.ancestor(
-        of: find.text('消费 · 苏洋 · 序号 1'),
+        of: find.text('苏洋'),
         matching: find.byType(TripEntryCard),
       );
       expect(
@@ -782,7 +782,13 @@ void main() {
       );
       expect(find.text('消费 · 苏洋 · 序号 2'), findsNothing);
       expect(find.text('-¥ 2.00'), findsNothing);
-      expect(find.text('城市轨道交通'), findsWidgets);
+      expect(find.textContaining('轨道交通'), findsWidgets);
+      await tester.ensureVisible(savedTransactionCard);
+      await tester.pumpAndSettle();
+      await tester.tap(savedTransactionCard);
+      await tester.pumpAndSettle();
+      expect(find.text('交易序号'), findsOneWidget);
+      expect(find.text('1'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox());
       await tester.pump();
@@ -820,7 +826,7 @@ void main() {
       expect(find.text('3105060012345678900'), findsOneWidget);
       expect(find.text('10月14日 21:40'), findsOneWidget);
       expect(find.text('¥ 2.00'), findsOneWidget);
-      expect(find.text('41条'), findsOneWidget);
+      expect(find.text('最近读取 41 条'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox());
       await tester.pump();
@@ -914,7 +920,7 @@ void main() {
       expect(find.text('3105060012345678900'), findsOneWidget);
       expect(find.text('已观察余额'), findsOneWidget);
       expect(find.text('¥ 2.00'), findsOneWidget);
-      expect(find.text('交易记录'), findsOneWidget);
+      expect(find.text('最近读取交易'), findsOneWidget);
       expect(find.text('41条'), findsOneWidget);
       expect(find.text('最近读取'), findsOneWidget);
       expect(find.text('2026-10-14 21:40:00'), findsOneWidget);

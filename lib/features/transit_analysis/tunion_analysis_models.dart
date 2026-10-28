@@ -14,7 +14,7 @@ const int kWalletAnchoredBalanceParseVersion = 8;
 
 /// 行程解析口径版本：解析 / 关联规则变更时递增，随读取批次持久化，
 /// 历史数据据此识别产出批次所用的解析口径。
-const int kTripParseVersion = kWalletAnchoredBalanceParseVersion;
+const int kTripParseVersion = 11;
 
 /// 识别证据：来源、说明与权重（0 表示"出场但未命中"）。
 class Evidence {
@@ -149,6 +149,10 @@ class TransitTrip {
   final String? cityCode;
 
   final String? lineLabel;
+
+  /// Bus route established by the city decoder/reference lookup, excluding
+  /// raw-code fallbacks in [lineLabel]. Used only for journey display labels.
+  final String? resolvedBusLineLabel;
   final String? stationLabel;
 
   /// 站点条目类型（如 "地铁" / "BRT" / "公交"）；
@@ -156,7 +160,7 @@ class TransitTrip {
   final String? stationType;
 
   /// 应用分类名称（如 "城市轨道交通" / "公共汽电车"）；
-  /// 由 0x1E 过程记录按"时间 + 金额"配对补充，未配对或未收录时为 null。
+  /// 由 TU 过程记录或已核实的上海本地 CU 终端分类补充；未知时为 null。
   final String? appTypeName;
 
   /// 交易余额（分）：优先从当前钱包沿连续账本倒推交易后余额；无法
@@ -168,14 +172,20 @@ class TransitTrip {
   /// null 为旧数据 / 未标注（展示层按记录余额兼容）。
   final bool? balanceAfterIsRecorded;
 
-  /// 复合消费（0x09）行程配对命中时的状态短名（如 "出站" / "进站" /
-  /// "上车" / "下车"）；其他行程或未配对时为 null，展示层据此替换
-  /// "复合消费"类型名（未配对保持原名，不猜测）。
+  /// 复合消费（0x09）的状态短名（如 "出站" / "进站" / "上车" / "下车"）。
+  /// TU 过程记录优先；上海本地 CU 地铁可按连续账本推断，并在
+  /// [rideStatusSource] 保留推断来源。其余未知状态为 null。
   final String? rideStatusName;
+
+  /// 派生进出站状态的来源。null 保持既有过程记录口径；
+  /// shanghai-cu-ledger-inference 表示上海 CU 地铁按账本顺序推断，
+  /// 不是卡内显式进出站字段，展示与档案必须保留这一区别。
+  final String? rideStatusSource;
 
   /// 是否为进站记录：0 元交易与 0x1E 入站类记录（EC 0x01 / EP 0x03）
   /// 按"时间 + 金额"配对命中时为 true；0x1E 未命中时按 0x1A 记录 1/2
   /// （城市轨道 / 公共汽电车应用信息记录）的进站时间兜底配对。
+  /// 上海本地 CU 地铁的账本推断另由 [rideStatusSource] 标明。
   /// 展示层据此改显进站时间与站点。
   final bool isEntry;
 
@@ -209,12 +219,14 @@ class TransitTrip {
     this.cityName,
     this.cityCode,
     this.lineLabel,
+    this.resolvedBusLineLabel,
     this.stationLabel,
     this.stationType,
     this.appTypeName,
     this.balanceAfterFen,
     this.balanceAfterIsRecorded,
     this.rideStatusName,
+    this.rideStatusSource,
     this.isEntry = false,
     this.matchedProcessTrip,
     this.displayProcessKey,

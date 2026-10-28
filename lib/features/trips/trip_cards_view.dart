@@ -4,6 +4,7 @@ import 'trip_entry_card.dart';
 import 'trip_entry_details.dart';
 import 'trip_entry_presenter.dart';
 import 'trip_filters.dart';
+import 'journey_presentation.dart';
 
 /// A display projection: callers own record identity, context and statistics.
 /// Both saved history and live trips use the same filters, cards and sheet.
@@ -15,6 +16,7 @@ class TripCardPresentation<S extends Enum> {
     required this.dateText,
     required this.remote,
     this.onDiagnostics,
+    this.journeyEvent,
   });
 
   final TripEntryInfo info;
@@ -23,6 +25,7 @@ class TripCardPresentation<S extends Enum> {
   final String dateText;
   final bool remote;
   final VoidCallback? onDiagnostics;
+  final JourneyEvent<TripEntryInfo>? journeyEvent;
 }
 
 class TripCardsView<S extends Enum> extends StatefulWidget {
@@ -48,13 +51,50 @@ class _TripCardsViewState<S extends Enum> extends State<TripCardsView<S>> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final groups = <String, List<TripCardPresentation<S>>>{};
-    for (final entry in widget.entries) {
-      if ((_sources.isEmpty || _sources.contains(entry.source)) &&
-          (_modes.isEmpty || _modes.contains(entry.mode))) {
-        groups.putIfAbsent(entry.dateText, () => []).add(entry);
-      }
-    }
+    final journeys = projectJourneys(
+      widget.entries.map(
+        (entry) =>
+            entry.journeyEvent?.withPayload(entry) ??
+            JourneyEvent(
+              payload: entry,
+              mode: entry.mode,
+              role: JourneyEventRole.unknown,
+              endpoint: JourneyEndpoint(
+                line: entry.info.line,
+                time: DateTime.tryParse(entry.info.timeText ?? ''),
+                timeText: entry.info.timeText,
+              ),
+              amountText: entry.info.amountText,
+            ),
+      ),
+    );
+    final visible = journeys
+        .where(
+          (journey) =>
+              (_sources.isEmpty ||
+                  journey.events.any(
+                    (event) => _sources.contains(event.payload.source),
+                  )) &&
+              (_modes.isEmpty || _modes.contains(journey.mode)),
+        )
+        .toList();
+    final pending = visible
+        .where((journey) => journey.state == JourneyState.inProgress)
+        .toList();
+    final history = visible
+        .where(
+          (journey) =>
+              journey.state != JourneyState.inProgress &&
+              journey.mode != TripModeFilter.other,
+        )
+        .toList();
+    final other = visible
+        .where(
+          (journey) =>
+              journey.state != JourneyState.inProgress &&
+              journey.mode == TripModeFilter.other,
+        )
+        .toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -109,7 +149,10 @@ class _TripCardsViewState<S extends Enum> extends State<TripCardsView<S>> {
           ],
         ),
         const SizedBox(height: 10),
-        if (groups.isEmpty)
+        _section(context, '行程信息提示', pending),
+        _section(context, '历史行程', history),
+        if (other.isNotEmpty) _section(context, '其他记录', other),
+        if (visible.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 16),
             child: Text(
@@ -119,29 +162,100 @@ class _TripCardsViewState<S extends Enum> extends State<TripCardsView<S>> {
               ),
             ),
           ),
-        for (final group in groups.entries) ...[
-          Padding(
-            padding: const EdgeInsets.only(top: 4, bottom: 6),
-            child: Text(
-              '${group.key} · ${group.value.length} 条',
-              style: theme.textTheme.titleSmall?.copyWith(
-                color: theme.colorScheme.primary,
-                fontWeight: FontWeight.w600,
-              ),
+      ],
+    );
+  }
+
+  Widget _section(
+    BuildContext context,
+    String title,
+    List<JourneyPresentation<TripCardPresentation<S>>> journeys,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 14, 4, 12),
+          child: Text(
+            '$title ${journeys.length}',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+        ),
+        for (final journey in journeys)
+          TripEntryCard(
+            info: journey.events.first.payload.info,
+            remote: journey.events.any((event) => event.payload.remote),
+            journey: journey.mode == TripModeFilter.other
+                ? null
+                : JourneyPresentation(
+                    events: [
+                      for (final event in journey.events)
+                        event.withPayload(event.payload.info),
+                    ],
+                    mode: journey.mode,
+                    state: journey.state,
+                    cityLabel: journey.cityLabel,
+                    start: journey.start,
+                    end: journey.end,
+                    duration: journey.duration,
+                    amountText: journey.amountText,
+                    balanceAfterText: journey.balanceAfterText,
+                    seatLabel: journey.seatLabel,
+                  ),
+            onTap: () => _openJourney(context, journey),
+          ),
+      ],
+    );
+  }
+
+  void _openJourney(
+    BuildContext context,
+    JourneyPresentation<TripCardPresentation<S>> journey,
+  ) {
+    void open(TripCardPresentation<S> entry) => showTripEntryDetails(
+      context,
+      entry.info,
+      onDiagnostics: entry.onDiagnostics,
+    );
+    if (journey.events.length == 1) {
+      open(journey.events.single.payload);
+      return;
+    }
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('行程记录', style: Theme.of(context).textTheme.titleLarge),
+                for (final event in journey.events)
+                  ListTile(
+                    title: Text(event.payload.info.title),
+                    subtitle: Text(
+                      [
+                        ?event.payload.info.timeText,
+                        ?event.payload.info.subText,
+                        if (event.role == JourneyEventRole.exit &&
+                            journey.balanceAfterText != null)
+                          '${event.mode == TripModeFilter.bus ? '下车' : '出站'}后余额 ${journey.balanceAfterText}',
+                      ].join('\n'),
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      open(event.payload);
+                    },
+                  ),
+              ],
             ),
           ),
-          for (final entry in group.value)
-            TripEntryCard(
-              info: entry.info,
-              remote: entry.remote,
-              onTap: () => showTripEntryDetails(
-                context,
-                entry.info,
-                onDiagnostics: entry.onDiagnostics,
-              ),
-            ),
-        ],
-      ],
+        ),
+      ),
     );
   }
 }

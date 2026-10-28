@@ -6,11 +6,13 @@ import '../data/app_database.dart';
 import '../domain/card_name_extension.dart';
 import '../data/card_repository.dart';
 import '../application/archive_history.dart';
+import '../application/archive_record_count.dart';
 import '../application/cu_archive_projection.dart';
 import '../../trips/cu_transaction_list.dart';
 import '../../trips/trip_cards_view.dart';
 import 'archive_trip_presenter.dart';
 import 'imported_archive_records.dart';
+import 'shanghai_archive_mirrored_records.dart';
 
 /// Archive-only detail: captured evidence/context is independent of live scans.
 class CardDetailPage extends StatefulWidget {
@@ -96,6 +98,10 @@ class _CardDetailBody extends StatelessWidget {
         .length;
     final readBatchCount = history.batches.length - summaryCount;
     final cityUnion = projectCuArchive(history);
+    final cuRecords = partitionShanghaiArchiveMirroredRecords(
+      history: history,
+      cityUnion: cityUnion,
+    );
     final trips = presentArchiveTrips(
       history.records,
       onDiagnostics: (record) => _showEvidence(
@@ -122,6 +128,7 @@ class _CardDetailBody extends StatelessWidget {
       children: [
         _ArchiveHeader(
           card: history.card!,
+          recordCount: ArchiveRecordCount.fromHistory(history),
           repository: repository,
           observedFields: history.latestObservedFields,
           balanceText: history.balanceText,
@@ -144,16 +151,6 @@ class _CardDetailBody extends StatelessWidget {
             ),
           ),
         const SizedBox(height: 8),
-        if (cityUnion.transactions.isNotEmpty)
-          CuTransactionList(
-            transactions: cityUnion.transactions,
-            sourceLabels: cityUnion.sourceLabels,
-          ),
-        for (final issue in cityUnion.issues)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Text(issue),
-          ),
         if (trips.entries.isNotEmpty ||
             (cityUnion.transactions.isEmpty && history.importedRecords.isEmpty))
           TripCardsView(
@@ -161,6 +158,16 @@ class _CardDetailBody extends StatelessWidget {
             entries: trips.entries,
             sourceLabels: archiveTripSourceLabels,
             summaryText: trips.summaryText,
+          ),
+        if (cityUnion.transactions.isNotEmpty)
+          CuApplicationRecords(
+            records: cuRecords,
+            sourceLabels: cityUnion.sourceLabels,
+          ),
+        for (final issue in cityUnion.issues)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Text(issue),
           ),
         if (history.importedRecords.isNotEmpty) ...[
           const SizedBox(height: 12),
@@ -250,6 +257,7 @@ void _showEvidence(BuildContext context, String title, String raw) {
 /// 右上角写入用户自定义名称（识别结果不被覆盖，改名后数据流即时刷新）。
 class _ArchiveHeader extends StatelessWidget {
   final SavedCard card;
+  final ArchiveRecordCount recordCount;
   final CardRepository repository;
   final Map<String, bool> observedFields;
   final String? balanceText;
@@ -258,6 +266,7 @@ class _ArchiveHeader extends StatelessWidget {
 
   const _ArchiveHeader({
     required this.card,
+    required this.recordCount,
     required this.repository,
     required this.observedFields,
     this.balanceText,
@@ -313,7 +322,7 @@ class _ArchiveHeader extends StatelessWidget {
                 balanceObservationLabel ?? '历史金额',
                 '$observed（非已验证港币账户余额）',
               ),
-            _row(context, '交易记录', card.transactionCountText ?? '—'),
+            _row(context, recordCount.label, recordCount.valueText),
             _row(context, '最近读取', card.lastReadFullText ?? '—'),
             for (final field in const {
               'cardNumber': '卡号',

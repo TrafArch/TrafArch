@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../shared/presentation/ui_constants.dart';
 import '../archive/data/app_database.dart';
 import '../../app/app_dependencies.dart';
+import '../archive/application/archive_record_count.dart';
 import '../archive/domain/card_name_extension.dart';
 import '../qr/presentation/qr_action_button.dart';
 import '../settings/presentation/settings_action_button.dart';
@@ -11,12 +12,34 @@ import '../archive/presentation/archive_transfer_dialogs.dart';
 
 /// 卡片列表页：展示已保存的卡片档案摘要，
 /// 数据流监听数据库（重复读取与改名后自动刷新），最近读取的在前。
-class CardsPage extends StatelessWidget {
+class CardsPage extends StatefulWidget {
   final AppDependencies app;
   const CardsPage({super.key, required this.app});
 
   @override
+  State<CardsPage> createState() => _CardsPageState();
+}
+
+class _CardsPageState extends State<CardsPage> {
+  late Stream<List<ArchiveCardSummary>> _summaries;
+
+  @override
+  void initState() {
+    super.initState();
+    _summaries = watchArchiveCardSummaries(widget.app.cardRepository);
+  }
+
+  @override
+  void didUpdateWidget(covariant CardsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.app.cardRepository != widget.app.cardRepository) {
+      _summaries = watchArchiveCardSummaries(widget.app.cardRepository);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final app = widget.app;
     return SafeArea(
       top: false,
       child: CustomScrollView(
@@ -38,8 +61,8 @@ class CardsPage extends StatelessWidget {
                 12,
                 UiConstants.floatingNavBarClearance,
               ),
-              child: StreamBuilder<List<SavedCard>>(
-                stream: app.cardRepository.watchCards(),
+              child: StreamBuilder<List<ArchiveCardSummary>>(
+                stream: _summaries,
                 builder: (context, snapshot) {
                   if (snapshot.hasError) {
                     return Card(
@@ -76,8 +99,12 @@ class CardsPage extends StatelessWidget {
                   }
                   return Column(
                     children: [
-                      for (final card in cards)
-                        _SavedCardTile(card: card, app: app),
+                      for (final summary in cards)
+                        _SavedCardTile(
+                          card: summary.card,
+                          recordCount: summary.recordCount,
+                          app: app,
+                        ),
                     ],
                   );
                 },
@@ -91,13 +118,18 @@ class CardsPage extends StatelessWidget {
 }
 
 /// 单张档案卡片（列表项）：左侧三行（名称 / 卡号 / 最近读取时间）、
-/// 右侧余额快照与交易记录条数；点击进入卡片详情页查看读取快照与行程，
+/// 右侧余额快照与累计已保存记录条数；点击进入卡片详情页查看读取快照与行程，
 /// 右侧操作菜单支持删除该档案。
 class _SavedCardTile extends StatelessWidget {
   final SavedCard card;
+  final ArchiveRecordCount recordCount;
   final AppDependencies app;
 
-  const _SavedCardTile({required this.card, required this.app});
+  const _SavedCardTile({
+    required this.card,
+    required this.recordCount,
+    required this.app,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -164,7 +196,7 @@ class _SavedCardTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      card.transactionCountText ?? '—',
+                      recordCount.listText,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall?.copyWith(

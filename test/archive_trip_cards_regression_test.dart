@@ -311,7 +311,7 @@ void main() {
       expect(find.byType(TripEntryCard), findsOneWidget);
       expect(find.textContaining('苏洋'), findsOneWidget);
       expect(find.text('-HK\$ 4.50'), findsOneWidget);
-      expect(find.text('2026-10-19 · 1 条'), findsOneWidget);
+      expect(find.text('2026年10月19日'), findsOneWidget);
       expect(find.textContaining('批次 ·'), findsNothing);
       expect(find.text('查看完整原始快照'), findsNothing);
       _expectNoJson();
@@ -344,26 +344,33 @@ void main() {
       ),
     );
     await _open(tester, repository, id);
-    expect(find.byType(TripEntryCard), findsNWidgets(6));
+    expect(find.byType(TripEntryCard), findsNWidgets(4));
     expect(find.textContaining('人民广场'), findsWidgets);
     expect(find.textContaining('世纪大道'), findsWidgets);
     expect(find.text('交易 1 条 · 过程及应用记录 3 条'), findsOneWidget);
 
     await _filter(tester, '0x1E 过程');
     expect(find.byType(TripEntryCard), findsOneWidget);
-    expect(find.textContaining('上车'), findsOneWidget);
+    expect(
+      tester.widget<TripEntryCard>(find.byType(TripEntryCard)).journey!.start,
+      isNotNull,
+    );
     await _filter(tester, '城市轨道交通');
     expect(find.byType(TripEntryCard), findsNothing);
     expect(find.text('当前筛选条件下没有记录'), findsOneWidget);
     await _filter(tester, '全部方式');
     await _filter(tester, '0x1A 轨道');
-    // 未关联的 1A 两侧继续显示并参与筛选。
-    expect(find.byType(TripEntryCard), findsNWidgets(2));
+    // 同一 1A 两侧展示为一张行程票，详情仍保留两个原始事件。
+    expect(find.byType(TripEntryCard), findsOneWidget);
+    expect(
+      tester.widget<TripEntryCard>(find.byType(TripEntryCard)).journey!.events,
+      hasLength(2),
+    );
     await _filter(tester, '全部来源');
     await _filter(tester, '公共汽电车');
-    expect(find.byType(TripEntryCard), findsNWidgets(3));
+    expect(find.byType(TripEntryCard), findsNWidgets(2));
     await _filter(tester, '全部方式');
-    expect(find.byType(TripEntryCard), findsNWidgets(6));
+    expect(find.byType(TripEntryCard), findsNWidgets(4));
     _expectNoJson();
     await _close(tester);
   });
@@ -413,7 +420,7 @@ void main() {
       ),
     );
     await _open(tester, repository, id);
-    expect(find.byType(TripEntryCard), findsNWidgets(3));
+    expect(find.byType(TripEntryCard), findsNWidgets(2));
     expect(find.text('交易 1 条 · 过程及应用记录 1 条（1 条已并入 0x18 交易）'), findsOneWidget);
     await _filter(tester, '0x18 交易');
     await tester.tap(find.byType(TripEntryCard));
@@ -545,7 +552,10 @@ void main() {
     await _open(tester, repository, id, size: const Size(390, 1100));
     expect(tester.takeException(), isNull);
     expect(find.text('-币种未知 4.50'), findsOneWidget);
-    expect(find.text('记录余额 币种未知 12.34'), findsOneWidget);
+    await tester.tap(find.byType(TripEntryCard));
+    await tester.pumpAndSettle();
+    expect(find.text('记录余额'), findsOneWidget);
+    expect(find.text('币种未知 12.34'), findsOneWidget);
     await _close(tester);
   });
 
@@ -592,7 +602,8 @@ void main() {
       expect(find.byType(TripEntryCard), findsNWidgets(2));
       await _filter(tester, '公共汽电车');
       expect(find.byType(TripEntryCard), findsOneWidget);
-      expect(find.textContaining('实时公交站'), findsOneWidget);
+      // 单次扣款公交票不显示未建立进出站关系的站点，原站点留在详情。
+      expect(find.textContaining('实时公交站'), findsNothing);
       await _filter(tester, '0x1E 过程');
       expect(find.byType(TripEntryCard), findsNothing);
       await _filter(tester, '全部来源');
@@ -600,6 +611,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(TripDetailRow), findsWidgets);
       expect(find.text('交易序号'), findsOneWidget);
+      expect(find.textContaining('实时公交站'), findsWidgets);
       _expectNoJson();
       await _close(tester);
     },

@@ -404,36 +404,95 @@ class CommonUnitTu {
 
   Future<void> _readCycleProcessRecords(List<TUnionProcessRecord> out) async {
     final blob = await _readWholeRecordFile(_processCycleFileSfi);
+    var nextRecord = 1;
+    List<int>? firstData;
+    final unconfirmed = <TUnionProcessRecord>[];
     if (blob != null) {
       final split = _splitCycleRecords(blob.raw);
       if (split != null) {
         out.addAll(split);
-        return;
+        if (blob.raw.first != 0x70) {
+          // A successful READ RECORD(S) may contain only a response-sized
+          // prefix. Count raw slots, including blanks, before continuing.
+          nextRecord = blob.raw.length ~/ _cycleRecordSize + 1;
+          if (split.isNotEmpty) firstData = split.first.raw;
+        } else {
+          // Templates have compatibility numbering, not proven physical P1.
+          // Confirm them one at a time without discarding the bulk prefix.
+          unconfirmed.addAll(split);
+        }
       }
     }
 
-    List<int>? firstData;
-    for (var i = 1; i <= _maxCycleRecordNumber; i++) {
-      final resp = await _exchange(
-        TUnionApdu.readRecord(_processCycleFileSfi, i),
-      );
-      if (!_isSuccess(resp)) break;
-      final data = _stripSw(resp);
-      if (data.isEmpty) break;
-      if (_isBlankRecord(data)) continue;
-      if (firstData != null && _listEquals(data, firstData)) break;
-      firstData ??= data;
-      out.add(
-        TUnionProcessRecord(
+    try {
+      for (var i = nextRecord; i <= _maxCycleRecordNumber; i++) {
+        final resp = await _exchange(
+          TUnionApdu.readRecord(_processCycleFileSfi, i),
+        );
+        if (!_isSuccess(resp)) break;
+        final data = _stripSw(resp);
+        if (data.isEmpty) break;
+        final payload = _singleCyclePayload(data);
+        if (payload == null) {
+          // A malformed or multi-record response does not prove a single
+          // physical slot. Retain it for diagnostics and stop this scan.
+          out.add(
+            TUnionProcessRecord(
+              sfi: _processCycleFileSfi,
+              recordNumber: i,
+              recordNumberIsReliable: false,
+              recordName: '循环记录 $i（响应长度异常）',
+              raw: data,
+            ),
+          );
+          break;
+        }
+        if (_isBlankRecord(payload)) continue;
+        final confirmed = unconfirmed.indexWhere((bulk) {
+          final body = _singleCyclePayload(bulk.raw);
+          return body != null && _listEquals(payload, body);
+        });
+        // A duplicate already observed in the template is still a distinct
+        // candidate to confirm. Only an unaccounted first-record repeat wraps.
+        if (confirmed < 0 &&
+            firstData != null &&
+            _listEquals(payload, firstData)) {
+          break;
+        }
+        firstData ??= payload;
+        final record = TUnionProcessRecord(
           sfi: _processCycleFileSfi,
           recordNumber: i,
           recordName: '循环记录 $i',
           raw: data,
           trip: _processParser.parseCycleTrip(data),
-        ),
-      );
+        );
+        if (confirmed >= 0) {
+          final bulk = unconfirmed.removeAt(confirmed);
+          out[out.indexOf(bulk)] = record;
+        } else {
+          out.add(record);
+        }
+      }
+    } finally {
+      // read() publishes this prefix even when a later exchange disconnects.
+      if (out.isEmpty && blob != null) out.add(blob);
     }
-    if (out.isEmpty && blob != null) out.add(blob);
+  }
+
+  static List<int>? _singleCyclePayload(List<int> data) {
+    for (var depth = 0; depth <= 3; depth++) {
+      if (data.isEmpty) return null;
+      if (data.first != 0x70) {
+        return data.length == _cycleRecordSize ? data : null;
+      }
+      final info = _templateLengthInfo(data, 0);
+      if (info == null) return null;
+      final (header, length) = info;
+      if (header + length != data.length) return null;
+      data = data.sublist(header);
+    }
+    return null;
   }
 
   List<TUnionProcessRecord>? _splitCycleRecords(
@@ -460,6 +519,9 @@ class CommonUnitTu {
             TUnionProcessRecord(
               sfi: _processCycleFileSfi,
               recordNumber: out.length + 1,
+              // This compatibility path renumbers decoded child items. A
+              // skipped blank inside a wrapper may have occupied a raw slot.
+              recordNumberIsReliable: false,
               recordName: '循环记录 ${out.length + 1}',
               raw: length == _cycleRecordSize
                   ? blob.sublist(pos, end)

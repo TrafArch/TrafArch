@@ -1,9 +1,17 @@
+import 'dart:convert';
+
 import '../../../protocols/transit/tunion/tunion_models.dart';
 import '../../../protocols/transit/tunion/tunion_trip_matcher.dart';
+import '../../transit_analysis/tunion_record_context.dart';
+import '../../transit_analysis/balance_interpretation.dart';
+import '../../transit_analysis/tunion_analysis_models.dart'
+    show kWalletAnchoredBalanceParseVersion;
+import '../../trips/journey_presentation.dart';
 import '../../trips/trip_cards_view.dart';
 import '../../trips/trip_entry_presenter.dart';
 import '../../trips/trip_filters.dart';
 import '../application/archive_history.dart';
+import '../domain/archive_context.dart';
 import 'archive_record_presenter.dart';
 
 const archiveTripSourceLabels = {
@@ -13,9 +21,9 @@ const archiveTripSourceLabels = {
   ArchiveRecordKind.bus: '0x1A 公交',
 };
 
-/// Saved-history projection plus the visible record counts. Linked 0x1E records
-/// are merged into 0x18; 0x1A is hidden only when all its source batches have
-/// parsed 0x1E evidence. Authoritative history and raw evidence stay untouched.
+/// Saved-history projection plus the visible record counts. Captured display
+/// links merge individual 1E/1A sides into 0x18. Independent 1E/1A payloads remain
+/// available for evidence-backed journey folding; raw history stays untouched.
 class ArchiveTripProjection {
   const ArchiveTripProjection({
     required this.entries,
@@ -72,17 +80,6 @@ ArchiveTripProjection presentArchiveTrips(
     return true;
   }
 
-  String applicationKey(ArchiveHistoryRecord record, String side) {
-    final f = record.fields;
-    final time = f['${side}Time'];
-    return tunionDisplayKey(
-      '1A-${record.kind == ArchiveRecordKind.rail ? 'rail' : 'bus'}-${side == 'entry'}',
-      time is int ? DateTime.fromMillisecondsSinceEpoch(time) : null,
-      _text(f['${side}TerminalId']),
-      _text(f['rawHex']),
-    );
-  }
-
   var transactionCount = 0;
   var processRecordCount = 0;
   var mergedRecordCount = 0;
@@ -111,7 +108,9 @@ ArchiveTripProjection presentArchiveTrips(
         events.add(_ArchiveEvent(record));
       } else {
         final visible = sides
-            .where((side) => !consume(record, applicationKey(record, side)))
+            .where(
+              (side) => !consume(record, _archiveApplicationKey(record, side)),
+            )
             .toList();
         if (visible.isEmpty) {
           processRecordCount--;
@@ -131,16 +130,25 @@ ArchiveTripProjection presentArchiveTrips(
       );
       return time != 0 ? time : a.$1.compareTo(b.$1);
     });
+  final transactionProcesses = _archiveTransactionProcessLinks(records);
+  final applicationLinks = _archiveApplicationLinks(
+    records,
+    transactionProcesses,
+  );
+  final processPositions = _archiveProcessPositions(records);
+  for (final transaction in transactionProcesses.entries) {
+    processPositions[transaction.key] = Map.unmodifiable({
+      for (final batch in transaction.value.entries)
+        batch.key: ?processPositions[batch.value]?[batch.key],
+    });
+  }
   return ArchiveTripProjection(
     entries: [
       for (final (_, event) in indexed)
-        TripCardPresentation(
-          info: event.info,
-          source: event.record.kind,
-          mode: event.mode,
-          dateText: event.dateText,
-          remote: event.remote,
-          onDiagnostics: () => onDiagnostics(event.record),
+        event.present(
+          onDiagnostics,
+          linkedApplicationId: applicationLinks[event.record],
+          processPositions: processPositions[event.record] ?? const {},
         ),
     ],
     transactionCount: transactionCount,
@@ -183,6 +191,270 @@ TUnionTripRecord? _processFromFields(Map<String, dynamic> fields) {
 String? _text(Object? value) =>
     value is String && value.isNotEmpty ? value : null;
 
+String _archiveApplicationKey(ArchiveHistoryRecord record, String side) {
+  final fields = record.fields;
+  final time = fields['${side}Time'];
+  return tunionDisplayKey(
+    '1A-${record.kind == ArchiveRecordKind.rail ? 'rail' : 'bus'}-${side == 'entry'}',
+    time is int ? DateTime.fromMillisecondsSinceEpoch(time, isUtc: true) : null,
+    _text(fields['${side}TerminalId']),
+    _text(fields['rawHex']),
+  );
+}
+
+/// Retain the original 1E coordinates when a saved 0x18 display link represents
+/// that exact operation. A POS-only display match never establishes adjacency.
+/// Each capture batch is checked independently; array indexes are not slots.
+Map<ArchiveHistoryRecord, Map<String, ArchiveHistoryRecord>>
+_archiveTransactionProcessLinks(List<ArchiveHistoryRecord> records) {
+  final cycles = <String, List<ArchiveHistoryRecord>>{};
+  for (final record in records) {
+    if (record.kind != ArchiveRecordKind.process) continue;
+    final cycle = _processFromFields(record.fields);
+    if (cycle == null) continue;
+    cycles.putIfAbsent(cycleDisplayKey(cycle), () => []).add(record);
+  }
+  final matches = <ArchiveHistoryRecord, Map<String, ArchiveHistoryRecord>>{};
+  final useCounts = <(ArchiveHistoryRecord, String), int>{};
+  for (final record in records) {
+    if (record.kind != ArchiveRecordKind.transaction) continue;
+    final source = _ArchiveEvent(record);
+    final event = source.journeyEvent(source.info);
+    var key = _text(record.fields['displayProcessKey']);
+    if (key == null) {
+      final cycle = source.matchedProcess;
+      if (cycle != null) key = cycleDisplayKey(cycle);
+    }
+    final candidates = cycles[key];
+    if (candidates == null) continue;
+    final compatible = candidates.where((candidate) {
+      final other = _ArchiveEvent(candidate);
+      return _sameArchiveOperation(
+            source,
+            event,
+            other,
+            other.journeyEvent(other.info),
+          ) &&
+          record.fields['amountFen'] is int &&
+          record.fields['amountFen'] == candidate.fields['amountFen'];
+    }).toList();
+    for (final batch in event.sourceIds) {
+      final choices = compatible
+          .where(
+            (candidate) =>
+                candidate.sources.any((source) => source.batchId == batch),
+          )
+          .toList();
+      if (choices.length != 1) continue;
+      final process = choices.single;
+      matches.putIfAbsent(record, () => {})[batch] = process;
+      final identity = (process, batch);
+      useCounts[identity] = (useCounts[identity] ?? 0) + 1;
+    }
+  }
+  return {
+    for (final match in matches.entries)
+      match.key: Map.unmodifiable({
+        for (final batch in match.value.entries)
+          if (useCounts[(batch.value, batch.key)] == 1) batch.key: batch.value,
+      }),
+  };
+}
+
+bool _sameArchiveOperation(
+  _ArchiveEvent source,
+  JourneyEvent<TripEntryInfo> event,
+  _ArchiveEvent other,
+  JourneyEvent<TripEntryInfo> candidate,
+) =>
+    (event.role == JourneyEventRole.entry ||
+        event.role == JourneyEventRole.exit) &&
+    event.role == candidate.role &&
+    event.mode == candidate.mode &&
+    event.scopeKey != null &&
+    event.scopeKey == candidate.scopeKey &&
+    source.epoch == other.epoch &&
+    event.endpoint.time != null &&
+    event.endpoint.time == candidate.endpoint.time &&
+    event.cityCode != null &&
+    event.cityCode == candidate.cityCode &&
+    event.sourceIds.any(candidate.sourceIds.contains);
+
+/// Saved transaction links and exact, one-to-one 1A/1E side evidence can name
+/// the same application record. All original payloads remain in the projection;
+/// the journey model folds equivalent source families only for presentation.
+Map<ArchiveHistoryRecord, String> _archiveApplicationLinks(
+  List<ArchiveHistoryRecord> records,
+  Map<ArchiveHistoryRecord, Map<String, ArchiveHistoryRecord>>
+  transactionProcesses,
+) {
+  final candidates =
+      <String, List<(_ArchiveEvent, JourneyEvent<TripEntryInfo>)>>{};
+  for (final record in records) {
+    if (record.kind != ArchiveRecordKind.rail &&
+        record.kind != ArchiveRecordKind.bus) {
+      continue;
+    }
+    for (final side in ['entry', 'exit']) {
+      if (record.fields['${side}Time'] is! int) continue;
+      final source = _ArchiveEvent(record, side: side);
+      final event = source.journeyEvent(source.info);
+      if (event.applicationRecordId == null ||
+          event.scopeKey == null ||
+          event.endpoint.time == null ||
+          event.cityCode == null) {
+        continue;
+      }
+      candidates
+          .putIfAbsent(_archiveApplicationKey(record, side), () => [])
+          .add((source, event));
+    }
+  }
+  final matches =
+      <ArchiveHistoryRecord, (_ArchiveEvent, JourneyEvent<TripEntryInfo>)>{};
+  final useCounts =
+      <(ArchiveHistoryRecord, String, ArchiveRecordKind, String), int>{};
+  for (final record in records) {
+    final transaction = record.kind == ArchiveRecordKind.transaction;
+    if (!transaction && record.kind != ArchiveRecordKind.process) continue;
+    final choices = transaction
+        ? candidates[_text(record.fields['displayApplicationKey'])]
+        : candidates.values.expand((sides) => sides).toList();
+    if (choices == null) continue;
+    final source = _ArchiveEvent(record);
+    final event = source.journeyEvent(source.info);
+    final compatible = choices.where((candidate) {
+      final (application, side) = candidate;
+      if (!_sameArchiveOperation(source, event, application, side)) {
+        return false;
+      }
+      final amount = !application.rail && application.entry
+          ? null
+          : application.fields[application.rail
+                ? '${application.side}AmountFen'
+                : 'amountFen'];
+      if (transaction) {
+        return amount is! int || record.fields['amountFen'] == amount;
+      }
+      final cycle = source.process;
+      if (cycle == null) return false;
+      return matchesTunionJourneySide(
+        isEntry: application.entry,
+        isRail: application.rail,
+        time: application.epoch == null
+            ? null
+            : DateTime.fromMillisecondsSinceEpoch(
+                application.epoch!,
+                isUtc: true,
+              ),
+        cityCode: application.city,
+        terminalId: application.text('${application.side}TerminalId'),
+        amountFen: amount is int ? amount : null,
+        cycle: cycle,
+      );
+    }).toList();
+    if (compatible.length != 1) continue;
+    final match = compatible.single;
+    matches[record] = match;
+    for (final batch in event.sourceIds.intersection(match.$2.sourceIds)) {
+      final identity = (match.$1.record, match.$1.side!, record.kind, batch);
+      useCounts[identity] = (useCounts[identity] ?? 0) + 1;
+    }
+  }
+  final result = <ArchiveHistoryRecord, String>{};
+  final proofBatches = <ArchiveHistoryRecord, Set<String>>{};
+  for (final match in matches.entries) {
+    final batches = {
+      for (final source in match.key.sources)
+        if (useCounts[(
+              match.value.$1.record,
+              match.value.$1.side!,
+              match.key.kind,
+              source.batchId,
+            )] ==
+            1)
+          source.batchId,
+    };
+    if (batches.isEmpty) continue;
+    result[match.key] = match.value.$2.applicationRecordId!;
+    proofBatches[match.key] = batches;
+  }
+  for (final transaction in transactionProcesses.entries) {
+    final identities = {
+      for (final batch in transaction.value.entries)
+        if (proofBatches[batch.value]?.contains(batch.key) == true)
+          ?result[batch.value],
+    };
+    if (identities.length != 1) continue;
+    final identity = identities.single;
+    final previous = result[transaction.key];
+    if (previous == null || previous == identity) {
+      result[transaction.key] = identity;
+    } else {
+      result.remove(transaction.key);
+    }
+  }
+  return result;
+}
+
+/// The cycle[] JSON array contains only decoded items; its indexes are never
+/// physical record slots. Only explicit, reliable capture provenance is used.
+Map<ArchiveHistoryRecord, Map<String, int>> _archiveProcessPositions(
+  List<ArchiveHistoryRecord> records,
+) {
+  final slots = <(String, int), int>{};
+  final rawCounts = <(String, String), int>{};
+  final candidates = <ArchiveHistoryRecord, Map<String, List<(int, String)>>>{};
+  String? rawHex(Object? value) {
+    if (value is! String) return null;
+    final text = value.replaceAll(RegExp(r'\s+'), '').toUpperCase();
+    return text.isNotEmpty &&
+            text.length.isEven &&
+            RegExp(r'^[0-9A-F]+$').hasMatch(text)
+        ? text
+        : null;
+  }
+
+  for (final record in records) {
+    if (record.kind != ArchiveRecordKind.process) continue;
+    final raw = rawHex(record.fields['rawHex']);
+    for (final source in record.sources) {
+      final provenance = source.provenance;
+      final evidence = provenance is Map ? provenance['record'] : null;
+      if (evidence is! Map ||
+          evidence['sfi'] != 0x1E ||
+          source.batchId.trim().isEmpty) {
+        continue;
+      }
+      final number = evidence['recordNumber'];
+      if (number is! int || number <= 0) continue;
+      final slot = (source.batchId, number);
+      slots[slot] = (slots[slot] ?? 0) + 1;
+      final sourceRaw = rawHex(evidence['rawHex']);
+      if (sourceRaw == null) continue;
+      final rawIdentity = (source.batchId, sourceRaw);
+      rawCounts[rawIdentity] = (rawCounts[rawIdentity] ?? 0) + 1;
+      if (evidence['recordNumberIsReliable'] != true || raw != sourceRaw) {
+        continue;
+      }
+      candidates
+          .putIfAbsent(record, () => {})
+          .putIfAbsent(source.batchId, () => [])
+          .add((number, sourceRaw));
+    }
+  }
+  return {
+    for (final record in candidates.entries)
+      record.key: Map.unmodifiable({
+        for (final batch in record.value.entries)
+          if (batch.value.length == 1 &&
+              slots[(batch.key, batch.value.single.$1)] == 1 &&
+              rawCounts[(batch.key, batch.value.single.$2)] == 1)
+            batch.key: batch.value.single.$1,
+      }),
+  };
+}
+
 class _ArchiveEvent {
   const _ArchiveEvent(this.record, {this.side});
   final ArchiveHistoryRecord record;
@@ -199,13 +471,29 @@ class _ArchiveEvent {
     return value == null || value == '' ? null : value.toString();
   }
 
+  String? capturedDisplay(String key) {
+    final display = fields['capturedDisplay'];
+    final endpoint = display is Map
+        ? (side == null ? display : display[side])
+        : null;
+    final value = endpoint is Map ? endpoint[key] : null;
+    return value is String && value.trim().isNotEmpty ? value.trim() : null;
+  }
+
   TUnionTripRecord? get process => record.kind != ArchiveRecordKind.process
       ? null
       : _processFromFields(fields);
 
+  TUnionTripRecord? get matchedProcess {
+    final matched = fields['matchedProcess'];
+    return matched is Map<String, dynamic> ? _processFromFields(matched) : null;
+  }
+
   TripModeFilter get mode {
     if (rail) return TripModeFilter.rail;
     if (record.kind == ArchiveRecordKind.bus) return TripModeFilter.bus;
+    final cycle = process ?? matchedProcess;
+    if (cycle != null && isTunionBusCycle(cycle)) return TripModeFilter.bus;
     final matched = fields['matchedProcess'];
     final appType =
         fields['appTypeCode'] ??
@@ -213,8 +501,184 @@ class _ArchiveEvent {
     return switch (fields['appTypeName'] ?? appType) {
       '城市轨道交通' || 1 => TripModeFilter.rail,
       '公共汽电车' || 2 => TripModeFilter.bus,
-      _ => TripModeFilter.other,
+      _ => switch (fields['stationType']) {
+        '公交' || 'BRT' || '公共汽电车' || 'bus' || 'brt' => TripModeFilter.bus,
+        '地铁' || '城市轨道交通' || 'metro' || 'rail' => TripModeFilter.rail,
+        _ => TripModeFilter.other,
+      },
     };
+  }
+
+  TripCardPresentation<ArchiveRecordKind> present(
+    void Function(ArchiveHistoryRecord) onDiagnostics, {
+    String? linkedApplicationId,
+    Map<String, int> processPositions = const {},
+  }) {
+    final details = info;
+    return TripCardPresentation(
+      info: details,
+      source: record.kind,
+      mode: mode,
+      dateText: dateText,
+      remote: remote,
+      onDiagnostics: () => onDiagnostics(record),
+      journeyEvent: journeyEvent(
+        details,
+        linkedApplicationId: linkedApplicationId,
+        processPositions: processPositions,
+      ),
+    );
+  }
+
+  JourneyEvent<TripEntryInfo> journeyEvent(
+    TripEntryInfo details, {
+    String? linkedApplicationId,
+    Map<String, int> processPositions = const {},
+  }) {
+    final clock = _archiveClock(fields, timeKey, record.context);
+    final application = rail || record.kind == ArchiveRecordKind.bus;
+    final staleExit = rail && side == 'exit' && fields['status'] == 1;
+    final JourneyEventRole role;
+    if (application) {
+      role = side == null || epoch == null || staleExit
+          ? JourneyEventRole.unknown
+          : entry
+          ? JourneyEventRole.entry
+          : JourneyEventRole.exit;
+    } else if (transaction) {
+      role =
+          _archiveStatusRole(text('rideStatusName'), mode) ??
+          _archiveProcessRole(matchedProcess, mode) ??
+          (fields['isEntry'] == true
+              ? JourneyEventRole.entry
+              : mode == TripModeFilter.bus && fields['consume'] == true
+              ? JourneyEventRole.single
+              : JourneyEventRole.unknown);
+    } else {
+      role = _archiveProcessRole(process, mode) ?? JourneyEventRole.unknown;
+    }
+    final capturedStation = capturedDisplay('station');
+    final rawStation =
+        capturedStation ??
+        (side == null
+            ? text('stationLabel') ?? process?.stationCode
+            : text('${side}StationName') ??
+                  text('${side}Station${rail ? 'Id' : 'Code'}'));
+    final station = mode == TripModeFilter.bus
+        ? _archiveBusStation(
+            rawStation,
+            rawHex:
+                capturedStation == null &&
+                record.kind == ArchiveRecordKind.bus &&
+                text('${side}StationName') == null,
+            rawCode:
+                capturedStation == null &&
+                (record.kind == ArchiveRecordKind.process ||
+                    fields['stationConfidence'] != 'exact'),
+          )
+        : _usefulIdentifier(rawStation);
+    final capturedLine = capturedDisplay('line');
+    final line =
+        (mode == TripModeFilter.bus
+            ? formatJourneyBusLine(capturedLine)
+            : capturedLine) ??
+        (side == null
+            ? text('lineLabel') ?? text('lineName') ?? process?.lineCode
+            : text('${side}LineName') ??
+                  text('${side}LineLabel') ??
+                  text('${side}LineCode'));
+    final label =
+        capturedDisplay('cityName') ??
+        text(side == null ? 'cityName' : '${side}CityName');
+    final seatAmount =
+        fields[rail && side != null ? '${side}AmountFen' : 'amountFen'];
+    final cycle = process;
+    final isSeatConsume = transaction
+        ? fields['consume'] == true
+        : cycle != null
+        ? cycle.isConsume
+        : rail
+        ? side != null && seatAmount is int && seatAmount > 0
+        : record.kind == ArchiveRecordKind.bus && side == 'exit';
+    return JourneyEvent(
+      payload: details,
+      mode: mode,
+      role: role,
+      endpoint: JourneyEndpoint(
+        line: _usefulIdentifier(line),
+        station: station,
+        time: clock.time,
+        timeText: clock.text,
+      ),
+      scopeKey: _archiveScope(record.context, clock.scope),
+      sourceIds: {
+        for (final source in record.sources)
+          if (source.batchId.trim().isNotEmpty) source.batchId,
+      },
+      cityCode: _usefulIdentifier(city),
+      cityLabel: label != null && label.length > 1 && label.endsWith('市')
+          ? label.substring(0, label.length - 1)
+          : label,
+      sequence: transaction && fields['sequence'] is int
+          ? fields['sequence'] as int
+          : null,
+      processPositions: record.kind == ArchiveRecordKind.process || transaction
+          ? processPositions
+          : const {},
+      applicationRecordId:
+          application && side != null && epoch != null && !staleExit
+          ? _archiveApplicationId(record)
+          : linkedApplicationId,
+      evidenceSource: switch (record.kind) {
+        ArchiveRecordKind.transaction => JourneyEvidenceSource.transaction,
+        ArchiveRecordKind.process => JourneyEvidenceSource.cycle,
+        ArchiveRecordKind.rail ||
+        ArchiveRecordKind.bus => JourneyEvidenceSource.application,
+      },
+      amountText: details.amountText,
+      balanceAfterText: journeyBalanceAfterText,
+      confirmedBalanceFen: journeyBalanceAfterText == null
+          ? null
+          : archiveRecordBalanceFen(record),
+      processBalance: processBalanceEvidence(processPositions),
+      seatLabel: mode == TripModeFilter.rail
+          ? journeySeatLabel(
+              line: _usefulIdentifier(line),
+              amountFen: seatAmount is int ? seatAmount : null,
+              isConsume: isSeatConsume,
+              currencyCode: record.context.currencyCode,
+            )
+          : null,
+    );
+  }
+
+  JourneyProcessBalanceEvidence? processBalanceEvidence(
+    Map<String, int> positions,
+  ) {
+    final cycle = process ?? (transaction ? matchedProcess : null);
+    final observation = record.context.extensions['balanceInterpretation'];
+    final hasInterpretation = record.context.extensions.containsKey(
+      'balanceInterpretation',
+    );
+    final directInterpretation =
+        !hasInterpretation ||
+        (observation is Map<String, dynamic> &&
+            BalanceInterpretation.fromJson(observation).semantics ==
+                BalanceSemantics.direct);
+    if (cycle == null ||
+        positions.isEmpty ||
+        record.context.currencyCode != 'CNY' ||
+        record.context.minorUnitDigits != 2 ||
+        !directInterpretation) {
+      return null;
+    }
+    return JourneyProcessBalanceEvidence(
+      recordedFen: cycle.balanceFen,
+      amountFen: cycle.amountFen,
+      currencyCode: record.context.currencyCode,
+      currencySymbol: '¥ ',
+      positions: Map.unmodifiable(positions),
+    );
   }
 
   String? get city => text(side == null ? 'cityCode' : '${side}CityCode');
@@ -257,6 +721,20 @@ class _ArchiveEvent {
     return balance == null ? null : record.context.formatAmount(balance);
   }
 
+  String? get journeyBalanceAfterText {
+    if (!transaction || archiveRecordBalanceIsRecorded(record)) return null;
+    final version = record.sources.isEmpty
+        ? 1
+        : record.sources.first.capturedParseVersion;
+    // v8 missing provenance remains compatible in legacy detail text, but is
+    // insufficient to claim a reliable post-journey balance in the summary.
+    if (version >= kWalletAnchoredBalanceParseVersion &&
+        fields['balanceAfterIsRecorded'] != false) {
+      return null;
+    }
+    return recordBalanceText;
+  }
+
   TripEntryInfo get info {
     final cycle = process;
     final isConsume = transaction
@@ -274,6 +752,7 @@ class _ArchiveEvent {
         ? (archiveRecordBalanceIsRecorded(record) ? '记录余额' : '交易后余额')
         : '余额';
     final station =
+        capturedDisplay('station') ??
         text(side == null ? 'stationLabel' : '${side}StationName') ??
         (side == null ? null : text('${side}Station${rail ? 'Id' : 'Code'}'));
     final status = transaction
@@ -302,6 +781,7 @@ class _ArchiveEvent {
         if (transaction) '序号 ${fields['sequence']}',
       ].join(' · '),
       line:
+          capturedDisplay('line') ??
           text('lineLabel') ??
           text('lineName') ??
           (side == null ? null : text('${side}LineCode')),
@@ -341,6 +821,13 @@ class _ArchiveEvent {
   }
 
   List<(String, String)> detailFields(TUnionTripRecord? cycle) => [
+    if (cycle != null && text('appTypeName') == null)
+      ('应用分类', cycle.appTypeName),
+    if (text('rideStatusSource') case final source?)
+      (
+        '进出站依据',
+        source == 'shanghai-cu-ledger-inference' ? '按上海本地轨道账本推断' : source,
+      ),
     if (cycle != null) ('过程类型', cycle.typeName),
     if (rail)
       ('交易状态', TransitRecord(statusCode: fields['status'] as int).statusName),
@@ -414,3 +901,185 @@ class _ArchiveEvent {
       ('卡片应用', application),
   ];
 }
+
+final _archiveApplicationIds = Expando<String>('archive-journey-record');
+var _nextArchiveApplicationId = 0;
+String _archiveApplicationId(ArchiveHistoryRecord record) =>
+    _archiveApplicationIds[record] ??= 'archive:${_nextArchiveApplicationId++}';
+
+JourneyEventRole? _archiveStatusRole(String? status, TripModeFilter mode) =>
+    switch (status) {
+      '进站' || '进闸' || '上车' => JourneyEventRole.entry,
+      '出站' || '出闸' || '下车' => JourneyEventRole.exit,
+      '单次消费' =>
+        mode == TripModeFilter.bus
+            ? JourneyEventRole.single
+            : JourneyEventRole.unknown,
+      '充值' || '补票' => JourneyEventRole.unknown,
+      _ => null,
+    };
+
+JourneyEventRole? _archiveProcessRole(
+  TUnionTripRecord? process,
+  TripModeFilter mode,
+) => process == null
+    ? null
+    : switch (process.typeCode) {
+        1 || 3 => JourneyEventRole.entry,
+        2 || 4 => JourneyEventRole.exit,
+        5 || 6 when mode == TripModeFilter.bus => JourneyEventRole.single,
+        _ => JourneyEventRole.unknown,
+      };
+
+String? _usefulIdentifier(String? value) {
+  final text = value?.trim();
+  return text == null || text.isEmpty || RegExp(r'^0+$|^[Ff]+$').hasMatch(text)
+      ? null
+      : text;
+}
+
+String? _archiveBusStation(
+  String? value, {
+  bool rawHex = false,
+  bool rawCode = false,
+}) {
+  final text = _usefulIdentifier(value);
+  if (text == null) return null;
+  final ordinal = RegExp(r'^第(\d+)站$').firstMatch(text);
+  if (ordinal != null) {
+    final number = int.tryParse(ordinal.group(1)!);
+    return number == null || number == 0 ? null : '站点$number';
+  }
+  if (rawHex && RegExp(r'^[0-9A-Fa-f]{1,2}$').hasMatch(text)) {
+    return '站点${int.parse(text, radix: 16)}';
+  }
+  return rawCode && RegExp(r'^[0-9A-Fa-f]+$').hasMatch(text) ? '站点$text' : text;
+}
+
+String? _archiveScope(ArchiveContext context, String? clockScope) {
+  final system = _text(context.systemId)?.trim();
+  final application = _text(context.applicationId)?.trim();
+  final currency = _text(context.currencyCode)?.trim();
+  final basis = _text(context.clockBasis)?.trim();
+  final digits = context.minorUnitDigits;
+  final offset = context.timeZoneOffsetMinutes;
+  if ([
+        system,
+        application,
+        currency,
+        basis,
+        clockScope,
+      ].any((value) => value == null || value.isEmpty) ||
+      digits == null ||
+      digits < 0 ||
+      digits > 9 ||
+      (offset != null && (offset < -1440 || offset > 1440))) {
+    return null;
+  }
+  return jsonEncode([
+    'archive',
+    system,
+    application,
+    currency,
+    digits,
+    basis,
+    context.timeZoneOffsetMinutes,
+    clockScope,
+  ]);
+}
+
+typedef _ArchiveClock = ({DateTime? time, String? text, String? scope});
+
+_ArchiveClock _archiveClock(
+  Map<String, dynamic> fields,
+  String key,
+  ArchiveContext context,
+) {
+  final epoch = fields[key];
+  if (epoch is! int) return (time: null, text: null, scope: null);
+  final captured = fields['capturedTimes'];
+  final representation = captured is Map ? captured[key] : null;
+  final civil = representation is Map ? representation['civil'] : null;
+  if (civil is String) {
+    final match = RegExp(
+      r'^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?(Z)?$',
+    ).firstMatch(civil);
+    if (match != null) {
+      final explicitUtc = match.group(8) != null;
+      final basis = representation['basis'];
+      final utcFlag = representation['isUtc'];
+      final claimedUtc = basis == 'utc' || utcFlag == true;
+      final claimedLocal =
+          basis == 'parser-local-unverified' || utcFlag == false;
+      if ((explicitUtc && claimedLocal) || (claimedUtc && claimedLocal)) {
+        return (time: null, text: civil, scope: null);
+      }
+      final parts = [for (var i = 1; i <= 6; i++) int.parse(match.group(i)!)];
+      final fraction = (match.group(7) ?? '').padRight(6, '0');
+      // UTC is only a stable calendar-arithmetic coordinate for unknown civil
+      // clocks. It does not assign UTC to the card: the scope isolates those
+      // values and the detail text retains its unverified-timezone warning.
+      final value = DateTime.utc(
+        parts[0],
+        parts[1],
+        parts[2],
+        parts[3],
+        parts[4],
+        parts[5],
+        int.parse(fraction.substring(0, 3)),
+        int.parse(fraction.substring(3)),
+      );
+      final actual = [
+        value.year,
+        value.month,
+        value.day,
+        value.hour,
+        value.minute,
+        value.second,
+      ];
+      if (List.generate(
+        6,
+        (i) => parts[i] == actual[i],
+      ).every((same) => same)) {
+        final utc = explicitUtc || claimedUtc;
+        return (
+          time: value,
+          text: _archiveClockText(value),
+          scope: jsonEncode([
+            utc ? 'captured-utc' : 'captured-civil',
+            representation['basis'],
+            representation['isUtc'],
+            representation['conversionOffsetMinutes'],
+          ]),
+        );
+      }
+    }
+    return (time: null, text: civil, scope: null);
+  }
+  final offset = context.timeZoneOffsetMinutes;
+  if (epoch < -8640000000000000 ||
+      epoch > 8640000000000000 ||
+      (offset != null && (offset < -1440 || offset > 1440))) {
+    return (time: null, text: '$epoch 毫秒（原始时间）', scope: null);
+  }
+  if (offset == null) {
+    return (time: null, text: archiveTimeText(epoch, context), scope: null);
+  }
+  final shifted = epoch + offset * 60000;
+  if (shifted < -8640000000000000 || shifted > 8640000000000000) {
+    return (time: null, text: '$epoch 毫秒（原始时间）', scope: null);
+  }
+  // The endpoint also provides the card's display date, so fixed-offset times
+  // use the same clock-face coordinate as their displayed hours and minutes.
+  final value = DateTime.fromMillisecondsSinceEpoch(shifted, isUtc: true);
+  return (
+    time: value,
+    text: _archiveClockText(value),
+    scope: 'captured-offset:$offset',
+  );
+}
+
+String _archiveClockText(DateTime value) =>
+    '${value.hour.toString().padLeft(2, '0')}:'
+    '${value.minute.toString().padLeft(2, '0')}:'
+    '${value.second.toString().padLeft(2, '0')}';

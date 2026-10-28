@@ -29,6 +29,185 @@ Future<ParsedCard?> _parseTu(LocalTransceive link) async {
 
 void main() {
   group('交通联合（TU）解析管道', () {
+    test('1E 模板中已观察到重复首条时逐一确认，不过早判断回卷', () async {
+      final first = _cycleProcessRecord();
+      final second = [...first]..[0x1F] = 0x41;
+      final third = [...first]..[0x1F] = 0x42;
+      final body = [...first, ...first, ...second];
+      final link = _baseLink();
+      link.enqueue(0xB2, const [0x6A, 0x83]);
+      link.enqueue(0xB2, const [0x6A, 0x83]);
+      link.enqueue(0xB2, _sw9000([0x70, 0x81, body.length, ...body]));
+      for (final slot in [first, first, second, third]) {
+        link.enqueue(0xB2, _sw9000(slot));
+      }
+      link.enqueue(0xB2, const [0x6A, 0x83]);
+      final parsed = (await _parseTu(link.call))!;
+      final records = parsed.transitProcessRecords.where((r) => r.sfi == 0x1E);
+      expect(records.map((r) => r.recordNumber), [1, 2, 3, 4]);
+      expect(records.every((r) => r.recordNumberIsReliable), isTrue);
+      expect(records.map((r) => r.trip!.time.second), [40, 40, 41, 42]);
+    });
+
+    test('1E 模板外壳恰好48字节但正文不足时不确认物理槽', () async {
+      final short = [0x70, 46, ..._cycleProcessRecord().take(46)];
+      final link = _baseLink();
+      for (var i = 0; i < 3; i++) {
+        link.enqueue(0xB2, const [0x6A, 0x83]);
+      }
+      link.enqueue(0xB2, _sw9000(short));
+      final parsed = (await _parseTu(link.call))!;
+      final record = parsed.transitProcessRecords
+          .where((r) => r.sfi == 0x1E)
+          .single;
+      expect(record.raw, short);
+      expect(record.trip, isNull);
+      expect(record.recordNumberIsReliable, isFalse);
+    });
+
+    test('1E 模板批量后从真实P1补读，空槽不被人工编号覆盖', () async {
+      final first = _cycleProcessRecord();
+      final second = [...first]..[0x1F] = 0x41;
+      final third = [...first]..[0x1F] = 0x42;
+      final body = [...first, ...List.filled(48, 0), ...second];
+      final link = _baseLink();
+      link.enqueue(0xB2, const [0x6A, 0x83]);
+      link.enqueue(0xB2, const [0x6A, 0x83]);
+      link.enqueue(0xB2, _sw9000([0x70, 0x81, body.length, ...body]));
+      for (final slot in [first, List.filled(48, 0), second, third]) {
+        link.enqueue(0xB2, _sw9000(slot));
+      }
+      link.enqueue(0xB2, const [0x6A, 0x83]);
+      final parsed = (await _parseTu(link.call))!;
+      final records = parsed.transitProcessRecords.where((r) => r.sfi == 0x1E);
+      expect(records.map((r) => r.recordNumber), [1, 3, 4]);
+      expect(records.every((r) => r.recordNumberIsReliable), isTrue);
+      expect(records.map((r) => r.trip!.time.second), [40, 41, 42]);
+    });
+
+    test('1E 逐条意外返回多记录时保留原文，不伪造单槽行程', () async {
+      final first = _cycleProcessRecord();
+      final second = [...first]..[0x1F] = 0x41;
+      final link = _baseLink();
+      link.enqueue(0xB2, const [0x6A, 0x83]);
+      link.enqueue(0xB2, const [0x6A, 0x83]);
+      link.enqueue(0xB2, const [0x6A, 0x83]);
+      link.enqueue(0xB2, _sw9000([...first, ...second]));
+      final parsed = (await _parseTu(link.call))!;
+      final record = parsed.transitProcessRecords
+          .where((r) => r.sfi == 0x1E)
+          .single;
+      expect(record.raw, [...first, ...second]);
+      expect(record.trip, isNull);
+      expect(record.recordNumberIsReliable, isFalse);
+    });
+
+    for (final count in [7, 30, 32]) {
+      test('1E 成功批量只有五槽时继续读取到$count槽且不压缩空槽', () async {
+        final slots = [
+          for (var i = 0; i < count; i++)
+            _cycleProcessRecord()..[0x1F] = _bcd('${i + 10}').single,
+        ];
+        slots[1] = List.filled(48, 0);
+        final link = _baseLink();
+        link.enqueue(0xB2, const [0x6A, 0x83]);
+        link.enqueue(0xB2, const [0x6A, 0x83]);
+        link.enqueue(0xB2, _sw9000(slots.take(5).expand((r) => r).toList()));
+        for (final slot in slots.skip(5)) {
+          link.enqueue(0xB2, _sw9000(slot));
+        }
+        link.enqueue(0xB2, const [0x6A, 0x83]);
+        final requests = <int>[];
+        final parsed = (await _parseTu((apdu) async {
+          if (apdu[1] == 0xB2 && apdu[3] == 0xF4) requests.add(apdu[2]);
+          return link.call(apdu);
+        }))!;
+        final records = parsed.transitProcessRecords.where(
+          (r) => r.sfi == 0x1E,
+        );
+        expect(records.map((r) => r.recordNumber), [
+          1,
+          for (var i = 3; i <= count; i++) i,
+        ]);
+        expect(records.map((r) => r.trip!.time.second), [
+          10,
+          for (var i = 12; i < count + 10; i++) i,
+        ]);
+        expect(requests, [for (var i = 6; i <= count + 1; i++) i]);
+        expect(records.every((r) => r.recordNumberIsReliable), isTrue);
+      });
+    }
+
+    test('1E 批量后的卡片回卷停止且不重复添加第一条', () async {
+      final first = _cycleProcessRecord();
+      final second = [...first]..[0x1F] = 0x41;
+      final link = _baseLink();
+      link.enqueue(0xB2, const [0x6A, 0x83]);
+      link.enqueue(0xB2, const [0x6A, 0x83]);
+      link.enqueue(0xB2, _sw9000([...first, ...second]));
+      link.enqueue(0xB2, _sw9000(first));
+      final requests = <int>[];
+      final parsed = (await _parseTu((apdu) async {
+        if (apdu[1] == 0xB2 && apdu[3] == 0xF4) requests.add(apdu[2]);
+        return link.call(apdu);
+      }))!;
+      expect(
+        parsed.transitProcessRecords.where((r) => r.sfi == 0x1E),
+        hasLength(2),
+      );
+      expect(requests, [3]);
+    });
+
+    test('1E 补读通信中断仍保留批量和已经成功的后续槽', () async {
+      final first = _cycleProcessRecord();
+      final second = [...first]..[0x1F] = 0x41;
+      final link = _baseLink();
+      link.enqueue(0xB2, const [0x6A, 0x83]);
+      link.enqueue(0xB2, const [0x6A, 0x83]);
+      link.enqueue(0xB2, _sw9000(first));
+      final tu = CommonUnitTu(
+        ApduExchange(
+          transceive: (apdu) async {
+            if (apdu[1] == 0xB2 && apdu[3] == 0xF4) {
+              if (apdu[2] == 2) return _sw9000(second);
+              throw StateError('simulated physical disconnect');
+            }
+            return link.call(apdu);
+          },
+        ),
+      );
+      final info = CardInfo();
+      final ledger = <ApduRecord>[];
+      expect(await tu.select(info, ledger), isTrue);
+      await expectLater(
+        tu.read(info, ledger),
+        throwsA(isA<ApduTransportException>()),
+      );
+      final records = tu.parsedCard!.transitProcessRecords.where(
+        (r) => r.sfi == 0x1E,
+      );
+      expect(records.map((r) => r.recordNumber), [1, 2]);
+      expect(records.map((r) => r.trip!.time.second), [40, 41]);
+    });
+
+    test('1E模板重编号保留读取结果但不得作为原始连续槽位证据', () async {
+      final link = _baseLink();
+      link.enqueue(0xB2, const [0x6A, 0x83]);
+      link.enqueue(0xB2, const [0x6A, 0x83]);
+      final first = _cycleProcessRecord();
+      final second = [...first]..[0x1F] = 0x41;
+      final body = [...first, ...List.filled(48, 0), ...second];
+      link.enqueue(0xB2, _sw9000([0x70, 0x81, body.length, ...body]));
+      final parsed = await _parseTu(link.call);
+      final records = parsed!.transitProcessRecords
+          .where((r) => r.sfi == 0x1E)
+          .toList();
+      expect(records, hasLength(2));
+      expect(records.every((record) => !record.recordNumberIsReliable), isTrue);
+      expect(records[0].trip!.time.second, 40);
+      expect(records[1].trip!.time.second, 41);
+    });
+
     for (final individual in [false, true]) {
       for (final missing in [0, 1]) {
         test('APDU 到余额：逐条=$individual 缺槽=$missing 不跨缺口', () async {
@@ -335,7 +514,14 @@ void main() {
       link.enqueue(0xB2, _sw9000(_record())); // 0x18 交易明细整体读取
       link.enqueue(0xB2, const [0x6A, 0x83]); // 0x1A 记录 1：逐条读取不支持
       final rail = _railFullRecord();
-      final bus = [0x27, 0x02, 0x7D, ...List.filled(0x7D, 0x00)];
+      final bus = [
+        0x27,
+        0x02,
+        0x7D,
+        ...List.filled(11, 0x00),
+        ..._busTransitRecordFilled(),
+        ...List.filled(26, 0x00),
+      ];
       link.enqueue(0xB2, _sw9000([...rail, ...bus])); // 0x1A 整体读取
       link.enqueue(0xB2, const [0x6A, 0x83]); // 0x1E 整体读取失败
       link.enqueue(0xB2, const [0x6A, 0x83]); // 0x1E 逐条读取失败
@@ -543,10 +729,12 @@ void main() {
 
     test('0x1A 记录 2：完整格式（27 02 7D 记录头）命中后按偏移解析', () {
       final busFull = [0x27, 0x02, 0x7D, ...List.filled(0x7D, 0x00)];
+      busFull[0x0F] =
+          0x10; // Nonblank business body; header alone is not a trip.
       final rec = parser.parseBusTransit(2, busFull);
       expect(rec, isNotNull);
       expect(rec!.hasRecordHeader, isTrue);
-      expect(rec.statusCode, 0x00); // 记录体全 0：未写入
+      expect(rec.statusCode, 0x00);
     });
 
     test('0x1A 记录 2：携带 14 字节记录头时记录体偏移自动后移', () {
@@ -839,6 +1027,80 @@ void main() {
         ),
       ]),
     );
+
+    for (final source in ['1E', '1A']) {
+      test('$source 重复终端只给精确时间的交易补进站，不抢占其他日期交易', () {
+        final older = DateTime(2026, 10, 27, 9);
+        final newer = DateTime(2026, 10, 28, 9);
+        final process = source == '1E'
+            ? _entryRecord(time: older)
+            : _railEntryRecord(time: older);
+        final parsed = ParsedCard(
+          parserName: 'reused terminal',
+          info: const TUnionCardInfo(cityCode: '3910'),
+          transactions: [
+            _txn(seq: 2, time: newer, amountFen: 500, rawType: 9),
+            _txn(seq: 1, time: older, amountFen: 0, rawType: 9),
+          ],
+          transitProcessRecords: [process],
+          selectedAidHex: 'A000000632010105',
+        );
+        // The raw terminals differ between 0x18 and the transit application;
+        // make the reusable POS explicit without changing either timestamp.
+        final withPos = source == '1E'
+            ? TUnionProcessRecord(
+                sfi: 0x1E,
+                recordNumber: 1,
+                recordName: 'synthetic reused terminal',
+                raw: const [],
+                trip: TUnionTripRecord(
+                  typeCode: 3,
+                  terminalId: '0000999999999999',
+                  appTypeCode: 1,
+                  lineStationCode: process.trip!.lineStationCode,
+                  amountFen: 0,
+                  balanceFen: 10000,
+                  time: older,
+                  cityCode: '3910',
+                ),
+              )
+            : TUnionProcessRecord(
+                sfi: 0x1A,
+                recordNumber: 1,
+                recordName: 'synthetic reused terminal',
+                raw: const [],
+                railTransit: TransitRecord(
+                  statusCode: 1,
+                  entryTime: older,
+                  entryTerminalId: '0000999999999999',
+                  entryCityCode: '3910',
+                  entryStationId: process.railTransit!.entryStationId,
+                ),
+              );
+        final trips = AnalysisEngine(kb)
+            .analyze(
+              ParsedCard(
+                parserName: parsed.parserName,
+                info: parsed.info,
+                transactions: parsed.transactions,
+                transitProcessRecords: [withPos],
+                selectedAidHex: parsed.selectedAidHex,
+              ),
+            )
+            .trips;
+        expect(trips.first.isEntry, isFalse);
+        expect(trips.first.displayProcessKey, isNull);
+        expect(trips.first.displayApplicationKey, isNull);
+        expect(trips.last.isEntry, isTrue);
+        expect(
+          source == '1E'
+              ? trips.last.displayProcessKey
+              : trips.last.displayApplicationKey,
+          isNotNull,
+        );
+        expect(trips.map((trip) => trip.amountFen), [500, 0]);
+      });
+    }
 
     test('卡片名称：发卡机构标识前 8 位反查卡前缀库', () {
       // 前 8 位为发卡机构代码（issuer 字段）→ 直接命中
@@ -1553,8 +1815,9 @@ List<int> _railFullRecord() => [
   ...List.filled(29, 0x5A), // 发卡机构自定义
 ];
 
-/// 0x1A 记录 2 示例数据（88 字节，全初始值：公共汽电车应用未写入）。
-List<int> _busTransitRecord() => List.filled(88, 0x00);
+/// 最小非空公交体：车辆号有值，其余字段保留初始值以验证空字段解码。
+/// 全空记录的过滤由 tunion_empty_application_record_test 覆盖。
+List<int> _busTransitRecord() => List.filled(88, 0x00)..[0x17] = 1;
 
 /// 0x1A 记录 2 示例数据（88 字节，按公共汽电车记录体布局构造的非零记录体）。
 List<int> _busTransitRecordFilled() => [
