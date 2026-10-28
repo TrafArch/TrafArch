@@ -7,6 +7,7 @@ import '../qr/presentation/qr_action_button.dart';
 import '../settings/presentation/settings_action_button.dart';
 import 'trip_stream_view.dart';
 import 'cu_transaction_list.dart';
+import 'shanghai_mirrored_records.dart';
 
 /// 行程页：展示最近一次读卡解析出的行程流（0x18 交易明细为主干，
 /// 0x1A / 0x1E 过程记录逐条关联、确认重复合并、无法关联独立保留），
@@ -77,6 +78,11 @@ class _TripsBody extends StatelessWidget {
       buses: [?bus],
       processTrips: app.cycleProcessTrips,
     );
+    final cuRecords = partitionShanghaiMirroredRecords(
+      parserId: stream.isEmpty ? null : app.parsedCard?.parserId,
+      tunionTransactions: app.parsedCard?.transactions ?? const [],
+      cityUnionTransactions: cuTransactions,
+    );
 
     if (stream.isEmpty && cuTransactions.isEmpty) {
       return Card(
@@ -103,8 +109,7 @@ class _TripsBody extends StatelessWidget {
         ],
         if (stream.isNotEmpty)
           TripStreamView(stream: stream, app: app, isRemote: app.isRemoteUse),
-        if (cuTransactions.isNotEmpty)
-          CuTransactionList(transactions: cuTransactions),
+        if (cuTransactions.isNotEmpty) CuApplicationRecords(records: cuRecords),
       ],
     );
   }

@@ -1,7 +1,10 @@
 import '../../protocols/transit/card_parser.dart';
 import '../../protocols/transit/tunion/tunion_trip_matcher.dart';
 import '../reference_data/data/tunion_knowledge_base.dart';
+import '../reference_data/data/city_union_lookup_rules.dart';
+import '../reference_data/domain/reference_match.dart';
 import '../reference_data/domain/station_codes.dart';
+import '../reference_data/domain/tu_cycle_station_resolver.dart';
 import '../reference_data/domain/tunion_terminal_decoder.dart';
 import '../reference_data/data/tunion_bus_location.dart';
 import '../../protocols/transit/tunion/tunion_models.dart';
@@ -60,7 +63,7 @@ class AnalysisEngine {
     CardIdentity identity,
     Currency currency,
   ) {
-    // 展示按原始记录顺序关联：秒级时间相等 OR 有效基础 POS 被包含。
+    // 展示先关联全部秒级时间，再由有效基础 POS 包含关系补缺。
     // 1E 与 1A 各自占用基础交易；余额仍走独立的严格证据匹配。
     final cycles = [
       for (final r in card.transitProcessRecords)
@@ -107,6 +110,11 @@ class AnalysisEngine {
           : null,
       recordedBalanceFen: (txn) => balanceMatches[txn]?.balanceFen,
     );
+    // TripReader L0/d.1.smali:12335: CU metro consumes the card's newest-to-
+    // oldest ledger with lastIsFinished initially false. Keep this inferred
+    // state local to continuous Shanghai records, separate from TU evidence.
+    var shanghaiLastIsFinished = false;
+    TUnionTransaction? previousShanghaiMetro;
     final trips = card.transactions.indexed.map((indexed) {
       final (index, txn) = indexed;
       final balance = balances[index];
@@ -115,6 +123,45 @@ class AnalysisEngine {
       final annotation = rideAnnotations[index];
       // 两来源独立关联，1E 优先，1A 补缺。
       final fallback = entryFallbacks[index];
+      // 上海本地设备把 CU 终端编码写入两应用的同一笔 0x18 交易。
+      // 只有缺少 TU 过程关联、卡种与终端前缀均独立确认时才查 CU；
+      // 原交易、金额、钱包与 TU 城市命名空间均保持原来源。
+      final localTerminal = _lookupShanghaiLocalTerminal(card, txn);
+      final shanghaiLocal = annotation == null && fallback == null
+          ? localTerminal
+          : null;
+      final explicitCity = _validCityCode(
+        annotation?.cityCode ?? fallback?.cityCode,
+      );
+      final explicitStatus =
+          annotation?.record.statusShortName ?? fallback?.statusName;
+      final explicitMetro =
+          explicitCity == '2900' &&
+          (annotation?.record.isCityRail == true || fallback?.isBus == false) &&
+          (explicitStatus == '进站' || explicitStatus == '出站');
+      String? inferredRideStatus;
+      if (localTerminal?.carrier == 2 &&
+          txn.isCompositeConsume &&
+          (shanghaiLocal != null || explicitMetro)) {
+        final previous = previousShanghaiMetro;
+        final continuous =
+            previous != null &&
+            previous.sequence == txn.sequence + 1 &&
+            previous.time.isAfter(txn.time) &&
+            ((previous.recordNumber == null && txn.recordNumber == null) ||
+                (previous.recordNumber != null &&
+                    txn.recordNumber == previous.recordNumber! + 1));
+        if (!continuous) shanghaiLastIsFinished = false;
+        final isEntry = explicitMetro
+            ? explicitStatus == '进站'
+            : !shanghaiLastIsFinished && txn.amountFen == 0;
+        if (!explicitMetro) inferredRideStatus = isEntry ? '进站' : '出站';
+        shanghaiLastIsFinished = isEntry;
+        previousShanghaiMetro = txn;
+      } else {
+        shanghaiLastIsFinished = false;
+        previousShanghaiMetro = null;
+      }
       // 已配对过程记录给出受理城市，不能用发卡城市的终端规则覆盖它。
       final recordCity = _validCityCode(
         annotation?.cityCode ?? fallback?.cityCode,
@@ -128,12 +175,16 @@ class AnalysisEngine {
       // 仅按前缀命中的规则也可能切出另一座城市；冲突时不混入其线路/站点。
       final terminalCity = _validCityCode(location?.cityCode);
       final loc =
-          recordCity != null &&
-              terminalCity != null &&
-              recordCity != terminalCity
+          shanghaiLocal != null ||
+              (recordCity != null &&
+                  terminalCity != null &&
+                  recordCity != terminalCity)
           ? null
           : location;
-      final cityCode = recordCity ?? _validCityCode(loc?.cityCode);
+      final cityCode =
+          recordCity ??
+          _validCityCode(loc?.cityCode) ??
+          (shanghaiLocal == null ? null : '2900');
       final cityName = cityCode == null
           ? null
           : knowledge.cities.lookup(cityCode)?.name;
@@ -165,9 +216,10 @@ class AnalysisEngine {
           ? _lookupBasicTerminal(txn.terminalId, knownCity, txn.time)
           : null;
       final stationMatch =
-          localTerminalMatch != null && !localTerminalMatch.isUnmatched
-          ? localTerminalMatch
-          : processMatch;
+          shanghaiLocal?.match ??
+          (localTerminalMatch != null && !localTerminalMatch.isUnmatched
+              ? localTerminalMatch
+              : processMatch);
       final terminalEntry = isBus
           ? null
           : _lookupStationEntry(loc, identity, card);
@@ -204,7 +256,9 @@ class AnalysisEngine {
       // 复合消费（0x09）配对命中时以行程状态短名（出站 / 进站 / 上车 /
       // 下车…）替代类型名展示；未配对保持 null（展示层不替换，不猜测）。
       final rideStatusName = txn.isCompositeConsume
-          ? annotation?.record.statusShortName ?? fallback?.statusName
+          ? annotation?.record.statusShortName ??
+                fallback?.statusName ??
+                inferredRideStatus
           : null;
       return TransitTrip(
         time: txn.time,
@@ -223,27 +277,35 @@ class AnalysisEngine {
                 : null),
         cityCode: cityCode,
         lineLabel: lineLabel,
+        resolvedBusLineLabel: busLocation?.lineLabel,
         stationLabel:
             busLocation?.stationLabel ??
             resolvedStation ??
             loc?.stationCode ??
             fallback?.stationLabel ??
             (isBus ? annotation?.record.stationCode : null),
-        stationType: stationEntry?.type,
+        // A Beijing industry-00 record may prove a location without proving
+        // the transaction's transport mode (TripReader presents it as info).
+        stationType: annotation?.record.appTypeCode == 0x00
+            ? null
+            : stationEntry?.type,
         appTypeName:
             annotation?.record.appTypeLabel ??
             (fallback == null
-                ? null
+                ? shanghaiLocal?.appTypeName
                 : fallback.isBus
                 ? '公共汽电车'
                 : '城市轨道交通'),
         balanceAfterFen: balance?.fen,
         balanceAfterIsRecorded: balance?.isRecorded,
         rideStatusName: rideStatusName,
+        rideStatusSource: inferredRideStatus == null
+            ? null
+            : 'shanghai-cu-ledger-inference',
         isEntry:
             annotation?.record.isEntry ??
             (sideLinks[index] == null
-                ? false
+                ? inferredRideStatus == '进站'
                 : sides[sideLinks[index]!].isEntry),
         displayProcessKey: cycleLinks[index] == null
             ? null
@@ -260,6 +322,45 @@ class AnalysisEngine {
       );
     }).toList()..sort((a, b) => b.time.compareTo(a.time));
     return trips;
+  }
+
+  _ShanghaiLocalTerminal? _lookupShanghaiLocalTerminal(
+    ParsedCard card,
+    TUnionTransaction transaction,
+  ) {
+    if (card.parserId != CardParserIds.shanghaiTunion ||
+        !transaction.isConsume ||
+        !RegExp(r'^[0-9A-Fa-f]{12}$').hasMatch(transaction.terminalId)) {
+      return null;
+    }
+    final identity = CityUnionLookupRules.identifyTerminal(
+      transaction.terminalId,
+    );
+    if (identity?.regionCode != '2000' || identity?.carrier == null) {
+      return null;
+    }
+    final resolved = knowledge.cuTerminals.resolve(
+      identity!.terminal,
+      CuLookupContext(
+        regionCode: '2000',
+        decodedCarrierType: identity.carrier,
+        transactionTime: transaction.time,
+        busLookupEnabled: true,
+      ),
+    );
+    final match = switch (resolved.status) {
+      ReferenceMatchStatus.matched => StationMatch.fromCandidates(
+        resolved.candidates,
+      ),
+      ReferenceMatchStatus.ambiguous => StationMatch(
+        null,
+        StationMatchConfidence.ambiguous,
+        candidates: resolved.candidates,
+      ),
+      ReferenceMatchStatus.unknown => StationMatch.unmatched,
+      ReferenceMatchStatus.unavailable => StationMatch.unavailable,
+    };
+    return _ShanghaiLocalTerminal(identity.carrier!, match);
   }
 
   /// 原 m761o 基础终端映射：仅 0x1E / 0x1A 未命中时调用；未知城市不猜测。
@@ -333,9 +434,12 @@ class AnalysisEngine {
       final cityCode = recordCity ?? identity.cityCode ?? card.info.cityCode;
       // 公交在聚合时用独立查询；轨道先走原始完整键 / 城市专用布局 /
       // 终端别名，全部未命中时才保留既有片段匹配兜底。
-      final match = !trip.isCityRail || isTunionBusCycle(trip)
+      // Industry 00's Beijing exception requires this record's acquirer city;
+      // an issuing-card city cannot supply missing location evidence.
+      final matchCity = trip.appTypeCode == 0x00 ? recordCity : cityCode;
+      final match = isTunionBusCycle(trip)
           ? StationMatch.unmatched
-          : _matchRailCycle(trip, cityCode);
+          : _matchRailCycle(trip, matchCity);
       {
         byKey[link.key] = _RideAnnotation(
           record: trip,
@@ -385,21 +489,14 @@ class AnalysisEngine {
   }
 
   StationMatch _matchRailCycle(TUnionTripRecord trip, String? cityCode) {
-    if (trip.appTypeCode != 0x01) return StationMatch.unmatched;
-    final service = knowledge.tuLookup;
-    if (service != null && cityCode != null) {
-      final source = service.resolveCycle(
-        city: cityCode,
-        field: trip.lineStationCode,
-        terminalId: trip.terminalId,
-        time: trip.time,
-        appType: trip.appTypeCode,
-      );
-      if (!source.isUnmatched) return source;
-    }
-    return knowledge.stationCodes.matchLineStationField(
-      field: trip.lineStationCode,
+    return resolveTuCycleStation(
+      stations: knowledge.stationCodes,
+      lookup: knowledge.tuLookup,
       cityCode: cityCode,
+      field: trip.lineStationCode,
+      terminalId: trip.terminalId,
+      time: trip.time,
+      appType: trip.appTypeCode,
     );
   }
 
@@ -782,6 +879,18 @@ class _RideAnnotation {
     this.cityCode,
     this.cityName,
   });
+}
+
+class _ShanghaiLocalTerminal {
+  const _ShanghaiLocalTerminal(this.carrier, this.match);
+  final int carrier;
+  final StationMatch match;
+
+  String? get appTypeName => switch (carrier) {
+    1 || 13 => '公共汽电车',
+    2 || 4 || 5 || 7 => '城市轨道交通',
+    _ => CityUnionLookupRules.presentation(carrier)?.$2,
+  };
 }
 
 /// 0x1A 进站兜底注解（内部用）：进站城市名（编码查得时）、城市代码

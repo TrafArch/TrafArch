@@ -3,6 +3,7 @@ import 'package:drift/drift.dart' show Value;
 import '../../../protocols/transit/card_parser.dart';
 import '../../transit_analysis/balance_interpretation.dart';
 import '../../transit_analysis/tunion_analysis_models.dart';
+import '../../transit_analysis/process_journey_positions.dart';
 import '../../../platform/storage/log_exporter.dart';
 import '../../../platform/nfc/nfc_models.dart';
 import '../../../protocols/transit/tunion/tunion_models.dart';
@@ -15,6 +16,7 @@ import '../data/card_repository.dart';
 import '../data/app_database.dart';
 import '../domain/archive_balance.dart';
 import 'archive_history.dart';
+import 'archive_application_display.dart';
 import 'card_identification_service.dart';
 import '../../../shared/application/owned_notifier.dart';
 import '../../scan/domain/captured_frame.dart';
@@ -117,6 +119,9 @@ class ArchiveController extends OwnedNotifier {
           parsed.transactions.isNotEmpty ||
           (parsed.parserId == CardParserIds.cityUnion &&
               view.cityUnionTransactions.isNotEmpty);
+      final processPositions = buildProcessJourneyPositions(
+        parsed.transitProcessRecords,
+      );
       final context = ArchiveContext(
         systemId: parsed.parserId,
         applicationId: parsed.selectedAidHex,
@@ -163,6 +168,7 @@ class ArchiveController extends OwnedNotifier {
               'kind': 'tu_process_record',
               'sfi': record.sfi,
               'recordNumber': record.recordNumber,
+              'recordNumberIsReliable': record.recordNumberIsReliable,
               'rawHex': record.rawHex,
             },
           for (final transaction in parsed.transactions)
@@ -190,6 +196,10 @@ class ArchiveController extends OwnedNotifier {
               'rawHex': rails[i].rawHex,
               'sfi': railSources[i].sfi,
               'recordNumber': railSources[i].recordNumber,
+              'capturedDisplay': captureRailApplicationDisplay(
+                view.knowledge,
+                rails[i],
+              ),
             },
           for (var i = 0; i < buses.length; i++)
             'buses[$i]': {
@@ -198,12 +208,26 @@ class ArchiveController extends OwnedNotifier {
               'rawHex': buses[i].rawHex,
               'sfi': busSources[i].sfi,
               'recordNumber': busSources[i].recordNumber,
+              'capturedDisplay': captureBusApplicationDisplay(
+                view.knowledge,
+                buses[i],
+              ),
             },
           for (var i = 0; i < view.cycleProcessTrips.length; i++)
             'cycle[$i]': {
               'parseVersion': kTripParseVersion,
               'referencePackages': packages,
               'rawHex': view.cycleProcessTrips[i].rawHex,
+              'capturedDisplay': captureProcessDisplay(
+                view.knowledge,
+                view.cycleProcessTrips[i],
+              ),
+              if (processPositions[view.cycleProcessTrips[i]]?['live']
+                  case final position?) ...{
+                'sfi': 0x1E,
+                'recordNumber': position,
+                'recordNumberIsReliable': true,
+              },
             },
           'rawApplicationSerial': parsed.info.applicationSerial,
           'rawCityCode': parsed.info.cityCode,

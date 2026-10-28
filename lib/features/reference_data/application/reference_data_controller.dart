@@ -5,6 +5,7 @@ import '../data/reference_updates.dart';
 import '../data/tunion_knowledge_base.dart';
 import '../data/tunion_bus_location.dart';
 import '../domain/station_codes.dart';
+import '../domain/tu_cycle_station_resolver.dart';
 import '../../../shared/application/owned_notifier.dart';
 
 class ReferenceDataController extends OwnedNotifier {
@@ -185,20 +186,16 @@ class ReferenceDataController extends OwnedNotifier {
     if (field == null || field.isEmpty) {
       return StationMatch.unmatched;
     }
-    if (appType != 0x01) return StationMatch.unmatched;
     final city = _lookupCityCode(cityCode);
-    final lookup = kb.tuLookup;
-    if (lookup != null) {
-      final source = lookup.resolveCycle(
-        city: city,
-        field: field,
-        terminalId: terminalId,
-        time: time,
-        appType: appType ?? 0x01,
-      );
-      if (!source.isUnmatched) return source;
-    }
-    return kb.stationCodes.matchLineStationField(field: field, cityCode: city);
+    return resolveTuCycleStation(
+      stations: kb.stationCodes,
+      lookup: kb.tuLookup,
+      cityCode: city,
+      field: field,
+      terminalId: terminalId,
+      time: time,
+      appType: appType,
+    );
   }
 
   TunionBusLocation resolveBusLocation(

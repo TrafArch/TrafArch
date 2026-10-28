@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'station_codes.dart';
+import 'tunion_bus_caller.dart';
 
 /// Offline inputs with separate namespaces for rail keys and local terminals.
 /// No issuer fallback or record mutation is permitted at this boundary.
@@ -32,8 +33,9 @@ class TuLookupValue {
 
 /// Original m756j(type=3), m759m and m761o lookup semantics (Simplified Chinese).
 /// City-specific cycle adapters use only their verified field/terminal slices.
-/// Unknown application types never enter the rail path. Missing dates use base
-/// names, not the current clock. The caller retains the original record city.
+/// Industry 00 can query a Beijing rail location only with the source-proven
+/// terminal classification. Missing dates use base names, not the current
+/// clock. The caller retains the original record city and application type.
 class TuLookupService {
   final TuLookupDataSource source;
   const TuLookupService(this.source);
@@ -154,7 +156,7 @@ class TuLookupService {
     DateTime? time,
     required int? appType,
   }) {
-    if (appType != 0x01 || !_validCity(city)) return StationMatch.unmatched;
+    if (!_validCity(city)) return StationMatch.unmatched;
     final raw = field.toUpperCase();
     // The parser retains the reserved trailing byte; original pos is 6 bytes.
     if (!RegExp(r'^(?:[0-9A-F]{12}|[0-9A-F]{14})$').hasMatch(raw)) {
@@ -162,6 +164,14 @@ class TuLookupService {
     }
     final pos = raw.substring(0, 12);
     final q = terminalId?.toUpperCase();
+    if (appType != 0x01) {
+      if (appType != 0x00 || !TunionBusCaller.hasBeijingRailTerminal(city, q)) {
+        return StationMatch.unmatched;
+      }
+      // Resolve only the original city + pos in the native rail source. A
+      // station label does not make this an entry/exit or a refund record.
+      return resolveRailKey(city: city, key: '$city$pos', time: time);
+    }
     final validTerminal = q != null && RegExp(r'^[0-9A-F]{16}$').hasMatch(q);
     if (validTerminal) {
       final exact = resolveProcess(city: city, terminal: q);

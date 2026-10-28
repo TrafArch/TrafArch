@@ -1,20 +1,27 @@
 import 'package:flutter/material.dart';
 
 import 'trip_entry_presenter.dart';
+import 'journey_presentation.dart';
+import 'trip_filters.dart';
 
 class TripEntryCard extends StatelessWidget {
   final TripEntryInfo info;
   final bool remote;
   final VoidCallback onTap;
+  final JourneyPresentation<TripEntryInfo>? journey;
   const TripEntryCard({
     super.key,
     required this.info,
     required this.remote,
     required this.onTap,
+    this.journey,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (journey case final ticket?) {
+      return _JourneyTicket(journey: ticket, onTap: onTap);
+    }
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     return Card(
@@ -121,6 +128,407 @@ class TripEntryCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _JourneyTicket extends StatelessWidget {
+  const _JourneyTicket({required this.journey, required this.onTap});
+  final JourneyPresentation<TripEntryInfo> journey;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final bus = journey.mode == TripModeFilter.bus;
+    final first = journey.events.first;
+    final date =
+        journey.start?.time ?? journey.end?.time ?? first.endpoint.time;
+    final dateLabel = date == null
+        ? '日期未知'
+        : '${date.year}年${date.month}月${date.day}日';
+    final city = journey.isCrossCity ? '' : journey.cityLabel ?? '地区未知';
+    final mode = bus ? '公共汽电车' : '轨道交通';
+    final amount = journey.state == JourneyState.inProgress
+        ? null
+        : journey.amountText;
+    final end = journey.end;
+    final start = journey.start;
+    final complete = start != null && end != null;
+    final seat = journey.seatLabel;
+    final radius = BorderRadius.circular(22);
+    return Card(
+      margin: const EdgeInsets.only(bottom: 14),
+      elevation: 0,
+      color: scheme.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+        borderRadius: radius,
+        side: BorderSide(color: scheme.outlineVariant),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 17),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    bus ? Icons.directions_bus_outlined : Icons.subway_outlined,
+                    color: scheme.primary,
+                    size: 21,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '$city$mode',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: onTap,
+                    tooltip: '查看行程记录',
+                    icon: const Icon(Icons.more_vert),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (complete)
+                _JourneyEndpoints(
+                  start: start,
+                  end: end,
+                  duration: journey.duration,
+                )
+              else if (start != null)
+                _JourneyStop(endpoint: start, bus: bus)
+              else if (end != null)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: _JourneyStop(endpoint: end, bus: bus, right: true),
+                )
+              else ...[
+                Text(
+                  first.endpoint.line ?? '线路未记录',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                // Single-charge buses intentionally have no invented endpoints.
+                if (!(bus && journey.state == JourneyState.single)) ...[
+                  if (first.endpoint.station case final station?) ...[
+                    const SizedBox(height: 6),
+                    Text(station, style: theme.textTheme.titleMedium),
+                  ],
+                  if (first.endpoint.timeText case final time?) ...[
+                    const SizedBox(height: 6),
+                    Text(time, style: theme.textTheme.bodyMedium),
+                  ],
+                ],
+              ],
+              const SizedBox(height: 20),
+              SizedBox(
+                height: 1,
+                width: double.infinity,
+                child: CustomPaint(
+                  painter: _TicketDivider(scheme.outlineVariant),
+                ),
+              ),
+              const SizedBox(height: 14),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final footer = Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          if (amount != null)
+                            Text(
+                              amount,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          if (seat != null &&
+                              journey.state != JourneyState.inProgress)
+                            Text(seat, style: theme.textTheme.bodySmall),
+                        ],
+                      ),
+                      if (amount != null) ...[
+                        const SizedBox(width: 8),
+                        Flexible(
+                          fit: FlexFit.loose,
+                          child: Text(
+                            '行程后余额 ${journey.balanceAfterText ?? '未知'}',
+                            textAlign: TextAlign.end,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  );
+                  if (MediaQuery.textScalerOf(context).scale(14) > 22) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(dateLabel, style: theme.textTheme.bodySmall),
+                        if (amount != null || seat != null) ...[
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: footer,
+                          ),
+                        ],
+                      ],
+                    );
+                  }
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(dateLabel, style: theme.textTheme.bodySmall),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: footer,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _JourneyEndpoints extends StatelessWidget {
+  const _JourneyEndpoints({
+    required this.start,
+    required this.end,
+    required this.duration,
+  });
+  final JourneyEndpoint start;
+  final JourneyEndpoint end;
+  final Duration? duration;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    Widget label(String text, TextStyle? style, {bool right = false}) => Text(
+      text,
+      textAlign: right ? TextAlign.end : TextAlign.start,
+      style: style,
+    );
+    final lineStyle = theme.textTheme.bodyMedium?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    final stationStyle = theme.textTheme.titleLarge?.copyWith(
+      fontWeight: FontWeight.w600,
+    );
+    TableRow gap(double height) =>
+        TableRow(children: List.generate(3, (_) => SizedBox(height: height)));
+    return Table(
+      columnWidths: const {
+        0: FlexColumnWidth(),
+        1: FixedColumnWidth(80),
+        2: FlexColumnWidth(),
+      },
+      defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+      children: [
+        TableRow(
+          children: [
+            label(start.line ?? '', lineStyle),
+            const SizedBox.shrink(),
+            label(end.line ?? '', lineStyle, right: true),
+          ],
+        ),
+        gap(5),
+        TableRow(
+          children: [
+            label(start.station ?? '站点未记录', stationStyle),
+            const _JourneyArrow(duration: null),
+            label(end.station ?? '站点未记录', stationStyle, right: true),
+          ],
+        ),
+        gap(8),
+        TableRow(
+          children: [
+            label(_journeyTimeText(start), theme.textTheme.titleMedium),
+            _JourneyDuration(duration: duration),
+            label(
+              _journeyTimeText(end, startDate: start.time),
+              theme.textTheme.titleMedium,
+              right: true,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+String _journeyTimeText(JourneyEndpoint endpoint, {DateTime? startDate}) {
+  final time = endpoint.time;
+  final dayOffset = startDate == null || time == null
+      ? 0
+      : DateTime.utc(time.year, time.month, time.day)
+            .difference(
+              DateTime.utc(startDate.year, startDate.month, startDate.day),
+            )
+            .inDays;
+  final text = endpoint.timeText ?? '';
+  return '$text${dayOffset > 0 ? '  +$dayOffset天' : ''}';
+}
+
+class _JourneyStop extends StatelessWidget {
+  const _JourneyStop({
+    required this.endpoint,
+    required this.bus,
+    this.right = false,
+  });
+  final JourneyEndpoint endpoint;
+  final bool bus;
+  final bool right;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: right
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
+      children: [
+        if (endpoint.line case final line?)
+          Text(
+            line,
+            textAlign: right ? TextAlign.end : TextAlign.start,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        const SizedBox(height: 5),
+        Text(
+          endpoint.station ?? '站点未记录',
+          textAlign: right ? TextAlign.end : TextAlign.start,
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        if (endpoint.timeText case final text?) ...[
+          const SizedBox(height: 8),
+          Text(
+            text,
+            textAlign: right ? TextAlign.end : TextAlign.start,
+            style: theme.textTheme.titleMedium,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _JourneyArrow extends StatelessWidget {
+  const _JourneyArrow({required this.duration});
+  final Duration? duration;
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      children: [
+        SizedBox(
+          key: const ValueKey('journey-arrow'),
+          width: 72,
+          height: 28,
+          child: CustomPaint(painter: _TicketArrow(theme.colorScheme.primary)),
+        ),
+        if (duration != null) _JourneyDuration(duration: duration),
+      ],
+    );
+  }
+}
+
+class _JourneyDuration extends StatelessWidget {
+  const _JourneyDuration({required this.duration});
+  final Duration? duration;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final value = duration;
+    String? label;
+    if (value != null) {
+      final hours = value.inHours;
+      final minutes = value.inMinutes.remainder(60);
+      label = hours > 0
+          ? '$hours小时${minutes > 0 ? '$minutes分钟' : ''}'
+          : value.inMinutes > 0
+          ? '${value.inMinutes}分钟'
+          : '${value.inSeconds}秒';
+    }
+    if (label == null) return const SizedBox.shrink();
+    return Text(
+      label,
+      textAlign: TextAlign.center,
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: theme.colorScheme.onSurfaceVariant,
+      ),
+    );
+  }
+}
+
+class _TicketArrow extends CustomPainter {
+  const _TicketArrow(this.color);
+  final Color color;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+    final y = size.height / 2;
+    canvas.drawLine(Offset(3, y), Offset(size.width - 4, y), paint);
+    canvas.drawLine(
+      Offset(size.width - 13, y - 7),
+      Offset(size.width - 4, y),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_TicketArrow oldDelegate) => oldDelegate.color != color;
+}
+
+class _TicketDivider extends CustomPainter {
+  const _TicketDivider(this.color);
+  final Color color;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1;
+    for (double x = 0; x < size.width; x += 9) {
+      canvas.drawLine(
+        Offset(x, 0),
+        Offset((x + 5).clamp(0, size.width), 0),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_TicketDivider oldDelegate) => oldDelegate.color != color;
 }
 
 class _TagBadge extends StatelessWidget {

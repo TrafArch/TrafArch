@@ -132,9 +132,18 @@ class CardSessionSnapshot {
         'rail': railRecord == null ? null : _railToJson(railRecord!),
         'bus': busRecord == null ? null : _busToJson(busRecord!),
       } else ...{
-        'rails': [for (final r in rails) _railToJson(r)],
-        'buses': [for (final b in buses) _busToJson(b)],
-        'cycle': [for (final p in processTrips) _cycleToJson(p)],
+        'rails': [
+          for (var i = 0; i < rails.length; i++)
+            _withCapturedDisplay(_railToJson(rails[i]), 'rails[$i]'),
+        ],
+        'buses': [
+          for (var i = 0; i < buses.length; i++)
+            _withCapturedDisplay(_busToJson(buses[i]), 'buses[$i]'),
+        ],
+        'cycle': [
+          for (var i = 0; i < processTrips.length; i++)
+            _withCapturedDisplay(_cycleToJson(processTrips[i]), 'cycle[$i]'),
+        ],
       },
       if (formatVersion == 3) ...{
         'context': context.toJson(),
@@ -142,6 +151,19 @@ class CardSessionSnapshot {
         'recordProvenance': recordProvenance,
       },
     });
+  }
+
+  Map<String, dynamic> _withCapturedDisplay(
+    Map<String, dynamic> fields,
+    String path,
+  ) {
+    final provenance = recordProvenance[path];
+    final display = provenance is Map ? provenance['capturedDisplay'] : null;
+    return {
+      ...fields,
+      if (formatVersion == 3 && display is Map && display.isNotEmpty)
+        'capturedDisplay': display,
+    };
   }
 
   /// Compatibility projection only; history/detail/export use decodeResult so
@@ -382,6 +404,8 @@ class CardSessionSnapshot {
     'cityName': t.cityName,
     'cityCode': t.cityCode,
     'lineLabel': t.lineLabel,
+    if (t.resolvedBusLineLabel != null)
+      'capturedDisplay': {'line': t.resolvedBusLineLabel},
     'stationLabel': t.stationLabel,
     'stationType': t.stationType,
     'appTypeName': t.appTypeName,
@@ -389,6 +413,7 @@ class CardSessionSnapshot {
     if (parseVersion >= kWalletAnchoredBalanceParseVersion)
       'balanceAfterIsRecorded': t.balanceAfterIsRecorded,
     'rideStatusName': t.rideStatusName,
+    'rideStatusSource': t.rideStatusSource,
     'isEntry': t.isEntry,
     'displayProcessKey': t.displayProcessKey,
     'displayApplicationKey': t.displayApplicationKey,
@@ -416,6 +441,7 @@ class CardSessionSnapshot {
     final matched = m['matchedProcess'];
     final balance = capturedTransactionBalance(m, parseVersion);
     final location = m['location'];
+    final capturedDisplay = m['capturedDisplay'];
     return TransitTrip(
       time: time,
       amountFen: _int(m['amountFen']) ?? 0,
@@ -439,12 +465,16 @@ class CardSessionSnapshot {
       cityName: _str(m['cityName']),
       cityCode: _str(m['cityCode']),
       lineLabel: _str(m['lineLabel']),
+      resolvedBusLineLabel: capturedDisplay is Map
+          ? _str(capturedDisplay['line'])
+          : null,
       stationLabel: _str(m['stationLabel']),
       stationType: _str(m['stationType']),
       appTypeName: _str(m['appTypeName']),
       balanceAfterFen: balance.fen,
       balanceAfterIsRecorded: balance.fen == null ? null : balance.isRecorded,
       rideStatusName: _str(m['rideStatusName']),
+      rideStatusSource: _str(m['rideStatusSource']),
       isEntry: m['isEntry'] == true,
       displayProcessKey: _str(m['displayProcessKey']),
       displayApplicationKey: _str(m['displayApplicationKey']),

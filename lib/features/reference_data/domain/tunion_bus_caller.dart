@@ -16,6 +16,15 @@ class TunionBusCaller {
     return null;
   }
 
+  /// m750d's Beijing terminal exception, used only to permit a location query
+  /// for industry 00. It does not assign a ride mode or transaction meaning.
+  static bool hasBeijingRailTerminal(String? city, String? terminal) {
+    if (city != '1000' || terminal == null) return false;
+    final key = terminal.toUpperCase();
+    return RegExp(r'^0000[0-9A-F]{12}$').hasMatch(key) &&
+        _prefix(_carrierA, '1000${key.substring(4)}') == 2;
+  }
+
   /// Known source classifications only. The original default maps every
   /// unrecognized subtype to bus; the app deliberately keeps those unknown.
   static int classification({

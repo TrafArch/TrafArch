@@ -133,6 +133,12 @@ class TUnionProcessParser {
       base = _railHeaderLength;
     }
 
+    // 记录头有效不代表已写入行程；检查字段体及所有未知/自定义尾部，
+    // 仅完全为空白时不产出过程事件，原始记录仍由读取层完整保留。
+    if (payload.skip(base).every((byte) => byte == 0x00 || byte == 0xFF)) {
+      return null;
+    }
+
     final entryTimeBytes = _slice(payload, base + 0x35, base + 0x3C);
     final exitTimeBytes = _slice(payload, base + 0x3C, base + 0x43);
     return TransitRecord(
@@ -212,6 +218,8 @@ class TUnionProcessParser {
     final hasHeader = _isBusRecordWithHeader(raw);
     final payload = hasHeader ? raw.sublist(_busRecordHeaderLength) : raw;
     if (payload.length < _minRecordLength) return null;
+    // 包括未知/发卡机构自定义字节，避免只因缺少时间或站点而丢弃部分记录。
+    if (payload.every((byte) => byte == 0x00 || byte == 0xFF)) return null;
 
     final entryTimeBytes = _slice(payload, 0x20, 0x27);
     final exitTimeBytes = _slice(payload, 0x4B, 0x52);

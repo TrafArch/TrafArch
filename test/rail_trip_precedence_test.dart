@@ -11,6 +11,30 @@ final _entryTime = DateTime(2026, 8, 8, 9, 6, 2);
 final _exitTime = DateTime(2026, 8, 8, 9, 12, 31);
 
 void main() {
+  test('重复终端先匹配精确时间，旧过程不抢占新交易', () {
+    final links = matchTunionDisplayEvents(
+      [_exitTime, _entryTime],
+      [_entryTime],
+      basicTime: (time) => time,
+      basicPos: (_) => 'ABCDEF123456',
+      eventTime: (time) => time,
+      eventPos: (_) => '0000ABCDEF123456',
+    );
+    expect(links, {1: 0});
+  });
+
+  test('全部事件的精确时间先保留，再分配只有POS的事件', () {
+    final links = matchTunionDisplayEvents(
+      [_exitTime, _entryTime],
+      [DateTime(2026, 8, 7, 9), _exitTime],
+      basicTime: (time) => time,
+      basicPos: (_) => 'ABCDEF123456',
+      eventTime: (time) => time,
+      eventPos: (_) => '0000ABCDEF123456',
+    );
+    expect(links, {0: 1, 1: 0});
+  });
+
   test('共享规则：时间独立命中、POS独立命中、无效POS与顺序占用', () {
     bool matches(String basic, String extended, {bool sameTime = false}) =>
         matchesTunionDisplay(

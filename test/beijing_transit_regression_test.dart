@@ -39,6 +39,7 @@ void main() {
     () {
       final trip = analyze(engine, '0001000A000100', bus: true);
       expect(trip.lineLabel, '1');
+      expect(trip.resolvedBusLineLabel, '1');
       expect(trip.stationLabel, '第10站');
       expect(trip.matchedProcessTrip!.lineCode, '0001');
       expect(trip.matchedProcessTrip!.stationCode, '000A');
@@ -129,8 +130,8 @@ void main() {
           ),
         ),
       );
-      expect(find.textContaining('第10站'), findsOneWidget);
-      expect(find.text('1'), findsOneWidget);
+      expect(find.textContaining('站点10'), findsOneWidget);
+      expect(find.text('1路'), findsOneWidget);
     },
   );
 
@@ -162,8 +163,8 @@ void main() {
         ),
       ),
     );
-    expect(find.textContaining('第10站'), findsOneWidget);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.textContaining('站点10'), findsOneWidget);
+    expect(find.text('1路'), findsOneWidget);
   });
 }
 

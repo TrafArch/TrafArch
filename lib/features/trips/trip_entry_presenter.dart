@@ -116,6 +116,13 @@ TripEntryInfo _describeEntry(TripEntry entry, TripPresentationContext display) {
           ('交易类型', trip.typeName),
           ('交易序号', '${trip.sequence}'),
           ('交易时间', trip.timeText),
+          if (trip.rideStatusSource != null)
+            (
+              '进出站依据',
+              trip.rideStatusSource == 'shanghai-cu-ledger-inference'
+                  ? '按上海本地轨道账本推断'
+                  : trip.rideStatusSource!,
+            ),
           ('金额', trip.amountText),
           if (trip.balanceAfterText != null)
             (trip.balanceAfterLabel!, trip.balanceAfterText!),

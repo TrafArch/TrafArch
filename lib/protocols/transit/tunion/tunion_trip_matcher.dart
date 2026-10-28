@@ -1,5 +1,35 @@
 import 'tunion_models.dart';
 
+/// Strong same-operation evidence for a 1A side and a 1E record. This is a
+/// display relationship only; no amounts or raw records are rewritten.
+bool matchesTunionJourneySide({
+  required bool isEntry,
+  required bool isRail,
+  required DateTime? time,
+  required String? cityCode,
+  required String? terminalId,
+  required int? amountFen,
+  required TUnionTripRecord cycle,
+}) {
+  String normalize(String? value) =>
+      (value ?? '').replaceAll(RegExp(r'\s+'), '').toUpperCase();
+  final city = normalize(cityCode);
+  final terminal = normalize(terminalId);
+  return time != null &&
+      time == cycle.time &&
+      RegExp(r'^[0-9A-F]{4}$').hasMatch(city) &&
+      !RegExp(r'^[0F]+$').hasMatch(city) &&
+      city == normalize(cycle.cityCode) &&
+      RegExp(r'^[0-9A-F]{16}$').hasMatch(terminal) &&
+      !RegExp(r'^0+$|^F+$').hasMatch(terminal) &&
+      terminal == normalize(cycle.terminalId) &&
+      (isRail ? cycle.isCityRail : cycle.isBus) &&
+      (isEntry
+          ? const {0x01, 0x03}.contains(cycle.typeCode)
+          : const {0x02, 0x04}.contains(cycle.typeCode)) &&
+      (amountFen == null || amountFen == cycle.amountFen);
+}
+
 /// 展示关联，不是余额锚点：秒级时间相等 OR 有效基础 POS 被扩展 POS 包含。
 bool matchesTunionDisplay({
   required DateTime? basicTime,
@@ -27,7 +57,8 @@ bool matchesTunionDisplay({
       extended.contains(basic);
 }
 
-/// 同一来源顺序扫描，先到的事件占用先到的基础交易；来源之间独立占用。
+/// 同一来源先分配全部秒级对应，再按 POS 补缺；同强度候选保持原顺序。
+/// 来源之间独立占用，终端复用不能抢占另一事件已知的精确时间对应。
 Map<int, int> matchTunionDisplayEvents<B, E>(
   List<B> basics,
   List<E> events, {
@@ -37,17 +68,22 @@ Map<int, int> matchTunionDisplayEvents<B, E>(
   required String? Function(E) eventPos,
 }) {
   final result = <int, int>{};
-  for (var event = 0; event < events.length; event++) {
-    for (var basic = 0; basic < basics.length; basic++) {
-      if (result.containsKey(basic)) continue;
-      if (matchesTunionDisplay(
-        basicTime: basicTime(basics[basic]),
-        basicPos: basicPos(basics[basic]),
-        extendedTime: eventTime(events[event]),
-        extendedPos: eventPos(events[event]),
-      )) {
-        result[basic] = event;
-        break;
+  final usedEvents = <int>{};
+  for (final exactTime in [true, false]) {
+    for (var event = 0; event < events.length; event++) {
+      if (usedEvents.contains(event)) continue;
+      for (var basic = 0; basic < basics.length; basic++) {
+        if (result.containsKey(basic)) continue;
+        if (matchesTunionDisplay(
+          basicTime: basicTime(basics[basic]),
+          basicPos: exactTime ? null : basicPos(basics[basic]),
+          extendedTime: eventTime(events[event]),
+          extendedPos: exactTime ? null : eventPos(events[event]),
+        )) {
+          result[basic] = event;
+          usedEvents.add(event);
+          break;
+        }
       }
     }
   }
