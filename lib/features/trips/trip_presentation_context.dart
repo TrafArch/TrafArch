@@ -1,4 +1,5 @@
 import '../transit_analysis/tunion_analysis_models.dart';
+import '../transit_analysis/shanghai_balance_display.dart';
 import '../reference_data/domain/station_codes.dart';
 import '../reference_data/data/tunion_bus_location.dart';
 
@@ -30,8 +31,12 @@ class TripPresentationContext {
     required this.resolveCycleStationMatch,
     required this.resolveLineName,
     required this.resolveBusLocation,
+    this.balanceDisplay = const ShanghaiBalanceDisplay(),
   });
   final Currency currency;
+  final ShanghaiBalanceDisplay balanceDisplay;
+  String? formatBalance(int? fen) =>
+      balanceDisplay.formatBalance(fen, symbol: currency.symbol);
   final String? Function(String?) cityNameOf;
   final StationLookup resolveStationMatch;
   final CycleStationLookup resolveCycleStationMatch;

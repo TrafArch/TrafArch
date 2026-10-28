@@ -8,6 +8,7 @@ import '../archive/domain/card_name_extension.dart';
 import '../qr/presentation/qr_action_button.dart';
 import '../settings/presentation/settings_action_button.dart';
 import '../archive/presentation/card_detail_page.dart';
+import '../archive/presentation/archive_balance_display.dart';
 import '../archive/presentation/archive_transfer_dialogs.dart';
 
 /// 卡片列表页：展示已保存的卡片档案摘要，
@@ -26,15 +27,30 @@ class _CardsPageState extends State<CardsPage> {
   @override
   void initState() {
     super.initState();
+    widget.app.addListener(_onChanged);
     _summaries = watchArchiveCardSummaries(widget.app.cardRepository);
   }
 
   @override
   void didUpdateWidget(covariant CardsPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.app != widget.app) {
+      oldWidget.app.removeListener(_onChanged);
+      widget.app.addListener(_onChanged);
+    }
     if (oldWidget.app.cardRepository != widget.app.cardRepository) {
       _summaries = watchArchiveCardSummaries(widget.app.cardRepository);
     }
+  }
+
+  void _onChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    widget.app.removeListener(_onChanged);
+    super.dispose();
   }
 
   @override
@@ -141,8 +157,11 @@ class _SavedCardTile extends StatelessWidget {
       child: InkWell(
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute<void>(
-            builder: (_) =>
-                CardDetailPage(repository: app.cardRepository, cardId: card.id),
+            builder: (_) => CardDetailPage(
+              repository: app.cardRepository,
+              cardId: card.id,
+              settings: app.settings,
+            ),
           ),
         ),
         child: Padding(
@@ -186,7 +205,12 @@ class _SavedCardTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      card.balanceText ?? '—',
+                      archiveCardBalanceText(
+                            card,
+                            includeShanghaiOverdraft:
+                                app.includeShanghaiOverdraft,
+                          ) ??
+                          '—',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.titleMedium?.copyWith(

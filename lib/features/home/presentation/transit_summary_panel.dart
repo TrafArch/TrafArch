@@ -36,7 +36,7 @@ class TransitSummaryPanel extends StatelessWidget {
     final publicInfo = app.cityUnionPublicInfo;
     // 首页显示本次读卡的协议结果。行程分析摘要和历史档案不参与余额
     // 取值；TU / CU 各自的钱包也不能相加或互相覆盖。
-    final balanceFen = info?.balanceFen;
+    final balanceFen = app.balanceDisplay.balanceFen(info?.balanceFen);
     final balanceText = balanceFen == null
         ? null
         : '${app.cardCurrency.symbol}${(balanceFen / 100).toStringAsFixed(2)}';
@@ -44,7 +44,9 @@ class TransitSummaryPanel extends StatelessWidget {
         ? null
         : BalanceInterpretation.fromParsedCard(parsed);
     final separateObservation =
-        isTUnion && interpretation?.semantics != BalanceSemantics.direct;
+        isTUnion &&
+        !app.balanceDisplay.isCityUnionBalance &&
+        interpretation?.semantics != BalanceSemantics.direct;
     final cardKind = isTUnion ? info?.cardKind : null;
     final expireDate = isTUnion ? info?.expireDate : null;
 
@@ -69,8 +71,7 @@ class TransitSummaryPanel extends StatelessWidget {
     } else if (isCityUnion) {
       parsedCardNumber = publicInfo?.cityCardNumber;
     } else {
-      parsedCardNumber =
-          info?.displayCardNumber ?? publicInfo?.cityCardNumber;
+      parsedCardNumber = info?.displayCardNumber ?? publicInfo?.cityCardNumber;
     }
     final cardNumber = identified?.cardNumber ?? parsedCardNumber ?? '未读取到卡号';
 
@@ -109,7 +110,9 @@ class TransitSummaryPanel extends StatelessWidget {
           summaryField(context, '余额说明', 'TU侧金额不能直接作为港币账户余额'),
       ],
       // Direct non-Octopus cards retain the existing currency policy.
-      if (isTUnion && !separateObservation && balanceText != null)
+      if ((isTUnion || isCityUnion) &&
+          !separateObservation &&
+          balanceText != null)
         summaryField(context, '余额', balanceText),
       // 上海卡 CU 单侧可用时，TU 钱包不可读，单独展示住建部钱包余额
       // （双应用卡统一在下方的双应用区块中展示，避免重复）。
@@ -161,11 +164,7 @@ class TransitSummaryPanel extends StatelessWidget {
           ),
         if (publicInfo?.cityCardNumber != null &&
             publicInfo!.cityCardNumber!.isNotEmpty)
-          summaryField(
-            context,
-            '城市一卡通卡号',
-            publicInfo.cityCardNumber!,
-          ),
+          summaryField(context, '城市一卡通卡号', publicInfo.cityCardNumber!),
         summaryField(
           context,
           '城市一卡通互联互通',

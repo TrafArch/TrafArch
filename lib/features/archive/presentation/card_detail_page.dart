@@ -13,16 +13,20 @@ import '../../trips/trip_cards_view.dart';
 import 'archive_trip_presenter.dart';
 import 'imported_archive_records.dart';
 import 'shanghai_archive_mirrored_records.dart';
+import 'archive_balance_display.dart';
+import '../../settings/application/settings_controller.dart';
 
 /// Archive-only detail: captured evidence/context is independent of live scans.
 class CardDetailPage extends StatefulWidget {
   final CardRepository repository;
   final String cardId;
+  final SettingsController? settings;
 
   const CardDetailPage({
     super.key,
     required this.repository,
     required this.cardId,
+    this.settings,
   });
 
   @override
@@ -35,16 +39,31 @@ class _CardDetailPageState extends State<CardDetailPage> {
   @override
   void initState() {
     super.initState();
+    widget.settings?.addListener(_onSettingsChanged);
     _subscribe();
   }
 
   @override
   void didUpdateWidget(CardDetailPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.settings != widget.settings) {
+      oldWidget.settings?.removeListener(_onSettingsChanged);
+      widget.settings?.addListener(_onSettingsChanged);
+    }
     if (oldWidget.repository != widget.repository ||
         oldWidget.cardId != widget.cardId) {
       _subscribe();
     }
+  }
+
+  void _onSettingsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    widget.settings?.removeListener(_onSettingsChanged);
+    super.dispose();
   }
 
   void _subscribe() {
@@ -80,7 +99,12 @@ class _CardDetailPageState extends State<CardDetailPage> {
         if (history == null || history.missing) {
           return const Center(child: Text('卡片不存在或已删除'));
         }
-        return _CardDetailBody(history: history, repository: widget.repository);
+        return _CardDetailBody(
+          history: history,
+          repository: widget.repository,
+          includeShanghaiOverdraft:
+              widget.settings?.includeShanghaiOverdraft ?? false,
+        );
       },
     ),
   );
@@ -89,7 +113,12 @@ class _CardDetailPageState extends State<CardDetailPage> {
 class _CardDetailBody extends StatelessWidget {
   final ArchiveHistoryResult history;
   final CardRepository repository;
-  const _CardDetailBody({required this.history, required this.repository});
+  final bool includeShanghaiOverdraft;
+  const _CardDetailBody({
+    required this.history,
+    required this.repository,
+    required this.includeShanghaiOverdraft,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -104,6 +133,8 @@ class _CardDetailBody extends StatelessWidget {
     );
     final trips = presentArchiveTrips(
       history.records,
+      includeShanghaiOverdraft: includeShanghaiOverdraft,
+      cardType: history.card!.cardType,
       onDiagnostics: (record) => _showEvidence(
         context,
         '诊断与原始证据',
@@ -131,7 +162,12 @@ class _CardDetailBody extends StatelessWidget {
           recordCount: ArchiveRecordCount.fromHistory(history),
           repository: repository,
           observedFields: history.latestObservedFields,
-          balanceText: history.balanceText,
+          balanceText: archiveCardBalanceText(
+            history.card!,
+            includeShanghaiOverdraft: includeShanghaiOverdraft,
+            balanceSnapshot: history.balanceSource?.snapshot,
+            capturedText: history.balanceText,
+          ),
           balanceObservationText: history.balanceObservationText,
           balanceObservationLabel: history.balanceObservationLabel,
         ),

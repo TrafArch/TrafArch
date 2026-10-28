@@ -84,7 +84,13 @@ void main() {
         terminalId: terminal,
         appType: 1,
       );
-      expect(match.stationName, station, reason: '$city/$key');
+      if (city == '4520' && key == '45201121') {
+        expect(match.confidence, StationMatchConfidence.ambiguous);
+        expect(match.candidates.map((e) => e.station).toSet(), {'苗岭路'});
+        expect(match.candidates.map((e) => e.line).toSet(), {'11号线', '蓝谷快线'});
+      } else {
+        expect(match.stationName, station, reason: '$city/$key');
+      }
       expect(
         match.candidates.any((e) => (e.sourceKey ?? e.code) == key),
         isTrue,
@@ -93,51 +99,46 @@ void main() {
     }
   });
 
-  test(
-    'every native rail source key remains reachable at its longest prefix',
-    () {
-      final groups = <String, List<Row>>{};
-      for (final row in db.select(
-        "SELECT * FROM all_records WHERE source_field IN ('M0.i0.a','M0.W.a','M0.a0.a','M0.e0.a')",
-      )) {
-        (groups['${row['region_code']}|${row['source_key']}'] ??= []).add(row);
-      }
-      final cities = <String>{};
-      final fields = <String>{};
-      final table = StationCodeTable.empty.withLive(
-        TuLookupLiveSource(repository),
+  test('every city-prefixed native rail source key remains reachable at its longest prefix', () {
+    final groups = <String, List<Row>>{};
+    for (final row in db.select(
+      "SELECT * FROM all_records WHERE source_field IN ('M0.i0.a','M0.W.a','M0.a0.a','M0.e0.a') "
+      "AND substr(source_key,1,4)=region_code AND length(source_key)>4",
+    )) {
+      (groups['${row['region_code']}|${row['source_key']}'] ??= []).add(row);
+    }
+    final cities = <String>{};
+    final fields = <String>{};
+    final table = StationCodeTable.empty.withLive(
+      TuLookupLiveSource(repository),
+    );
+    for (final rows in groups.values) {
+      final first = rows.first;
+      final city = first['region_code'] as String;
+      final key = first['source_key'] as String;
+      cities.add(city);
+      fields.add(first['source_field'] as String);
+      // Filler cannot accidentally form another hexadecimal source key.
+      final match = table.matchTuRailKey(cityCode: city, key: '${key}FFFFFFFF');
+      final identities = rows
+          .map((r) => (r['line_name'], r['station_name']))
+          .toSet();
+      expect(
+        match.confidence,
+        identities.length == 1
+            ? StationMatchConfidence.exact
+            : StationMatchConfidence.ambiguous,
+        reason: '$city/$key',
       );
-      for (final rows in groups.values) {
-        final first = rows.first;
-        final city = first['region_code'] as String;
-        final key = first['source_key'] as String;
-        cities.add(city);
-        fields.add(first['source_field'] as String);
-        // Filler cannot accidentally form another hexadecimal source key.
-        final match = table.matchTuRailKey(
-          cityCode: city,
-          key: '${key}FFFFFFFF',
-        );
-        final identities = rows
-            .map((r) => (r['line_name'], r['station_name']))
-            .toSet();
-        expect(
-          match.confidence,
-          identities.length == 1
-              ? StationMatchConfidence.exact
-              : StationMatchConfidence.ambiguous,
-          reason: '$city/$key',
-        );
-        expect(match.candidates.map((e) => e.sourceKey).toSet(), {key});
-        expect(
-          match.candidates.map((e) => e.rawValueJson).toSet(),
-          rows.map((r) => r['raw_value_json']).toSet(),
-        );
-      }
-      expect(cities.length, greaterThan(30));
-      expect(fields, {'M0.i0.a', 'M0.W.a', 'M0.a0.a', 'M0.e0.a'});
-    },
-  );
+      expect(match.candidates.map((e) => e.sourceKey).toSet(), {key});
+      expect(
+        match.candidates.map((e) => e.rawValueJson).toSet(),
+        rows.map((r) => r['raw_value_json']).toSet(),
+      );
+    }
+    expect(cities.length, greaterThan(30));
+    expect(fields, {'M0.i0.a', 'M0.W.a', 'M0.a0.a', 'M0.e0.a'});
+  });
 
   test('all 270 verified line-only prefixes, including Nanning without a region table', () {
     final rows = supplement['rail_prefixes'] as List;

@@ -24,6 +24,8 @@ class SettingsController extends OwnedNotifier {
 
   bool get loggingEnabled => _values[SettingsKeys.loggingEnabled] ?? false;
   bool get autoSaveEnabled => _values[SettingsKeys.autoSaveEnabled] ?? false;
+  bool get includeShanghaiOverdraft =>
+      _values[SettingsKeys.includeShanghaiOverdraft] ?? false;
   bool get monetEnabled => _values[SettingsKeys.monetEnabled] ?? true;
 
   Future<bool> openFeedbackEmail(String address) async {
@@ -63,6 +65,7 @@ class SettingsController extends OwnedNotifier {
     for (final key in [
       SettingsKeys.loggingEnabled,
       SettingsKeys.autoSaveEnabled,
+      SettingsKeys.includeShanghaiOverdraft,
       SettingsKeys.monetEnabled,
     ]) {
       final revision = _revisions[key] ?? 0;
@@ -95,6 +98,8 @@ class SettingsController extends OwnedNotifier {
 
   Future<void> setAutoSaveEnabled(bool value) =>
       _set(SettingsKeys.autoSaveEnabled, value);
+  Future<void> setIncludeShanghaiOverdraft(bool value) =>
+      _set(SettingsKeys.includeShanghaiOverdraft, value);
   Future<void> setMonetEnabled(bool value) =>
       _set(SettingsKeys.monetEnabled, value);
 

@@ -1,5 +1,10 @@
 # Offline reference data tooling
 
+Developer-maintained TU city databases use the tracked offline publisher
+documented in [CITY_DATABASE_UPDATE.md](CITY_DATABASE_UPDATE.md). Station records
+remain in each existing city table. The former shared community table and its
+importer have been removed; CU is restored to its preceding published package.
+
 The Python standard-library CLI builds TU and CU independently usable SQLite
 assets from frozen local inputs. It performs no network requests and invokes no
 Flutter, Gradle, Android, emulator, device, or test commands. Python 3.11 or newer
@@ -19,7 +24,8 @@ Outputs retain the runtime asset names:
 * `assets/data/reference_manifest.json`
 
 Each package preserves every original table, row, index, view, raw identifier,
-source field and `PRAGMA user_version`. The build appends only these two tables:
+source field and `PRAGMA user_version`. The baseline build appends these two
+publication tables; current developer city updates retain this structure:
 
 ```sql
 CREATE TABLE reference_package(key TEXT PRIMARY KEY,value TEXT NOT NULL);

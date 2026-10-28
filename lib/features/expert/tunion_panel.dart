@@ -68,11 +68,17 @@ class TunionPanel extends StatelessWidget {
       ExpertField('卡种类型', expertValue(info.cardKind)),
       ExpertField(
         '余额',
-        balance.semantics == BalanceSemantics.direct
-            ? wallet?.balanceText ?? '未知'
+        balance.semantics == BalanceSemantics.direct ||
+                values.balanceDisplay.isCityUnionBalance
+            ? values.balanceDisplay.formatBalance(
+                    wallet?.balanceFen,
+                    symbol: values.currency.symbol,
+                  ) ??
+                  '未知'
             : balance.accountBalanceText,
       ),
       if (balance.semantics != BalanceSemantics.direct &&
+          !values.balanceDisplay.isCityUnionBalance &&
           balance.observedBalanceText != null)
         ExpertField(balance.observationLabel, balance.observedBalanceText!),
       ExpertField('剩余有效天数', daysRemainingText(wallet?.daysRemaining)),

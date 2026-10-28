@@ -17,6 +17,12 @@ abstract interface class TuLookupDataSource {
   List<TuLookupValue> railHistory(String key);
 }
 
+/// Optional access to the original rail rows inside each city table.
+/// These remain city-owned source keys, not a shared supplemental namespace.
+abstract interface class TuCityRailFieldSource {
+  Iterable<StationCodeEntry> cityRailFieldCandidates(String city);
+}
+
 class TuLookupValue {
   final String sourceField;
   final String sourceKey;
@@ -62,12 +68,20 @@ class TuLookupService {
     );
     if (source.queryIssue != null) return StationMatch.unavailable;
     if (rows.isEmpty) return _miss;
+    return _datedRailMatch(rows, normalized, time);
+  }
+
+  StationMatch _datedRailMatch(
+    List<StationCodeEntry> rows,
+    String key,
+    DateTime? time,
+  ) {
     final evidence = <StationMatchEvidence>[];
     var candidates = rows;
     if (time != null) {
       // The history prefix is selected against the entire input, independently
       // of the base key length, as in the original nested prefix search.
-      final history = source.railHistory(normalized);
+      final history = source.railHistory(key);
       if (source.queryIssue != null) return StationMatch.unavailable;
       if (history.isNotEmpty) {
         final longest = history
@@ -150,6 +164,80 @@ class TuLookupService {
   }
 
   StationMatch resolveCycle({
+    required String? city,
+    required String field,
+    String? terminalId,
+    DateTime? time,
+    required int? appType,
+  }) {
+    final original = _resolveCycleNative(
+      city: city,
+      field: field,
+      terminalId: terminalId,
+      time: time,
+      appType: appType,
+    );
+    final citySource = source;
+    final raw = field.toUpperCase();
+    if (appType != 1 ||
+        !_validCity(city) ||
+        !RegExp(r'^(?:[0-9A-F]{12}|[0-9A-F]{14})$').hasMatch(raw) ||
+        citySource is! TuCityRailFieldSource ||
+        original.confidence == StationMatchConfidence.ambiguous ||
+        original.confidence == StationMatchConfidence.unavailable ||
+        (original.stationName ?? '').trim().isNotEmpty) {
+      return original;
+    }
+    const railKinds = {'metro', 'tram', 'light_rail', 'intercity_rail'};
+    final originalKind = original.entry?.kind;
+    if (originalKind != null && !railKinds.contains(originalKind)) {
+      return original;
+    }
+    final cityCode = city!;
+    final pos = raw.substring(0, 12);
+    final full = '$cityCode$pos';
+    var longest = 0;
+    final candidates = <StationCodeEntry>[];
+    for (final row
+        in (citySource as TuCityRailFieldSource).cityRailFieldCandidates(
+          cityCode,
+        )) {
+      if (row.system != 'tu' || !railKinds.contains(row.kind)) continue;
+      final key = row.sourceKey ?? row.code;
+      // A city-prefixed key consumes four fewer position characters. Equal
+      // position prefixes retain all evidence, irrespective of spelling.
+      final prefixedLength = key.startsWith(cityCode) && full.startsWith(key)
+          ? key.length - cityCode.length
+          : 0;
+      final bareLength = pos.startsWith(key) ? key.length : 0;
+      final consumed = prefixedLength > bareLength
+          ? prefixedLength
+          : bareLength;
+      if (consumed < 4 || consumed > 12 || consumed < longest) continue;
+      if (consumed > longest) {
+        candidates.clear();
+        longest = consumed;
+      }
+      candidates.add(row);
+    }
+    if (source.queryIssue != null) return StationMatch.unavailable;
+    if (candidates.isEmpty) return original;
+    final extra = _datedRailMatch(candidates, full, time);
+    if (extra.confidence == StationMatchConfidence.unavailable) return extra;
+    final line = (original.lineName ?? '').trim();
+    if (line.isNotEmpty &&
+        extra.candidates.any((row) => (row.line ?? '').trim() != line)) {
+      return original;
+    }
+    return StationMatch(
+      extra.entry,
+      extra.confidence,
+      candidates: extra.candidates,
+      evidence: [...original.evidence, ...extra.evidence],
+    );
+  }
+
+  StationMatch _resolveCycleNative({
     required String? city,
     required String field,
     String? terminalId,

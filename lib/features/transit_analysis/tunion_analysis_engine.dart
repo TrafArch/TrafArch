@@ -250,7 +250,10 @@ class AnalysisEngine {
                           _lookupTerminalLineName(loc, identity, card)) ??
                 fallback?.lineCode ??
                 loc?.lineCode);
-      final resolvedStation = confidence == StationMatchConfidence.exact
+      // A line-only reference must not hide the original stop code.
+      final resolvedStation =
+          confidence == StationMatchConfidence.exact &&
+              (stationEntry?.station ?? '').trim().isNotEmpty
           ? stationEntry?.station
           : null;
       // 复合消费（0x09）配对命中时以行程状态短名（出站 / 进站 / 上车 /

@@ -62,6 +62,10 @@ TunionBusLocation resolveTunionBusLocation({
   final match = !exact.isUnmatched
       ? exact
       : _sourceBusPrefix(stations, cityCode, field) ?? exact;
+  if (match.confidence == StationMatchConfidence.ambiguous ||
+      match.confidence == StationMatchConfidence.unavailable) {
+    return TunionBusLocation(match: match);
+  }
   final fallbackAllowed = context.routeFallbackAllowed != false;
   final decoded = fallbackAllowed
       ? decodeBeijingBus(cityCode: cityCode, field: field)
@@ -92,7 +96,9 @@ TunionBusLocation resolveTunionBusLocation({
         : match.lineName ?? line,
     stationLabel: compatibility != null
         ? decoded?.stationLabel
-        : match.stationName ?? decoded?.stationLabel,
+        : (match.stationName ?? '').trim().isNotEmpty
+        ? match.stationName
+        : decoded?.stationLabel,
     match: match,
   );
 }

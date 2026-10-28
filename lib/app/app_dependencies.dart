@@ -6,6 +6,7 @@ import 'app_info.dart';
 import '../features/updates/update_service.dart';
 import '../features/transit_analysis/tunion_analysis_models.dart';
 import '../features/transit_analysis/cu_transaction_analysis.dart';
+import '../features/transit_analysis/shanghai_balance_display.dart';
 import '../protocols/transit/card_parser.dart';
 import '../features/reference_data/data/tunion_knowledge_base.dart';
 import '../features/reference_data/domain/city_union_knowledge_base.dart';
@@ -208,6 +209,12 @@ class AppDependencies extends OwnedNotifier {
   CjT331PublicInfo? get cityUnionPublicInfo => _view?.cityUnionPublicInfo;
   CityUnionCardInfo? get cityUnionCard => _view?.cityUnionCard;
   Currency get cardCurrency => _view?.cardCurrency ?? Currency.cny;
+  ShanghaiBalanceDisplay get balanceDisplay => ShanghaiBalanceDisplay.forCard(
+    includeShanghaiOverdraft: includeShanghaiOverdraft,
+    parserId: parsedCard?.parserId,
+    applicationId: parsedCard?.selectedAidHex,
+    currencyCode: cardCurrency.code,
+  );
   String? get cardCityCode => _view?.cardCityCode;
   bool isRemoteUse(String? code) => _view?.isRemoteUse(code) ?? false;
   CardAnalysisResult? get analysis => _view?.analysis;
@@ -219,6 +226,7 @@ class AppDependencies extends OwnedNotifier {
       : 'TU ${knowledgeBase!.tuStations?.stationCount ?? 0} 条 / CU ${knowledgeBase!.cuRepository?.totalEntryCount ?? 0} 条；'
             '${knowledgeBase!.loadIssues.isEmpty ? '本地数据已加载' : '部分数据不可用'}';
   bool get loggingEnabled => settings.loggingEnabled;
+  bool get includeShanghaiOverdraft => settings.includeShanghaiOverdraft;
   bool get exportingLog => diagnostics.exportingLog;
   String? get logExportMessage => diagnostics.logExportMessage;
   bool get logExportFailed => diagnostics.logExportFailed;
@@ -291,6 +299,8 @@ class AppDependencies extends OwnedNotifier {
       settings.setAutoSaveEnabled(enabled);
   Future<void> setMonetEnabled(bool enabled) =>
       settings.setMonetEnabled(enabled);
+  Future<void> setIncludeShanghaiOverdraft(bool enabled) =>
+      settings.setIncludeShanghaiOverdraft(enabled);
   Future<bool> openFeedbackEmail(String address) =>
       settings.openFeedbackEmail(address);
   Future<void> openPrivacyPolicy() => settings.openPrivacyPolicy();
