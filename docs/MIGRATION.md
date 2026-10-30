@@ -26,7 +26,13 @@ v1–v7 捕获仍按原规则读取，不以新钱包或合并后的行程列表
 
 外部 properties 使用 `storeFile/storePassword/keyAlias/keyPassword` 四个字段；其中相对 `storeFile` 以 properties 所在目录为基准，绝对路径保持原义。旧 `android/key.properties` 的相对路径仍以 `android/app` 为基准。已选择的配置缺失或无效时失败，不能静默改用 Debug 证书；`unsignedApk=true` 仍明确禁用签名。没有任何签名配置时保留作者原有 Debug 回退行为，不能将其当成开发者签名发布。
 
-密码不得出现在命令行参数、日志或文档中。构建后核验最终 APK 的签名证书、包名、显示名、实际 versionCode 和对齐；`repairBuild=true` 保持源码构建号不递增，使用时需核对应用内 `app_info.dart` 与 `pubspec.yaml` 一致。
+密码不得出现在命令行参数、日志或文档中。构建后核验最终 APK 的签名证书、包名、显示名、实际 versionCode 和对齐。
+
+## 每次打包自动递增构建号
+
+Debug / Profile / Release 的 APK / AAB 统一以 `pubspec.yaml` 中 `version: x.y.z+N` 的 N 为本次构建号，打包前同步到 `lib/app/app_info.dart`。生成安装包后，pubspec 将 N+1 预留给下一次打包，AppInfo 则保留已生成产物的实际构建号。`repairBuild=true` 同样自增；版本名称 x.y.z 未经发布指示不改变。
+
+常规 `flutter build apk`、`flutter build appbundle`、`flutter run`，以及完整名称的 Gradle assemble / bundle / package / install 模式入口均参与。一次调用多个打包任务只预留一次；普通测试、静态检查、任务查询和 `--dry-run` 不消耗构建号。打包任务不复用配置缓存，以确保每次同步正确版本。同一 checkout 内串行构建，每个产物分别核验实际版本码。
 
 ## 历史迁移验收记录
 

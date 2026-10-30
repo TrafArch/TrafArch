@@ -20,7 +20,7 @@ class TripEntryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (journey case final ticket?) {
-      return _JourneyTicket(journey: ticket, onTap: onTap);
+      return _JourneyTicket(journey: ticket, remote: remote, onTap: onTap);
     }
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
@@ -131,8 +131,13 @@ class TripEntryCard extends StatelessWidget {
 }
 
 class _JourneyTicket extends StatelessWidget {
-  const _JourneyTicket({required this.journey, required this.onTap});
+  const _JourneyTicket({
+    required this.journey,
+    required this.remote,
+    required this.onTap,
+  });
   final JourneyPresentation<TripEntryInfo> journey;
+  final bool remote;
   final VoidCallback onTap;
 
   @override
@@ -189,6 +194,10 @@ class _JourneyTicket extends StatelessWidget {
                       ),
                     ),
                   ),
+                  if (remote) ...[
+                    _TagBadge(text: '异地用卡', tertiary: true, scheme: scheme),
+                    const SizedBox(width: 4),
+                  ],
                   IconButton(
                     onPressed: onTap,
                     tooltip: '查看行程记录',

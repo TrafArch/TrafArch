@@ -129,6 +129,7 @@ void main() {
       expect(find.text('中国轻纺城'), findsOneWidget);
       expect(find.text('善贤'), findsOneWidget);
       expect(find.text('1小时31分钟'), findsOneWidget);
+      expect(find.text('异地用卡'), findsOneWidget);
       expect(find.byKey(const ValueKey('journey-arrow')), findsOneWidget);
       expect(tester.takeException(), isNull);
     },

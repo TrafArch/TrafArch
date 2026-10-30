@@ -38,7 +38,7 @@ python -X utf8 -m tools.reference_data validate  # 校验发布包与 manifest
 ## 文档与变更约定
 
 - `docs/` 下带日期的文件（如 `*_20261021.md`）是历史证据与交接记录，不随代码现状更新；描述当前架构的只有 `ARCHITECTURE.md`、`NATIVE_SESSION_CONTRACT.md`、`MIGRATION.md`、`REFERENCE_DATA_TOOLING.md`，代码与这些文档冲突时以代码为准并回写文档。
-- CHANGELOG 按日期分节、中文书写；新改动并入最新条目，未经指示不自行升版本号或开新日期节。
+- CHANGELOG 按日期分节、中文书写；新改动并入最新条目，不自行开新日期节。用户已要求每次构建自动递增构建号，见下方版本约束。
 
 ## Android 应用身份
 
@@ -49,7 +49,8 @@ python -X utf8 -m tools.reference_data validate  # 校验发布包与 manifest
 - applicationId 与旧正式包相同，安装按覆盖升级处理，不再与原应用并存；只有与旧包相同的签名证书才能升级，Debug 或其他密钥会因 `INSTALL_FAILED_UPDATE_INCOMPATIBLE` 失败，需先卸载旧应用，旧应用数据随之丢失。
 - Kotlin namespace 保持 `com.kajolno.TrafArch`，与 applicationId 同值，仅作为原生类命名空间。
 - Debug、Release 和验证构建都保持同一 applicationId；不得追加 `.repair` 等 applicationIdSuffix，也不得把显示名称改成 Alpha、“修复验证版”或其他名称。
-- 版本号按发布策略维护；验收前核验最终 APK 的实际 Android versionCode，不把源码构建号直接当作拆包后的版本码。
+- 用户在 2026-10-30 明确要求每次构建（包括测试构建及 repairBuild）版本号自增。Debug / Profile / Release 的 APK / AAB 统一使用 pubspec 当前构建号，生成安装包后自动预留下一号；本次产物内 AppInfo 保留本次号。不得再用 repairBuild 跳过自增。普通测试、静态检查与 dry-run 不递增；主版本名未经指示不改。
+- 验收前核验最终 APK 的实际 Android versionCode，不把源码构建号直接当作拆包后的版本码；串行生成多个安装包时，每次构建均使用不同构建号。
 - 后续测试与发布构建使用用户提供的开发者原签名，供覆盖安装；签名材料保存在仓库外，不复制入仓库、不打印密码，不使用 Debug 证书替代原签名。
 - 验收最终 APK 的清单，而非仅检查 Gradle 源码；在交付说明中记录显示名称、包名、Android 版本码和签名状态。
 

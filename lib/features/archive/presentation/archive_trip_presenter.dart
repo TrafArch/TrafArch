@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../../../shared/domain/remote_card_use.dart';
 import '../../../protocols/transit/tunion/tunion_models.dart';
 import '../../../protocols/transit/tunion/tunion_trip_matcher.dart';
 import '../../transit_analysis/tunion_record_context.dart';
@@ -704,13 +705,7 @@ class _ArchiveEvent {
   }
 
   String? get city => text(side == null ? 'cityCode' : '${side}CityCode');
-  bool get remote {
-    final home = record.cardCityCode?.trim().toUpperCase() ?? '';
-    final destination = city?.trim().toUpperCase() ?? '';
-    return home.replaceAll('0', '').isNotEmpty &&
-        destination.replaceAll('0', '').isNotEmpty &&
-        home != destination;
-  }
+  bool get remote => isRemoteCardUse(record.cardCityCode, city);
 
   String? timeText(String key) {
     final value = fields[key];
