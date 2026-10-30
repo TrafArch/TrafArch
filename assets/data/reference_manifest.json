@@ -81607,15 +81607,15 @@
       }
     },
     "TU": {
-      "bytes": 6074368,
+      "bytes": 6254592,
       "content_version": "54f0cdf46bb04e9114fbc5048011f7b05d1b2e4ad191444a75b30fe2848ffce5",
       "file": "TrafArch_Database_TU.sqlite",
-      "sha256": "17587bb3110d7b09220fad8e6fd121396b560fd3f1843da27efc093206f465e3",
+      "sha256": "fa585d815b8f29ec52183e71f783ffa3acd7eacf1ca74907c44f5150e7529deb",
       "tables": {
         "card_prefixes": 429,
         "issuer_city_codes": 347,
         "protocol_region_codes": 3224,
-        "record_provenance": 7658,
+        "record_provenance": 8004,
         "reference_documents": 6,
         "reference_package": 4,
         "region_10_transport_summary": 4,
@@ -81653,6 +81653,7 @@
         "region_40_transport_summary": 4,
         "region_41_transport_summary": 4,
         "region_42_transport_summary": 4,
+        "region_43_transport_summary": 4,
         "region_4_transport_summary": 4,
         "region_5_transport_summary": 4,
         "region_6_transport_summary": 4,
@@ -81660,7 +81661,7 @@
         "region_8_transport_summary": 4,
         "region_9_transport_summary": 4,
         "region_aliases": 46,
-        "region_code_info": 40,
+        "region_code_info": 41,
         "region_上海_2900": 1033,
         "region_东莞_6020": 40,
         "region_乌鲁木齐_8810": 21,
@@ -81686,9 +81687,10 @@
         "region_无锡_3020": 98,
         "region_昆明_7310": 114,
         "region_杭州_3310": 311,
+        "region_武汉_5210": 282,
         "region_沈阳_2210": 137,
         "region_洛阳_4930": 19,
-        "region_济南_4510": 48,
+        "region_济南_4510": 112,
         "region_深圳_5840": 326,
         "region_温州_3330": 41,
         "region_滁州_3750": 14,
@@ -81702,9 +81704,9 @@
         "region_金华_3380": 28,
         "region_长沙_5510": 217,
         "region_青岛_4520": 220,
-        "regions": 41,
-        "source_metadata": 44,
-        "source_regions": 42,
+        "regions": 42,
+        "source_metadata": 123,
+        "source_regions": 43,
         "supplemental_sources": 2
       }
     }
@@ -81856,5 +81858,14 @@
   ],
   "sqlite_version": "3.53.4",
   "tool_sha256": "5cbe962a2227602fbc3b668c885f4bb00edb9219dcc5358c637a14c22dcd0302",
-  "tool_version": "1.0.0"
+  "tool_version": "1.0.0",
+  "tu_manifest_sync": {
+    "city_records": 8004,
+    "database_bytes_preserved": true,
+    "origin": "User-updated TU asset; existing provenance retained; no physical-card verification",
+    "package_sha256": "fa585d815b8f29ec52183e71f783ffa3acd7eacf1ca74907c44f5150e7529deb",
+    "previous_manifest_sha256": "8cc3f696a391031c8033476d40fa91b4905afdfd2a3d16bbcba9a11ac5711bbd",
+    "previous_package_sha256": "17587bb3110d7b09220fad8e6fd121396b560fd3f1843da27efc093206f465e3",
+    "publisher_sha256": "56a76d0e50a13535064f804544df73d89edd663bac418517ffccfe642d70f384"
+  }
 }

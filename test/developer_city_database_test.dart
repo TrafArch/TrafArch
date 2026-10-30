@@ -117,7 +117,7 @@ void main() {
     () {
       expect(
         tu.select('SELECT COUNT(*) AS c FROM all_records').single['c'],
-        7658,
+        8004,
       );
       expect(
         tu.select('SELECT COUNT(*) AS c FROM "region_南京_3010"').single['c'],
@@ -133,30 +133,24 @@ void main() {
     },
   );
 
-  test(
-    'CU Jinan revision matches the approved package without withdrawn imports',
-    () {
-      expect(
-        sha256
-            .convert(
-              File('assets/data/TrafArch_Database_CU.sqlite').readAsBytesSync(),
-            )
-            .toString(),
-        '77ba3ad4310782f7625f7b1b1f87a7bc99fee2420cf9060477b614f1580c6ed3',
-      );
-      final manifest = jsonDecode(
-        File('assets/data/reference_manifest.json').readAsStringSync(),
-      ) as Map;
-      expect(
-        manifest.keys.where((k) => '$k'.startsWith('community_')),
-        isEmpty,
-      );
-      expect(
-        (manifest['sources'] as List).where(
-          (s) => '${s['id']}'.startsWith('tripreader_community_'),
-        ),
-        isEmpty,
-      );
-    },
-  );
+  test('TU synchronization preserves the approved CU Jinan package', () {
+    expect(
+      sha256
+          .convert(
+            File('assets/data/TrafArch_Database_CU.sqlite').readAsBytesSync(),
+          )
+          .toString(),
+      '77ba3ad4310782f7625f7b1b1f87a7bc99fee2420cf9060477b614f1580c6ed3',
+    );
+    final manifest = jsonDecode(
+      File('assets/data/reference_manifest.json').readAsStringSync(),
+    ) as Map;
+    expect(manifest.keys.where((k) => '$k'.startsWith('community_')), isEmpty);
+    expect(
+      (manifest['sources'] as List).where(
+        (s) => '${s['id']}'.startsWith('tripreader_community_'),
+      ),
+      isEmpty,
+    );
+  });
 }
