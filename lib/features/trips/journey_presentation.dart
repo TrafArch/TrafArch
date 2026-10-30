@@ -1,7 +1,7 @@
 import 'trip_filters.dart';
 
 /// A role established by record evidence, never by a zero or positive amount.
-enum JourneyEventRole { entry, exit, single, unknown }
+enum JourneyEventRole { entry, exit, single, unknown, fareAdjustment }
 
 enum JourneyState { completed, inProgress, single, incomplete }
 
@@ -92,6 +92,7 @@ class JourneyEvent<T> {
     this.amountText,
     this.balanceAfterText,
     this.confirmedBalanceFen,
+    this.walletDeltaFen,
     this.processBalance,
     this.seatLabel,
   });
@@ -116,6 +117,11 @@ class JourneyEvent<T> {
   /// Confirmed balance after this operation, excluding uninterpreted record balances.
   final String? balanceAfterText;
   final int? confirmedBalanceFen;
+
+  /// Signed effect of an explicitly identified 0x18 recharge/consume operation.
+  /// Unknown types remain null. Only confirmed same-capture balances may close
+  /// a local 1E interval; this is never an anchor for extending the 1E ledger.
+  final int? walletDeltaFen;
   final JourneyProcessBalanceEvidence? processBalance;
   final String? seatLabel;
 
@@ -135,6 +141,7 @@ class JourneyEvent<T> {
     amountText: amountText,
     balanceAfterText: balanceAfterText,
     confirmedBalanceFen: confirmedBalanceFen,
+    walletDeltaFen: walletDeltaFen,
     processBalance: processBalance,
     seatLabel: seatLabel,
   );
@@ -153,6 +160,7 @@ class JourneyPresentation<T> {
     this.end,
     this.duration,
     this.amountText,
+    this.fareAdjustmentAmountText,
     this.balanceAfterText,
     this.seatLabel,
   });
@@ -165,8 +173,13 @@ class JourneyPresentation<T> {
   final JourneyEndpoint? end;
   final Duration? duration;
   final String? amountText;
+  final String? fareAdjustmentAmountText;
   final String? balanceAfterText;
   final String? seatLabel;
+
+  /// A correction point is known, but the actual entry place/time is not.
+  bool get startsWithFareAdjustment =>
+      start != null && events.first.role == JourneyEventRole.fareAdjustment;
 
   /// Endpoint cities describe acceptance, independently of the issuing city.
   /// Unknown city placeholders do not establish a cross-city journey.
@@ -212,7 +225,8 @@ List<JourneyPresentation<T>> projectJourneys<T>(
     consumed.addAll([entryIndex, exitIndex]);
     final entry = source[entryIndex];
     final exit = source[exitIndex];
-    completedPairs.add((entry, exit));
+    final adjustment = entry.role == JourneyEventRole.fareAdjustment;
+    if (!adjustment) completedPairs.add((entry, exit));
     projected.add((
       entryIndex < exitIndex ? entryIndex : exitIndex,
       JourneyPresentation<T>(
@@ -228,11 +242,21 @@ List<JourneyPresentation<T>> projectJourneys<T>(
             : null,
         start: entry.endpoint,
         end: exit.endpoint,
-        duration: exit.endpoint.time!.difference(entry.endpoint.time!),
+        duration: adjustment
+            ? null
+            : exit.endpoint.time!.difference(entry.endpoint.time!),
         amountText: exit.amountText,
+        fareAdjustmentAmountText: adjustment ? entry.amountText : null,
         balanceAfterText:
             exit.balanceAfterText ??
-            _pairedProcessBalanceText(entry, exit, source, processSlotCounts),
+            (adjustment
+                ? null
+                : _pairedProcessBalanceText(
+                    entry,
+                    exit,
+                    source,
+                    processSlotCounts,
+                  )),
         seatLabel: _presentText(exit.seatLabel),
       ),
     ));
@@ -269,7 +293,7 @@ List<JourneyPresentation<T>> projectJourneys<T>(
         ambiguousApplication.contains(j)) {
       continue;
     }
-    final entryIndex = source[i].role == JourneyEventRole.entry ? i : j;
+    final entryIndex = _isJourneyStart(source[i].role) ? i : j;
     final exitIndex = entryIndex == i ? j : i;
     final entry = source[entryIndex];
     final exit = source[exitIndex];
@@ -302,6 +326,22 @@ List<JourneyPresentation<T>> projectJourneys<T>(
               processSlotCounts[(exit.scopeKey, batch, b)] == 1;
         });
     if (!consecutiveTransaction && !consecutiveProcess) {
+      continue;
+    }
+    if (entry.role == JourneyEventRole.fareAdjustment &&
+        (!_unambiguousAdjustment(entry, source) ||
+            entry.processPositions.entries.any((slot) {
+              final other = exit.processPositions[slot.key];
+              return other != null &&
+                  ((slot.value - other).abs() != 1 ||
+                      processSlotCounts[(
+                            entry.scopeKey,
+                            slot.key,
+                            slot.value,
+                          )] !=
+                          1 ||
+                      processSlotCounts[(exit.scopeKey, slot.key, other)] != 1);
+            }))) {
       continue;
     }
     final entryApplication = _presentText(entry.applicationRecordId);
@@ -495,6 +535,7 @@ JourneyEvent<T> _operationEvent<T>(List<JourneyEvent<T>> sides) {
     amountText: preferred.amountText ?? endpoint.amountText,
     balanceAfterText: preferred.balanceAfterText,
     confirmedBalanceFen: preferred.confirmedBalanceFen,
+    walletDeltaFen: preferred.walletDeltaFen,
     processBalance: processBalance,
     seatLabel: preferred.seatLabel ?? endpoint.seatLabel,
   );
@@ -586,7 +627,8 @@ bool _singleProcessDebitCloses<T>(
   for (final (entry, exit) in completedPairs) {
     final after = exit.processBalance;
     final end = exit.endpoint.time;
-    if (exit.role != JourneyEventRole.exit ||
+    if (entry.role != JourneyEventRole.entry ||
+        exit.role != JourneyEventRole.exit ||
         exit.scopeKey != event.scopeKey ||
         after == null ||
         !_validProcessBalance(after) ||
@@ -641,7 +683,8 @@ String? _pairedProcessBalanceText<T>(
 ) {
   final before = entry.processBalance;
   final after = exit.processBalance;
-  if (before == null ||
+  if (entry.role != JourneyEventRole.entry ||
+      before == null ||
       after == null ||
       !_validProcessBalance(before) ||
       !_validProcessBalance(after) ||
@@ -653,6 +696,8 @@ String? _pairedProcessBalanceText<T>(
   }
   final postFen = before.recordedFen - after.amountFen;
   if (postFen < 0 ||
+      (exit.confirmedBalanceFen != null &&
+          exit.confirmedBalanceFen != postFen) ||
       (after.recordedFen != postFen &&
           after.recordedFen != before.recordedFen)) {
     return null;
@@ -682,6 +727,20 @@ String? _pairedProcessBalanceText<T>(
     // Both halves independently explain the debit: this exit already contains
     // the post-fare value. Do not subtract the fare from it a second time.
     if (after.recordedFen == postFen) return after.format(postFen);
+
+    // A recharge need not write 1E. Use its independently confirmed 0x18
+    // balance only when the immediately newer physical 1E operation also has
+    // a confirmed 0x18 debit, and every intervening operation closes exactly.
+    if (_rechargeIntervalCloses(
+      exit,
+      source,
+      slotCounts,
+      batch,
+      exitSlot,
+      postFen,
+    )) {
+      return after.format(postFen);
+    }
 
     // Equal records alone cannot establish pre-fare semantics. Require the
     // immediately newer 1E operation to be a zero-debit entry with the expected
@@ -717,6 +776,87 @@ String? _pairedProcessBalanceText<T>(
   return null;
 }
 
+bool _rechargeIntervalCloses<T>(
+  JourneyEvent<T> exit,
+  List<JourneyEvent<T>> source,
+  Map<(String?, String, int), int> slotCounts,
+  String batch,
+  int exitSlot,
+  int postFen,
+) {
+  final end = exit.endpoint.time!;
+  for (final anchor in source) {
+    final evidence = anchor.processBalance;
+    final time = anchor.endpoint.time;
+    final confirmed = anchor.confirmedBalanceFen;
+    if (anchor.evidenceSource != JourneyEvidenceSource.transaction ||
+        (anchor.role != JourneyEventRole.single &&
+            anchor.role != JourneyEventRole.exit) ||
+        anchor.scopeKey != exit.scopeKey ||
+        _journeyCityCode(anchor.cityCode) == null ||
+        evidence == null ||
+        !_validProcessBalance(evidence) ||
+        evidence.amountFen <= 0 ||
+        confirmed == null ||
+        confirmed != evidence.recordedFen ||
+        anchor.walletDeltaFen != -evidence.amountFen ||
+        time == null ||
+        time.isUtc != end.isUtc ||
+        !time.isAfter(end) ||
+        !_validProcessSlot(anchor, evidence, batch, exitSlot - 1, slotCounts)) {
+      continue;
+    }
+    final recharges = <JourneyEvent<T>>[];
+    var blocked = false;
+    for (final other in source) {
+      if (identical(other, exit) || identical(other, anchor)) continue;
+      final otherTime = other.endpoint.time;
+      if (otherTime == null) {
+        if (other.scopeKey == exit.scopeKey &&
+            other.sourceIds.contains(batch)) {
+          blocked = true;
+          break;
+        }
+        continue;
+      }
+      if (otherTime.isBefore(end) || otherTime.isAfter(time)) continue;
+      final delta = other.walletDeltaFen;
+      if (otherTime.isUtc != end.isUtc ||
+          !otherTime.isAfter(end) ||
+          !otherTime.isBefore(time) ||
+          other.scopeKey != exit.scopeKey ||
+          !other.sourceIds.contains(batch) ||
+          other.evidenceSource != JourneyEvidenceSource.transaction ||
+          other.role != JourneyEventRole.unknown ||
+          other.processBalance != null ||
+          other.processPositions.isNotEmpty ||
+          delta == null ||
+          delta <= 0 ||
+          other.confirmedBalanceFen == null) {
+        blocked = true;
+        break;
+      }
+      recharges.add(other);
+    }
+    if (blocked) continue;
+    recharges.sort((a, b) => a.endpoint.time!.compareTo(b.endpoint.time!));
+    var running = postFen;
+    DateTime? previous;
+    for (final recharge in recharges) {
+      final rechargeTime = recharge.endpoint.time!;
+      if (previous == rechargeTime ||
+          running + recharge.walletDeltaFen! != recharge.confirmedBalanceFen) {
+        blocked = true;
+        break;
+      }
+      previous = rechargeTime;
+      running = recharge.confirmedBalanceFen!;
+    }
+    if (!blocked && running + anchor.walletDeltaFen! == confirmed) return true;
+  }
+  return false;
+}
+
 bool _balanceIntervalBlocked<T>(
   List<JourneyEvent<T>> source,
   JourneyEvent<T> start,
@@ -740,8 +880,10 @@ bool _validProcessBalance(JourneyProcessBalanceEvidence evidence) =>
     evidence.amountFen >= 0;
 
 bool _compatible<T>(JourneyEvent<T> entry, JourneyEvent<T> exit) {
-  if (entry.role != JourneyEventRole.entry ||
+  if (!_isJourneyStart(entry.role) ||
       exit.role != JourneyEventRole.exit ||
+      (entry.role == JourneyEventRole.fareAdjustment &&
+          entry.mode != TripModeFilter.rail) ||
       _presentText(entry.scopeKey) == null ||
       entry.scopeKey != exit.scopeKey ||
       entry.mode == TripModeFilter.other ||
@@ -767,6 +909,41 @@ bool _compatible<T>(JourneyEvent<T> entry, JourneyEvent<T> exit) {
   if (entry.mode == TripModeFilter.bus) {
     final line = _presentText(entry.endpoint.line);
     if (line == null || line != _presentText(exit.endpoint.line)) return false;
+  }
+  return true;
+}
+
+bool _isJourneyStart(JourneyEventRole role) =>
+    role == JourneyEventRole.entry || role == JourneyEventRole.fareAdjustment;
+
+/// A correction can supply the known point before an exit only when there is
+/// no open entry or competing correction. An earlier exit closes the previous
+/// journey. Unknown clocks cannot prove which side of this boundary they belong.
+bool _unambiguousAdjustment<T>(
+  JourneyEvent<T> adjustment,
+  List<JourneyEvent<T>> source,
+) {
+  final start = adjustment.endpoint.time!;
+  final earlier = <JourneyEvent<T>>[];
+  for (final other in source) {
+    if (identical(other, adjustment) ||
+        other.scopeKey != adjustment.scopeKey ||
+        other.mode != TripModeFilter.rail ||
+        !other.sourceIds.any(adjustment.sourceIds.contains)) {
+      continue;
+    }
+    final time = other.endpoint.time;
+    if (time == null) return false;
+    if (time.isUtc == start.isUtc &&
+        time.isBefore(start) &&
+        start.difference(time) <= const Duration(hours: 24)) {
+      earlier.add(other);
+    }
+  }
+  earlier.sort((a, b) => b.endpoint.time!.compareTo(a.endpoint.time!));
+  for (final other in earlier) {
+    if (other.role == JourneyEventRole.exit) return true;
+    if (_isJourneyStart(other.role)) return false;
   }
   return true;
 }

@@ -285,7 +285,10 @@ bool _sameArchiveOperation(
   JourneyEvent<TripEntryInfo> candidate,
 ) =>
     (event.role == JourneyEventRole.entry ||
-        event.role == JourneyEventRole.exit) &&
+        event.role == JourneyEventRole.exit ||
+        (event.role == JourneyEventRole.single &&
+            event.mode == TripModeFilter.bus) ||
+        event.role == JourneyEventRole.fareAdjustment) &&
     event.role == candidate.role &&
     event.mode == candidate.mode &&
     event.scopeKey != null &&
@@ -662,6 +665,7 @@ class _ArchiveEvent {
       confirmedBalanceFen: journeyBalanceAfterText == null
           ? null
           : archiveRecordBalanceFen(record),
+      walletDeltaFen: _walletDeltaFen,
       processBalance: processBalanceEvidence(processPositions),
       seatLabel: mode == TripModeFilter.rail
           ? journeySeatLabel(
@@ -672,6 +676,28 @@ class _ArchiveEvent {
             )
           : null,
     );
+  }
+
+  int? get _walletDeltaFen {
+    final amount = fields['amountFen'];
+    if (!transaction ||
+        journeyBalanceAfterText == null ||
+        fields['balanceAfterIsRecorded'] != false ||
+        record.sources.isEmpty ||
+        record.sources.any(
+          (source) =>
+              source.capturedParseVersion < kWalletAnchoredBalanceParseVersion,
+        ) ||
+        record.context.currencyCode != 'CNY' ||
+        record.context.minorUnitDigits != 2 ||
+        amount is! int ||
+        amount < 0) {
+      return null;
+    }
+    if (fields['consume'] == true) return -amount;
+    return fields['consume'] == false && text('typeName') == '充值'
+        ? amount
+        : null;
   }
 
   JourneyProcessBalanceEvidence? processBalanceEvidence(
@@ -935,7 +961,11 @@ JourneyEventRole? _archiveStatusRole(String? status, TripModeFilter mode) =>
         mode == TripModeFilter.bus
             ? JourneyEventRole.single
             : JourneyEventRole.unknown,
-      '充值' || '补票' => JourneyEventRole.unknown,
+      '补票' =>
+        mode == TripModeFilter.rail
+            ? JourneyEventRole.fareAdjustment
+            : JourneyEventRole.unknown,
+      '充值' => JourneyEventRole.unknown,
       _ => null,
     };
 
@@ -947,6 +977,8 @@ JourneyEventRole? _archiveProcessRole(
     : switch (process.typeCode) {
         1 || 3 => JourneyEventRole.entry,
         2 || 4 => JourneyEventRole.exit,
+        7 ||
+        8 when mode == TripModeFilter.rail => JourneyEventRole.fareAdjustment,
         5 || 6 when mode == TripModeFilter.bus => JourneyEventRole.single,
         _ => JourneyEventRole.unknown,
       };
