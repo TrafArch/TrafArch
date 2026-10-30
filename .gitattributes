@@ -2,3 +2,5 @@
 assets/data/reference_manifest.json text eol=lf
 test/fixtures/developer_tu_city_rows.json text eol=lf
 scripts/reference_data/*.py text eol=lf
+scripts/reference_data/inputs/*.csv text eol=lf
+scripts/reference_data/inputs/*.json text eol=lf

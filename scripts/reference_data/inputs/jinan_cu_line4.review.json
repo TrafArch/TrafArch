@@ -1,0 +1,686 @@
+{
+  "conflicts": [],
+  "diagnostics": [],
+  "format_version": 1,
+  "header": [
+    "City",
+    "Code",
+    "Type",
+    "Line",
+    "Station"
+  ],
+  "kind": "station_csv_review",
+  "mode": "city",
+  "priority": 500,
+  "protocol": "CU",
+  "publication": "Review artifact only; explicit protocol/table/rule mapping is required before adding a new frozen source revision.",
+  "raw_source_base64": "Q2l0eSxDb2RlLFR5cGUsTGluZSxTdGF0aW9uCjI1MDAsMDAwMDAwMDAwMDAwMDQwMSxtZXRybyw05Y+357q/LOesrOS4gOWMu+enkeWkp+WtpgoyNTAwLDAwMDAwMDAwMDAwMDA0MDIsbWV0cm8sNOWPt+e6vyzmmKXpo47mgqbliqjlhazlm60KMjUwMCwwMDAwMDAwMDAwMDAwNDAzLG1ldHJvLDTlj7fnur8s5rWO5Y2X6KW/56uZ6KW/5bm/5Zy6CjI1MDAsMDAwMDAwMDAwMDAwMDQwNCxtZXRybyw05Y+357q/LOWkp+adqAoyNTAwLDAwMDAwMDAwMDAwMDA0MDUsbWV0cm8sNOWPt+e6vyzohYrlsbHmsrPlhazlm60KMjUwMCwwMDAwMDAwMDAwMDAwNDA2LG1ldHJvLDTlj7fnur8s6IWK5bGxCjI1MDAsMDAwMDAwMDAwMDAwMDQwNyxtZXRybyw05Y+357q/LOauteW6lwoyNTAwLDAwMDAwMDAwMDAwMDA0MDgsbWV0cm8sNOWPt+e6vyzokKXluILooZcKMjUwMCwwMDAwMDAwMDAwMDAwNDA5LG1ldHJvLDTlj7fnur8s5Y2X6L6b5bqECjI1MDAsMDAwMDAwMDAwMDAwMDQxMCxtZXRybyw05Y+357q/LOS6lOmHjOeJjOWdigoyNTAwLDAwMDAwMDAwMDAwMDA0MTEsbWV0cm8sNOWPt+e6vyzlhavkuIDnq4vkuqTmoaUKMjUwMCwwMDAwMDAwMDAwMDAwNDEyLG1ldHJvLDTlj7fnur8s55yB5L2T6IKy5Lit5b+DCjI1MDAsMDAwMDAwMDAwMDAwMDQxMyxtZXRybyw05Y+357q/LOazieWfjuWFrOWbrQoyNTAwLDAwMDAwMDAwMDAwMDA0MTQsbWV0cm8sNOWPt+e6vyzljYPkvZvlsbEKMjUwMCwwMDAwMDAwMDAwMDAwNDE1LG1ldHJvLDTlj7fnur8s5bGx5biI5Lic6LevCjI1MDAsMDAwMDAwMDAwMDAwMDQxNixtZXRybyw05Y+357q/LOWxseWkp+i3r+WNl+WPowoyNTAwLDAwMDAwMDAwMDAwMDA0MTcsbWV0cm8sNOWPt+e6vyznh5XlsbHnq4vkuqTmoaUKMjUwMCwwMDAwMDAwMDAwMDAwNDE4LG1ldHJvLDTlj7fnur8s5rWG5rC05rOJ6LevCjI1MDAsMDAwMDAwMDAwMDAwMDQxOSxtZXRybyw05Y+357q/LOWxseS4nOWNmueJqemmhgoyNTAwLDAwMDAwMDAwMDAwMDA0MjAsbWV0cm8sNOWPt+e6vyzovazlsbHopb/ot6/vvIjkuIfosaHln47vvIkKMjUwMCwwMDAwMDAwMDAwMDAwNDIxLG1ldHJvLDTlj7fnur8s5aWl5L2T5Lit5b+DCjI1MDAsMDAwMDAwMDAwMDAwMDQyMixtZXRybyw05Y+357q/LOWlpeS9k+S4nOi3rwoyNTAwLDAwMDAwMDAwMDAwMDA0MjMsbWV0cm8sNOWPt+e6vyzoiJzms7Dlub/lnLoKMjUwMCwwMDAwMDAwMDAwMDAwNDI0LG1ldHJvLDTlj7fnur8s5rGJ5bOq6YeR6LC3CjI1MDAsMDAwMDAwMDAwMDAwMDQyNSxtZXRybyw05Y+357q/LOael+WutuW6hAoyNTAwLDAwMDAwMDAwMDAwMDA0MjYsbWV0cm8sNOWPt+e6vyzpu4Tph5HkuqfkuJrlm60KMjUwMCwwMDAwMDAwMDAwMDAwNDI3LG1ldHJvLDTlj7fnur8s5paH5peF5Z+OCjI1MDAsMDAwMDAwMDAwMDAwMDQyOCxtZXRybyw05Y+357q/LOmCouadkeeri+S6pOahpeilvwoyNTAwLDAwMDAwMDAwMDAwMDA0MjksbWV0cm8sNOWPt+e6vyzpgqLmnZHnq4vkuqTmoaXkuJwKMjUwMCwwMDAwMDAwMDAwMDAwNDMwLG1ldHJvLDTlj7fnur8s5ZSQ5Ya25YWs5ZutCjI1MDAsMDAwMDAwMDAwMDAwMDQzMSxtZXRybyw05Y+357q/LOWUkOWGtgoyNTAwLDAwMDAwMDAwMDAwMDA0MzIsbWV0cm8sNOWPt+e6vyzljobln47kuozkuK3llJDlhrbmoKHljLoKMjUwMCwwMDAwMDAwMDAwMDAwNDMzLG1ldHJvLDTlj7fnur8s5b2t5a625bqECg==",
+  "records": [
+    {
+      "line_name": "4号线",
+      "physical_line_end": 2,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000401",
+        "metro",
+        "4号线",
+        "第一医科大学"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000401\",\"metro\",\"4号线\",\"第一医科大学\"]",
+      "record": 1,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000401",
+      "station_name": "第一医科大学",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 3,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000402",
+        "metro",
+        "4号线",
+        "春风悦动公园"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000402\",\"metro\",\"4号线\",\"春风悦动公园\"]",
+      "record": 2,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000402",
+      "station_name": "春风悦动公园",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 4,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000403",
+        "metro",
+        "4号线",
+        "济南西站西广场"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000403\",\"metro\",\"4号线\",\"济南西站西广场\"]",
+      "record": 3,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000403",
+      "station_name": "济南西站西广场",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 5,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000404",
+        "metro",
+        "4号线",
+        "大杨"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000404\",\"metro\",\"4号线\",\"大杨\"]",
+      "record": 4,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000404",
+      "station_name": "大杨",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 6,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000405",
+        "metro",
+        "4号线",
+        "腊山河公园"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000405\",\"metro\",\"4号线\",\"腊山河公园\"]",
+      "record": 5,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000405",
+      "station_name": "腊山河公园",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 7,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000406",
+        "metro",
+        "4号线",
+        "腊山"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000406\",\"metro\",\"4号线\",\"腊山\"]",
+      "record": 6,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000406",
+      "station_name": "腊山",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 8,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000407",
+        "metro",
+        "4号线",
+        "段店"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000407\",\"metro\",\"4号线\",\"段店\"]",
+      "record": 7,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000407",
+      "station_name": "段店",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 9,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000408",
+        "metro",
+        "4号线",
+        "营市街"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000408\",\"metro\",\"4号线\",\"营市街\"]",
+      "record": 8,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000408",
+      "station_name": "营市街",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 10,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000409",
+        "metro",
+        "4号线",
+        "南辛庄"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000409\",\"metro\",\"4号线\",\"南辛庄\"]",
+      "record": 9,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000409",
+      "station_name": "南辛庄",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 11,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000410",
+        "metro",
+        "4号线",
+        "五里牌坊"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000410\",\"metro\",\"4号线\",\"五里牌坊\"]",
+      "record": 10,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000410",
+      "station_name": "五里牌坊",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 12,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000411",
+        "metro",
+        "4号线",
+        "八一立交桥"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000411\",\"metro\",\"4号线\",\"八一立交桥\"]",
+      "record": 11,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000411",
+      "station_name": "八一立交桥",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 13,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000412",
+        "metro",
+        "4号线",
+        "省体育中心"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000412\",\"metro\",\"4号线\",\"省体育中心\"]",
+      "record": 12,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000412",
+      "station_name": "省体育中心",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 14,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000413",
+        "metro",
+        "4号线",
+        "泉城公园"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000413\",\"metro\",\"4号线\",\"泉城公园\"]",
+      "record": 13,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000413",
+      "station_name": "泉城公园",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 15,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000414",
+        "metro",
+        "4号线",
+        "千佛山"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000414\",\"metro\",\"4号线\",\"千佛山\"]",
+      "record": 14,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000414",
+      "station_name": "千佛山",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 16,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000415",
+        "metro",
+        "4号线",
+        "山师东路"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000415\",\"metro\",\"4号线\",\"山师东路\"]",
+      "record": 15,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000415",
+      "station_name": "山师东路",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 17,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000416",
+        "metro",
+        "4号线",
+        "山大路南口"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000416\",\"metro\",\"4号线\",\"山大路南口\"]",
+      "record": 16,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000416",
+      "station_name": "山大路南口",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 18,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000417",
+        "metro",
+        "4号线",
+        "燕山立交桥"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000417\",\"metro\",\"4号线\",\"燕山立交桥\"]",
+      "record": 17,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000417",
+      "station_name": "燕山立交桥",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 19,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000418",
+        "metro",
+        "4号线",
+        "浆水泉路"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000418\",\"metro\",\"4号线\",\"浆水泉路\"]",
+      "record": 18,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000418",
+      "station_name": "浆水泉路",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 20,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000419",
+        "metro",
+        "4号线",
+        "山东博物馆"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000419\",\"metro\",\"4号线\",\"山东博物馆\"]",
+      "record": 19,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000419",
+      "station_name": "山东博物馆",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 21,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000420",
+        "metro",
+        "4号线",
+        "转山西路（万象城）"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000420\",\"metro\",\"4号线\",\"转山西路（万象城）\"]",
+      "record": 20,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000420",
+      "station_name": "转山西路（万象城）",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 22,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000421",
+        "metro",
+        "4号线",
+        "奥体中心"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000421\",\"metro\",\"4号线\",\"奥体中心\"]",
+      "record": 21,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000421",
+      "station_name": "奥体中心",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 23,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000422",
+        "metro",
+        "4号线",
+        "奥体东路"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000422\",\"metro\",\"4号线\",\"奥体东路\"]",
+      "record": 22,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000422",
+      "station_name": "奥体东路",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 24,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000423",
+        "metro",
+        "4号线",
+        "舜泰广场"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000423\",\"metro\",\"4号线\",\"舜泰广场\"]",
+      "record": 23,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000423",
+      "station_name": "舜泰广场",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 25,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000424",
+        "metro",
+        "4号线",
+        "汉峪金谷"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000424\",\"metro\",\"4号线\",\"汉峪金谷\"]",
+      "record": 24,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000424",
+      "station_name": "汉峪金谷",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 26,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000425",
+        "metro",
+        "4号线",
+        "林家庄"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000425\",\"metro\",\"4号线\",\"林家庄\"]",
+      "record": 25,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000425",
+      "station_name": "林家庄",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 27,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000426",
+        "metro",
+        "4号线",
+        "黄金产业园"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000426\",\"metro\",\"4号线\",\"黄金产业园\"]",
+      "record": 26,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000426",
+      "station_name": "黄金产业园",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 28,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000427",
+        "metro",
+        "4号线",
+        "文旅城"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000427\",\"metro\",\"4号线\",\"文旅城\"]",
+      "record": 27,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000427",
+      "station_name": "文旅城",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 29,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000428",
+        "metro",
+        "4号线",
+        "邢村立交桥西"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000428\",\"metro\",\"4号线\",\"邢村立交桥西\"]",
+      "record": 28,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000428",
+      "station_name": "邢村立交桥西",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 30,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000429",
+        "metro",
+        "4号线",
+        "邢村立交桥东"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000429\",\"metro\",\"4号线\",\"邢村立交桥东\"]",
+      "record": 29,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000429",
+      "station_name": "邢村立交桥东",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 31,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000430",
+        "metro",
+        "4号线",
+        "唐冶公园"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000430\",\"metro\",\"4号线\",\"唐冶公园\"]",
+      "record": 30,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000430",
+      "station_name": "唐冶公园",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 32,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000431",
+        "metro",
+        "4号线",
+        "唐冶"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000431\",\"metro\",\"4号线\",\"唐冶\"]",
+      "record": 31,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000431",
+      "station_name": "唐冶",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 33,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000432",
+        "metro",
+        "4号线",
+        "历城二中唐冶校区"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000432\",\"metro\",\"4号线\",\"历城二中唐冶校区\"]",
+      "record": 32,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000432",
+      "station_name": "历城二中唐冶校区",
+      "transport_type": "metro"
+    },
+    {
+      "line_name": "4号线",
+      "physical_line_end": 34,
+      "protocol": "CU",
+      "raw_cells": [
+        "2500",
+        "0000000000000433",
+        "metro",
+        "4号线",
+        "彭家庄"
+      ],
+      "raw_value_json": "[\"2500\",\"0000000000000433\",\"metro\",\"4号线\",\"彭家庄\"]",
+      "record": 33,
+      "region_code": "2500",
+      "source_field": "CITY",
+      "source_key": "0000000000000433",
+      "station_name": "彭家庄",
+      "transport_type": "metro"
+    }
+  ],
+  "selected_records": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33
+  ],
+  "source_bytes": 1684,
+  "source_id": "user-jinan-cu-line4-20261030",
+  "source_sha256": "ce3ca4ead3793dbca616ec2106df5d75522db35ab09ea492bdbc705d41d84d44",
+  "status": "ready_for_mapping"
+}

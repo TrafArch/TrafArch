@@ -34,6 +34,49 @@
     "sqlite_version": "3.50.4"
   },
   "format_version": 1,
+  "jinan_cu_line4_update": {
+    "baseline_manifest_sha256": "27cc04c6c828eefe634127e33d5b05c53e9897af9c1f5f348761946428ab45ca",
+    "bytes": 1684,
+    "file": "jinan_cu_line4.csv",
+    "id": "user-jinan-cu-line4-20261030",
+    "kind": "csv",
+    "match_mode": "exact",
+    "origin": "User screenshot station order and user-confirmed 16-digit 00000000000004xx codes; no physical-card verification",
+    "priority": 500,
+    "protocol": "CU",
+    "publisher_helpers_sha256": "c00995d7b4bff24df806d9ce25d6fc95545d85763877946a789a2796819d668d",
+    "publisher_sha256": "8c4b1394b1840d22d8b98ee0905b78701f9059e61de3986caac7722f3351a97f",
+    "review_sha256": "f6845683369dc846d8d7e36ff6fb67211fc5aaf31996d7d89c78f2721fc289e1",
+    "sha256": "ce3ca4ead3793dbca616ec2106df5d75522db35ab09ea492bdbc705d41d84d44",
+    "sqlite_version": "3.50.4",
+    "station_count": 33,
+    "table": "region_济南_2500",
+    "tu_bytes_preserved": true
+  },
+  "jinan_cu_lines238_update": {
+    "baseline_manifest_sha256": "fecbc53aeea08a48d93382f321b6b8c6f799a8c6c40da4901f1743e8b7e42fd9",
+    "bytes": 2494,
+    "file": "jinan_cu_lines238.csv",
+    "id": "user-jinan-cu-lines238-20261030",
+    "kind": "csv",
+    "lines": {
+      "2": 19,
+      "3": 19,
+      "8": 14
+    },
+    "match_mode": "exact",
+    "origin": "User screenshot station order and user-confirmed 16-digit zero-padded line/station codes; no physical-card verification",
+    "priority": 500,
+    "protocol": "CU",
+    "publisher_helpers_sha256": "c00995d7b4bff24df806d9ce25d6fc95545d85763877946a789a2796819d668d",
+    "publisher_sha256": "ef39586d725f343cda6d4ecc3607e56854579c2311342485a8cacac839fff67b",
+    "review_sha256": "d2cd50281c93a00576b0e2d433ab779356b80790400b76b59cba4c584896f6e2",
+    "sha256": "c79bdabcccba4751b704ec9dad3681cd443bfa79489f6fa5560b73d61df1acbc",
+    "sqlite_version": "3.50.4",
+    "station_count": 52,
+    "table": "region_济南_2500",
+    "tu_bytes_preserved": true
+  },
   "normalization": {
     "conflicts": [
       {
@@ -81528,10 +81571,10 @@
   },
   "packages": {
     "CU": {
-      "bytes": 5099520,
-      "content_version": "c0d8eb2c6db519cb0c0a0836794dd092a3019fe67609c84f3da333dd39039437",
+      "bytes": 5136384,
+      "content_version": "10ff12eea3619955c2ad298f1a13dd6b556f9bcd11c079ea2acf15f8129c84e4",
       "file": "TrafArch_Database_CU.sqlite",
-      "sha256": "accae2741cc8ddc5e518c14096be2131234da4c24a28ef0b0d58daf950c0e6d0",
+      "sha256": "77ba3ad4310782f7625f7b1b1f87a7bc99fee2420cf9060477b614f1580c6ed3",
       "tables": {
         "bus_routes": 13852,
         "cu_card_names": 36,
@@ -81553,12 +81596,13 @@
         "region_宁波_3150": 163,
         "region_成都_6100": 278,
         "region_杭州_3100": 311,
+        "region_济南_2500": 85,
         "region_深圳_5180": 295,
         "region_绍兴_3120": 51,
-        "regions": 7,
+        "regions": 8,
         "routes": 171,
-        "station_registry": 1732,
-        "terminal_index": 6111,
+        "station_registry": 1817,
+        "terminal_index": 6196,
         "unresolved_terminals": 3
       }
     },
@@ -81778,6 +81822,36 @@
       "priority": 500,
       "protocol": "TU",
       "sha256": "f99bbc1d9129eb18d01c7754fbcb2c00aadd813dda3f83ba955375ca466b52e7"
+    },
+    {
+      "baseline_manifest_sha256": "27cc04c6c828eefe634127e33d5b05c53e9897af9c1f5f348761946428ab45ca",
+      "bytes": 1684,
+      "file": "jinan_cu_line4.csv",
+      "id": "user-jinan-cu-line4-20261030",
+      "kind": "csv",
+      "origin": "User screenshot station order and user-confirmed 16-digit 00000000000004xx codes; no physical-card verification",
+      "priority": 500,
+      "protocol": "CU",
+      "publisher_helpers_sha256": "c00995d7b4bff24df806d9ce25d6fc95545d85763877946a789a2796819d668d",
+      "publisher_sha256": "8c4b1394b1840d22d8b98ee0905b78701f9059e61de3986caac7722f3351a97f",
+      "review_sha256": "f6845683369dc846d8d7e36ff6fb67211fc5aaf31996d7d89c78f2721fc289e1",
+      "sha256": "ce3ca4ead3793dbca616ec2106df5d75522db35ab09ea492bdbc705d41d84d44",
+      "sqlite_version": "3.50.4"
+    },
+    {
+      "baseline_manifest_sha256": "fecbc53aeea08a48d93382f321b6b8c6f799a8c6c40da4901f1743e8b7e42fd9",
+      "bytes": 2494,
+      "file": "jinan_cu_lines238.csv",
+      "id": "user-jinan-cu-lines238-20261030",
+      "kind": "csv",
+      "origin": "User screenshot station order and user-confirmed 16-digit zero-padded line/station codes; no physical-card verification",
+      "priority": 500,
+      "protocol": "CU",
+      "publisher_helpers_sha256": "c00995d7b4bff24df806d9ce25d6fc95545d85763877946a789a2796819d668d",
+      "publisher_sha256": "ef39586d725f343cda6d4ecc3607e56854579c2311342485a8cacac839fff67b",
+      "review_sha256": "d2cd50281c93a00576b0e2d433ab779356b80790400b76b59cba4c584896f6e2",
+      "sha256": "c79bdabcccba4751b704ec9dad3681cd443bfa79489f6fa5560b73d61df1acbc",
+      "sqlite_version": "3.50.4"
     }
   ],
   "sqlite_version": "3.53.4",

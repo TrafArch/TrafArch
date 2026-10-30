@@ -133,24 +133,30 @@ void main() {
     },
   );
 
-  test('CU is restored byte for byte to the preceding published package', () {
-    expect(
-      sha256
-          .convert(
-            File('assets/data/TrafArch_Database_CU.sqlite').readAsBytesSync(),
-          )
-          .toString(),
-      'accae2741cc8ddc5e518c14096be2131234da4c24a28ef0b0d58daf950c0e6d0',
-    );
-    final manifest = jsonDecode(
-      File('assets/data/reference_manifest.json').readAsStringSync(),
-    ) as Map;
-    expect(manifest.keys.where((k) => '$k'.startsWith('community_')), isEmpty);
-    expect(
-      (manifest['sources'] as List).where(
-        (s) => '${s['id']}'.startsWith('tripreader_community_'),
-      ),
-      isEmpty,
-    );
-  });
+  test(
+    'CU Jinan revision matches the approved package without withdrawn imports',
+    () {
+      expect(
+        sha256
+            .convert(
+              File('assets/data/TrafArch_Database_CU.sqlite').readAsBytesSync(),
+            )
+            .toString(),
+        '77ba3ad4310782f7625f7b1b1f87a7bc99fee2420cf9060477b614f1580c6ed3',
+      );
+      final manifest = jsonDecode(
+        File('assets/data/reference_manifest.json').readAsStringSync(),
+      ) as Map;
+      expect(
+        manifest.keys.where((k) => '$k'.startsWith('community_')),
+        isEmpty,
+      );
+      expect(
+        (manifest['sources'] as List).where(
+          (s) => '${s['id']}'.startsWith('tripreader_community_'),
+        ),
+        isEmpty,
+      );
+    },
+  );
 }
