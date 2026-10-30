@@ -169,7 +169,31 @@ void main() {
       );
       expect(find.text('杭州$title'), findsOneWidget);
       expect(find.text(title), findsNothing);
+      final badge = find.text('异地用卡');
+      final menu = find.byTooltip('查看行程记录');
+      expect(badge, findsOneWidget);
+      expect(
+        tester.getRect(badge).left,
+        greaterThan(tester.getRect(find.text('杭州$title')).right),
+      );
+      expect(tester.getRect(badge).right, lessThan(tester.getRect(menu).left));
+      expect(
+        tester.getCenter(badge).dy,
+        closeTo(tester.getCenter(menu).dy, 0.5),
+      );
     });
+
+    testWidgets('本地$title行程不显示异地标识', (tester) async {
+      await _show(tester, _journey(mode: mode));
+      expect(find.text('异地用卡'), findsNothing);
+    });
+
+    for (final state in [JourneyState.inProgress, JourneyState.single]) {
+      testWidgets('异地$title的$state行程也显示标识', (tester) async {
+        await _show(tester, _journey(mode: mode, state: state), remote: true);
+        expect(find.text('异地用卡'), findsOneWidget);
+      });
+    }
   }
   for (final unknown in ['', '0000', 'ffff', '0F0F']) {
     testWidgets('未知城市$unknown不构成跨城标题证据', (tester) async {
@@ -209,8 +233,10 @@ void main() {
       size: const Size(320, 1000),
       scale: 2,
       brightness: Brightness.dark,
+      remote: true,
     );
     expect(tester.takeException(), isNull);
     expect(find.text('沙河'), findsOneWidget);
+    expect(find.text('异地用卡'), findsOneWidget);
   });
 }

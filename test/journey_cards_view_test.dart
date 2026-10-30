@@ -19,6 +19,7 @@ TripCardPresentation<TripSourceFilter> event({
   required JourneyEventRole role,
   String city = '北京',
   String code = '1000',
+  bool remote = false,
   TripModeFilter mode = TripModeFilter.rail,
   String? amount,
   String? balance,
@@ -39,7 +40,7 @@ TripCardPresentation<TripSourceFilter> event({
     source: source,
     mode: mode,
     dateText: '2026-10-27',
-    remote: false,
+    remote: remote,
     journeyEvent: JourneyEvent(
       payload: info,
       mode: mode,
@@ -79,6 +80,7 @@ List<TripCardPresentation<TripSourceFilter>> sample() => [
     role: JourneyEventRole.exit,
     amount: '-¥25.00',
     balance: '¥118.50',
+    remote: true,
   ),
   event(
     sequence: 42,
@@ -87,6 +89,7 @@ List<TripCardPresentation<TripSourceFilter>> sample() => [
     station: '3号航站楼',
     role: JourneyEventRole.entry,
     amount: '-¥0.00',
+    remote: true,
   ),
   event(
     sequence: 40,
@@ -99,6 +102,7 @@ List<TripCardPresentation<TripSourceFilter>> sample() => [
     mode: TripModeFilter.bus,
     amount: '-¥1.00',
     balance: '¥143.50',
+    remote: true,
   ),
   event(
     sequence: 38,
@@ -157,6 +161,36 @@ Future<void> pumpCards(
 }
 
 void main() {
+  testWidgets('跨城行程任一端异地只显示一个标识且更多菜单仍打开两端详情', (tester) async {
+    await pumpCards(tester, [
+      event(
+        sequence: 43,
+        time: DateTime(2026, 10, 27, 12, 44),
+        line: '2号线',
+        station: '东直门',
+        role: JourneyEventRole.exit,
+        remote: false,
+      ),
+      event(
+        sequence: 42,
+        time: DateTime(2026, 10, 27, 12, 7),
+        line: '1号线',
+        station: '起点',
+        city: '异地',
+        code: '2900',
+        role: JourneyEventRole.entry,
+        remote: true,
+      ),
+    ]);
+    expect(find.byType(TripEntryCard), findsOneWidget);
+    expect(find.text('轨道交通'), findsOneWidget);
+    expect(find.text('异地用卡'), findsOneWidget);
+    await tester.tap(find.byTooltip('查看行程记录'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('序号 42'), findsOneWidget);
+    expect(find.textContaining('序号 43'), findsOneWidget);
+  });
+
   testWidgets('进出站原始余额一致时仍区分出站后的投影余额', (tester) async {
     await pumpCards(tester, [
       event(
@@ -250,6 +284,7 @@ void main() {
       expect(find.text('站点17'), findsOneWidget);
       expect(find.text('站点29'), findsOneWidget);
       expect(find.text('27分钟'), findsOneWidget);
+      expect(find.text('异地用卡'), findsNWidgets(2));
       expect(tester.takeException(), isNull);
       if (output != null) {
         await tester.runAsync(() async {

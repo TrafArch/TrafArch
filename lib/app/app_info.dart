@@ -1,4 +1,4 @@
-/// 应用元信息，version/buildNumber 与 pubspec.yaml 的 version 字段保持同步。
+/// 应用元信息；打包前从 pubspec.yaml 同步本次版本，打包后 pubspec 预留下次构建号。
 class AppInfo {
   AppInfo._();
 
@@ -11,8 +11,13 @@ class AppInfo {
   /// 当前展示用应用名称：中文名留空时回退为英文名。
   static String get appName => appNameZh.isEmpty ? appNameEn : appNameZh;
 
+<<<<<<< HEAD
+  static const String version = '1.0.1-alpha';
+  static const String buildNumber = '2104';
+=======
   static const String version = '1.0.2-beta.1';
   static const String buildNumber = '2105';
+>>>>>>> 00e1a51a0bb304c03ddeaaa7da380475cb57e4ea
   static const String author = 'kajolno';
   static const String copyright = '© 2026 kajolno';
 }

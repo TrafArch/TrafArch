@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../../../shared/domain/remote_card_use.dart';
 import '../../transit_analysis/tunion_analysis_models.dart';
 import '../../reference_data/domain/station_codes.dart';
 import '../../reference_data/domain/tunion_terminal_decoder.dart';
@@ -101,17 +102,7 @@ class CardSessionSnapshot {
       rawEvidence.isEmpty;
 
   /// [code] 是否与卡片城市不同（异地用卡判定，不可判定时不判定）。
-  bool isRemoteUse(String? code) {
-    final local = cardCityCode;
-    if (local == null || code == null) return false;
-    final a = local.trim().toUpperCase();
-    final b = code.trim().toUpperCase();
-    if (_isUnsetCityCode(a) || _isUnsetCityCode(b)) return false;
-    return a != b;
-  }
-
-  static bool _isUnsetCityCode(String code) =>
-      code.isEmpty || code.replaceAll('0', '').isEmpty;
+  bool isRemoteUse(String? code) => isRemoteCardUse(cardCityCode, code);
 
   /// New captures use v3. Decoded captures retain their original version/text.
   String encode() {
