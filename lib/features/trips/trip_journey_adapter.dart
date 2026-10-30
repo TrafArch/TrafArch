@@ -29,6 +29,7 @@ JourneyEvent<TripEntryInfo> describeJourneyEvent(
   String? decodedBusLine;
   String? balanceAfterText;
   int? confirmedBalanceFen;
+  int? walletDeltaFen;
   TUnionTripRecord? balanceProcess;
   int? fareFen;
   var isConsume = false;
@@ -57,6 +58,13 @@ JourneyEvent<TripEntryInfo> describeJourneyEvent(
       if (trip.balanceAfterIsRecorded == false) {
         balanceAfterText = display.formatBalance(trip.balanceAfterFen);
         confirmedBalanceFen = trip.balanceAfterFen;
+        if (trip.amountFen >= 0 && trip.currency.code == 'CNY') {
+          walletDeltaFen = trip.isConsume
+              ? -trip.amountFen
+              : trip.typeName == '充值'
+              ? trip.amountFen
+              : null;
+        }
       }
       balanceProcess = process;
       station = mode == TripModeFilter.bus
@@ -202,6 +210,7 @@ JourneyEvent<TripEntryInfo> describeJourneyEvent(
     amountText: info.amountText,
     balanceAfterText: balanceAfterText,
     confirmedBalanceFen: confirmedBalanceFen,
+    walletDeltaFen: walletDeltaFen,
     processBalance:
         allowProcessBalance &&
             display.currency.code == 'CNY' &&
@@ -249,6 +258,8 @@ JourneyEventRole _processRole(TUnionTripRecord record, TripModeFilter mode) =>
     switch (record.typeCode) {
       0x01 || 0x03 => JourneyEventRole.entry,
       0x02 || 0x04 => JourneyEventRole.exit,
+      0x07 ||
+      0x08 when mode == TripModeFilter.rail => JourneyEventRole.fareAdjustment,
       0x05 || 0x06 when mode == TripModeFilter.bus => JourneyEventRole.single,
       _ => JourneyEventRole.unknown,
     };
@@ -261,7 +272,11 @@ JourneyEventRole? _statusRole(String? status, TripModeFilter mode) =>
         mode == TripModeFilter.bus
             ? JourneyEventRole.single
             : JourneyEventRole.unknown,
-      '充值' || '补票' => JourneyEventRole.unknown,
+      '补票' =>
+        mode == TripModeFilter.rail
+            ? JourneyEventRole.fareAdjustment
+            : JourneyEventRole.unknown,
+      '充值' => JourneyEventRole.unknown,
       _ => null,
     };
 

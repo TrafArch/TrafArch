@@ -199,6 +199,7 @@ class _TripCardsViewState<S extends Enum> extends State<TripCardsView<S>> {
                     end: journey.end,
                     duration: journey.duration,
                     amountText: journey.amountText,
+                    fareAdjustmentAmountText: journey.fareAdjustmentAmountText,
                     balanceAfterText: journey.balanceAfterText,
                     seatLabel: journey.seatLabel,
                   ),

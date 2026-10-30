@@ -53,6 +53,61 @@ void main() {
     directory.deleteSync(recursive: true);
   });
 
+  test(
+    'reported Hangzhou fare adjustment and Shaoxing exit form one journey',
+    () {
+      // Original 1E slots 2/3 from transit_card_log_20261030_181503.txt.
+      const hex = {
+        2: '040000413101908075010089001000000000000000000005DC20261030155834337003493370FFFFFFFF000000000000',
+        3: '080000413101984302010004001400000000000000000005DC20261030143450331001663310FFFFFFFF000000000000',
+      };
+      final records = [
+        for (final slot in hex.entries)
+          TUnionProcessRecord(
+            sfi: 0x1E,
+            recordNumber: slot.key,
+            recordName: '循环记录${slot.key}',
+            raw: _bytes(slot.value),
+            trip: const TUnionProcessParser().parseCycleTrip(
+              _bytes(slot.value),
+            ),
+          ),
+      ];
+      final positions = buildProcessJourneyPositions(records);
+      final display = _display(reference);
+      final events = [
+        for (final record in records)
+          describeJourneyEvent(
+            ProcessTripEntry(record.trip!),
+            display,
+            describeTripEntry(
+              ProcessTripEntry(record.trip!),
+              display,
+              remote: false,
+            ),
+            processPositions: positions[record.trip!]!,
+          ),
+      ];
+      final journeys = projectJourneys(events);
+      expect(journeys, hasLength(1));
+      final journey = journeys.single;
+      expect(journey.state, JourneyState.completed);
+      expect(journey.start?.station, '景芳');
+      expect(journey.start?.line, '4号线');
+      expect(journey.end?.station, '中国轻纺城');
+      expect(journey.end?.line, '1号线');
+      expect(journey.isCrossCity, isTrue);
+      expect(journey.duration, isNull);
+      expect(
+        journey.events.any((event) => event.role == JourneyEventRole.entry),
+        isFalse,
+      );
+      expect(journey.events.first.role.name, 'fareAdjustment');
+      expect(journey.balanceAfterText, isNull);
+      expect(records.last.trip!.rawHex, hex[3]);
+    },
+  );
+
   test('reported Shaoxing entry and Hangzhou exit form one live journey', () {
     final records = _reportedRecords();
     final positions = buildProcessJourneyPositions(records);

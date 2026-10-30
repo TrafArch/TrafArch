@@ -20,11 +20,13 @@ JourneyPresentation<TripEntryInfo> _journey({
   String cityCode = '1100',
   String? endCityCode,
   String line = '大兴机场线',
+  String? startStation = '草桥',
   String? seatLabel,
+  bool fareAdjustment = false,
 }) {
   final start = JourneyEndpoint(
     line: line,
-    station: '草桥',
+    station: startStation,
     time: DateTime(2026, 10, 26, 23, 55),
     timeText: '23:55',
   );
@@ -39,7 +41,9 @@ JourneyPresentation<TripEntryInfo> _journey({
       JourneyEvent(
         payload: _detail,
         mode: mode,
-        role: state != JourneyState.single
+        role: fareAdjustment
+            ? JourneyEventRole.fareAdjustment
+            : state != JourneyState.single
             ? JourneyEventRole.entry
             : JourneyEventRole.single,
         endpoint: start,
@@ -59,10 +63,11 @@ JourneyPresentation<TripEntryInfo> _journey({
     state: state,
     start: state == JourneyState.single ? null : start,
     end: state == JourneyState.completed ? end : null,
-    duration: state == JourneyState.completed
+    duration: state == JourneyState.completed && !fareAdjustment
         ? const Duration(minutes: 30)
         : null,
     amountText: state == JourneyState.inProgress ? null : '-¥7.00',
+    fareAdjustmentAmountText: fareAdjustment ? '-¥3.00' : null,
     balanceAfterText: '¥118.50',
     seatLabel: seatLabel,
   );
@@ -106,6 +111,60 @@ Future<void> _show(
 }
 
 void main() {
+  for (final scale in [1.0, 2.0]) {
+    testWidgets('补票行程在窄屏字体$scale下分别显示两笔金额及补票标签', (tester) async {
+      await _show(
+        tester,
+        _journey(fareAdjustment: true, line: '首都机场至城市副中心特别长的线路名称'),
+        size: const Size(320, 1100),
+        scale: scale,
+        remote: true,
+      );
+      expect(find.text('补票'), findsOneWidget);
+      _expectFareLabelAtStation(tester, '草桥');
+      expect(find.text('补票 -¥3.00'), findsOneWidget);
+      expect(find.text('出站 -¥7.00'), findsOneWidget);
+      expect(find.text('行程后余额 ¥118.50'), findsOneWidget);
+      expect(find.text('30分钟'), findsNothing);
+      final arrow = tester.getCenter(
+        find.byKey(const ValueKey('journey-arrow')),
+      );
+      expect(arrow.dy, closeTo(tester.getCenter(find.text('草桥')).dy, 0.5));
+      expect(arrow.dy, closeTo(tester.getCenter(find.text('沙河')).dy, 0.5));
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  for (final scale in [1.0, 2.0]) {
+    testWidgets('孤立补票卡片在窄屏字体$scale下于长站名右上角显示补票', (tester) async {
+      final event = _journey(
+        fareAdjustment: true,
+        startStation: '中国轻纺城',
+      ).events.first;
+      await _show(
+        tester,
+        projectJourneys([event]).single,
+        size: const Size(320, 1100),
+        scale: scale,
+      );
+      expect(find.text('补票'), findsOneWidget);
+      _expectFareLabelAtStation(tester, '中国轻纺城');
+      expect(find.byKey(const ValueKey('journey-arrow')), findsNothing);
+      expect(find.text('沙河'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('补票站点缺失时仍在占位站名右上角显示补票', (tester) async {
+    final event = _journey(
+      fareAdjustment: true,
+      startStation: null,
+    ).events.first;
+    await _show(tester, projectJourneys([event]).single);
+    _expectFareLabelAtStation(tester, '站点未记录');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('地铁名称不追加站且箭头与两端站名垂直居中对齐', (tester) async {
     await _show(tester, _journey());
     expect(find.text('草桥站'), findsNothing);
@@ -239,4 +298,17 @@ void main() {
     expect(find.text('沙河'), findsOneWidget);
     expect(find.text('异地用卡'), findsOneWidget);
   });
+}
+
+void _expectFareLabelAtStation(WidgetTester tester, String station) {
+  final stationFinder = find.text(station);
+  final labelFinder = find.text('补票');
+  final stationRect = tester.getRect(stationFinder);
+  final labelRect = tester.getRect(labelFinder);
+  expect(labelRect.left, greaterThan(stationRect.right));
+  expect(labelRect.center.dy, lessThan(stationRect.center.dy));
+  expect(
+    tester.widget<Text>(labelFinder).style!.fontSize,
+    lessThan(tester.widget<Text>(stationFinder).style!.fontSize!),
+  );
 }

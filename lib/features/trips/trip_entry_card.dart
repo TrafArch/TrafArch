@@ -212,6 +212,7 @@ class _JourneyTicket extends StatelessWidget {
                   start: start,
                   end: end,
                   duration: journey.duration,
+                  fareAdjustment: journey.startsWithFareAdjustment,
                 )
               else if (start != null)
                 _JourneyStop(endpoint: start, bus: bus)
@@ -229,9 +230,15 @@ class _JourneyTicket extends StatelessWidget {
                 ),
                 // Single-charge buses intentionally have no invented endpoints.
                 if (!(bus && journey.state == JourneyState.single)) ...[
-                  if (first.endpoint.station case final station?) ...[
+                  if (first.endpoint.station != null ||
+                      first.role == JourneyEventRole.fareAdjustment) ...[
                     const SizedBox(height: 6),
-                    Text(station, style: theme.textTheme.titleMedium),
+                    _JourneyStationLabel(
+                      station: first.endpoint.station ?? '站点未记录',
+                      style: theme.textTheme.titleMedium,
+                      fareAdjustment:
+                          first.role == JourneyEventRole.fareAdjustment,
+                    ),
                   ],
                   if (first.endpoint.timeText case final time?) ...[
                     const SizedBox(height: 6),
@@ -257,9 +264,13 @@ class _JourneyTicket extends StatelessWidget {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
+                          if (journey.fareAdjustmentAmountText case final fare?)
+                            Text('补票 $fare', style: theme.textTheme.bodySmall),
                           if (amount != null)
                             Text(
-                              amount,
+                              journey.startsWithFareAdjustment
+                                  ? '出站 $amount'
+                                  : amount,
                               style: theme.textTheme.bodyMedium?.copyWith(
                                 fontWeight: FontWeight.w600,
                               ),
@@ -327,10 +338,12 @@ class _JourneyEndpoints extends StatelessWidget {
     required this.start,
     required this.end,
     required this.duration,
+    this.fareAdjustment = false,
   });
   final JourneyEndpoint start;
   final JourneyEndpoint end;
   final Duration? duration;
+  final bool fareAdjustment;
 
   @override
   Widget build(BuildContext context) {
@@ -366,7 +379,11 @@ class _JourneyEndpoints extends StatelessWidget {
         gap(5),
         TableRow(
           children: [
-            label(start.station ?? '站点未记录', stationStyle),
+            _JourneyStationLabel(
+              station: start.station ?? '站点未记录',
+              style: stationStyle,
+              fareAdjustment: fareAdjustment,
+            ),
             const _JourneyArrow(duration: null),
             label(end.station ?? '站点未记录', stationStyle, right: true),
           ],
@@ -382,6 +399,42 @@ class _JourneyEndpoints extends StatelessWidget {
               right: true,
             ),
           ],
+        ),
+      ],
+    );
+  }
+}
+
+class _JourneyStationLabel extends StatelessWidget {
+  const _JourneyStationLabel({
+    required this.station,
+    required this.style,
+    this.fareAdjustment = false,
+  });
+
+  final String station;
+  final TextStyle? style;
+  final bool fareAdjustment;
+
+  @override
+  Widget build(BuildContext context) {
+    final stationText = Text(station, style: style);
+    if (!fareAdjustment) return stationText;
+    final theme = Theme.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Flexible(fit: FlexFit.loose, child: stationText),
+        const SizedBox(width: 4),
+        Text(
+          '补票',
+          maxLines: 1,
+          style: theme.textTheme.labelSmall?.copyWith(
+            fontSize: 11,
+            height: 1,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
         ),
       ],
     );
