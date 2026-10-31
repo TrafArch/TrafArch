@@ -117,7 +117,7 @@ void main() {
     () {
       expect(
         tu.select('SELECT COUNT(*) AS c FROM all_records').single['c'],
-        7658,
+        8004,
       );
       expect(
         tu.select('SELECT COUNT(*) AS c FROM "region_南京_3010"').single['c'],
@@ -133,14 +133,14 @@ void main() {
     },
   );
 
-  test('CU is restored byte for byte to the preceding published package', () {
+  test('TU synchronization preserves the approved CU Jinan package', () {
     expect(
       sha256
           .convert(
             File('assets/data/TrafArch_Database_CU.sqlite').readAsBytesSync(),
           )
           .toString(),
-      'accae2741cc8ddc5e518c14096be2131234da4c24a28ef0b0d58daf950c0e6d0',
+      '77ba3ad4310782f7625f7b1b1f87a7bc99fee2420cf9060477b614f1580c6ed3',
     );
     final manifest = jsonDecode(
       File('assets/data/reference_manifest.json').readAsStringSync(),

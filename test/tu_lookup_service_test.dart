@@ -105,6 +105,10 @@ void main() {
       "SELECT * FROM all_records WHERE source_field IN ('M0.i0.a','M0.W.a','M0.a0.a','M0.e0.a') "
       "AND substr(source_key,1,4)=region_code AND length(source_key)>4",
     )) {
+      if (row['source_field'] !=
+          StationCodeTable.tuRailSourceField(row['region_code'] as String)) {
+        continue;
+      }
       (groups['${row['region_code']}|${row['source_key']}'] ??= []).add(row);
     }
     final cities = <String>{};
@@ -139,6 +143,30 @@ void main() {
     expect(cities.length, greaterThan(30));
     expect(fields, {'M0.i0.a', 'M0.W.a', 'M0.a0.a', 'M0.e0.a'});
   });
+
+  test(
+    'Wuhan city fields retain their source without entering the native map',
+    () {
+      const key = '521000111131';
+      final records = repository.findStations(
+        regionCode: '5210',
+        sourceKey: key,
+      );
+      expect(records, hasLength(1));
+      expect(records.single.sourceField, 'M0.W.a');
+      expect(
+        lookup.resolveRailKey(city: '5210', key: '${key}FFFFFFFF').confidence,
+        StationMatchConfidence.unmatched,
+      );
+      final match = lookup.resolveCycle(
+        city: '5210',
+        field: '00111131000000',
+        appType: 1,
+      );
+      expect(match.confidence, StationMatchConfidence.unmatched);
+      expect(records.single.stationName, '江安路');
+    },
+  );
 
   test('all 270 verified line-only prefixes, including Nanning without a region table', () {
     final rows = supplement['rail_prefixes'] as List;

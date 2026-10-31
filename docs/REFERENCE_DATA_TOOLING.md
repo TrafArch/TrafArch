@@ -1,9 +1,73 @@
 # Offline reference data tooling
 
+## Jinan CU Lines 2/3/8 user revision (2026-10-30)
+
+The current CU revision adds 52 records to the existing `region_济南_2500`:
+
+| Line | Records | First code/station | Last code/station |
+|---|---:|---|---|
+| 2 | 19 | `0000000000000201` 王府庄 | `0000000000000219` 彭家庄 |
+| 3 | 19 | `0000000000000301` 龙洞 | `0000000000000319` 机场北(暂未开通) |
+| 8 | 14 | `0000000000000801` 邢村立交桥东 | `0000000000000814` 清源大街 |
+
+These names and ordering follow the three user screenshots and the same confirmed
+16-digit decimal code rule as Line 4. The last Line 3 record retains the screenshot's
+`暂未开通` label in both its name and raw source data; dictionary inclusion does not
+assert operation. Existing Line 4 IDs, codes, names and provenance remain intact.
+Jinan now has 85 records across four lines. Transfer stations retain separate
+line-specific codes. TU remains byte-identical; other-city freshness is not audited.
+
+Freeze the published packages and manifest **after** the initial Line 4 revision
+as a new baseline (locally `data/reference/sources/cu-before-jinan-lines238-20261030`).
+Do not replace or reuse the earlier pre-Line-4 baseline. Run:
+
+```powershell
+python -X utf8 -m tools.reference_data import-csv scripts/reference_data/inputs/jinan_cu_lines238.csv --protocol CU --source-id user-jinan-cu-lines238-20261030 --priority 500 --region 2500 --output scripts/reference_data/inputs/jinan_cu_lines238.review.json
+python -X utf8 scripts/reference_data/publish_jinan_cu.py --revision lines238 --baseline-dir C:\path\cu-before-jinan-lines238
+python -X utf8 scripts/reference_data/publish_jinan_cu.py --revision lines238 --baseline-dir C:\path\cu-before-jinan-lines238 --verify
+python -X utf8 -m unittest discover -s scripts/reference_data -p test_publish_jinan_cu.py -v
+```
+
+The CLI rejects an already imported baseline instead of overwriting existing
+codes. Verification rebuilds from the separate baseline without republishing.
+
+## Initial Jinan CU Line 4 user revision (2026-10-30)
+
+The initial Jinan CU publication added 33 stations in `region_济南_2500`, registered
+through `regions.table_name` and the existing `stations` / `station_lookup`
+views. Station order and names come from the user screenshot; the user confirmed
+16-digit zero-padded codes `0000000000000401` through `0000000000000433`,
+incremented in decimal. Match keys are exact and scoped to CU region `2500`.
+This is user-supplied data, without physical-card or other-city freshness claims.
+TU bytes and pre-existing CU business records remain unchanged.
+
+The original ignored CLI and frozen inputs can be recovered from Git commit
+`fafcfb6^` (`tools/` and `data/reference/`). These historical inputs predate the
+currently published data: **do not run their default build against assets/data**,
+as doing so would roll back later revisions. Recovery does not require downloading
+or recreating tools. The original `import-csv` produces a review artifact only;
+the tracked CU publisher implements its explicit mapping into the city schema:
+
+```powershell
+python -X utf8 -m tools.reference_data import-csv scripts/reference_data/inputs/jinan_cu_line4.csv --protocol CU --source-id user-jinan-cu-line4-20261030 --priority 500 --region 2500 --output scripts/reference_data/inputs/jinan_cu_line4.review.json
+python -X utf8 scripts/reference_data/publish_jinan_cu.py --baseline-dir C:\path\cu-before-jinan
+python -X utf8 scripts/reference_data/publish_jinan_cu.py --baseline-dir C:\path\cu-before-jinan --verify
+```
+
+Before publication freeze the then-current TU, CU and manifest together in the
+separate baseline directory. This local run uses the ignored directory
+`data/reference/sources/cu-before-jinan-20261030`. The publisher checks the CSV
+against the CLI review, baseline manifest hashes, row preservation, runtime view
+reachability, integrity, foreign keys and reproducible output; it updates only
+CU and the manifest, with rollback on publication failure. Manifest audit records
+pin the baseline, CSV, review, publisher and helper hashes. Other cities' data
+freshness is outside this update's scope.
+
 Developer-maintained TU city databases use the tracked offline publisher
 documented in [CITY_DATABASE_UPDATE.md](CITY_DATABASE_UPDATE.md). Station records
 remain in each existing city table. The former shared community table and its
-importer have been removed; CU is restored to its preceding published package.
+importer have been removed; the earlier CU restoration is the baseline for the
+Jinan revision described above.
 
 The Python standard-library CLI builds TU and CU independently usable SQLite
 assets from frozen local inputs. It performs no network requests and invokes no
