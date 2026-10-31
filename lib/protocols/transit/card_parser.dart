@@ -16,6 +16,11 @@ abstract final class CardParserIds {
   /// 不归入普通交通联合解析器（[tunion]）。
   static const String shanghaiTunion = 'shanghai_tunion';
 
+  static const String lingnanTong = 'lingnan_tong';
+  static const String lingnanTunion = 'lingnan_tunion';
+  static const String shenzhenTunion = 'shenzhen_tunion';
+  static const String beijingBmac = 'beijing_bmac';
+
   /// 城市一卡通（住建部 City Union，CJ/T 331-2016）。
   static const String cityUnion = 'city_union';
 
@@ -25,7 +30,10 @@ abstract final class CardParserIds {
   /// 是否属于交通联合（JT/T 978.2）家族：普通交通联合卡或上海交通卡
   /// （交通联合版）。分析链路与展示层按族级分派时使用。
   static bool isTUnionFamily(String? parserId) =>
-      parserId == tunion || parserId == shanghaiTunion;
+      parserId == tunion ||
+      parserId == shanghaiTunion ||
+      parserId == lingnanTunion ||
+      parserId == shenzhenTunion;
 }
 
 /// 统一卡片解析器接口。

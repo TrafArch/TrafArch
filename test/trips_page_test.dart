@@ -70,6 +70,8 @@ void main() {
   testWidgets('10条交易与30条1E全部展示保存，摘要不以交易数截断记录数', (tester) async {
     // 合成复现泉城通日志的容量差异；不包含用户卡号或真实行程。
     final channel = _FakeNfcChannel()
+      ..enqueue(0xA4, [0x6A, 0x82]) // 前置 APPY Case 4
+      ..enqueue(0xA4, [0x6A, 0x82]) // APPY 无 Le 兼容
       ..enqueue(0xA4, [0x6A, 0x82])
       ..enqueue(0xA4, [0x90, 0x00])
       ..enqueue(0xB0, _sw9000(_publicFile()))
@@ -1093,6 +1095,8 @@ class _FakeNfcChannel implements NfcChannel {
     List<int>? cycleRecord,
     List<int>? publicFile,
   }) {
+    enqueue(0xA4, const [0x6A, 0x82]); // 前置 APPY Case 4
+    enqueue(0xA4, const [0x6A, 0x82]); // APPY 无 Le 兼容
     enqueue(0xA4, const [0x90, 0x00]);
     enqueue(0xA4, _sw9000(const []));
     enqueue(0xB0, _sw9000(publicFile ?? _publicFile()));
