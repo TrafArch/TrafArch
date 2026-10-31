@@ -15,6 +15,7 @@ import '../../trips/trip_filters.dart';
 import '../application/archive_history.dart';
 import '../domain/archive_context.dart';
 import 'archive_record_presenter.dart';
+import 'archive_journey_merge.dart';
 
 const archiveTripSourceLabels = {
   ArchiveRecordKind.transaction: '0x18 交易',
@@ -32,26 +33,73 @@ class ArchiveTripProjection {
     required this.transactionCount,
     required this.processRecordCount,
     required this.mergedRecordCount,
+    this.journeys = const [],
   });
 
   final List<TripCardPresentation<ArchiveRecordKind>> entries;
   final int transactionCount;
   final int processRecordCount;
   final int mergedRecordCount;
+  final List<ArchiveJourney> journeys;
 
   String get summaryText =>
       '交易 $transactionCount 条 · 过程及应用记录 $processRecordCount 条'
       '${mergedRecordCount == 0 ? '' : '（$mergedRecordCount 条已并入 0x18 交易）'}';
 }
 
-/// Adapt the authoritative history, without re-merging records or looking up
-/// anything in a live scan/reference database. A 0x1A record has up to two UI
-/// events; both retain the complete record, captured context and attribution.
+/// Keep aggregate records/counts intact, but match journeys inside each original
+/// capture when batches are available. No live scan/reference lookup is used.
+/// Repeated presentations retain their individual captured details and sources.
 ArchiveTripProjection presentArchiveTrips(
   List<ArchiveHistoryRecord> records, {
   required void Function(ArchiveHistoryRecord) onDiagnostics,
+  List<ArchiveBatchEvidence> batches = const [],
   bool includeShanghaiOverdraft = true,
   String? cardType,
+}) {
+  final aggregate = _presentArchiveRecords(
+    records,
+    onDiagnostics: onDiagnostics,
+    includeShanghaiOverdraft: includeShanghaiOverdraft,
+    cardType: cardType,
+  );
+  if (batches.isEmpty) return aggregate;
+  final keys = <ArchiveJourneyEntry, Set<String>>{};
+  final captures = <ArchiveJourney>[];
+  for (final batch in batches) {
+    final projection = _presentArchiveRecords(
+      ArchiveHistory.projectRecords([batch], preserveOccurrences: true),
+      onDiagnostics: onDiagnostics,
+      includeShanghaiOverdraft: includeShanghaiOverdraft,
+      cardType: cardType,
+      onEvent: (entry, sources) {
+        keys[entry] = {
+          for (final source in sources)
+            ?archiveJourneyOperationKey(
+              source.record,
+              side: source.side,
+              event: source.journeyEvent(source.info),
+            ),
+        };
+      },
+    );
+    captures.addAll(projection.journeys);
+  }
+  return ArchiveTripProjection(
+    entries: aggregate.entries,
+    transactionCount: aggregate.transactionCount,
+    processRecordCount: aggregate.processRecordCount,
+    mergedRecordCount: aggregate.mergedRecordCount,
+    journeys: mergeArchiveJourneys(captures, keys),
+  );
+}
+
+ArchiveTripProjection _presentArchiveRecords(
+  List<ArchiveHistoryRecord> records, {
+  required void Function(ArchiveHistoryRecord) onDiagnostics,
+  required bool includeShanghaiOverdraft,
+  required String? cardType,
+  void Function(ArchiveJourneyEntry, List<_ArchiveEvent>)? onEvent,
 }) {
   _ArchiveEvent eventFor(ArchiveHistoryRecord record, {String? side}) {
     final display = record.context.minorUnitDigits != 2
@@ -159,15 +207,49 @@ ArchiveTripProjection presentArchiveTrips(
         batch.key: ?processPositions[batch.value]?[batch.key],
     });
   }
+  final entries = <ArchiveJourneyEntry>[];
+  for (final (_, event) in indexed) {
+    final entry = event.present(
+      onDiagnostics,
+      linkedApplicationId: applicationLinks[event.record],
+      processPositions: processPositions[event.record] ?? const {},
+    );
+    entries.add(entry);
+    if (onEvent != null) {
+      final witnesses = <_ArchiveEvent>[event];
+      final operation = entry.journeyEvent!;
+      for (final process
+          in transactionProcesses[event.record]?.values.toSet() ??
+              <ArchiveHistoryRecord>{}) {
+        witnesses.add(eventFor(process));
+      }
+      // Only exact, one-to-one links verified inside this capture may witness
+      // a hidden 1A side. POS-only display consumption is not identity proof.
+      final applicationId = applicationLinks[event.record];
+      if (applicationId != null) {
+        for (final application in records) {
+          if ((application.kind != ArchiveRecordKind.rail &&
+                  application.kind != ArchiveRecordKind.bus) ||
+              _archiveApplicationId(application) != applicationId) {
+            continue;
+          }
+          for (final side in ['entry', 'exit']) {
+            final witness = eventFor(application, side: side);
+            final candidate = witness.journeyEvent(witness.info);
+            if (_sameArchiveOperation(event, operation, witness, candidate)) {
+              witnesses.add(witness);
+            }
+          }
+        }
+      }
+      onEvent(entry, witnesses);
+    }
+  }
   return ArchiveTripProjection(
-    entries: [
-      for (final (_, event) in indexed)
-        event.present(
-          onDiagnostics,
-          linkedApplicationId: applicationLinks[event.record],
-          processPositions: processPositions[event.record] ?? const {},
-        ),
-    ],
+    entries: entries,
+    journeys: projectJourneys([
+      for (final entry in entries) entry.journeyEvent!.withPayload(entry),
+    ]),
     transactionCount: transactionCount,
     processRecordCount: processRecordCount,
     mergedRecordCount: mergedRecordCount,
