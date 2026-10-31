@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'expert_widgets.dart';
 import 'expert_formatters.dart';
 import '../../protocols/transit/card_parser.dart';
+import '../../protocols/transit/local/local_card_models.dart';
 import '../transit_analysis/tunion_analysis_models.dart';
 import '../transit_analysis/balance_interpretation.dart';
 import '../../protocols/transit/tunion/tunion_models.dart';
@@ -117,5 +118,60 @@ class TunionPanel extends StatelessWidget {
         CycleProcessPanel(records: cycleRecords, values: values),
       ],
     ];
+  }
+}
+
+/// LNT's native wallet records stay separate from the TU analysis projection.
+class LingnanTransactionPanel extends StatelessWidget {
+  const LingnanTransactionPanel({super.key, required this.result});
+
+  final ReadResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    final trips = result.trips;
+    final first = trips.firstOrNull;
+    final raw = first?.rawBody;
+    final sequence = raw != null && raw.length >= 2
+        ? ((raw[0] << 8) | raw[1]).toString()
+        : '未知';
+    final time = first?.timestamp;
+    String pad(int value) => value.toString().padLeft(2, '0');
+    final recent = time == null || time.millisecondsSinceEpoch == 0
+        ? '未知'
+        : '${time.year}-${pad(time.month)}-${pad(time.day)} '
+              '${pad(time.hour)}:${pad(time.minute)}（年份推断，秒未知）';
+    final type = first == null
+        ? '未知'
+        : switch (first.posType) {
+            0x02 => '充值',
+            0x06 => '消费',
+            0x09 => '复合消费',
+            final value =>
+              '0x${value.toRadixString(16).padLeft(2, '0').toUpperCase()}',
+          };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Divider(height: 32),
+        Text(
+          '岭南通交易',
+          style: Theme.of(context).textTheme.titleSmall
+              ?.copyWith(color: Theme.of(context).colorScheme.primary),
+        ),
+        const SizedBox(height: 4),
+        ExpertField('交易记录', '${trips.length} 条'),
+        ExpertField('最近交易', recent),
+        ExpertField(
+          '交易金额',
+          first == null
+              ? '未知'
+              : 'CNY ${(first.balanceDelta / 100).toStringAsFixed(2)}',
+        ),
+        ExpertField('交易类型', type),
+        ExpertField('交易序号', sequence),
+        ExpertField('终端编号', first?.terminalHex ?? '未知'),
+      ],
+    );
   }
 }

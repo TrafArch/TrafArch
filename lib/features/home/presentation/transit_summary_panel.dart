@@ -30,7 +30,10 @@ class TransitSummaryPanel extends StatelessWidget {
     final isTUnion = CardParserIds.isTUnionFamily(parsed?.parserId);
     final isCityUnion = parsed?.parserId == CardParserIds.cityUnion;
     final isShanghai = parsed?.parserId == CardParserIds.shanghaiTunion;
-    final isLocal = parsed?.parserId == CardParserIds.localCard;
+    final isLocal =
+        parsed?.parserId == CardParserIds.localCard ||
+        parsed?.parserId == CardParserIds.beijingBmac ||
+        parsed?.parserId == CardParserIds.lingnanTong;
     final local = parsed?.localCard;
     final info = parsed?.info;
     final publicInfo = app.cityUnionPublicInfo;
@@ -125,6 +128,22 @@ class TransitSummaryPanel extends StatelessWidget {
           '城市一卡通余额',
           '${(app.cityUnionBalanceFen! / 100).toStringAsFixed(2)} 元',
         ),
+      if (parsed?.parserId == CardParserIds.lingnanTunion) ...[
+        summaryField(
+          context,
+          '岭南通应用',
+          local?.info.isLNT == true ? '已确认' : '未确认',
+        ),
+        if (local?.info.cardNumber.isNotEmpty == true)
+          summaryField(context, '岭南通卡号', local!.info.cardNumber),
+        summaryField(
+          context,
+          '岭南通余额',
+          local?.info.observedBalance == null
+              ? '未读取到'
+              : '${(local!.info.observedBalance! / 100).toStringAsFixed(2)} 元',
+        ),
+      ],
       if (expireDate != null)
         summaryField(context, '有效期至', summaryDate(expireDate)),
       if (isCityUnion && publicInfo?.applicationExpiryDate != null)

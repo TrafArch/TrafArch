@@ -7,6 +7,7 @@ import '../../../protocols/transit/local/apdu_exchange.dart';
 import 'bank_card_probe.dart';
 import '../../../protocols/bank/domain/models/bank_card_result.dart';
 import '../../../protocols/transit/local/cards/beijing_local_card.dart';
+import '../../../protocols/transit/local/cards/beijing_bmac.dart';
 import '../../../protocols/transit/local/cards/common_card_info.dart';
 import '../../../protocols/transit/local/cards/macau_pass_card.dart';
 import '../../../protocols/transit/local/cards/shenzhentong.dart';
@@ -16,7 +17,7 @@ import '../../../protocols/transit/local/cards/suzhou_card.dart';
 import '../../../protocols/transit/local/cards/suzhou_cika.dart';
 import '../../../protocols/transit/local/cards/tft_local_card.dart';
 import '../../../protocols/transit/local/cards/wuhan_tong_card.dart';
-import '../../../protocols/transit/local/cards/yangchengtong.dart';
+import '../../../protocols/transit/local/cards/lingnan_tong.dart';
 import '../../../protocols/transit/local/local_card_models.dart';
 import '../../../protocols/transit/local/trips/trip_dedup.dart';
 import '../../../protocols/transit/local/trips/trip_extras.dart';
@@ -72,8 +73,10 @@ class LocalReadOutcome {
 
 /// 交通卡 / 银行卡统一识读编排主体（新模块为主）：按优先级串联各读法，
 /// 命中即返回。
-/// 0) [ShanghaiTransitUnionCardParser] 先读 TU，仅确认上海 TU 才读 CU，
-///    命中上海时返回合并结果；
+/// 0) 首次 APDU 只读选择 PAY.APPY（带 Le，状态拒绝可一次无 Le 兼容），
+///    确认后先读完 LNT 信息/统计/TICL/余额/交易，再探 TU，绝不切回 LNT；
+///    LNT 已确认时 TU 目标前缀合并双侧，否则保留地方结果，不再 CU/银行；
+/// 1) 非 LNT 由 [ShanghaiTransitUnionCardParser] 读 TU，仅上海 TU 才读 CU；
 /// 1) 普通 TU 复用已读结果直接返回，不探测 CU；
 /// 2) TU 无可返回结果时独立回退普通 CU，不冒认上海 TU、不重复探测；
 /// 3) 地方交通卡逐城市探测（武汉通 / 北京 / 羊城通 / 深圳通 /
@@ -135,22 +138,166 @@ class LocalCardReader {
     try {
       callback.onProgress(5);
 
-      // 1) 先读取 TU，上海 TU 确认后才探测 CU；复用产物避免二次读取。
+      // 0) APPY 必须是首次 APDU；先完整读取 LNT，再探 TU，绝不切回。
+      final lntInfo = CardInfo();
+      final lntRecords = <ApduRecord>[];
+      final lntExtras = CardExtras();
+      Object? lntError;
+      var appyConfirmed = false;
+      onStage?.call(LingnanTong.moduleName);
+      final lnt = LingnanTong(apdu);
+      try {
+        appyConfirmed = await lnt.selectAppy(lntRecords, lntExtras);
+        if (appyConfirmed) {
+          lntInfo.isLNT = lntInfo.isYCT = true;
+          await lnt.read(lntInfo, lntRecords, lntExtras);
+        }
+      } on Exception catch (e) {
+        lntError = e;
+        callback.onError(_mapError(e));
+      }
+      final local = ReadResult(
+        info: lntInfo,
+        records: lntRecords,
+        extras: lntExtras,
+        readError: lntError,
+        transportFailure: _transportFailureOf(lntError),
+      );
+      if (local.transportFailure?.stopsSession == true) {
+        if (appyConfirmed) return _localOutcome(local);
+        throw lntError!;
+      }
+
+      // 1) LNT 已确认时只探 TU，不混入上海 CU 或其他地方/银行读法。
       callback.onProgress(10);
       final shanghai = await ShanghaiTransitUnionCardParser(
         _transceive,
         onStage: onStage,
         onProgress: (p) => callback.onProgress(10 + (p * 40).round()),
-      ).read();
+      ).read(probeCu: !appyConfirmed);
       final tuCard = shanghai.tu.card;
       final cuCard = shanghai.cu.card;
 
-      if (shanghai.isShanghaiTransitUnion && shanghai.mergedCard != null) {
+      if (!appyConfirmed &&
+          shanghai.isShanghaiTransitUnion &&
+          shanghai.mergedCard != null) {
         callback.onProgress(95);
         return LocalReadOutcome.transit(
           readResult: shanghai.readResult,
           parsedCard: shanghai.mergedCard,
           shanghai: shanghai,
+        );
+      }
+
+      if (LingnanTong.matchesTuIdentity(
+        confirmed: shanghai.tu.confirmed,
+        cardNumber:
+            shanghai.tu.identity?.displayCardNumber ??
+            tuCard?.info.displayCardNumber,
+      )) {
+        final tuInfo = tuCard?.info ?? shanghai.tu.identity;
+        if (tuInfo != null) {
+          callback.onProgress(95);
+          return _outcome(
+            shanghai.tu.cardInfo,
+            shanghai.tu.records,
+            extras,
+            ParsedCard(
+              parserId: CardParserIds.lingnanTunion,
+              parserName: '岭南通（交通联合版）',
+              info: tuInfo,
+              transactions: tuCard?.transactions ?? const [],
+              transactionFileObserved: tuCard?.transactionFileObserved ?? false,
+              transitProcessRecords: tuCard?.transitProcessRecords ?? const [],
+              selectedAidHex: tuCard?.selectedAidHex ?? '',
+              localCard: local,
+            ),
+            readError: shanghai.tu.readError ?? lntError,
+          );
+        }
+      }
+
+      if (appyConfirmed) {
+        // TU 不匹配/不可用时保留地方钱包；TU 部分产物也留作诊断。
+        lntExtras.slots['lnt.tuConfirmed'] = shanghai.tu.confirmed;
+        lntExtras.slots['lnt.tuCard'] = tuCard == null
+            ? null
+            : {
+                'applicationSerial': tuCard.info.applicationSerial,
+                'balanceFen': tuCard.info.balanceFen,
+                'selectedAidHex': tuCard.selectedAidHex,
+              };
+        lntExtras.slots['lnt.tuRecords'] = [
+          for (final record in shanghai.tu.records)
+            {
+              'commandHex': record.commandHex,
+              'response': record.response,
+              'rawBody': record.rawBody,
+            },
+        ];
+        return _localOutcome(
+          ReadResult(
+            info: lntInfo,
+            records: lntRecords,
+            extras: lntExtras,
+            readError: shanghai.tu.readError ?? lntError,
+            transportFailure:
+                shanghai.tu.transportFailure ?? local.transportFailure,
+          ),
+        );
+      }
+
+      if (Shenzhentong.matchesTuIdentity(
+        confirmed: shanghai.tu.confirmed,
+        cardNumber:
+            shanghai.tu.identity?.displayCardNumber ??
+            tuCard?.info.displayCardNumber,
+      )) {
+        final tuInfo = tuCard?.info ?? shanghai.tu.identity!;
+        final sztInfo = CardInfo();
+        final sztRecords = <ApduRecord>[];
+        final sztExtras = CardExtras();
+        Object? sztError;
+        final tuFailure = shanghai.tu.transportFailure;
+        final shouldProbe = tuFailure?.stopsSession != true;
+        sztExtras.slots['szt.probed'] = shouldProbe;
+        sztExtras.slots['szt.confirmed'] = false;
+        if (shouldProbe) {
+          onStage?.call(Shenzhentong.moduleName);
+          final szt = Shenzhentong(apdu);
+          try {
+            if (await szt.select(sztInfo, sztRecords)) {
+              sztExtras.slots['szt.confirmed'] = true;
+              await szt.read(sztInfo, sztRecords);
+            }
+          } on Exception catch (e) {
+            sztError = e;
+            callback.onError(_mapError(e));
+          }
+        }
+        final sztResult = ReadResult(
+          info: sztInfo,
+          records: sztRecords,
+          extras: sztExtras,
+          readError: sztError,
+          transportFailure: _transportFailureOf(sztError),
+        );
+        callback.onProgress(95);
+        return _outcome(
+          shanghai.tu.cardInfo,
+          shanghai.tu.records,
+          extras,
+          ParsedCard(
+            parserId: CardParserIds.shenzhenTunion,
+            parserName: Shenzhentong.tuModuleName,
+            info: tuInfo,
+            transactions: tuCard?.transactions ?? const [],
+            transactionFileObserved: tuCard?.transactionFileObserved ?? false,
+            transitProcessRecords: tuCard?.transitProcessRecords ?? const [],
+            selectedAidHex: tuCard?.selectedAidHex ?? 'A000000632010105',
+            localCard: sztResult,
+          ),
+          readError: shanghai.tu.readError ?? sztError,
         );
       }
 
@@ -231,6 +378,17 @@ class LocalCardReader {
         return await _finishLocal(tripReader, info, records, extras);
       }
 
+      onStage?.call(BeijingBmac.moduleName);
+      final bmac = BeijingBmac(apdu);
+      if (await bmac.select(info, records, extras)) {
+        callback.onProgress(35);
+        await bmac.read(info, records, extras);
+        callback.onProgress(95);
+        return _localOutcome(
+          ReadResult(info: info, records: records, extras: extras),
+        );
+      }
+
       // 4) 北京地方卡探测
       if (await BeijingLocalCard(apdu).probe(info, records)) {
         info.isBeijing = true;
@@ -247,29 +405,19 @@ class LocalCardReader {
         return await _finishLocal(tripReader, info, records, extras);
       }
 
-      // 5) 羊城通 YCT (PAY.APPY -> m794k)
-      final yct = YangchengTong(apdu);
-      if (await yct.selectAppy(records)) {
-        info.isYCT = true;
+      final szt = Shenzhentong(apdu);
+      onStage?.call(Shenzhentong.moduleName);
+      if (await szt.select(info, records)) {
         callback.onProgress(35);
-        await yct.readInfoAndBalance(info, records);
-        callback.onProgress(50);
-        await extrasReader.readCommon(info, records, extras); // m790f
-        callback.onProgress(65);
-        await tripReader.readFile(
-          info,
-          records,
-          extras,
-          TripFile.metro,
-        ); // m789e 196
-        callback.onProgress(80);
-        return await _finishLocal(tripReader, info, records, extras);
+        await szt.read(info, records);
+        callback.onProgress(95);
+        return _localOutcome(
+          ReadResult(info: info, records: records, extras: extras),
+        );
       }
 
-      // 6) SZT / SUXIN / SUZ CIKA / TFT
-      if (await Shenzhentong(apdu).select(info, records)) {
-        // isSZT 已置位
-      } else if (await SuzhouCard(apdu).select(info, records)) {
+      // 6) SUXIN / SUZ CIKA / TFT
+      if (await SuzhouCard(apdu).select(info, records)) {
         // isSuzhou / isSuxin 已置位
       } else if (await SuzhouCika(apdu).select(info, records)) {
         // isSuzhou / isCika 已置位
@@ -278,8 +426,8 @@ class LocalCardReader {
         // isTFT 已置位
       }
 
-      // 7) 共用读取 m791g（条件：YCT/SUXIN/CIKA/SZT）
-      if (info.isYCT || info.isSuxin || info.isCika || info.isSZT) {
+      // 7) 共用读取 m791g（条件：YCT/SUXIN/CIKA）
+      if (info.isYCT || info.isSuxin || info.isCika) {
         callback.onProgress(35);
         if (await CommonCardInfo(apdu).read(info, records)) {
           callback.onProgress(50);
@@ -331,30 +479,13 @@ class LocalCardReader {
     await ex.readCommon(info, records, extras); // m790f
     await reader.readFile(info, records, extras, TripFile.metro); // m789e 196
 
-    if (info.isSZT || info.isCika) {
+    if (info.isCika) {
       await reader.readFile(
         info,
         records,
         extras,
         TripFile.suxinTx,
       ); // m789e 132
-    }
-    if (info.isSZT) {
-      if (info.cityCode != 2000) {
-        await reader.readFile(
-          info,
-          records,
-          extras,
-          TripFile.ferry,
-        ); // m789e 52
-      } else {
-        await reader.readFile(
-          info,
-          records,
-          extras,
-          TripFile.other,
-        ); // m789e 212
-      }
     }
     if (info.isCika) {
       await reader.readFile(info, records, extras, TripFile.bus); // m789e 76
@@ -386,10 +517,17 @@ class LocalCardReader {
   LocalReadOutcome _localOutcome(ReadResult result) {
     final info = result.info;
     final parsed = ParsedCard(
-      parserId: CardParserIds.localCard,
+      parserId: info.isBmac
+          ? CardParserIds.beijingBmac
+          : info.isLNT
+          ? CardParserIds.lingnanTong
+          : CardParserIds.localCard,
       parserName: '地方交通卡 · ${info.cardKindLabel}',
       info: TUnionCardInfo(
         applicationSerial: info.cardNumber.isEmpty ? null : info.cardNumber,
+        issuerId: info.issuerCode.isEmpty ? null : info.issuerCode,
+        effectiveDate: info.issueDate,
+        expireDate: info.expiryDate,
         balanceFen: info.observedBalance,
       ),
       transactions: const [],
