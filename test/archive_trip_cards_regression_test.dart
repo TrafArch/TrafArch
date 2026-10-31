@@ -434,7 +434,11 @@ void main() {
     tester,
   ) async {
     final repository = CardRepository(testDatabase());
-    final trip = _transaction()..remove('currency');
+    final trip = _transaction()
+      ..remove('currency')
+      // Complete 0x18 body: sequence 42, 450 minor units, terminal 4200,
+      // and the captured civil timestamp. Truncated HEX is not a witness.
+      ..['rawHex'] = '002A000000000001C20600000000420020261019235800';
     final id = await _save(repository, _snapshot(trips: [trip]));
     await _save(
       repository,
@@ -449,6 +453,25 @@ void main() {
     final history = await ArchiveHistory(repository).load(id);
     expect(history.records, hasLength(2));
     expect(history.records.map((r) => r.sources.length), containsAll([1, 2]));
+    final journeys = presentArchiveTrips(
+      history.records,
+      batches: history.batches,
+      onDiagnostics: (_) {},
+    ).journeys;
+    expect(journeys, hasLength(2));
+    final hkdJourney = journeys.singleWhere(
+      (journey) => journey.amountText == '-HK\$ 4.50',
+    );
+    expect(hkdJourney.events, hasLength(2));
+    expect(
+      hkdJourney.events.expand((event) => event.sourceIds).toSet(),
+      history.batches
+          .where(
+            (batch) => batch.decoded.snapshot!.context.currencyCode == 'HKD',
+          )
+          .map((batch) => batch.id)
+          .toSet(),
+    );
     final before = (await repository.getArchiveRows(id)).batches;
 
     await _open(tester, repository, id);
@@ -462,7 +485,11 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.textContaining('2 个批次'), findsOneWidget);
+    expect(find.text('行程记录'), findsOneWidget);
+    expect(find.byType(ListTile), findsNWidgets(2));
+    await tester.tap(find.byType(ListTile).first);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('1 个批次'), findsOneWidget);
     _expectNoJson();
     await tester.scrollUntilVisible(
       find.text('诊断与原始证据'),

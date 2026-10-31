@@ -342,6 +342,26 @@ class ArchiveHistory {
       final time = b.readAt.compareTo(a.readAt);
       return time != 0 ? time : b.id.compareTo(a.id);
     });
+    return ArchiveHistoryResult(
+      card: card,
+      batches: List.unmodifiable(batches),
+      records: projectRecords(batches),
+      importedRecords: rows.importedRecords,
+      latestCapture: scalar == null
+          ? null
+          : CardSessionSnapshot.decodeResult(scalar),
+      balanceObservedAt: balanceObservedAt,
+      documentReadIssue: rows.documentReadIssue,
+    );
+  }
+
+  /// Project original captures without borrowing the newest capture's fields
+  /// or monetary context. Journey matching uses every occurrence in one batch;
+  /// repeated paths must remain visible to its ambiguity checks.
+  static List<ArchiveHistoryRecord> projectRecords(
+    Iterable<ArchiveBatchEvidence> batches, {
+    bool preserveOccurrences = false,
+  }) {
     final records = <String, ArchiveHistoryRecord>{};
     for (final batch in batches) {
       final snapshot = batch.decoded.snapshot;
@@ -400,6 +420,7 @@ class ArchiveHistory {
           final key = jsonEncode(
             _canonical({
               'kind': section.key,
+              if (preserveOccurrences) 'occurrence': [batch.id, path],
               // v8 persists a source flag that older writers omitted. Compare
               // its interpreted meaning below, not its serialization shape.
               // Display captures can improve between reads of the same raw
@@ -471,17 +492,7 @@ class ArchiveHistory {
             ? time
             : a.sources.first.path.compareTo(b.sources.first.path);
       });
-    return ArchiveHistoryResult(
-      card: card,
-      batches: List.unmodifiable(batches),
-      records: List.unmodifiable(sorted),
-      importedRecords: rows.importedRecords,
-      latestCapture: scalar == null
-          ? null
-          : CardSessionSnapshot.decodeResult(scalar),
-      balanceObservedAt: balanceObservedAt,
-      documentReadIssue: rows.documentReadIssue,
-    );
+    return List.unmodifiable(sorted);
   }
 }
 
