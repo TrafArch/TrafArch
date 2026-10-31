@@ -1,7 +1,7 @@
 name: transit_card_analyzer
 description: "TrafArch - NFC 交通卡读取与分析"
 publish_to: 'none'
-version: 1.0.2-beta.2+2110
+version: 1.0.2-beta.2+2111
 
 environment:
   sdk: ^3.13.5
@@ -16,6 +16,7 @@ dependencies:
   # 提供的 ColorScheme 与项目仍在使用的内置 flutter/material 类型不兼容；
   # 锁定 1.9.x（最后的内置 Material 版本），待项目整体迁移 material_ui 后再升。
   dynamic_color: ^1.9.0
+  flutter_svg: 2.3.2
   path_provider: ^2.1.6
   flutter_floating_bottom_bar: ^3.0.0
   mobile_scanner: ^7.4.2
@@ -54,3 +55,4 @@ flutter:
     - assets/data/reference_manifest.json
     - assets/dictionaries/
     - assets/icon/
+    - assets/gallery/

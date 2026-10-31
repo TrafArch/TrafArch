@@ -11,12 +11,15 @@ plugins {
 // The application ID below is the install identity; a debug-signed build cannot
 // upgrade an installation that uses the developer's original signing key.
 val repairBuild = providers.gradleProperty("repairBuild").orNull == "true"
+// A separate Dart entrypoint hosts the offline UI gallery without analytics.
+val galleryBuild = providers.gradleProperty("target").orNull
+    ?.replace('\\', '/')?.substringAfterLast('/') == "main_gallery.dart"
 // Hand an aligned APK to the developer for signing with the original key.
 val unsignedApk = providers.gradleProperty("unsignedApk").orNull == "true"
 val hasGoogleServicesConfig = fileTree(projectDir) {
     include("google-services.json", "src/**/google-services.json")
 }.files.isNotEmpty()
-if (hasGoogleServicesConfig && !repairBuild) {
+if (hasGoogleServicesConfig && !repairBuild && !galleryBuild) {
     apply(plugin = "com.google.gms.google-services")
 }
 
@@ -211,11 +214,13 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
 
     // Import the Firebase BoM
-    implementation(platform("com.google.firebase:firebase-bom:35.0.0"))
+    if (!galleryBuild) {
+        implementation(platform("com.google.firebase:firebase-bom:35.0.0"))
 
     // TODO: Add the dependencies for Firebase products you want to use
     // When using the BoM, don't specify versions in Firebase dependencies
-    implementation("com.google.firebase:firebase-analytics")
+        implementation("com.google.firebase:firebase-analytics")
+    }
 
     // Add the dependencies for any other desired Firebase products
     // https://firebase.google.com/docs/android/setup#available-libraries

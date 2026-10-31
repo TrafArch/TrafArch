@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 372 286" preserveAspectRatio="none" aria-label="站点地图示意">
+        <path fill="#263B50" d="M282-10c-28 52-17 91 11 122 27 30 25 76-2 111-14 19-17 43-10 73h101V-10z"/>
+        <path fill="#1B2634" d="M18 19h76v53H18zM111 12h94v69h-94zM23 94h65v65H23zM109 101h100v54H109zM29 181h92v76H29zM143 177h93v80h-93z"/>
+        <path fill="none" stroke="#334255" stroke-width="1" d="M-10 86h240M-10 169h270M100-10l-3 306M217-10l-9 306M10 248l230-197M-10 40l266 207"/>
+        <path fill="none" stroke="#50677D" stroke-width="2" d="M-12 224C70 184 97 122 158 106c56-14 97 18 142-24M44-10c18 83 68 114 123 147 47 28 69 79 73 159"/>
+        <text fill="#93A0B4" font-size="12" x="294" y="142">黄浦江</text>
+      </svg>

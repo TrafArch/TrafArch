@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../app/app_info.dart';
 import '../../../app/app_dependencies.dart';
+import '../../../app/beta_ui_scope.dart';
 import 'about_page.dart';
 import 'feedback_page.dart';
 import '../../reference_data/presentation/knowledge_base_page.dart';
@@ -122,6 +123,16 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ]),
           section('外观', [
+            if (BetaUiScope.maybeOf(context) case final beta?)
+              Card(
+                child: SwitchListTile(
+                  secondary: const Icon(Icons.new_releases_outlined),
+                  title: const Text('启用新界面（beta）'),
+                  subtitle: const Text('预览全新界面与模拟数据，仅本次运行生效'),
+                  value: beta.enabled,
+                  onChanged: beta.onChanged,
+                ),
+              ),
             Card(
               child: SwitchListTile(
                 secondary: const Icon(Icons.palette_outlined),
