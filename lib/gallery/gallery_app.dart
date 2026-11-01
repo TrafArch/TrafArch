@@ -1,11 +1,13 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../app/app_info.dart';
+import '../shared/app_support.dart';
 import 'gallery_controller.dart';
 import 'gallery_data.dart';
 import 'gallery_theme.dart';
@@ -14,11 +16,20 @@ part 'gallery_components.dart';
 part 'gallery_pages.dart';
 part 'gallery_inspection.dart';
 part 'gallery_overlays.dart';
+part 'gallery_information.dart';
 
 class GalleryApp extends StatefulWidget {
-  const GalleryApp({super.key, this.controller, this.onDisableBeta});
+  const GalleryApp({
+    super.key,
+    this.controller,
+    this.onDisableBeta,
+    this.openWebLink,
+    this.openEmail,
+  });
   final GalleryController? controller;
   final VoidCallback? onDisableBeta;
+  final Future<void> Function(Uri)? openWebLink;
+  final Future<bool> Function(String)? openEmail;
 
   @override
   State<GalleryApp> createState() => _GalleryAppState();
@@ -60,7 +71,7 @@ class _GalleryAppState extends State<GalleryApp> {
           home: Scaffold(
             body: Center(
               child: snapshot.hasError
-                  ? const Text('演示数据加载失败，请重新打开应用')
+                  ? const Text('样例数据加载失败，请重新打开应用')
                   : const CircularProgressIndicator(),
             ),
           ),
@@ -88,6 +99,8 @@ class _GalleryAppState extends State<GalleryApp> {
           home: _GalleryView(
             controller: c,
             onDisableBeta: widget.onDisableBeta,
+            openWebLink: widget.openWebLink,
+            openEmail: widget.openEmail,
           ),
         ),
       );
@@ -96,9 +109,16 @@ class _GalleryAppState extends State<GalleryApp> {
 }
 
 class _GalleryView extends StatefulWidget {
-  const _GalleryView({required this.controller, this.onDisableBeta});
+  const _GalleryView({
+    required this.controller,
+    this.onDisableBeta,
+    this.openWebLink,
+    this.openEmail,
+  });
   final GalleryController controller;
   final VoidCallback? onDisableBeta;
+  final Future<void> Function(Uri)? openWebLink;
+  final Future<bool> Function(String)? openEmail;
   @override
   State<_GalleryView> createState() => _GalleryViewState();
 }
@@ -113,6 +133,41 @@ class _GalleryViewState extends State<_GalleryView> {
   final Map<String, Rect> _menuRects = {};
   Size? _viewport;
   bool _menuMeasureScheduled = false;
+  String? _openingLink;
+  String? _linkError;
+  Future<List<LicenseEntry>>? _licenses;
+  Future<void> _openContact(String value, {bool email = false}) async {
+    if (_openingLink != null) return;
+    final page = c.page;
+    final generation = c.generation;
+    setState(() {
+      _openingLink = value;
+      _linkError = null;
+    });
+    try {
+      if (email) {
+        final opened = await widget.openEmail?.call(value) ?? false;
+        if (!opened) throw StateError('email unavailable');
+      } else {
+        final open = widget.openWebLink;
+        if (open == null) throw StateError('browser unavailable');
+        await open(Uri.parse(value));
+      }
+    } catch (_) {
+      if (mounted && c.page == page && c.generation == generation) {
+        setState(
+          () => _linkError = email
+              ? '无法打开邮件应用，请安装或启用邮件应用，或复制邮箱地址。'
+              : '无法打开页面，请安装或启用 Edge 或 Chrome 后重试，也可复制链接自行打开。',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _openingLink = null);
+    }
+  }
+
+  void _reloadLicenses() => setState(() => _licenses = null);
+
   bool get _reduceMotion => MediaQuery.disableAnimationsOf(context);
 
   @override
@@ -168,47 +223,9 @@ class _GalleryViewState extends State<_GalleryView> {
                         excluding: c.overlay != null,
                         child: PageStorage(
                           bucket: _bucket,
-                          child: AnimatedSwitcher(
-                            key: ValueKey(c.generation),
-                            duration: _reduceMotion
-                                ? Duration.zero
-                                : const Duration(milliseconds: 220),
-                            reverseDuration: _reduceMotion
-                                ? Duration.zero
-                                : const Duration(milliseconds: 140),
-                            switchInCurve: Curves.easeOutCubic,
-                            switchOutCurve: Curves.easeInCubic,
-                            transitionBuilder: (child, animation) =>
-                                FadeTransition(
-                                  opacity: animation,
-                                  child: AnimatedBuilder(
-                                    animation: animation,
-                                    builder: (_, child) => Transform.translate(
-                                      offset: Offset(
-                                        0,
-                                        8 * (1 - animation.value),
-                                      ),
-                                      child: child,
-                                    ),
-                                    child: child,
-                                  ),
-                                ),
-                            layoutBuilder: (current, previous) => Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                for (final child in previous)
-                                  IgnorePointer(
-                                    child: ExcludeFocus(
-                                      child: ExcludeSemantics(child: child),
-                                    ),
-                                  ),
-                                ?current,
-                              ],
-                            ),
-                            child: KeyedSubtree(
-                              key: ValueKey(c.page),
-                              child: _page(),
-                            ),
+                          child: KeyedSubtree(
+                            key: ValueKey(c.page),
+                            child: _page(),
                           ),
                         ),
                       ),
@@ -287,6 +304,10 @@ class _GalleryViewState extends State<_GalleryView> {
     GalleryPage.knowledge => _knowledge(),
     GalleryPage.qr => _qr(),
     GalleryPage.scenes => _scenes(),
+    GalleryPage.about => _about(),
+    GalleryPage.feedback => _feedback(),
+    GalleryPage.acknowledgements => _acknowledgements(),
+    GalleryPage.licenses => _licensePage(),
   };
 
   Widget _list(List<Widget> children, {String? id, double? bottom}) => ListView(

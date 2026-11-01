@@ -16,6 +16,10 @@ enum GalleryPage {
   knowledge,
   qr,
   scenes,
+  about,
+  feedback,
+  acknowledgements,
+  licenses,
 }
 
 enum GalleryOverlay {
@@ -27,7 +31,6 @@ enum GalleryOverlay {
   delete,
   source,
   mode,
-  about,
   export,
   rawFeedback,
 }
@@ -265,9 +268,9 @@ class GalleryController extends ChangeNotifier {
     if (log && !logsEnabled) return;
     exportTitle = log ? '日志导出预览' : '卡片记录导出预览';
     exportText = log
-        ? 'TrafArch Gallery · Demo 2.4.0\n${logs.join('\n')}'
+        ? 'TrafArch · 界面日志\n${logs.join('\n')}'
         : const JsonEncoder.withIndent('  ').convert({
-            'demo': true,
+            'dataSource': 'built-in-sample',
             'designVersion': '2.4.0',
             'cards': (all ? savedCards : [selectedCard])
                 .map(
@@ -349,9 +352,12 @@ class GalleryController extends ChangeNotifier {
     } else if (q['edge'] == 'empty') {
       trips.clear();
     }
+    if (q['modal'] == 'about') {
+      _history.add(page);
+      page = GalleryPage.about;
+    }
     overlay = switch (q['modal']) {
       'face' => GalleryOverlay.face,
-      'about' => GalleryOverlay.about,
       _ => null,
     };
     final v = scene.variant;

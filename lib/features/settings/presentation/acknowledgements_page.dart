@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../shared/app_support.dart';
+
 /// 致谢页：鸣谢读卡识途（Trip Reader）公开数据源。
 class AcknowledgementsPage extends StatelessWidget {
   const AcknowledgementsPage({super.key});
 
   /// 读卡识途公开数据源项目地址（数据以 CC BY 4.0 许可开放）。
-  static const String tripReaderDataUrl =
-      'https://github.com/domosekai/tripreader-data';
-  static const String communityDataUrl =
-      'https://github.com/HaoTian22/tripreader-data';
+  static const String tripReaderDataUrl = AppSupport.tripReader;
+  static const String communityDataUrl = AppSupport.community;
 
   @override
   Widget build(BuildContext context) {

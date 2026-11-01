@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../app/app_dependencies.dart';
+import '../../../shared/app_support.dart';
 import 'survey_page.dart';
 
 class FeedbackPage extends StatelessWidget {
@@ -9,17 +10,16 @@ class FeedbackPage extends StatelessWidget {
 
   final AppDependencies app;
 
-  static const String emailAddress = 'support@trafarch.top';
+  static const String emailAddress = AppSupport.email;
 
   /// 用户反馈 QQ 群号。
-  static const String qqGroupNumber = '1106608008';
+  static const String qqGroupNumber = AppSupport.qqGroup;
 
   /// QQ 加群链接（应用内 WebView 直接打开加群页）。
-  static const String qqGroupJoinUrl = 'https://qm.qq.com/q/I8Ba9gEise';
+  static const String qqGroupJoinUrl = AppSupport.qqJoin;
 
   /// 反馈问卷地址（飞书问卷，Edge / Chrome Custom Tab 打开）。
-  static const String surveyUrl =
-      'https://trafarch.feishu.cn/share/base/form/shrcniZ6QaPgqGazU1bpdmZyNPh';
+  static const String surveyUrl = AppSupport.survey;
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(

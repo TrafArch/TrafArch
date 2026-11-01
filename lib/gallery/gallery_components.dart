@@ -243,6 +243,7 @@ extension _GalleryComponents on _GalleryViewState {
     int selected,
     ValueChanged<int> onSelected, {
     bool scroll = false,
+    String? id,
   }) {
     Widget button(int i) => Padding(
       padding: const EdgeInsets.all(3),
@@ -291,6 +292,9 @@ extension _GalleryComponents on _GalleryViewState {
         ),
         child: scroll
             ? SingleChildScrollView(
+                key: id == null
+                    ? null
+                    : PageStorageKey('gallery-${c.generation}-$id'),
                 scrollDirection: Axis.horizontal,
                 child: Row(children: List.generate(labels.length, button)),
               )
@@ -461,88 +465,114 @@ extension _GalleryComponents on _GalleryViewState {
             ? null
             : BorderRadius.circular(31 + _extraTextScale * 10),
         border: c.docked ? null : Border.all(color: t.line),
-        boxShadow: c.docked
-            ? null
-            : [
-                BoxShadow(
-                  color: t.dark
-                      ? Colors.black.withValues(alpha: .55)
-                      : const Color(0xff142846).withValues(alpha: .14),
-                  blurRadius: t.dark ? 34 : 30,
-                  offset: const Offset(0, 12),
-                ),
-              ],
       ),
-      child: Row(
-        children: [
-          for (var i = 0; i < 5; i++) ...[
-            if (i > 0 && !c.docked) const SizedBox(width: 5),
-            Expanded(
-              child: Semantics(
-                selected: c.page.index == i,
-                child: AnimatedContainer(
-                  key: ValueKey('nav-highlight-${GalleryPage.values[i].name}'),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final gap = c.docked ? 0.0 : 5.0;
+          final itemWidth = (constraints.maxWidth - gap * 4) / 5;
+          return Stack(
+            children: [
+              if (!c.docked)
+                AnimatedPositioned(
                   duration: _reduceMotion
                       ? Duration.zero
-                      : const Duration(milliseconds: 180),
-                  decoration: BoxDecoration(
-                    color: !c.docked && c.page.index == i
-                        ? t.tone
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(
-                      c.docked ? 16 : 25 + _extraTextScale * 10,
-                    ),
-                  ),
-                  child: TextButton(
-                    key: ValueKey('nav-${GalleryPage.values[i].name}'),
-                    onPressed: () => c.navigate(GalleryPage.values[i]),
-                    style: TextButton.styleFrom(
-                      minimumSize: Size.zero,
-                      padding: EdgeInsets.zero,
-                      foregroundColor: c.page.index == i ? t.onTone : t.muted,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(c.docked ? 16 : 25),
+                      : const Duration(milliseconds: 320),
+                  curve: Curves.easeInOutCubic,
+                  left: c.page.index * (itemWidth + gap),
+                  top: 0,
+                  bottom: 0,
+                  width: itemWidth,
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      key: const ValueKey('nav-capsule'),
+                      decoration: BoxDecoration(
+                        color: t.tone,
+                        borderRadius: BorderRadius.circular(
+                          25 + _extraTextScale * 10,
+                        ),
                       ),
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        AnimatedContainer(
-                          duration: _reduceMotion
-                              ? Duration.zero
-                              : const Duration(milliseconds: 180),
-                          width: c.docked ? 56 : 20,
-                          height: c.docked ? 28 : 20,
-                          decoration: BoxDecoration(
-                            color: c.docked && c.page.index == i
-                                ? t.tone
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(28),
-                          ),
-                          child: Icon(icons[i], size: c.docked ? 22 : 20),
-                        ),
-                        SizedBox(height: c.docked ? 2 : 3),
-                        Text(
-                          names[i],
-                          maxLines: 1,
-                          style: TextStyle(
-                            fontSize: 12,
-                            height: c.docked ? 16 / 12 : 1,
-                            fontWeight: !c.docked
-                                ? FontWeight.w600
-                                : c.page.index == i
-                                ? FontWeight.w700
-                                : FontWeight.w500,
-                          ),
-                        ),
-                      ],
                     ),
                   ),
                 ),
+              Row(
+                children: [
+                  for (var i = 0; i < 5; i++) ...[
+                    if (i > 0 && !c.docked) const SizedBox(width: 5),
+                    Expanded(
+                      child: Semantics(
+                        selected: c.page.index == i,
+                        child: TextButton(
+                          key: ValueKey('nav-${GalleryPage.values[i].name}'),
+                          onPressed: () => c.navigate(GalleryPage.values[i]),
+                          style:
+                              TextButton.styleFrom(
+                                minimumSize: Size.zero,
+                                padding: EdgeInsets.zero,
+                                foregroundColor: c.page.index == i
+                                    ? t.onTone
+                                    : t.muted,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    c.docked ? 16 : 25,
+                                  ),
+                                ),
+                                overlayColor: Colors.transparent,
+                                shadowColor: Colors.transparent,
+                                surfaceTintColor: Colors.transparent,
+                                elevation: 0,
+                                splashFactory: NoSplash.splashFactory,
+                              ).copyWith(
+                                // Touch focus must not paint a persistent dark state layer.
+                                // Keyboard focus remains visible as a thin outline.
+                                side: WidgetStateProperty.resolveWith(
+                                  (states) =>
+                                      states.contains(WidgetState.focused)
+                                      ? BorderSide(color: t.onTone)
+                                      : BorderSide.none,
+                                ),
+                              ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              AnimatedContainer(
+                                duration: _reduceMotion
+                                    ? Duration.zero
+                                    : const Duration(milliseconds: 180),
+                                width: c.docked ? 56 : 20,
+                                height: c.docked ? 28 : 20,
+                                decoration: BoxDecoration(
+                                  color: c.docked && c.page.index == i
+                                      ? t.tone
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(28),
+                                ),
+                                child: Icon(icons[i], size: c.docked ? 22 : 20),
+                              ),
+                              SizedBox(height: c.docked ? 2 : 3),
+                              Text(
+                                names[i],
+                                maxLines: 1,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  height: c.docked ? 16 / 12 : 1,
+                                  fontWeight: !c.docked
+                                      ? FontWeight.w600
+                                      : c.page.index == i
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
-            ),
-          ],
-        ],
+            ],
+          );
+        },
       ),
     );
     if (c.docked) return bar;

@@ -8,6 +8,7 @@ extension _GalleryInspection on _GalleryViewState {
       c.expertTab,
       (i) => c.update(() => c.expertTab = i),
       scroll: true,
+      id: 'expert-tabs',
     ),
     _gap(16),
     if (!c.hasRead)
@@ -31,7 +32,7 @@ extension _GalleryInspection on _GalleryViewState {
           ),
           _gap(14),
           ..._expertSections(c.expertKind),
-          _text('以上为演示样例，未保留的字段显示未知。', size: 12, color: t.muted),
+          _text('以上为内置样例，未保留的字段显示未知。', size: 12, color: t.muted),
         ],
         1 => [..._expertSections('transit')],
         2 => [_compliance()],
@@ -62,7 +63,7 @@ extension _GalleryInspection on _GalleryViewState {
           ], initiallyOpen: true),
         ],
       },
-  ], id: 'expert-${c.expertTab}-${c.expertKind}');
+  ], id: 'expert');
 
   String _spacedHex(String value) =>
       RegExp(r'.{1,2}').allMatches(value).map((m) => m.group(0)).join(' ');
@@ -422,11 +423,11 @@ extension _GalleryInspection on _GalleryViewState {
     final q = c.qr;
     final title = switch (q.view) {
       'camera' || 'camera-error' => '扫描乘车码',
-      'gallery' => '相册导入演示',
+      'gallery' => '相册导入',
       _ => '乘车码解析',
     };
     final note = _text(
-      '演示模式 · 使用模拟数据预览扫码与导入流程',
+      '使用内置二维码样例预览扫码与导入流程',
       size: 11,
       color: t.muted,
       align: TextAlign.center,
@@ -455,7 +456,7 @@ extension _GalleryInspection on _GalleryViewState {
                         color: t.onTone,
                       ),
                       _gap(14),
-                      _text('扫码取景演示', size: 12, color: t.muted),
+                      _text('扫码取景', size: 12, color: t.muted),
                     ],
                   ),
                 ),
@@ -480,7 +481,7 @@ extension _GalleryInspection on _GalleryViewState {
         ),
         _gap(12),
         _button(
-          q.torch ? '闪光灯已开启（演示）' : '闪光灯（演示）',
+          q.torch ? '闪光灯已开启' : '闪光灯',
           q.toggleTorch,
           icon: Icons.flashlight_on_outlined,
         ),
@@ -493,7 +494,7 @@ extension _GalleryInspection on _GalleryViewState {
         _gap(20),
         note,
         _gap(16),
-        _expand('qr:scenarios', '演示其他状态', [
+        _expand('qr:scenarios', '其他扫码状态', [
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -528,7 +529,7 @@ extension _GalleryInspection on _GalleryViewState {
         _gap(20),
         note,
       ] else if (q.view == 'gallery') ...[
-        _text('选择一张样例图片，演示识别与错误恢复流程。', size: 13, color: t.muted),
+        _text('选择一张内置图片，查看识别结果。', size: 13, color: t.muted),
         _gap(18),
         for (final sample in [
           ('valid', '有效乘车码', 'JT/T 1179 模拟载荷 · 335 字节'),
@@ -659,7 +660,7 @@ extension _GalleryInspection on _GalleryViewState {
       ['版本', '0x80'],
       ['声明长度', '${raw.length - 3} 字节（数据体，自证书起）'],
       ['数据总长', '${raw.length} 字节'],
-      ['发卡机构名称', '福路通·榕城通（演示）'],
+      ['发卡机构名称', '福路通·榕城通'],
       ['发卡机构标识', '01283910'],
       ['支付账户号', '6225880123456789'],
       ['用户账户号', '1380013800'],

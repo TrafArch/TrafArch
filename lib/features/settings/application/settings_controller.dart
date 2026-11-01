@@ -4,6 +4,7 @@ import '../../../platform/browser/feedback_browser.dart';
 import '../../../platform/storage/settings_store.dart';
 import '../../../platform/storage/app_logger.dart';
 import '../../../shared/application/owned_notifier.dart';
+import '../../../shared/app_support.dart';
 
 class SettingsController extends OwnedNotifier {
   SettingsController(
@@ -40,7 +41,7 @@ class SettingsController extends OwnedNotifier {
   }
 
   Future<void> openPrivacyPolicy() =>
-      _browser.open(Uri.parse('https://www.trafarch.top/privacy.html'));
+      _browser.open(Uri.parse(AppSupport.privacy));
 
   Future<void> openFeedbackSurvey(Uri url) async {
     if (disposed || openingFeedbackSurvey) return;

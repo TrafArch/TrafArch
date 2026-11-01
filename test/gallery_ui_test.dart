@@ -102,63 +102,157 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets(
-    'floating selection encloses icon and label while pages animate',
-    (tester) async {
-      tester.view.physicalSize = const Size(360, 892);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      final c = GalleryController(data);
-      addTearDown(c.dispose);
-      await tester.pumpWidget(GalleryApp(controller: c));
-      await tester.pumpAndSettle();
-      final highlight = find.byKey(const ValueKey('nav-highlight-home'));
-      final button = find.byKey(const ValueKey('nav-home'));
-      final label = find.descendant(of: button, matching: find.text('首页'));
-      final icon = find.descendant(
-        of: button,
-        matching: find.byIcon(Icons.home_outlined),
-      );
-      expect(tester.getSize(highlight).height, closeTo(50, .1));
-      expect(
-        tester.getRect(highlight).contains(tester.getCenter(icon)),
-        isTrue,
-      );
-      expect(
-        tester.getRect(highlight).contains(tester.getCenter(label)),
-        isTrue,
-      );
-      await tester.tap(find.byKey(const ValueKey('nav-trips')));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 70));
-      final fades = tester.widgetList<FadeTransition>(
-        find.ancestor(
-          of: find.byKey(const ValueKey(GalleryPage.trips)),
-          matching: find.byType(FadeTransition),
+  testWidgets('one capsule moves continuously while pages switch immediately', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 892);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final c = GalleryController(data);
+    addTearDown(c.dispose);
+    await tester.pumpWidget(GalleryApp(controller: c));
+    await tester.pumpAndSettle();
+    final capsule = find.byKey(const ValueKey('nav-capsule'));
+    final initialRect = tester.getRect(capsule);
+    final originalElement = tester.element(capsule);
+    final home = find.byKey(const ValueKey('nav-home'));
+    expect(initialRect.height, closeTo(50, .1));
+    expect(
+      initialRect.contains(
+        tester.getCenter(
+          find.descendant(of: home, matching: find.byIcon(Icons.home_outlined)),
         ),
-      );
+      ),
+      isTrue,
+    );
+    expect(
+      initialRect.contains(
+        tester.getCenter(find.descendant(of: home, matching: find.text('首页'))),
+      ),
+      isTrue,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('nav-cards')));
+    await tester.pump();
+    final headerY = tester.getTopLeft(find.text('卡包').first).dy;
+    expect(find.byKey(const ValueKey(GalleryPage.home)), findsNothing);
+    expect(find.byType(AnimatedSwitcher), findsNothing);
+    await tester.pump(const Duration(milliseconds: 100));
+    final midway = tester.getRect(capsule);
+    final target = tester.getCenter(find.byKey(const ValueKey('nav-cards'))).dx;
+    expect(midway.center.dx, greaterThan(initialRect.center.dx));
+    expect(midway.center.dx, lessThan(target));
+    expect(tester.element(capsule), same(originalElement));
+    expect(tester.getTopLeft(find.text('卡包').first).dy, headerY);
+
+    // A new tap redirects the existing moving capsule without replacing it.
+    await tester.tap(find.byKey(const ValueKey('nav-trips')));
+    await tester.pump();
+    expect(tester.getRect(capsule).left, closeTo(midway.left, .1));
+    await tester.pumpAndSettle();
+    expect(
+      tester.getRect(capsule).center.dx,
+      closeTo(tester.getCenter(find.byKey(const ValueKey('nav-trips'))).dx, .1),
+    );
+    expect(find.byKey(const ValueKey(GalleryPage.trips)), findsOneWidget);
+    c.update(() => c.docked = true);
+    await tester.pumpAndSettle();
+    expect(capsule, findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('bottom bar has no dark state layer for touch, focus or hover', (
+    tester,
+  ) async {
+    final c = GalleryController(data);
+    addTearDown(c.dispose);
+    await tester.pumpWidget(GalleryApp(controller: c));
+    await tester.pumpAndSettle();
+    for (final mode in [ThemeMode.light, ThemeMode.dark]) {
+      c.update(() => c.themeMode = mode);
+      await tester.pumpAndSettle();
+      final nav = find.byKey(const ValueKey('nav-expert'));
+      final button = tester.widget<TextButton>(nav);
+      for (final states in [
+        {WidgetState.pressed},
+        {WidgetState.focused},
+        {WidgetState.hovered},
+        {WidgetState.pressed, WidgetState.focused},
+      ]) {
+        expect(button.style!.overlayColor!.resolve(states), Colors.transparent);
+        expect(button.style!.elevation!.resolve(states), 0);
+        expect(button.style!.shadowColor!.resolve(states), Colors.transparent);
+      }
+      final gesture = await tester.startGesture(tester.getCenter(nav));
+      await tester.pump(const Duration(milliseconds: 100));
       expect(
-        fades.any((fade) => fade.opacity.value > 0 && fade.opacity.value < 1),
+        tester
+            .widgetList<Material>(
+              find.descendant(of: nav, matching: find.byType(Material)),
+            )
+            .every((m) => m.elevation == 0),
         isTrue,
       );
-      // Repeated taps during a transition must leave one usable current page.
-      await tester.tap(find.byKey(const ValueKey('nav-cards')));
-      await tester.pump(const Duration(milliseconds: 30));
-      await tester.tap(find.byKey(const ValueKey('nav-home')));
+      await gesture.up();
       await tester.pumpAndSettle();
-      expect(c.page, GalleryPage.home);
-      expect(find.text('开始读取'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-      c.update(() => c.docked = true);
-      await tester.pumpAndSettle();
-      expect(
-        tester.getSize(find.byKey(const ValueKey('nav-highlight-home'))).height,
-        closeTo(60, .1),
-      );
-      await tester.pumpWidget(const SizedBox.shrink());
-    },
-  );
+    }
+  });
+
+  testWidgets('expert raw tab keeps horizontal offset and list identity', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 892);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final c = GalleryController(data);
+    c.update(() => c.hasRead = true);
+    c.navigate(GalleryPage.expert);
+    addTearDown(c.dispose);
+    await tester.pumpWidget(GalleryApp(controller: c));
+    await tester.pumpAndSettle();
+    final vertical = find.byKey(
+      PageStorageKey('gallery-${c.generation}-expert'),
+    );
+    final listElement = tester.element(vertical);
+    final horizontal = find.byKey(
+      PageStorageKey('gallery-${c.generation}-expert-tabs'),
+    );
+    await tester.drag(horizontal, const Offset(-300, 0));
+    await tester.pumpAndSettle();
+    final scroll = tester.state<ScrollableState>(
+      find.descendant(of: horizontal, matching: find.byType(Scrollable)),
+    );
+    final offset = scroll.position.pixels;
+    expect(offset, greaterThan(0));
+    final raw = find.text('APDU / Raw Data');
+    final before = tester.getRect(raw);
+    await tester.tap(raw);
+    await tester.pump();
+    expect(c.expertTab, 3);
+    expect(tester.element(vertical), same(listElement));
+    expect(scroll.position.pixels, closeTo(offset, .1));
+    expect(tester.getRect(raw), before);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(tester.getRect(raw), before);
+    expect(find.textContaining('C-APDU'), findsWidgets);
+    // Other updates and leaving the page must preserve the tab strip offset.
+    c.update(() => c.includeOverdraft = true);
+    await tester.pumpAndSettle();
+    expect(scroll.position.pixels, closeTo(offset, .1));
+    c.navigate(GalleryPage.cards);
+    await tester.pumpAndSettle();
+    c.navigate(GalleryPage.expert);
+    await tester.pumpAndSettle();
+    final restored = tester.state<ScrollableState>(
+      find.descendant(of: horizontal, matching: find.byType(Scrollable)),
+    );
+    expect(restored.position.pixels, closeTo(offset, .1));
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 
   testWidgets('card actions stay anchored and edit only the chosen card', (
     tester,
@@ -373,6 +467,10 @@ void main() {
         GalleryPage.cards,
         GalleryPage.detail,
         GalleryPage.settings,
+        GalleryPage.expert,
+        GalleryPage.about,
+        GalleryPage.feedback,
+        GalleryPage.acknowledgements,
         GalleryPage.qr,
       ]) {
         for (final dock in [false, true]) {

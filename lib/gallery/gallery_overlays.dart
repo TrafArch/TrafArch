@@ -121,7 +121,6 @@ extension _GalleryOverlays on _GalleryViewState {
     GalleryOverlay.delete => '删除本卡',
     GalleryOverlay.source => '记录来源',
     GalleryOverlay.mode => '交通方式',
-    GalleryOverlay.about => '关于 TrafArch',
     GalleryOverlay.export => c.exportTitle,
     GalleryOverlay.rawFeedback => '反馈内容预览',
   };
@@ -134,7 +133,7 @@ extension _GalleryOverlays on _GalleryViewState {
       onCancel: c.back,
       onSubmit: (name) {
         c.save(name);
-        _toast('已保存到演示卡包');
+        _toast('已保存到卡包');
       },
     ),
     GalleryOverlay.rename => _GalleryNameForm(
@@ -150,7 +149,7 @@ extension _GalleryOverlays on _GalleryViewState {
     GalleryOverlay.delete => Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _text('删除“${c.selectedCard.name}”及其本次演示记录？', size: 14),
+        _text('删除“${c.selectedCard.name}”及其本次会话记录？', size: 14),
         _gap(8),
         _text('仅影响当前内存样例。', size: 12, color: t.muted),
         _gap(22),
@@ -173,59 +172,10 @@ extension _GalleryOverlays on _GalleryViewState {
     GalleryOverlay.mode => Column(children: _dropdownItems(type)),
     GalleryOverlay.face => _faceSheet(),
     GalleryOverlay.trip => _tripSheet(),
-    GalleryOverlay.about => Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: Image.asset(
-                'assets/icon/app_icon.png',
-                width: 56,
-                height: 56,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _text('TrafArch', size: 23, weight: FontWeight.w700),
-                  _text(
-                    '${AppInfo.version} (${AppInfo.buildNumber})',
-                    size: 12,
-                    color: t.muted,
-                  ),
-                  _text('界面设计 Demo 2.4.0', size: 11, color: t.muted),
-                ],
-              ),
-            ),
-          ],
-        ),
-        _gap(22),
-        _text(
-          '只读交通卡读取与分析工具。\n此新界面 beta 使用模拟卡片、行程与二维码，供交互和布局评审。',
-          size: 14,
-          color: t.muted,
-        ),
-        _gap(20),
-        _kv('作者', AppInfo.author),
-        _gap(14),
-        _text(
-          AppInfo.copyright,
-          size: 12,
-          color: t.muted,
-          align: TextAlign.center,
-        ),
-        _gap(14),
-        _button('关闭', c.back, primary: true),
-      ],
-    ),
     GalleryOverlay.export => Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _text('演示内容预览 · 尚未保存文件', size: 12, color: t.warn),
+        _text('内容预览 · 尚未保存文件', size: 12, color: t.warn),
         _gap(14),
         _hexBox(c.exportText),
         _gap(14),
@@ -235,10 +185,10 @@ extension _GalleryOverlays on _GalleryViewState {
     GalleryOverlay.rawFeedback => Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _text('演示模式下仅预览反馈内容。', size: 13, color: t.muted),
+        _text('反馈草稿保留在本页，不会自动提交。', size: 13, color: t.muted),
         _gap(14),
         _hexBox(
-          'TrafArch 新界面 beta\n设计版本：Demo 2.4.0\n场景：${c.sceneId ?? c.page.name}\n数据：合成演示样例\n\n请描述看到的问题、操作步骤和期望结果。',
+          'TrafArch 新界面 beta\n设计版本：2.4.0\n场景：${c.sceneId ?? c.page.name}\n数据：内置样例\n\n请描述看到的问题、操作步骤和期望结果。',
         ),
         _gap(14),
         _button('关闭预览', c.back, primary: true),
@@ -463,7 +413,7 @@ extension _GalleryOverlays on _GalleryViewState {
         _kv('受理城市', trip['city'] as String? ?? '未记录'),
         _kv('交易金额', trip['amount'] as String?),
         _gap(16),
-        _text('本行程为演示摘要。未保留各侧原始字段，不据此补造记录。', size: 12, color: t.muted),
+        _text('本行程为内置样例摘要。未保留各侧原始字段，不据此补造记录。', size: 12, color: t.muted),
         _gap(16),
         _button('关闭', c.back, primary: true),
       ],
@@ -531,7 +481,7 @@ extension _GalleryOverlays on _GalleryViewState {
       ),
       _gap(16),
       _button(
-        '从相册选择（演示）',
+        '从内置相册选择',
         () => c.update(() => c.expanded.add('face:samples')),
         icon: Icons.photo_library_outlined,
       ),

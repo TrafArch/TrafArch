@@ -1,6 +1,8 @@
 import 'package:flutter/widgets.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../gallery/gallery_app.dart';
+import '../platform/browser/feedback_browser.dart';
 import 'app_dependencies.dart';
 import 'beta_ui_scope.dart';
 import 'trafarch_app.dart';
@@ -24,6 +26,11 @@ class _InternalPreviewAppState extends State<InternalPreviewApp> {
         ? GalleryApp(
             key: const ValueKey('new-ui'),
             onDisableBeta: () => _switch(false),
+            openWebLink: const MethodChannelFeedbackBrowser().open,
+            openEmail: (address) => launchUrl(
+              Uri(scheme: 'mailto', path: address),
+              mode: LaunchMode.externalApplication,
+            ),
           )
         : TransitCardAnalyzerApp(
             key: const ValueKey('current-ui'),

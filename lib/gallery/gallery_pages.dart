@@ -173,7 +173,7 @@ extension _GalleryPages on _GalleryViewState {
                     ? (c.hasRead ? '读取失败，保留上次结果' : '未能读到卡片')
                     : c.hasRead
                     ? '今天 09:41 读取成功'
-                    : 'NFC 已就绪（演示）',
+                    : '内置卡片已就绪',
                 size: 12,
                 color: failed ? t.warn : t.onTone,
               ),
@@ -280,7 +280,7 @@ extension _GalleryPages on _GalleryViewState {
               _text('贴卡，了解你的每一次出行', size: 15, weight: FontWeight.w600),
               _gap(8),
               _text(
-                '支持交通联合、城市一卡通及部分 FeliCa 卡片\n本次为交互演示，使用模拟数据',
+                '支持交通联合、城市一卡通及部分 FeliCa 卡片\n当前使用内置卡片样例',
                 size: 12,
                 color: t.muted,
                 align: TextAlign.center,
@@ -1022,7 +1022,7 @@ extension _GalleryPages on _GalleryViewState {
             '读取后自动保存',
             c.autoSave,
             c.setAutoSave,
-            subtitle: '每次模拟读取后保存到演示卡包',
+            subtitle: '每次读取后保存到当前卡包',
           ),
           const Divider(),
           _switch(
@@ -1078,7 +1078,7 @@ extension _GalleryPages on _GalleryViewState {
             '莫奈取色',
             c.monet,
             (value) => c.update(() => c.monet = value),
-            subtitle: c.monet ? '演示中使用雾蓝回退配色' : '使用手动选择的主题配色',
+            subtitle: c.monet ? '当前使用雾蓝回退配色' : '使用手动选择的主题配色',
           ),
           if (!c.monet)
             Padding(
@@ -1169,7 +1169,7 @@ extension _GalleryPages on _GalleryViewState {
             '启用运行日志',
             c.logsEnabled,
             c.setLogs,
-            subtitle: '仅记录本次演示会话中的界面操作',
+            subtitle: '仅记录本次会话中的界面操作',
           ),
           if (c.logsEnabled) ...[
             const Divider(),
@@ -1184,12 +1184,12 @@ extension _GalleryPages on _GalleryViewState {
       ),
       padding: EdgeInsets.zero,
     ),
-    _sectionTitle('演示工具'),
+    _sectionTitle('样例管理'),
     _panel(
       Column(
         children: [
           _settingRow(
-            '演示场景',
+            '内置场景',
             () => c.navigate(GalleryPage.scenes),
             subtitle: '52 个预置场景 · 切换后载入固定样例',
             icon: Icons.dashboard_customize_outlined,
@@ -1198,7 +1198,7 @@ extension _GalleryPages on _GalleryViewState {
           _settingRow(
             '恢复初始样例',
             c.reset,
-            subtitle: '清空本次演示操作，回到未读卡首页',
+            subtitle: '恢复内置卡片与行程，回到未读卡首页',
             icon: Icons.restart_alt_rounded,
           ),
         ],
@@ -1222,16 +1222,16 @@ extension _GalleryPages on _GalleryViewState {
       Column(
         children: [
           _settingRow(
-            '反馈',
-            () => c.showOverlay(GalleryOverlay.rawFeedback),
-            subtitle: '查看反馈内容预览',
+            '问题反馈',
+            () => _openInformationPage(GalleryPage.feedback),
+            subtitle: 'QQ 群、邮箱与问卷反馈渠道',
             icon: Icons.feedback_outlined,
           ),
           const Divider(),
           _settingRow(
             '关于',
-            () => c.showOverlay(GalleryOverlay.about),
-            subtitle: '${AppInfo.version} · Demo 2.4.0',
+            () => _openInformationPage(GalleryPage.about),
+            subtitle: '版本 ${AppInfo.version}',
             icon: Icons.info_outline,
           ),
         ],
@@ -1240,7 +1240,7 @@ extension _GalleryPages on _GalleryViewState {
     ),
     _gap(20),
     _text(
-      '交互演示 · 全部卡片和行程均为模拟数据\n重启后恢复初始样例',
+      '当前卡片和行程来自内置样例\n重启后恢复初始样例',
       size: 11,
       color: t.muted,
       align: TextAlign.center,
@@ -1283,7 +1283,7 @@ extension _GalleryPages on _GalleryViewState {
       grouped.putIfAbsent(s.group, () => []).add(s);
     }
     return _list([
-      _header('演示场景', back: true),
+      _header('内置场景', back: true),
       _text('切换场景将载入独立的固定样例。所有操作仅在本次运行中保留。', size: 12, color: t.muted),
       _gap(12),
       _button('恢复初始样例', c.reset, icon: Icons.restart_alt_rounded),
