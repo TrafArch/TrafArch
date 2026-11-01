@@ -1104,6 +1104,9 @@ class _FakeNfcChannel implements NfcChannel {
     enqueue(0xB0, _sw9000(_managementFile()));
     enqueue(0x5C, const [0x00, 0x00, 0x27, 0x10, 0x90, 0x00]); // 余额 10000 分
     enqueue(0xB2, _sw9000(record)); // 0x18 交易明细整体读取
+    if (record.length < 10 * 23) {
+      enqueue(0xB2, const [0x6A, 0x83]); // 0x18 后续物理槽：文件结束
+    }
     if (busRecord != null) {
       enqueue(0xB2, _sw9000(varRecord ?? List.filled(85, 0x00))); // 0x1A 记录 1
       enqueue(0xB2, _sw9000(busRecord)); // 0x1A 记录 2 命中

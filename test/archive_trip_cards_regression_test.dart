@@ -355,7 +355,7 @@ void main() {
       tester.widget<TripEntryCard>(find.byType(TripEntryCard)).journey!.start,
       isNotNull,
     );
-    await _filter(tester, '城市轨道交通');
+    await _filter(tester, '轨道交通');
     expect(find.byType(TripEntryCard), findsNothing);
     expect(find.text('当前筛选条件下没有记录'), findsOneWidget);
     await _filter(tester, '全部方式');

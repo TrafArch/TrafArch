@@ -10,7 +10,7 @@ const tripSourceLabels = <TripSourceFilter, String>{
   TripSourceFilter.record: '0x1A 记录',
 };
 const tripModeLabels = <TripModeFilter, String>{
-  TripModeFilter.rail: '城市轨道交通',
+  TripModeFilter.rail: '轨道交通',
   TripModeFilter.bus: '公共汽电车',
   TripModeFilter.other: '其他',
 };
@@ -27,12 +27,12 @@ TripModeFilter tripModeOf(TripEntry entry) => switch (entry) {
   ProcessTripEntry(:final record) =>
     record.isBus
         ? TripModeFilter.bus
-        : (record.isCityRail ? TripModeFilter.rail : TripModeFilter.other),
+        : (record.isRailTransit ? TripModeFilter.rail : TripModeFilter.other),
   TransactionTripEntry(:final trip) =>
     trip.matchedProcessTrip?.isBus == true || trip.appTypeName == '公共汽电车'
         ? TripModeFilter.bus
-        : (trip.matchedProcessTrip?.isCityRail == true ||
-                  trip.appTypeName == '城市轨道交通'
+        : (trip.matchedProcessTrip?.isRailTransit == true ||
+                  const {'城市轨道交通', '市郊铁路'}.contains(trip.appTypeName)
               ? TripModeFilter.rail
               : TripModeFilter.other),
 };

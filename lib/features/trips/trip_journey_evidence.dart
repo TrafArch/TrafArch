@@ -53,6 +53,15 @@ Map<TripEntry, LiveJourneyEvidence> buildLiveJourneyEvidence({
             cityCode: _applicationCity(side),
             terminalId: side.terminal,
             amountFen: _applicationAmount(side),
+            stationId: side.isEntry
+                ? side.rail?.entryStationId
+                : side.rail?.exitStationId,
+            lineCode: side.isEntry
+                ? side.rail?.entryLineCode
+                : side.rail?.exitLineCode,
+            agencyId: side.isEntry
+                ? side.rail?.entryAgencyId
+                : side.rail?.exitAgencyId,
             cycle: cycle,
           ),
         )
@@ -103,6 +112,9 @@ Map<TripEntry, LiveJourneyEvidence> buildLiveJourneyEvidence({
                     (side.rail != null
                         ? TripModeFilter.rail
                         : TripModeFilter.bus) &&
+                (side.rail == null ||
+                    trip.appTypeCode == null ||
+                    trip.appTypeCode == 0x01) &&
                 (_applicationAmount(side) == null ||
                     trip.amountFen == _applicationAmount(side)),
           )
@@ -186,7 +198,7 @@ int? _applicationAmount(TunionApplicationSide side) => side.rail != null
 bool _transactionMatchesCycle(TransitTrip trip, TUnionTripRecord cycle) {
   final mode = isTunionBusCycle(cycle)
       ? TripModeFilter.bus
-      : cycle.isCityRail
+      : cycle.isRailTransit
       ? TripModeFilter.rail
       : TripModeFilter.other;
   final role = cycle.isEntry
@@ -204,6 +216,7 @@ bool _transactionMatchesCycle(TransitTrip trip, TUnionTripRecord cycle) {
       mode != TripModeFilter.other &&
       _transactionRole(trip) == role &&
       _transactionMode(trip) == mode &&
+      (trip.appTypeCode == null || trip.appTypeCode == cycle.appTypeCode) &&
       trip.time == cycle.time &&
       trip.amountFen == cycle.amountFen &&
       _city(trip.cityCode) != null &&

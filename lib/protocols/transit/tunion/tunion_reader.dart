@@ -278,32 +278,47 @@ class CommonUnitTu {
 
   Future<void> _readTransactions(List<TUnionTransaction> records) async {
     _transactionFileObserved = false;
+    var nextRecord = 1;
 
     final bulk = await _exchange(
       TUnionApdu.readRecord(_transactionFileSfi, 1, mode: 0x05, le: 0x00),
     );
     if (_isSuccess(bulk)) {
-      _transactionFileObserved =
-          _stripSw(bulk).length % _transactionRecordSize == 0;
-      records.addAll(_decodeRecords(_stripSw(bulk)));
+      final data = _stripSw(bulk);
+      final payload = _unwrapRecordTemplate(data) ?? data;
+      _transactionFileObserved = payload.length % _transactionRecordSize == 0;
+      records.addAll(_decodeRecords(data));
+      // READ RECORD(S) can return only a response-sized prefix. Empty and
+      // invalid records still occupy slots; an incomplete tail needs rereading.
+      nextRecord = payload.length ~/ _transactionRecordSize + 1;
     }
 
-    if (records.isEmpty) {
-      for (var i = 1; i <= _maxTransactionRecords; i++) {
-        final resp = await _exchange(
-          TUnionApdu.readRecord(_transactionFileSfi, i, le: 0x00),
-        );
-        if (!_isSuccess(resp)) break;
-        if (_stripSw(resp).length % _transactionRecordSize == 0) {
-          _transactionFileObserved = true;
-        }
-        records.addAll(_decodeRecords(_stripSw(resp), firstRecordNumber: i));
-        if (records.length >= _maxTransactionRecords) break;
+    final firstRaw = records.firstOrNull?.rawHex;
+    String? firstIndividualRaw;
+    for (var i = nextRecord; i <= _maxTransactionRecords;) {
+      final resp = await _exchange(
+        TUnionApdu.readRecord(_transactionFileSfi, i, le: 0x00),
+      );
+      if (!_isSuccess(resp)) break;
+      final data = _stripSw(resp);
+      final payload = _unwrapRecordTemplate(data) ?? data;
+      final slots = payload.length ~/ _transactionRecordSize;
+      if (slots == 0) break;
+      if (payload.length % _transactionRecordSize == 0) {
+        _transactionFileObserved = true;
       }
-    }
-
-    if (records.length > _maxTransactionRecords) {
-      records.removeRange(_maxTransactionRecords, records.length);
+      // Keep the existing compatibility with cards returning several records
+      // even for a single-record request, including their physical slot stride.
+      for (final record in _decodeRecords(data, firstRecordNumber: i)) {
+        // Some cards wrap or ignore P1. Compare the complete record, never just
+        // its sequence, so distinct transactions with equal sequences survive.
+        if (record.rawHex == firstRaw || record.rawHex == firstIndividualRaw) {
+          return;
+        }
+        firstIndividualRaw ??= record.rawHex;
+        records.add(record);
+      }
+      i += slots;
     }
   }
 
@@ -586,7 +601,9 @@ class CommonUnitTu {
     final out = <TUnionTransaction>[];
     for (
       var s = 0;
-      s + _transactionRecordSize <= payload.length;
+      s + _transactionRecordSize <= payload.length &&
+          firstRecordNumber + s ~/ _transactionRecordSize <=
+              _maxTransactionRecords;
       s += _transactionRecordSize
     ) {
       final record = _decodeTransaction(
