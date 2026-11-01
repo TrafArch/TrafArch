@@ -1598,15 +1598,29 @@ void main() {
 /// 按 INS 字节匹配的脚本化 APDU 链路（无需真机）。
 class _ScriptedLink {
   final Map<int, List<List<int>>> _queues = {};
+  bool _transactionBulkSucceeded = false;
 
   void enqueue(int ins, List<int> resp) =>
       _queues.putIfAbsent(ins, () => []).add(resp);
 
   Future<List<int>> call(List<int> apdu) async {
     final ins = apdu.length > 1 ? apdu[1] : -1;
+    // These legacy fixtures describe the complete 0x18 file in their bulk
+    // response. Its continuation ends here; later B2 responses belong to 1A/1E.
+    // Individual-only fixtures still consume their explicitly queued records.
+    if (ins == 0xB2 && apdu[3] == 0xC4 && _transactionBulkSucceeded) {
+      return const [0x6A, 0x83];
+    }
     final queue = _queues[ins];
     if (queue == null || queue.isEmpty) return const [0x6A, 0x82];
-    return queue.removeAt(0);
+    final response = queue.removeAt(0);
+    if (ins == 0xB2 && apdu[3] == 0xC5) {
+      _transactionBulkSucceeded =
+          response.length >= 2 &&
+          response[response.length - 2] == 0x90 &&
+          response.last == 0;
+    }
+    return response;
   }
 }
 

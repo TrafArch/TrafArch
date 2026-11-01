@@ -16,6 +16,8 @@ import '../application/archive_history.dart';
 import '../domain/archive_context.dart';
 import 'archive_record_presenter.dart';
 import 'archive_journey_merge.dart';
+import 'archive_journey_identity.dart';
+import 'archive_partial_capture_merge.dart';
 
 const archiveTripSourceLabels = {
   ArchiveRecordKind.transaction: '0x18 交易',
@@ -65,6 +67,8 @@ ArchiveTripProjection presentArchiveTrips(
   );
   if (batches.isEmpty) return aggregate;
   final keys = <ArchiveJourneyEntry, Set<String>>{};
+  final transactionObservations =
+      <ArchiveJourneyEntry, ArchiveTransactionObservation>{};
   final captures = <ArchiveJourney>[];
   for (final batch in batches) {
     final projection = _presentArchiveRecords(
@@ -73,6 +77,13 @@ ArchiveTripProjection presentArchiveTrips(
       includeShanghaiOverdraft: includeShanghaiOverdraft,
       cardType: cardType,
       onEvent: (entry, sources) {
+        if (entry.source == ArchiveRecordKind.transaction) {
+          final observation = archiveTransactionObservation(
+            sources.first.record,
+            event: entry.journeyEvent!,
+          );
+          if (observation != null) transactionObservations[entry] = observation;
+        }
         keys[entry] = {
           for (final source in sources)
             ?archiveJourneyOperationKey(
@@ -90,7 +101,11 @@ ArchiveTripProjection presentArchiveTrips(
     transactionCount: aggregate.transactionCount,
     processRecordCount: aggregate.processRecordCount,
     mergedRecordCount: aggregate.mergedRecordCount,
-    journeys: mergeArchiveJourneys(captures, keys),
+    journeys: mergeArchiveJourneys(
+      captures,
+      keys,
+      transactionObservations: transactionObservations,
+    ),
   );
 }
 
@@ -115,32 +130,37 @@ ArchiveTripProjection _presentArchiveRecords(
   }
 
   // 保存时生成的关联按来源批次消费；不跨批次重新按 POS 配对。
-  final links = <String, List<String>>{};
+  final links = <String, List<(String, int?)>>{};
   for (final record in records) {
     if (record.kind != ArchiveRecordKind.transaction) continue;
+    final appType = eventFor(record).railAppTypeCode;
     for (final source in record.sources) {
       final keys = links.putIfAbsent(source.batchId, () => []);
       for (final field in ['displayProcessKey', 'displayApplicationKey']) {
         final key = record.fields[field];
-        if (key is String) keys.add(key);
+        if (key is String) keys.add((key, appType));
       }
       if (record.fields['displayProcessKey'] == null) {
         final matched = record.fields['matchedProcess'];
         if (matched is Map<String, dynamic>) {
           final process = _processFromFields(matched);
-          if (process != null) keys.add(cycleDisplayKey(process));
+          if (process != null) keys.add((cycleDisplayKey(process), appType));
         }
       }
     }
   }
   bool consume(ArchiveHistoryRecord record, String key) {
     final batches = record.sources.map((s) => s.batchId).toSet();
+    final appType = eventFor(record).railAppTypeCode;
+    bool matches((String, int?) link) =>
+        link.$1 == key &&
+        (link.$2 == null || appType == null || link.$2 == appType);
     if (batches.isEmpty ||
-        !batches.every((b) => links[b]?.contains(key) == true)) {
+        !batches.every((b) => links[b]?.any(matches) == true)) {
       return false;
     }
     for (final batch in batches) {
-      links[batch]!.remove(key);
+      links[batch]!.removeAt(links[batch]!.indexWhere(matches));
     }
     return true;
   }
@@ -373,6 +393,9 @@ bool _sameArchiveOperation(
         event.role == JourneyEventRole.fareAdjustment) &&
     event.role == candidate.role &&
     event.mode == candidate.mode &&
+    (event.railAppTypeCode == null ||
+        candidate.railAppTypeCode == null ||
+        event.railAppTypeCode == candidate.railAppTypeCode) &&
     event.scopeKey != null &&
     event.scopeKey == candidate.scopeKey &&
     source.epoch == other.epoch &&
@@ -452,6 +475,11 @@ Map<ArchiveHistoryRecord, String> _archiveApplicationLinks(
         cityCode: application.city,
         terminalId: application.text('${application.side}TerminalId'),
         amountFen: amount is int ? amount : null,
+        stationId: application.text('${application.side}StationId'),
+        lineCode: application.fields['${application.side}LineCode'] is int
+            ? application.fields['${application.side}LineCode'] as int
+            : null,
+        agencyId: application.text('${application.side}AgencyId'),
         cycle: cycle,
       );
     }).toList();
@@ -596,6 +624,17 @@ class _ArchiveEvent {
     return matched is Map<String, dynamic> ? _processFromFields(matched) : null;
   }
 
+  int? get railAppTypeCode => mode != TripModeFilter.rail
+      ? null
+      : rail
+      ? 0x01
+      : (process ?? matchedProcess)?.appTypeCode ??
+            switch (fields['appTypeName'] ?? fields['appTypeCode']) {
+              '市郊铁路' || 0x0E => 0x0E,
+              '城市轨道交通' || 0x01 => 0x01,
+              _ => null,
+            };
+
   TripModeFilter get mode {
     if (rail) return TripModeFilter.rail;
     if (record.kind == ArchiveRecordKind.bus) return TripModeFilter.bus;
@@ -606,7 +645,7 @@ class _ArchiveEvent {
         fields['appTypeCode'] ??
         (matched is Map ? matched['appTypeCode'] : null);
     return switch (fields['appTypeName'] ?? appType) {
-      '城市轨道交通' || 1 => TripModeFilter.rail,
+      '城市轨道交通' || '市郊铁路' || 1 || 0x0E => TripModeFilter.rail,
       '公共汽电车' || 2 => TripModeFilter.bus,
       _ => switch (fields['stationType']) {
         '公交' || 'BRT' || '公共汽电车' || 'bus' || 'brt' => TripModeFilter.bus,
@@ -729,6 +768,7 @@ class _ArchiveEvent {
       sequence: transaction && fields['sequence'] is int
           ? fields['sequence'] as int
           : null,
+      railAppTypeCode: railAppTypeCode,
       processPositions: record.kind == ArchiveRecordKind.process || transaction
           ? processPositions
           : const {},
@@ -1091,7 +1131,7 @@ String? _archiveBusStation(
 }
 
 String? _archiveScope(ArchiveContext context, String? clockScope) {
-  final system = _text(context.systemId)?.trim();
+  final system = _text(archiveJourneySystemId(context))?.trim();
   final application = _text(context.applicationId)?.trim();
   final currency = _text(context.currencyCode)?.trim();
   final basis = _text(context.clockBasis)?.trim();

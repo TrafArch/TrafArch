@@ -145,7 +145,7 @@ void main() {
   });
 
   test(
-    'Wuhan city fields retain their source without entering the native map',
+    'Wuhan city fields retain their source through rail and cycle lookups',
     () {
       const key = '521000111131';
       final records = repository.findStations(
@@ -156,14 +156,17 @@ void main() {
       expect(records.single.sourceField, 'M0.W.a');
       expect(
         lookup.resolveRailKey(city: '5210', key: '${key}FFFFFFFF').confidence,
-        StationMatchConfidence.unmatched,
+        StationMatchConfidence.exact,
       );
       final match = lookup.resolveCycle(
         city: '5210',
         field: '00111131000000',
         appType: 1,
       );
-      expect(match.confidence, StationMatchConfidence.unmatched);
+      expect(match.confidence, StationMatchConfidence.exact);
+      expect(match.stationName, '江安路');
+      expect(match.entry?.sourceField, 'M0.W.a');
+      expect(match.entry?.sourceKey, key);
       expect(records.single.stationName, '江安路');
     },
   );

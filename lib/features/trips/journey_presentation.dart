@@ -86,6 +86,7 @@ class JourneyEvent<T> {
     this.cityCode,
     this.cityLabel,
     this.sequence,
+    this.railAppTypeCode,
     this.processPositions = const {},
     this.applicationRecordId,
     this.evidenceSource = JourneyEvidenceSource.unknown,
@@ -106,6 +107,10 @@ class JourneyEvent<T> {
   final String? cityCode;
   final String? cityLabel;
   final int? sequence;
+
+  /// Original rail application classification, separate from wallet scope.
+  /// Metro and suburban railway cannot form the two halves of one ride.
+  final int? railAppTypeCode;
 
   /// Positive original 0x1E record slots, keyed by their capture batch ID.
   /// These are not transaction sequence numbers or filtered list positions.
@@ -135,6 +140,7 @@ class JourneyEvent<T> {
     cityCode: cityCode,
     cityLabel: cityLabel,
     sequence: sequence,
+    railAppTypeCode: railAppTypeCode,
     processPositions: processPositions,
     applicationRecordId: applicationRecordId,
     evidenceSource: evidenceSource,
@@ -451,6 +457,12 @@ List<_JourneyOperation<T>> _journeyOperations<T>(List<JourneyEvent<T>> events) {
         city == null ||
         RegExp(r'^[0F]+$').hasMatch(city) ||
         first.mode == TripModeFilter.other ||
+        sides
+                .map((side) => side.railAppTypeCode)
+                .whereType<int>()
+                .toSet()
+                .length >
+            1 ||
         first.endpoint.time == null ||
         sides.any(
           (side) =>
@@ -529,6 +541,10 @@ JourneyEvent<T> _operationEvent<T>(List<JourneyEvent<T>> sides) {
     cityCode: preferred.cityCode,
     cityLabel: endpoint.cityLabel ?? preferred.cityLabel,
     sequence: sides.map((side) => side.sequence).whereType<int>().firstOrNull,
+    railAppTypeCode: sides
+        .map((side) => side.railAppTypeCode)
+        .whereType<int>()
+        .firstOrNull,
     processPositions: {for (final side in sides) ...side.processPositions},
     applicationRecordId: preferred.applicationRecordId,
     evidenceSource: preferred.evidenceSource,
@@ -887,7 +903,10 @@ bool _compatible<T>(JourneyEvent<T> entry, JourneyEvent<T> exit) {
       _presentText(entry.scopeKey) == null ||
       entry.scopeKey != exit.scopeKey ||
       entry.mode == TripModeFilter.other ||
-      entry.mode != exit.mode) {
+      entry.mode != exit.mode ||
+      (entry.railAppTypeCode != null &&
+          exit.railAppTypeCode != null &&
+          entry.railAppTypeCode != exit.railAppTypeCode)) {
     return false;
   }
   if (_journeyCityCode(entry.cityCode) == null ||

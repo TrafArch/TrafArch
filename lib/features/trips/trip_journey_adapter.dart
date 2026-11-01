@@ -199,6 +199,14 @@ JourneyEvent<TripEntryInfo> describeJourneyEvent(
     cityCode: cityCode,
     cityLabel: cityLabel,
     sequence: sequence,
+    railAppTypeCode: mode != TripModeFilter.rail
+        ? null
+        : switch (entry) {
+            ProcessTripEntry(:final record) => record.appTypeCode,
+            TransactionTripEntry(:final trip) => trip.appTypeCode,
+            RailRecordEntry() => 0x01,
+            _ => null,
+          },
     processPositions: Map.unmodifiable(processPositions),
     applicationRecordId: recordId,
     evidenceSource: switch (entry) {
@@ -250,7 +258,7 @@ TripModeFilter _transactionMode(TransitTrip trip) {
 
 TripModeFilter _processMode(TUnionTripRecord record) => isTunionBusCycle(record)
     ? TripModeFilter.bus
-    : record.isCityRail
+    : record.isRailTransit
     ? TripModeFilter.rail
     : TripModeFilter.other;
 

@@ -10,24 +10,58 @@ bool matchesTunionJourneySide({
   required String? terminalId,
   required int? amountFen,
   required TUnionTripRecord cycle,
+  String? stationId,
+  int? lineCode,
+  String? agencyId,
 }) {
   String normalize(String? value) =>
       (value ?? '').replaceAll(RegExp(r'\s+'), '').toUpperCase();
   final city = normalize(cityCode);
   final terminal = normalize(terminalId);
-  return time != null &&
+  final sameSide =
+      time != null &&
       time == cycle.time &&
       RegExp(r'^[0-9A-F]{4}$').hasMatch(city) &&
       !RegExp(r'^[0F]+$').hasMatch(city) &&
       city == normalize(cycle.cityCode) &&
       RegExp(r'^[0-9A-F]{16}$').hasMatch(terminal) &&
       !RegExp(r'^0+$|^F+$').hasMatch(terminal) &&
-      terminal == normalize(cycle.terminalId) &&
       (isRail ? cycle.isCityRail : cycle.isBus) &&
       (isEntry
           ? const {0x01, 0x03}.contains(cycle.typeCode)
           : const {0x02, 0x04}.contains(cycle.typeCode)) &&
       (amountFen == null || amountFen == cycle.amountFen);
+  if (!sameSide) return false;
+  if (terminal == normalize(cycle.terminalId)) return true;
+
+  // Beijing writes BCD line/station ordinals in its 1A station and terminal,
+  // but binary ordinals and a different terminal namespace in 1E. This
+  // observed EP metro layout is not a general time-only or station-name alias.
+  final station = normalize(stationId);
+  final field = normalize(cycle.lineStationCode);
+  final agency = normalize(agencyId);
+  if (!isRail ||
+      city != '1000' ||
+      cycle.appTypeCode != 0x01 ||
+      !const {0x03, 0x04}.contains(cycle.typeCode) ||
+      amountFen == null ||
+      !RegExp(r'^100075130900\d{4}$').hasMatch(station) ||
+      !RegExp(r'^100075131F\d{4}[0-9A-F]{2}$').hasMatch(terminal) ||
+      !RegExp(r'^00003000[0-9A-F]{8}$').hasMatch(normalize(cycle.terminalId)) ||
+      terminal.substring(10, 14) != station.substring(12) ||
+      !RegExp(r'^[0-9A-F]{14}$').hasMatch(field) ||
+      !RegExp(r'^[0-9A-F]{16}$').hasMatch(agency) ||
+      RegExp(r'^0+$|^F+$').hasMatch(agency) ||
+      agency != normalize(cycle.acquirerId)) {
+    return false;
+  }
+  final line = int.parse(station.substring(12, 14));
+  final stop = int.parse(station.substring(14));
+  return line > 0 &&
+      stop > 0 &&
+      lineCode == line &&
+      int.parse(field.substring(0, 2), radix: 16) == line &&
+      int.parse(field.substring(2, 6), radix: 16) == stop;
 }
 
 /// 展示关联，不是余额锚点：秒级时间相等 OR 有效基础 POS 被扩展 POS 包含。

@@ -5,11 +5,59 @@ import '../../transit_analysis/balance_interpretation.dart';
 import '../../trips/journey_presentation.dart';
 import '../../trips/trip_cards_view.dart';
 import '../application/archive_history.dart';
+import '../domain/captured_transaction_balance.dart';
 import '../domain/card_session_snapshot.dart';
+import 'archive_journey_identity.dart';
+import 'archive_partial_capture_merge.dart';
 
 typedef ArchiveJourney =
     JourneyPresentation<TripCardPresentation<ArchiveRecordKind>>;
 typedef ArchiveJourneyEntry = TripCardPresentation<ArchiveRecordKind>;
+
+/// Unlike an operation key, this can witness an unclassified interrupted read.
+/// City, mode and role remain strict in the normal journey merge below.
+ArchiveTransactionObservation? archiveTransactionObservation(
+  ArchiveHistoryRecord record, {
+  required JourneyEvent<dynamic> event,
+}) {
+  final raw = _hex(record.fields['rawHex']);
+  if (record.kind != ArchiveRecordKind.transaction ||
+      raw == null ||
+      raw.length < 46 ||
+      event.scopeKey == null ||
+      event.endpoint.time == null ||
+      record.sources.isEmpty) {
+    return null;
+  }
+  final balances = {
+    for (final source in record.sources)
+      capturedTransactionBalance(record.fields, source.capturedParseVersion),
+  };
+  if (balances.length != 1) return null;
+  final balance = balances.single;
+  final occurrence = {
+    'scope': event.scopeKey,
+    'cardCityCode': record.cardCityCode,
+    'context': _identityContext(record.context),
+    'rawHex': raw,
+  };
+  return ArchiveTransactionObservation(
+    occurrenceIdentity: jsonEncode(_canonical(occurrence)),
+    identity: jsonEncode(
+      _canonical({
+        ...occurrence,
+        'identity': {
+          for (final field in record.fields.entries)
+            if (!_transactionAnnotations.contains(field.key) &&
+                field.key != 'cityCode')
+              field.key: field.key == 'rawHex' ? raw : field.value,
+        },
+      }),
+    ),
+    balanceFen: balance.fen,
+    balanceIsRecorded: balance.isRecorded,
+  );
+}
 
 /// An operation witness, never a journey pairing rule. Raw bytes and captured
 /// facts establish repeated observations; names, fares and array slots do not.
@@ -115,7 +163,9 @@ Map<String, dynamic> _identityContext(ArchiveContext context) {
         'observedFields',
         'captureDeviceOffsetMinutes',
       }.contains(field.key))
-        field.key: field.value,
+        field.key: field.key == 'systemId'
+            ? archiveJourneySystemId(context)
+            : field.value,
   };
   final observation = identity['balanceInterpretation'];
   if (observation is! Map<String, dynamic>) return identity;
@@ -135,7 +185,9 @@ Map<String, dynamic> _identityContext(ArchiveContext context) {
     for (final field in observation.entries)
       if (field.key != 'observedAmountMinor' &&
           field.key != 'accountBalanceMinor')
-        field.key: field.key == 'verifiedAccountBalance' && field.value is Map
+        field.key: field.key == 'parserId' && field.value == context.systemId
+            ? archiveJourneySystemId(context)
+            : field.key == 'verifiedAccountBalance' && field.value is Map
             ? {
                 for (final verified in (field.value as Map).entries)
                   if (verified.key != 'amountMinor' &&
@@ -171,8 +223,11 @@ const _transactionAnnotations = {
 /// runs the matcher or extends a balance ledger after combining evidence.
 List<ArchiveJourney> mergeArchiveJourneys(
   List<ArchiveJourney> captures,
-  Map<ArchiveJourneyEntry, Set<String>> operationKeys,
-) {
+  Map<ArchiveJourneyEntry, Set<String>> operationKeys, {
+  Map<ArchiveJourneyEntry, ArchiveTransactionObservation>
+      transactionObservations =
+      const {},
+}) {
   Set<String> keys(ArchiveJourney journey, JourneyEventRole role) => {
     for (final event in journey.events)
       if (event.role == role) ...?operationKeys[event.payload],
@@ -288,10 +343,14 @@ List<ArchiveJourney> mergeArchiveJourneys(
       absorbed.addAll(attachment.value);
     }
   }
-  final result = [
-    for (final group in groups)
-      if (!absorbed.contains(group)) _combine(group),
-  ];
+  final result = attachArchivePartialCaptures(
+    [
+      for (final group in groups)
+        if (!absorbed.contains(group)) _combine(group),
+    ],
+    originalCaptures: captures,
+    observations: transactionObservations,
+  );
   result.sort((a, b) {
     DateTime? latest(ArchiveJourney journey) => journey.events
         .map((event) => event.endpoint.time)
@@ -308,12 +367,22 @@ List<ArchiveJourney> mergeArchiveJourneys(
   return List.unmodifiable(result);
 }
 
-bool _consistentFacts(List<ArchiveJourney> group) => [
-  (ArchiveJourney j) => j.amountText,
-  (ArchiveJourney j) => j.fareAdjustmentAmountText,
-  (ArchiveJourney j) => j.balanceAfterText,
-  (ArchiveJourney j) => j.seatLabel,
-].every((field) => group.map(field).whereType<String>().toSet().length <= 1);
+bool _consistentFacts(List<ArchiveJourney> group) =>
+    group
+            .expand((journey) => journey.events)
+            .map((event) => event.railAppTypeCode)
+            .whereType<int>()
+            .toSet()
+            .length <=
+        1 &&
+    [
+      (ArchiveJourney j) => j.amountText,
+      (ArchiveJourney j) => j.fareAdjustmentAmountText,
+      (ArchiveJourney j) => j.balanceAfterText,
+      (ArchiveJourney j) => j.seatLabel,
+    ].every(
+      (field) => group.map(field).whereType<String>().toSet().length <= 1,
+    );
 
 Set<String> _batches(ArchiveJourney journey) => {
   for (final event in journey.events) ...event.sourceIds,

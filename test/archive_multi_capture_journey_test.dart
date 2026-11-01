@@ -566,7 +566,7 @@ void main() {
 
     await _selectFilter(tester, '全部方式', '公共汽电车');
     expect(find.byType(TripEntryCard), findsNothing);
-    await _selectFilter(tester, '公共汽电车', '城市轨道交通');
+    await _selectFilter(tester, '公共汽电车', '轨道交通');
     expect(find.byType(TripEntryCard), findsOneWidget);
 
     await tester.tap(find.byType(TripEntryCard));

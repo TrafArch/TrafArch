@@ -85,6 +85,7 @@ List<_Step> _tu({String serial = _serial}) => [
   _Step('00B0970000', _hex(List<int>.filled(60, 0)..[6] = 0x31)),
   _Step('805C000204', '00002710'),
   _Step('00B201C500', _tuFare),
+  _Step.reject('00B202C400'),
   _Step.reject('00B201D400'),
   _Step.reject('00B201D500'),
   _Step.reject('00B201F500'),
@@ -340,7 +341,7 @@ void main() {
     () async {
       final replay = _Replay([
         ..._lnt(),
-        ..._tu().take(7),
+        ..._tu().takeWhile((step) => step.command != '00B201D400'),
         _Step.lost('00B201D400'),
       ]);
       final bank = _BankProbe();
