@@ -76,7 +76,7 @@ void main() {
     expect(find.byType(FeedbackPage), findsOneWidget);
     expect(find.byType(SurveyPage), findsNothing);
     expect(find.text('暂时无法打开问卷'), findsOneWidget);
-    expect(find.textContaining('Edge 或 Chrome'), findsWidgets);
+    expect(find.textContaining('Edge、Chrome 或 Firefox'), findsWidgets);
     await tester.drag(find.byType(ListView), const Offset(0, -300));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('复制问卷链接'));
@@ -226,7 +226,7 @@ void main() {
     await tester.scrollUntilVisible(find.text('隐私政策'), 150);
     await tester.tap(find.text('隐私政策'));
     await tester.pumpAndSettle();
-    expect(find.text('无法打开隐私政策，请安装或启用 Edge 或 Chrome 后重试。'), findsOneWidget);
+    expect(find.text('无法打开隐私政策，请安装或启用 Edge、Chrome 或 Firefox 后重试。'), findsOneWidget);
     await tester.tap(find.text('隐私政策'));
     await tester.pumpAndSettle();
     expect(calls, 2);

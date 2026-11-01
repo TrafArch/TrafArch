@@ -8,12 +8,23 @@ import org.junit.Test
 class PreferredCustomTabsLauncherTest {
     private val url = "https://example.com/form?id=001#upload"
 
-    @Test fun edgeWinsWhenBothProvidersSupportCustomTabs() {
+    private fun launcher(
+        supportsCustomTabs: (String) -> Boolean = { true },
+        isInstalled: (String) -> Boolean = { true },
+        launchCustomTab: (String, String) -> Unit = { _, _ -> },
+        launchExternal: (String, String) -> Unit = { _, _ -> },
+    ) = PreferredCustomTabsLauncher(
+        supportsCustomTabs = supportsCustomTabs,
+        isInstalled = isInstalled,
+        launchCustomTab = launchCustomTab,
+        launchExternal = launchExternal,
+    )
+
+    @Test fun edgeWinsWhenAllProvidersSupportCustomTabs() {
         val launched = mutableListOf<Pair<String, String>>()
-        val launcher = PreferredCustomTabsLauncher(
-            supportsCustomTabs = { true },
-            launch = { provider, address -> launched.add(provider to address) },
-        )
+        val launcher = launcher(launchCustomTab = { provider, address ->
+            launched.add(provider to address)
+        })
 
         assertEquals("com.microsoft.emmx", launcher.open(url))
         assertEquals(listOf("com.microsoft.emmx" to url), launched)
@@ -21,9 +32,9 @@ class PreferredCustomTabsLauncherTest {
 
     @Test fun missingEdgeUsesChrome() {
         val launched = mutableListOf<String>()
-        val launcher = PreferredCustomTabsLauncher(
+        val launcher = launcher(
             supportsCustomTabs = { it == "com.android.chrome" },
-            launch = { provider, _ -> launched.add(provider) },
+            launchCustomTab = { provider, _ -> launched.add(provider) },
         )
 
         assertEquals("com.android.chrome", launcher.open(url))
@@ -32,62 +43,97 @@ class PreferredCustomTabsLauncherTest {
 
     @Test fun edgeLaunchFailureContinuesWithChrome() {
         val attempted = mutableListOf<String>()
-        val launcher = PreferredCustomTabsLauncher(
-            supportsCustomTabs = { true },
-            launch = { provider, _ ->
-                attempted.add(provider)
-                if (provider == "com.microsoft.emmx") throw SecurityException("disabled")
-            },
-        )
+        val launcher = launcher(launchCustomTab = { provider, _ ->
+            attempted.add(provider)
+            if (provider == "com.microsoft.emmx") throw SecurityException("disabled")
+        })
 
         assertEquals("com.android.chrome", launcher.open(url))
         assertEquals(listOf("com.microsoft.emmx", "com.android.chrome"), attempted)
     }
 
     @Test fun failedProviderDiscoveryStillTriesChrome() {
-        val launcher = PreferredCustomTabsLauncher(
-            supportsCustomTabs = {
-                if (it == "com.microsoft.emmx") throw SecurityException("hidden")
-                true
-            },
-            launch = { _, _ -> },
-        )
+        val launcher = launcher(supportsCustomTabs = {
+            if (it == "com.microsoft.emmx") throw SecurityException("hidden")
+            true
+        })
         assertEquals("com.android.chrome", launcher.open(url))
+    }
+
+    @Test fun firefoxFallsBackToExternalViewBecauseItHasNoCustomTabsService() {
+        val customTabs = mutableListOf<String>()
+        val external = mutableListOf<Pair<String, String>>()
+        val launcher = launcher(
+            supportsCustomTabs = { false },
+            isInstalled = { it == "org.mozilla.firefox" },
+            launchCustomTab = { provider, _ -> customTabs.add(provider) },
+            launchExternal = { provider, address -> external.add(provider to address) },
+        )
+
+        assertEquals("org.mozilla.firefox", launcher.open(url))
+        assertEquals(emptyList<String>(), customTabs)
+        assertEquals(listOf("org.mozilla.firefox" to url), external)
+    }
+
+    @Test fun firefoxWithCustomTabsServiceUsesCustomTabNotExternalView() {
+        val customTabs = mutableListOf<String>()
+        val external = mutableListOf<String>()
+        val launcher = launcher(
+            supportsCustomTabs = { it == "org.mozilla.firefox" },
+            launchCustomTab = { provider, _ -> customTabs.add(provider) },
+            launchExternal = { provider, _ -> external.add(provider) },
+        )
+
+        assertEquals("org.mozilla.firefox", launcher.open(url))
+        assertEquals(listOf("org.mozilla.firefox"), customTabs)
+        assertEquals(emptyList<String>(), external)
     }
 
     @Test fun missingProvidersNeverLaunchAnImplicitDefaultBrowser() {
         val checked = mutableListOf<String>()
         val launched = mutableListOf<String>()
-        val launcher = PreferredCustomTabsLauncher(
+        val launcher = launcher(
             supportsCustomTabs = { checked.add(it); false },
-            launch = { provider, _ -> launched.add(provider) },
+            isInstalled = { false },
+            launchCustomTab = { provider, _ -> launched.add(provider) },
+            launchExternal = { provider, _ -> launched.add(provider) },
         )
 
         assertNull(launcher.open(url))
-        assertEquals(listOf("com.microsoft.emmx", "com.android.chrome"), checked)
+        assertEquals(
+            listOf("com.microsoft.emmx", "com.android.chrome", "org.mozilla.firefox"),
+            checked,
+        )
         assertEquals(emptyList<String>(), launched)
     }
 
-    @Test fun bothLaunchFailuresReportUnavailable() {
+    @Test fun allLaunchFailuresReportUnavailable() {
         val attempted = mutableListOf<String>()
-        val launcher = PreferredCustomTabsLauncher(
-            supportsCustomTabs = { true },
-            launch = { provider, _ ->
-                attempted.add(provider)
-                throw IllegalStateException("activity no longer available")
-            },
+        val launcher = launcher(launchCustomTab = { provider, _ ->
+            attempted.add(provider)
+            throw IllegalStateException("activity no longer available")
+        })
+
+        assertNull(launcher.open(url))
+        assertEquals(
+            listOf("com.microsoft.emmx", "com.android.chrome", "org.mozilla.firefox"),
+            attempted,
+        )
+    }
+
+    @Test fun firefoxExternalLaunchFailureIsReported() {
+        val launcher = launcher(
+            supportsCustomTabs = { false },
+            isInstalled = { true },
+            launchExternal = { _, _ -> throw SecurityException("disabled") },
         )
 
         assertNull(launcher.open(url))
-        assertEquals(listOf("com.microsoft.emmx", "com.android.chrome"), attempted)
     }
 
     @Test fun invalidUrlsAreRejectedBeforeBrowserDiscovery() {
         var queried = false
-        val launcher = PreferredCustomTabsLauncher(
-            supportsCustomTabs = { queried = true; true },
-            launch = { _, _ -> },
-        )
+        val launcher = launcher(supportsCustomTabs = { queried = true; true })
 
         for (address in listOf("", "https:/form", "file:///tmp/a", "javascript:alert(1)",
             "https://example.com/a b")) {

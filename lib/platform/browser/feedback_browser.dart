@@ -1,6 +1,9 @@
 import 'package:flutter/services.dart';
 
-/// Opens a web page using the supported browser's Android Custom Tab.
+/// Opens a web page in a supported Android browser.
+///
+/// Edge / Chrome 走应用内 Custom Tab；Firefox 不绑定 CustomTabsService，
+/// 由原生层固定包名走 VIEW 跳转，仍属于受支持浏览器。
 abstract interface class FeedbackBrowser {
   Future<void> open(Uri url);
 }
@@ -18,8 +21,16 @@ class MethodChannelFeedbackBrowser implements FeedbackBrowser {
   const MethodChannelFeedbackBrowser();
 
   static const _channel = MethodChannel('transit_card_analyzer/browser');
+
+  /// 原生层允许的浏览器包名：Edge、Chrome、Firefox。
+  static const supportedProviders = {
+    'com.microsoft.emmx',
+    'com.android.chrome',
+    'org.mozilla.firefox',
+  };
+
   static const _unavailable =
-      '无法启动 Edge 或 Chrome 的应用内浏览器。请安装或启用其中一个浏览器后重试，'
+      '无法启动 Edge、Chrome 或 Firefox。请安装或启用其中一个浏览器后重试，'
       '也可复制问卷链接自行打开。';
 
   @override
@@ -31,7 +42,7 @@ class MethodChannelFeedbackBrowser implements FeedbackBrowser {
       final provider = await _channel.invokeMethod<String>('openCustomTab', {
         'url': url.toString(),
       });
-      if (!{'com.microsoft.emmx', 'com.android.chrome'}.contains(provider)) {
+      if (!supportedProviders.contains(provider)) {
         throw const FeedbackBrowserException(_unavailable);
       }
     } on MissingPluginException {

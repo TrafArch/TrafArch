@@ -17,7 +17,7 @@ class FeedbackPage extends StatelessWidget {
   /// QQ 加群链接（应用内 WebView 直接打开加群页）。
   static const String qqGroupJoinUrl = 'https://qm.qq.com/q/I8Ba9gEise';
 
-  /// 反馈问卷地址（飞书问卷，Edge / Chrome Custom Tab 打开）。
+  /// 反馈问卷地址（飞书问卷，Edge / Chrome / Firefox 打开）。
   static const String surveyUrl =
       'https://trafarch.feishu.cn/share/base/form/shrcniZ6QaPgqGazU1bpdmZyNPh';
 
@@ -118,7 +118,7 @@ class FeedbackPage extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            '问卷在 Edge 或 Chrome 的应用内浏览器中打开',
+            '问卷在 Edge、Chrome 或 Firefox 中打开',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.outline,

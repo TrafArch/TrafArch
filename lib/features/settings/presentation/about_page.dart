@@ -34,7 +34,7 @@ class _AboutPageState extends State<AboutPage> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('无法打开隐私政策，请安装或启用 Edge 或 Chrome 后重试。')),
+        const SnackBar(content: Text('无法打开隐私政策，请安装或启用 Edge、Chrome 或 Firefox 后重试。')),
       );
     } finally {
       if (mounted) setState(() => _openingPrivacy = false);

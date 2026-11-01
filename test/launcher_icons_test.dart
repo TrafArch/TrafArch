@@ -91,6 +91,70 @@ void main() {
     );
   }
 
+  test('night launcher layers reuse the light geometry with the dark palette', () async {
+    const darkBackground = [35, 48, 68];
+    const darkForeground = [172, 193, 223];
+    const lightForegroundColor = [78, 112, 152];
+    for (final entry in densities.entries) {
+      final size = entry.value * 108 ~/ 48;
+      final lightPath = '$root/mipmap-${entry.key}';
+      final nightPath = '$root/mipmap-night-${entry.key}';
+      final layers = <String, ui.Image>{};
+      try {
+        for (final name in ['ic_launcher_background', 'ic_launcher_foreground']) {
+          for (final (path, key) in [
+            (lightPath, 'light_$name'),
+            (nightPath, 'night_$name'),
+          ]) {
+            final codec = await ui.instantiateImageCodec(
+              File('$path/$name.png').readAsBytesSync(),
+            );
+            layers[key] = (await codec.getNextFrame()).image;
+            codec.dispose();
+            expect(layers[key]!.width, size);
+            expect(layers[key]!.height, size);
+          }
+        }
+        final nightBackground = (await layers['night_ic_launcher_background']!
+            .toByteData(format: ui.ImageByteFormat.rawStraightRgba))!;
+        final nightForeground = (await layers['night_ic_launcher_foreground']!
+            .toByteData(format: ui.ImageByteFormat.rawStraightRgba))!;
+        final lightForeground = (await layers['light_ic_launcher_foreground']!
+            .toByteData(format: ui.ImageByteFormat.rawStraightRgba))!;
+        for (var offset = 0; offset < size * size * 4; offset += 4) {
+          expect(nightBackground.getUint8(offset + 3), 255);
+          for (var channel = 0; channel < 3; channel++) {
+            expect(
+              nightBackground.getUint8(offset + channel),
+              darkBackground[channel],
+            );
+          }
+          final alpha = lightForeground.getUint8(offset + 3);
+          expect(nightForeground.getUint8(offset + 3), alpha);
+          if (alpha == 0) continue;
+          for (var channel = 0; channel < 3; channel++) {
+            final expected = darkForeground[channel];
+            final actual = nightForeground.getUint8(offset + channel);
+            if (alpha == 255) {
+              expect(actual, expected);
+            } else {
+              // 低 alpha 像素在解码/反预乘后会有几个单位的舍入，
+              // 因此只要求它已明显偏向暗色图形色而不是旧的亮色。
+              expect(
+                (actual - expected).abs(),
+                lessThan((actual - lightForegroundColor[channel]).abs()),
+              );
+            }
+          }
+        }
+      } finally {
+        for (final image in layers.values) {
+          image.dispose();
+        }
+      }
+    }
+  });
+
   test('both adaptive entries expose the monochrome layer', () {
     for (final name in ['ic_launcher', 'ic_launcher_round']) {
       final xml = File('$root/mipmap-anydpi/$name.xml').readAsStringSync();

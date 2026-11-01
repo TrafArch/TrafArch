@@ -22,6 +22,11 @@
         <intent>
             <action android:name="android.support.customtabs.action.CustomTabsService" />
         </intent>
+        <!-- 反馈问卷：Firefox 不提供 CustomTabsService，只能按包名走 VIEW 跳转，
+             需显式声明可见性才能判断是否已安装。 -->
+        <package android:name="com.microsoft.emmx" />
+        <package android:name="com.android.chrome" />
+        <package android:name="org.mozilla.firefox" />
     </queries>
 
     <application

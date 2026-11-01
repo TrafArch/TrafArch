@@ -42,6 +42,15 @@ void main() {
     expect(launches, 0);
   });
 
+  test('Firefox 作为受支持浏览器不视为启动失败', () async {
+    messenger.setMockMethodCallHandler(channel, (_) async => 'org.mozilla.firefox');
+
+    await expectLater(
+      browser.open(Uri.parse('https://example.com/form')),
+      completes,
+    );
+  });
+
   test('没有受支持浏览器时返回可展示的失败而不尝试其他通道', () async {
     messenger.setMockMethodCallHandler(channel, (_) async {
       throw PlatformException(code: 'BROWSER_UNAVAILABLE');
@@ -53,7 +62,7 @@ void main() {
         isA<FeedbackBrowserException>().having(
           (error) => error.message,
           'message',
-          allOf(contains('Edge'), contains('Chrome')),
+          allOf(contains('Edge'), contains('Chrome'), contains('Firefox')),
         ),
       ),
     );
