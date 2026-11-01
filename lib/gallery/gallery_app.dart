@@ -108,12 +108,25 @@ class _GalleryViewState extends State<_GalleryView> {
   GalleryTokens get t => Theme.of(context).extension<GalleryTokens>()!;
   PageStorageBucket _bucket = PageStorageBucket();
   int _generation = -1;
+  final _menuRoot = GlobalKey();
+  final Map<String, BuildContext> _menuAnchors = {};
+  final Map<String, Rect> _menuRects = {};
+  Size? _viewport;
+  bool _menuMeasureScheduled = false;
+  bool get _reduceMotion => MediaQuery.disableAnimationsOf(context);
 
   @override
   Widget build(BuildContext context) {
     if (_generation != c.generation) {
       _generation = c.generation;
       _bucket = PageStorageBucket();
+      _menuAnchors.clear();
+      _menuRects.clear();
+    }
+    final viewport = MediaQuery.sizeOf(context);
+    if (_viewport != viewport) {
+      _viewport = viewport;
+      _scheduleMenuMeasure();
     }
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: (t.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
@@ -147,6 +160,7 @@ class _GalleryViewState extends State<_GalleryView> {
               body: SafeArea(
                 bottom: false,
                 child: Stack(
+                  key: _menuRoot,
                   children: [
                     ExcludeFocus(
                       excluding: c.overlay != null,
@@ -154,9 +168,47 @@ class _GalleryViewState extends State<_GalleryView> {
                         excluding: c.overlay != null,
                         child: PageStorage(
                           bucket: _bucket,
-                          child: KeyedSubtree(
+                          child: AnimatedSwitcher(
                             key: ValueKey(c.generation),
-                            child: _page(),
+                            duration: _reduceMotion
+                                ? Duration.zero
+                                : const Duration(milliseconds: 220),
+                            reverseDuration: _reduceMotion
+                                ? Duration.zero
+                                : const Duration(milliseconds: 140),
+                            switchInCurve: Curves.easeOutCubic,
+                            switchOutCurve: Curves.easeInCubic,
+                            transitionBuilder: (child, animation) =>
+                                FadeTransition(
+                                  opacity: animation,
+                                  child: AnimatedBuilder(
+                                    animation: animation,
+                                    builder: (_, child) => Transform.translate(
+                                      offset: Offset(
+                                        0,
+                                        8 * (1 - animation.value),
+                                      ),
+                                      child: child,
+                                    ),
+                                    child: child,
+                                  ),
+                                ),
+                            layoutBuilder: (current, previous) => Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                for (final child in previous)
+                                  IgnorePointer(
+                                    child: ExcludeFocus(
+                                      child: ExcludeSemantics(child: child),
+                                    ),
+                                  ),
+                                ?current,
+                              ],
+                            ),
+                            child: KeyedSubtree(
+                              key: ValueKey(c.page),
+                              child: _page(),
+                            ),
                           ),
                         ),
                       ),
@@ -175,6 +227,53 @@ class _GalleryViewState extends State<_GalleryView> {
         ),
       ),
     );
+  }
+
+  Widget _menuAnchor(String id, Widget child) => Builder(
+    builder: (anchorContext) {
+      _menuAnchors[id] = anchorContext;
+      _scheduleMenuMeasure();
+      return child;
+    },
+  );
+
+  void _scheduleMenuMeasure() {
+    if (_menuMeasureScheduled) return;
+    _menuMeasureScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _menuMeasureScheduled = false;
+      if (!mounted) return;
+      var changed = false;
+      for (final id in _menuAnchors.keys) {
+        final rect = _measureMenuBounds(id);
+        if (rect != null && rect != _menuRects[id]) {
+          _menuRects[id] = rect;
+          changed = true;
+        }
+      }
+      if (changed && c.overlay != null) setState(() {});
+    });
+  }
+
+  Rect? _measureMenuBounds(String id) {
+    final anchorContext = _menuAnchors[id];
+    final anchor = anchorContext?.mounted == true
+        ? anchorContext!.findRenderObject()
+        : null;
+    final root = _menuRoot.currentContext?.findRenderObject();
+    if (anchor is RenderBox && anchor.hasSize && root is RenderBox) {
+      return anchor.localToGlobal(Offset.zero, ancestor: root) & anchor.size;
+    }
+    return null;
+  }
+
+  Rect _menuBounds(String id) =>
+      _menuRects[id] ?? const Rect.fromLTWH(16, 64, 36, 36);
+
+  void _openDropdown(GalleryOverlay type, String anchor, {GalleryCard? card}) {
+    final rect = _measureMenuBounds(anchor);
+    if (rect != null) _menuRects[anchor] = rect;
+    c.showOverlay(type, card: card);
   }
 
   Widget _page() => switch (c.page) {

@@ -387,50 +387,36 @@ extension _GalleryPages on _GalleryViewState {
     ]);
   }
 
-  Widget _filterButton(String label, GalleryOverlay overlay) =>
-      PopupMenuButton<String>(
-        tooltip: overlay == GalleryOverlay.source ? '选择记录来源' : '选择交通方式',
-        initialValue: label,
-        position: PopupMenuPosition.under,
-        offset: const Offset(0, 6),
-        color: t.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        onSelected: (value) => c.update(() {
-          if (overlay == GalleryOverlay.source) {
-            c.source = value;
-          } else {
-            c.mode = value;
-          }
-        }),
-        itemBuilder: (_) =>
-            (c.data.json[overlay == GalleryOverlay.source ? 'sources' : 'modes']
-                    as List)
-                .cast<String>()
-                .map(
-                  (value) => CheckedPopupMenuItem<String>(
-                    value: value,
-                    checked: value == label,
-                    child: _text(value, size: 13),
-                  ),
-                )
-                .toList(),
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 36),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-          decoration: ShapeDecoration(
-            color: label.startsWith('全部') ? t.surface : t.tone,
+  Widget _filterButton(String label, GalleryOverlay overlay) => _menuAnchor(
+    'filter-${overlay.name}',
+    Semantics(
+      button: true,
+      expanded: c.overlay == overlay,
+      child: Tooltip(
+        message: overlay == GalleryOverlay.source ? '选择记录来源' : '选择交通方式',
+        child: TextButton(
+          key: ValueKey('filter-${overlay.name}'),
+          onPressed: () => _openDropdown(overlay, 'filter-${overlay.name}'),
+          style: TextButton.styleFrom(
+            minimumSize: const Size(0, 36),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            backgroundColor: label.startsWith('全部') ? t.surface : t.tone,
+            foregroundColor: label.startsWith('全部') ? t.muted : t.onTone,
             shape: StadiumBorder(side: BorderSide(color: t.line)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(label, style: TextStyle(fontSize: 12, color: t.onTone)),
-              const SizedBox(width: 4),
+              Text(label, style: const TextStyle(fontSize: 12)),
+              const SizedBox(width: 7),
               const Icon(Icons.expand_more_rounded, size: 16),
             ],
           ),
         ),
-      );
+      ),
+    ),
+  );
 
   Widget _trip(GalleryRecord trip, {bool interactive = true}) {
     final rail = trip['kind'] == 'rail';
@@ -651,15 +637,18 @@ extension _GalleryPages on _GalleryViewState {
                   ),
                 ),
                 const SizedBox(width: 4),
-                SizedBox(
-                  width: 34,
-                  height: 40,
-                  child: IconButton(
-                    tooltip: '${card.name} 管理',
-                    padding: EdgeInsets.zero,
-                    onPressed: () =>
-                        c.showOverlay(GalleryOverlay.cardMenu, card: card),
-                    icon: const Icon(Icons.more_horiz_rounded, size: 21),
+                _menuAnchor(
+                  'card-${card.id}',
+                  _icon(
+                    Icons.more_horiz_rounded,
+                    '${card.name} 管理',
+                    () => _openDropdown(
+                      GalleryOverlay.cardMenu,
+                      'card-${card.id}',
+                      card: card,
+                    ),
+                    size: 36,
+                    background: t.surface2,
                   ),
                 ),
               ],
@@ -806,29 +795,10 @@ extension _GalleryPages on _GalleryViewState {
   }
 
   Widget _weekly(GalleryCard card) {
-    final values = List<int>.filled(7, 0);
-    final categories = <String, int>{};
-    int count = 0;
-    for (final row in c.ledger(card)) {
-      final date = DateTime.tryParse(row['isoDate'] as String? ?? '');
-      if (date == null) continue;
-      final day = date.difference(DateTime(2026, 10, 26)).inDays;
-      if (day < 0 || day > 6) continue;
-      final amount = RegExp(r'[\d.]+')
-          .firstMatch(row['amount'] as String? ?? '')
-          ?.group(0);
-      if (amount == null) continue;
-      final fen = (double.parse(amount) * 100).round();
-      values[day] += fen;
-      final kind = row['kind'] == 'rail'
-          ? '轨道交通'
-          : row['kind'] == 'bus'
-          ? '公共汽电车'
-          : '其他';
-      categories.update(kind, (value) => value + fen, ifAbsent: () => fen);
-      count++;
-    }
-    final total = values.fold(0, (sum, value) => sum + value);
+    final weekly = GalleryWeeklySpending(card.currency, c.ledger(card));
+    final values = weekly.days;
+    final categories = weekly.categories;
+    final total = weekly.total;
     final max = math.max(1, values.reduce(math.max));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -839,19 +809,17 @@ extension _GalleryPages on _GalleryViewState {
             children: [
               _text('本周消费', size: 12, color: t.muted),
               _gap(6),
-              _text(
-                '¥${formatGalleryMoney(total)}',
-                size: 36,
-                weight: FontWeight.w700,
-              ),
+              _text(weekly.format(total), size: 36, weight: FontWeight.w700),
               _gap(12),
               Row(
                 children: [
-                  Expanded(child: _text('乘车 $count 次', size: 13)),
-                  _text(
-                    '日均 ¥${formatGalleryMoney((total / 7).round())}',
-                    size: 12,
-                    color: t.muted,
+                  Expanded(child: _text('乘车 ${weekly.count} 次', size: 13)),
+                  Flexible(
+                    child: _text(
+                      '日均 ${weekly.format((total / 7).round())}',
+                      size: 12,
+                      color: t.muted,
+                    ),
                   ),
                 ],
               ),
@@ -866,7 +834,7 @@ extension _GalleryPages on _GalleryViewState {
             label: List.generate(
               7,
               (i) =>
-                  '${['周一', '周二', '周三', '周四', '周五', '周六', '周日'][i]} ${formatGalleryMoney(values[i])}元',
+                  '${['周一', '周二', '周三', '周四', '周五', '周六', '周日'][i]} ${weekly.format(values[i])}',
             ).join('，'),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
@@ -877,7 +845,14 @@ extension _GalleryPages on _GalleryViewState {
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: Column(
                       children: [
-                        _text(formatGalleryMoney(values[i]), size: 10),
+                        _text(
+                          weekly.currency == null
+                              ? '—'
+                              : weekly.currency == GalleryCurrency.jpy
+                              ? '${values[i]}'
+                              : formatGalleryMoney(values[i]),
+                          size: 10,
+                        ),
                         _gap(8),
                         Container(
                           height: 92,
@@ -916,15 +891,12 @@ extension _GalleryPages on _GalleryViewState {
           _panel(
             Column(
               children: categories.entries
-                  .map(
-                    (entry) =>
-                        _kv(entry.key, '¥${formatGalleryMoney(entry.value)}'),
-                  )
+                  .map((entry) => _kv(entry.key, weekly.format(entry.value)))
                   .toList(),
             ),
           ),
         _gap(12),
-        _text('仅统计本周有明确日期的样例记录；未记录日期的交易不计入。', size: 11, color: t.muted),
+        _text('仅统计本周有明确日期、币种和扣款金额的样例记录；未记录日期的交易不计入。', size: 11, color: t.muted),
       ],
     );
   }

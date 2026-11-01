@@ -56,6 +56,23 @@ class GalleryTokens extends ThemeExtension<GalleryTokens> {
   }
 
   ThemeData theme() {
+    final feedback = WidgetStateProperty.resolveWith<Color?>((states) {
+      if (states.contains(WidgetState.pressed)) return Colors.transparent;
+      if (states.contains(WidgetState.focused)) {
+        return onTone.withValues(alpha: .12);
+      }
+      if (states.contains(WidgetState.hovered)) {
+        return onTone.withValues(alpha: .04);
+      }
+      return Colors.transparent;
+    });
+    final flatButton = ButtonStyle(
+      elevation: const WidgetStatePropertyAll(0),
+      shadowColor: const WidgetStatePropertyAll(Colors.transparent),
+      surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+      overlayColor: feedback,
+      splashFactory: NoSplash.splashFactory,
+    );
     final scheme =
         ColorScheme.fromSeed(
           seedColor: onTone,
@@ -81,7 +98,14 @@ class GalleryTokens extends ThemeExtension<GalleryTokens> {
       ),
       iconTheme: IconThemeData(color: muted, size: 20),
       dividerTheme: DividerThemeData(color: line, space: 1, thickness: 1),
-      splashFactory: InkRipple.splashFactory,
+      splashFactory: NoSplash.splashFactory,
+      splashColor: Colors.transparent,
+      highlightColor: Colors.transparent,
+      textButtonTheme: TextButtonThemeData(style: flatButton),
+      filledButtonTheme: FilledButtonThemeData(style: flatButton),
+      outlinedButtonTheme: OutlinedButtonThemeData(style: flatButton),
+      elevatedButtonTheme: ElevatedButtonThemeData(style: flatButton),
+      iconButtonTheme: IconButtonThemeData(style: flatButton),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: surface2,
@@ -95,6 +119,7 @@ class GalleryTokens extends ThemeExtension<GalleryTokens> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       ),
       switchTheme: SwitchThemeData(
+        overlayColor: feedback,
         trackColor: WidgetStateProperty.resolveWith(
           (states) =>
               states.contains(WidgetState.selected) ? control : surface2,

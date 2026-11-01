@@ -99,6 +99,14 @@ class GalleryCard {
   String face;
   String? image;
 
+  // These currencies belong to the frozen samples, not inferred real cards.
+  GalleryCurrency? get currency => switch (id) {
+    'shanghai' || 'shenzhen' => GalleryCurrency.cny,
+    'suica' => GalleryCurrency.jpy,
+    'octopus' => GalleryCurrency.hkd,
+    _ => null,
+  };
+
   bool get unknownBalance => !RegExp(r'\d').hasMatch(rawBalance);
 
   String balance(bool includeOverdraft) {
@@ -113,6 +121,74 @@ class GalleryCard {
     final fen = (value * 100).round() - (includeOverdraft ? 0 : 800);
     return '¥${formatGalleryMoney(fen)}';
   }
+}
+
+enum GalleryCurrency {
+  cny(100, '元'),
+  jpy(1, '日元'),
+  hkd(100, '港元');
+
+  const GalleryCurrency(this.scale, this.unit);
+  final int scale;
+  final String unit;
+
+  String format(int amount) => switch (this) {
+    cny => '¥${formatGalleryMoney(amount)}',
+    jpy => '${formatGalleryMoney(amount * 100).split('.').first} JPY',
+    hkd => 'HK\$${formatGalleryMoney(amount)}',
+  };
+
+  /// Only explicit debits in this sample's currency count as spending.
+  int? debit(String value) {
+    final pattern = switch (this) {
+      cny => r'^[−-]¥([\d,]+(?:\.\d{1,2})?)$',
+      jpy => r'^[−-]([\d,]+) JPY$',
+      hkd => r'^[−-]HK\$([\d,]+(?:\.\d{1,2})?)$',
+    };
+    final number = RegExp(pattern).firstMatch(value)?.group(1);
+    if (number == null) return null;
+    final parts = number.replaceAll(',', '').split('.');
+    final whole = int.tryParse(parts.first);
+    if (whole == null) return null;
+    return whole * scale +
+        (parts.length == 1 ? 0 : int.parse(parts[1].padRight(2, '0')));
+  }
+}
+
+class GalleryWeeklySpending {
+  GalleryWeeklySpending(this.currency, Iterable<GalleryRecord> records) {
+    if (currency == null) return;
+    for (final row in records) {
+      final text = row['isoDate'] as String? ?? '';
+      final date = DateTime.tryParse(text);
+      if (date == null || date.toIso8601String().split('T').first != text) {
+        continue;
+      }
+      final day = date.difference(DateTime(2026, 10, 26)).inDays;
+      if (day < 0 || day > 6) continue;
+      final amount = currency!.debit(row['amount'] as String? ?? '');
+      if (amount == null) continue;
+      days[day] += amount;
+      final category = switch (row['kind']) {
+        'rail' => '轨道交通',
+        'bus' => '公共汽电车',
+        _ => '其他',
+      };
+      categories.update(
+        category,
+        (value) => value + amount,
+        ifAbsent: () => amount,
+      );
+      count++;
+    }
+  }
+
+  final GalleryCurrency? currency;
+  final List<int> days = List<int>.filled(7, 0);
+  final Map<String, int> categories = {};
+  int count = 0;
+  int get total => days.fold(0, (sum, value) => sum + value);
+  String format(int amount) => currency?.format(amount) ?? '暂不可用';
 }
 
 String formatGalleryMoney(int fen) {

@@ -3,6 +3,11 @@ part of 'gallery_app.dart';
 extension _GalleryOverlays on _GalleryViewState {
   List<Widget> _overlay() {
     final type = c.overlay!;
+    if (type == GalleryOverlay.cardMenu ||
+        type == GalleryOverlay.source ||
+        type == GalleryOverlay.mode) {
+      return _dropdownOverlay(type);
+    }
     final sheet = [
       GalleryOverlay.face,
       GalleryOverlay.trip,
@@ -36,50 +41,64 @@ extension _GalleryOverlays on _GalleryViewState {
               ),
               child: FocusScope(
                 autofocus: true,
-                child: FocusTraversalGroup(
-                  child: Semantics(
-                    scopesRoute: true,
-                    namesRoute: true,
-                    label: _overlayTitle(type),
-                    explicitChildNodes: true,
-                    child: Material(
-                      color: t.surface,
-                      borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(sheet ? 26 : 24),
-                        bottom: Radius.circular(sheet ? 0 : 24),
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.all(22),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _text(
-                                    _overlayTitle(type),
-                                    size: 18,
-                                    weight: FontWeight.w600,
+                child: Focus(
+                  autofocus:
+                      type != GalleryOverlay.save &&
+                      type != GalleryOverlay.rename,
+                  skipTraversal: true,
+                  onKeyEvent: (_, event) {
+                    if (event is KeyDownEvent &&
+                        event.logicalKey == LogicalKeyboardKey.escape) {
+                      c.back();
+                      return KeyEventResult.handled;
+                    }
+                    return KeyEventResult.ignored;
+                  },
+                  child: FocusTraversalGroup(
+                    child: Semantics(
+                      scopesRoute: true,
+                      namesRoute: true,
+                      label: _overlayTitle(type),
+                      explicitChildNodes: true,
+                      child: Material(
+                        color: t.surface,
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(sheet ? 26 : 24),
+                          bottom: Radius.circular(sheet ? 0 : 24),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.all(22),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _text(
+                                      _overlayTitle(type),
+                                      size: 18,
+                                      weight: FontWeight.w600,
+                                    ),
                                   ),
-                                ),
-                                IconButton(
-                                  autofocus:
-                                      type != GalleryOverlay.save &&
-                                      type != GalleryOverlay.rename,
-                                  tooltip: '关闭',
-                                  onPressed: c.back,
-                                  icon: const Icon(
-                                    Icons.close_rounded,
-                                    size: 21,
+                                  IconButton(
+                                    autofocus:
+                                        type != GalleryOverlay.save &&
+                                        type != GalleryOverlay.rename,
+                                    tooltip: '关闭',
+                                    onPressed: c.back,
+                                    icon: const Icon(
+                                      Icons.close_rounded,
+                                      size: 21,
+                                    ),
                                   ),
-                                ),
-                              ],
-                            ),
-                            _gap(12),
-                            _overlayBody(type),
-                          ],
+                                ],
+                              ),
+                              _gap(12),
+                              _overlayBody(type),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -149,42 +168,9 @@ extension _GalleryOverlays on _GalleryViewState {
         ),
       ],
     ),
-    GalleryOverlay.cardMenu => Column(
-      children: [
-        _settingRow(
-          '重命名',
-          () => c.showOverlay(GalleryOverlay.rename),
-          icon: Icons.edit_outlined,
-        ),
-        _settingRow(
-          '更换卡面',
-          () => c.showOverlay(GalleryOverlay.face),
-          icon: Icons.palette_outlined,
-        ),
-        _settingRow('导出记录', () => c.export(), icon: Icons.download_outlined),
-        ListTile(
-          leading: Icon(Icons.delete_outline_rounded, color: t.danger),
-          title: _text('删除本卡', color: t.danger),
-          onTap: () => c.showOverlay(GalleryOverlay.delete),
-        ),
-      ],
-    ),
-    GalleryOverlay.source => _options(
-      (c.data.json['sources'] as List).cast<String>(),
-      c.source,
-      (value) => c.update(() {
-        c.source = value;
-        c.overlay = null;
-      }),
-    ),
-    GalleryOverlay.mode => _options(
-      (c.data.json['modes'] as List).cast<String>(),
-      c.mode,
-      (value) => c.update(() {
-        c.mode = value;
-        c.overlay = null;
-      }),
-    ),
+    GalleryOverlay.cardMenu ||
+    GalleryOverlay.source ||
+    GalleryOverlay.mode => Column(children: _dropdownItems(type)),
     GalleryOverlay.face => _faceSheet(),
     GalleryOverlay.trip => _tripSheet(),
     GalleryOverlay.about => Column(
@@ -260,23 +246,201 @@ extension _GalleryOverlays on _GalleryViewState {
     ),
   };
 
-  Widget _options(
-    List<String> options,
-    String selected,
-    ValueChanged<String> onSelected,
-  ) => Column(
-    children: options
+  List<Widget> _dropdownOverlay(GalleryOverlay type) {
+    final cardMenu = type == GalleryOverlay.cardMenu;
+    final anchor = cardMenu
+        ? 'card-${c.selectedCard.id}'
+        : 'filter-${type.name}';
+    final radius = BorderRadius.circular(cardMenu ? 14 : 12);
+    return [
+      Positioned.fill(
+        child: ModalBarrier(
+          dismissible: true,
+          onDismiss: c.back,
+          semanticsLabel: '关闭菜单',
+          color: Colors.transparent,
+        ),
+      ),
+      Positioned.fill(
+        child: CustomSingleChildLayout(
+          delegate: _GalleryMenuLayout(
+            anchor: () => _menuBounds(anchor),
+            alignEnd: cardMenu,
+            width: (cardMenu ? 158 : 170) * (1 + _extraTextScale),
+            bottomInset: MediaQuery.paddingOf(context).bottom,
+          ),
+          child: TweenAnimationBuilder<double>(
+            key: ValueKey('menu-${c.generation}-${type.name}-$anchor'),
+            tween: Tween(begin: 0, end: 1),
+            duration: _reduceMotion
+                ? Duration.zero
+                : const Duration(milliseconds: 140),
+            curve: Curves.easeOut,
+            builder: (_, value, child) => Opacity(
+              opacity: value,
+              child: Transform.translate(
+                offset: Offset(0, -4 * (1 - value)),
+                child: child,
+              ),
+            ),
+            child: Semantics(
+              scopesRoute: true,
+              namesRoute: true,
+              label: _overlayTitle(type),
+              explicitChildNodes: true,
+              child: _dropdownFocus(
+                FocusTraversalGroup(
+                  policy: WidgetOrderTraversalPolicy(),
+                  child: Shortcuts(
+                    shortcuts: const {
+                      SingleActivator(LogicalKeyboardKey.arrowDown):
+                          NextFocusIntent(),
+                      SingleActivator(LogicalKeyboardKey.arrowUp):
+                          PreviousFocusIntent(),
+                    },
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: radius,
+                        boxShadow: [
+                          BoxShadow(
+                            color: t.dark
+                                ? Colors.black.withValues(alpha: .55)
+                                : const Color(0xff142846)
+                                      .withValues(alpha: .18),
+                            blurRadius: 36,
+                            offset: const Offset(0, 18),
+                          ),
+                        ],
+                      ),
+                      child: Material(
+                        key: const ValueKey('gallery-dropdown'),
+                        color: t.surface,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: radius,
+                          side: BorderSide(color: t.line),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: SingleChildScrollView(
+                          primary: false,
+                          padding: EdgeInsets.all(cardMenu ? 6 : 5),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: _dropdownItems(type),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ];
+  }
+
+  Widget _dropdownFocus(Widget child) => FocusScope(
+    autofocus: true,
+    child: Focus(
+      autofocus: true,
+      skipTraversal: true,
+      onKeyEvent: (_, event) {
+        if (event is KeyDownEvent &&
+            event.logicalKey == LogicalKeyboardKey.escape) {
+          c.back();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: child,
+    ),
+  );
+
+  List<Widget> _dropdownItems(GalleryOverlay type) {
+    if (type == GalleryOverlay.cardMenu) {
+      return [
+        _dropdownItem(
+          '重命名',
+          () => c.showOverlay(GalleryOverlay.rename),
+          icon: Icons.edit_outlined,
+        ),
+        _dropdownItem(
+          '更改卡面',
+          () => c.showOverlay(GalleryOverlay.face),
+          icon: Icons.palette_outlined,
+        ),
+        _dropdownItem(
+          '删除本卡',
+          () => c.showOverlay(GalleryOverlay.delete),
+          icon: Icons.delete_outline_rounded,
+          danger: true,
+        ),
+      ];
+    }
+    final source = type == GalleryOverlay.source;
+    final selected = source ? c.source : c.mode;
+    return (c.data.json[source ? 'sources' : 'modes'] as List)
+        .cast<String>()
         .map(
-          (label) => ListTile(
-            title: _text(label, size: 14),
-            trailing: label == selected
-                ? Icon(Icons.check_rounded, color: t.onTone)
-                : null,
-            onTap: () => onSelected(label),
+          (value) => _dropdownItem(
+            value,
+            () => c.update(() {
+              if (source) {
+                c.source = value;
+              } else {
+                c.mode = value;
+              }
+              c.overlay = null;
+            }),
+            selected: value == selected,
           ),
         )
-        .toList(),
-  );
+        .toList();
+  }
+
+  Widget _dropdownItem(
+    String label,
+    VoidCallback action, {
+    IconData? icon,
+    bool selected = false,
+    bool danger = false,
+  }) {
+    final color = danger
+        ? t.danger
+        : selected
+        ? t.onTone
+        : t.text;
+    return Semantics(
+      selected: icon == null ? selected : null,
+      child: TextButton(
+        key: ValueKey('menu-option-$label'),
+        onPressed: action,
+        style: TextButton.styleFrom(
+          minimumSize: const Size(0, 42),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          foregroundColor: color,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        child: Row(
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 16, color: danger ? t.danger : t.muted),
+              const SizedBox(width: 9),
+            ],
+            Expanded(child: _text(label, size: 14, color: color)),
+            if (selected) ...[
+              const SizedBox(width: 8),
+              Icon(Icons.check_rounded, size: 14, color: t.control),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _tripSheet() {
     final trip = c.selectedTrip;
@@ -400,6 +564,47 @@ extension _GalleryOverlays on _GalleryViewState {
       _button('完成', c.back, primary: true),
     ],
   );
+}
+
+class _GalleryMenuLayout extends SingleChildLayoutDelegate {
+  _GalleryMenuLayout({
+    required this.anchor,
+    required this.alignEnd,
+    required this.width,
+    required this.bottomInset,
+  });
+  final Rect Function() anchor;
+  final bool alignEnd;
+  final double width, bottomInset;
+
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
+    final availableWidth = math.max(0.0, constraints.maxWidth - 24);
+    final menuWidth = math.min(width, availableWidth);
+    return BoxConstraints(
+      minWidth: menuWidth,
+      maxWidth: menuWidth,
+      maxHeight: math.max(0, constraints.maxHeight - bottomInset - 16),
+    );
+  }
+
+  @override
+  Offset getPositionForChild(Size size, Size childSize) {
+    final rect = anchor();
+    final x = alignEnd ? rect.right - childSize.width : rect.left;
+    final below = rect.bottom + 6;
+    final bottom = size.height - bottomInset - 8;
+    final y = below + childSize.height <= bottom
+        ? below
+        : rect.top - childSize.height - 6;
+    return Offset(
+      x.clamp(12.0, math.max(12.0, size.width - childSize.width - 12)),
+      y.clamp(8.0, math.max(8.0, bottom - childSize.height)),
+    );
+  }
+
+  @override
+  bool shouldRelayout(covariant _GalleryMenuLayout oldDelegate) => true;
 }
 
 class _GalleryNameForm extends StatefulWidget {

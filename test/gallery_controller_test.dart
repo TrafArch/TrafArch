@@ -182,6 +182,54 @@ void main() {
     expect(c.trips.length, 5);
   });
 
+  test('weekly samples keep explicit CNY, JPY and HKD currencies', () {
+    for (final sample in [
+      (GalleryCurrency.cny, '−¥1,234.56', 123456, '¥1,234.56'),
+      (GalleryCurrency.jpy, '−1,234 JPY', 1234, '1,234 JPY'),
+      (GalleryCurrency.hkd, '−HK\$1,234.56', 123456, 'HK\$1,234.56'),
+    ]) {
+      final summary = GalleryWeeklySpending(sample.$1, [
+        {'isoDate': '2026-10-26', 'amount': sample.$2, 'kind': 'rail'},
+        {'isoDate': '2026-11-01', 'amount': sample.$2, 'kind': 'bus'},
+        {'isoDate': '2026-10-25', 'amount': sample.$2, 'kind': 'rail'},
+        {'isoDate': '2026-11-02', 'amount': sample.$2, 'kind': 'rail'},
+        {'amount': sample.$2, 'kind': 'rail'},
+        {'isoDate': '2026-10-27', 'amount': '—', 'kind': 'rail'},
+        {'isoDate': '2026-10-27', 'amount': '+¥20.00', 'kind': 'rail'},
+        {'isoDate': '2026-10-27', 'amount': '−EUR2.00', 'kind': 'rail'},
+      ]);
+      expect(summary.count, 2);
+      expect(summary.days, [sample.$3, 0, 0, 0, 0, 0, sample.$3]);
+      expect(summary.total, sample.$3 * 2);
+      expect(summary.categories, {'轨道交通': sample.$3, '公共汽电车': sample.$3});
+      expect(summary.format(sample.$3), sample.$4);
+    }
+    expect(GalleryCurrency.jpy.debit('−1.23 JPY'), isNull);
+    expect(GalleryCurrency.cny.debit('−HK\$2.00'), isNull);
+  });
+
+  test('weekly snapshot does not invent dates or an unknown currency', () {
+    final original = jsonEncode(c.data.json);
+    expect(
+      GalleryWeeklySpending(c.current.currency, c.ledger(c.current)).total,
+      1000,
+    );
+    for (final card in c.cards.where(
+      (card) => card.id == 'suica' || card.id == 'octopus',
+    )) {
+      final weekly = GalleryWeeklySpending(card.currency, c.ledger(card));
+      expect(weekly.count, 0);
+      expect(weekly.total, 0);
+      expect(weekly.format(0), card.id == 'suica' ? '0 JPY' : 'HK\$0.00');
+    }
+    final unknown = GalleryWeeklySpending(null, [
+      {'isoDate': '2026-10-27', 'amount': '−¥2.00', 'kind': 'bus'},
+    ]);
+    expect(unknown.format(0), '暂不可用');
+    expect(unknown.categories, isEmpty);
+    expect(jsonEncode(c.data.json), original);
+  });
+
   test('logs and export remain previews with no card data in UI logs', () {
     c.navigate(GalleryPage.settings);
     expect(c.logs, isEmpty);

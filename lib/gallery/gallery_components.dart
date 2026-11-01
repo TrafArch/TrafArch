@@ -96,9 +96,11 @@ extension _GalleryComponents on _GalleryViewState {
     String label,
     VoidCallback action, {
     Color? color,
+    Color? background,
+    double size = 44,
   }) => SizedBox(
-    width: 44,
-    height: 44,
+    width: size,
+    height: size,
     child: IconButton(
       onPressed: action,
       tooltip: label,
@@ -106,6 +108,7 @@ extension _GalleryComponents on _GalleryViewState {
         side: BorderSide(color: t.line),
         shape: const CircleBorder(),
         foregroundColor: color ?? t.muted,
+        backgroundColor: background,
         padding: EdgeInsets.zero,
       ),
       icon: Icon(icon, size: 21),
@@ -454,65 +457,92 @@ extension _GalleryComponents on _GalleryViewState {
       ),
       decoration: BoxDecoration(
         color: c.docked ? t.surface2 : t.surface.withValues(alpha: .97),
-        borderRadius: c.docked ? null : BorderRadius.circular(31),
+        borderRadius: c.docked
+            ? null
+            : BorderRadius.circular(31 + _extraTextScale * 10),
         border: c.docked ? null : Border.all(color: t.line),
         boxShadow: c.docked
             ? null
             : [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: .18),
-                  blurRadius: 24,
-                  offset: const Offset(0, 8),
+                  color: t.dark
+                      ? Colors.black.withValues(alpha: .55)
+                      : const Color(0xff142846).withValues(alpha: .14),
+                  blurRadius: t.dark ? 34 : 30,
+                  offset: const Offset(0, 12),
                 ),
               ],
       ),
       child: Row(
-        children: List.generate(
-          5,
-          (i) => Expanded(
-            child: Semantics(
-              selected: c.page.index == i,
-              child: TextButton(
-                key: ValueKey('nav-${GalleryPage.values[i].name}'),
-                onPressed: () => c.navigate(GalleryPage.values[i]),
-                style: TextButton.styleFrom(
-                  minimumSize: Size.zero,
-                  padding: EdgeInsets.zero,
-                  foregroundColor: c.page.index == i ? t.onTone : t.muted,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+        children: [
+          for (var i = 0; i < 5; i++) ...[
+            if (i > 0 && !c.docked) const SizedBox(width: 5),
+            Expanded(
+              child: Semantics(
+                selected: c.page.index == i,
+                child: AnimatedContainer(
+                  key: ValueKey('nav-highlight-${GalleryPage.values[i].name}'),
+                  duration: _reduceMotion
+                      ? Duration.zero
+                      : const Duration(milliseconds: 180),
+                  decoration: BoxDecoration(
+                    color: !c.docked && c.page.index == i
+                        ? t.tone
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(
+                      c.docked ? 16 : 25 + _extraTextScale * 10,
+                    ),
                   ),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 56,
-                      height: c.docked ? 28 : 26,
-                      decoration: BoxDecoration(
-                        color: c.page.index == i ? t.tone : Colors.transparent,
-                        borderRadius: BorderRadius.circular(28),
-                      ),
-                      child: Icon(icons[i], size: c.docked ? 22 : 20),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      names[i],
-                      maxLines: 1,
-                      style: TextStyle(
-                        fontSize: 12,
-                        height: 16 / 12,
-                        fontWeight: c.page.index == i
-                            ? FontWeight.w700
-                            : FontWeight.w500,
+                  child: TextButton(
+                    key: ValueKey('nav-${GalleryPage.values[i].name}'),
+                    onPressed: () => c.navigate(GalleryPage.values[i]),
+                    style: TextButton.styleFrom(
+                      minimumSize: Size.zero,
+                      padding: EdgeInsets.zero,
+                      foregroundColor: c.page.index == i ? t.onTone : t.muted,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(c.docked ? 16 : 25),
                       ),
                     ),
-                  ],
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        AnimatedContainer(
+                          duration: _reduceMotion
+                              ? Duration.zero
+                              : const Duration(milliseconds: 180),
+                          width: c.docked ? 56 : 20,
+                          height: c.docked ? 28 : 20,
+                          decoration: BoxDecoration(
+                            color: c.docked && c.page.index == i
+                                ? t.tone
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(28),
+                          ),
+                          child: Icon(icons[i], size: c.docked ? 22 : 20),
+                        ),
+                        SizedBox(height: c.docked ? 2 : 3),
+                        Text(
+                          names[i],
+                          maxLines: 1,
+                          style: TextStyle(
+                            fontSize: 12,
+                            height: c.docked ? 16 / 12 : 1,
+                            fontWeight: !c.docked
+                                ? FontWeight.w600
+                                : c.page.index == i
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-        ),
+          ],
+        ],
       ),
     );
     if (c.docked) return bar;
