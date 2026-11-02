@@ -11,12 +11,15 @@ import '../shared/app_support.dart';
 import 'gallery_controller.dart';
 import 'gallery_data.dart';
 import 'gallery_theme.dart';
+import 'gallery_preferences.dart';
 
 part 'gallery_components.dart';
 part 'gallery_pages.dart';
 part 'gallery_inspection.dart';
 part 'gallery_overlays.dart';
 part 'gallery_information.dart';
+part 'gallery_navigation.dart';
+part 'gallery_navigation_item.dart';
 
 class GalleryApp extends StatefulWidget {
   const GalleryApp({
@@ -25,11 +28,13 @@ class GalleryApp extends StatefulWidget {
     this.onDisableBeta,
     this.openWebLink,
     this.openEmail,
+    this.preferences,
   });
   final GalleryController? controller;
   final VoidCallback? onDisableBeta;
   final Future<void> Function(Uri)? openWebLink;
   final Future<bool> Function(String)? openEmail;
+  final GalleryPreferences? preferences;
 
   @override
   State<GalleryApp> createState() => _GalleryAppState();
@@ -38,10 +43,12 @@ class GalleryApp extends StatefulWidget {
 class _GalleryAppState extends State<GalleryApp> {
   late final Future<GalleryController> _ready;
   GalleryController? _owned;
+  late final GalleryPreferences _preferences;
 
   @override
   void initState() {
     super.initState();
+    _preferences = widget.preferences ?? GalleryPreferences();
     _ready = widget.controller != null
         ? Future.value(widget.controller!)
         : GalleryData.load().then((data) {
@@ -58,6 +65,7 @@ class _GalleryAppState extends State<GalleryApp> {
   @override
   void dispose() {
     _owned?.dispose();
+    if (widget.preferences == null) _preferences.dispose();
     super.dispose();
   }
 
@@ -96,8 +104,10 @@ class _GalleryAppState extends State<GalleryApp> {
             true,
             c.monet ? 'blue' : c.palette,
           ).theme(),
-          home: _GalleryView(
+          home: _GalleryNavigator(
+            key: ValueKey(c.generation),
             controller: c,
+            preferences: _preferences,
             onDisableBeta: widget.onDisableBeta,
             openWebLink: widget.openWebLink,
             openEmail: widget.openEmail,
@@ -110,12 +120,17 @@ class _GalleryAppState extends State<GalleryApp> {
 
 class _GalleryView extends StatefulWidget {
   const _GalleryView({
+    super.key,
     required this.controller,
+    required this.entry,
+    required this.preferences,
     this.onDisableBeta,
     this.openWebLink,
     this.openEmail,
   });
   final GalleryController controller;
+  final GalleryRouteEntry entry;
+  final GalleryPreferences preferences;
   final VoidCallback? onDisableBeta;
   final Future<void> Function(Uri)? openWebLink;
   final Future<bool> Function(String)? openEmail;
@@ -126,6 +141,15 @@ class _GalleryView extends StatefulWidget {
 class _GalleryViewState extends State<_GalleryView> {
   GalleryController get c => widget.controller;
   GalleryTokens get t => Theme.of(context).extension<GalleryTokens>()!;
+  GalleryRouteEntry get _entry => widget.entry;
+  GalleryPage get _viewPage =>
+      _entry.kind == GalleryRouteKind.main ? c.mainPage : _entry.page;
+  bool get _isMain => _entry.kind == GalleryRouteKind.main;
+  GalleryCard get _selectedCard => c.cards.firstWhere(
+    (card) => card.id == _entry.cardId,
+    orElse: () => c.current,
+  );
+  GalleryPreferences get _preferences => widget.preferences;
   PageStorageBucket _bucket = PageStorageBucket();
   int _generation = -1;
   final _menuRoot = GlobalKey();
@@ -170,6 +194,25 @@ class _GalleryViewState extends State<_GalleryView> {
 
   bool get _reduceMotion => MediaQuery.disableAnimationsOf(context);
 
+  Widget _fade(Object identity, Widget child) => _GalleryFade(
+    identity: identity,
+    reduceMotion: _reduceMotion,
+    child: child,
+  );
+
+  Widget _collapse(bool open, WidgetBuilder builder) => _GalleryCollapse(
+    open: open,
+    builder: builder,
+    reduceMotion: _reduceMotion,
+  );
+
+  Widget _expandArrow(bool open, {double size = 18}) => AnimatedRotation(
+    turns: open ? .25 : 0,
+    duration: _reduceMotion ? Duration.zero : _GalleryMotion.expand,
+    curve: _GalleryMotion.curve,
+    child: Icon(Icons.chevron_right_rounded, size: size),
+  );
+
   @override
   Widget build(BuildContext context) {
     if (_generation != c.generation) {
@@ -183,61 +226,76 @@ class _GalleryViewState extends State<_GalleryView> {
       _viewport = viewport;
       _scheduleMenuMeasure();
     }
+    if (_entry.overlay != null) {
+      return Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: SafeArea(
+          bottom: false,
+          child: Stack(
+            key: _menuRoot,
+            fit: StackFit.expand,
+            children: _overlay(),
+          ),
+        ),
+      );
+    }
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: (t.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
           .copyWith(
             statusBarColor: Colors.transparent,
-            systemNavigationBarColor: c.docked && c.isMainPage
-                ? t.surface2
-                : t.bg,
+            systemNavigationBarColor: c.docked && _isMain ? t.surface2 : t.bg,
             systemNavigationBarDividerColor: Colors.transparent,
           ),
-      child: PopScope(
-        canPop: !c.canGoBack,
-        onPopInvokedWithResult: (didPop, result) {
-          if (!didPop) c.back();
+      child: Shortcuts(
+        shortcuts: const {
+          SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),
         },
-        child: Shortcuts(
-          shortcuts: const {
-            SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),
+        child: Actions(
+          actions: {
+            DismissIntent: CallbackAction<DismissIntent>(
+              onInvoke: (_) {
+                c.back();
+                return null;
+              },
+            ),
           },
-          child: Actions(
-            actions: {
-              DismissIntent: CallbackAction<DismissIntent>(
-                onInvoke: (_) {
-                  c.back();
-                  return null;
-                },
-              ),
-            },
-            child: Scaffold(
-              resizeToAvoidBottomInset: true,
-              body: SafeArea(
-                bottom: false,
-                child: Stack(
-                  key: _menuRoot,
-                  children: [
-                    ExcludeFocus(
-                      excluding: c.overlay != null,
-                      child: ExcludeSemantics(
-                        excluding: c.overlay != null,
-                        child: PageStorage(
-                          bucket: _bucket,
-                          child: KeyedSubtree(
-                            key: ValueKey(c.page),
-                            child: _page(),
-                          ),
-                        ),
-                      ),
+          child: Scaffold(
+            backgroundColor: _entry.overlay != null ? Colors.transparent : t.bg,
+            resizeToAvoidBottomInset: true,
+            body: SafeArea(
+              bottom: false,
+              child: Stack(
+                key: _menuRoot,
+                fit: StackFit.expand,
+                children: [
+                  if (_entry.overlay != null)
+                    ..._overlay()
+                  else ...[
+                    PageStorage(
+                      bucket: _bucket,
+                      child: _isMain
+                          ? _GalleryMainTransition(
+                              page: _viewPage,
+                              reduceMotion: _reduceMotion,
+                              child: _page(_viewPage),
+                            )
+                          : KeyedSubtree(
+                              key: ValueKey(_viewPage),
+                              child: _page(_viewPage),
+                            ),
                     ),
-                    if (c.isMainPage)
+                    if (_isMain)
                       Align(
                         alignment: Alignment.bottomCenter,
-                        child: _navigation(),
+                        child: RepaintBoundary(
+                          key: const ValueKey('gallery-navigation'),
+                          child: _navigation(),
+                        ),
                       ),
-                    if (c.overlay != null) ..._overlay(),
                   ],
-                ),
+                ],
               ),
             ),
           ),
@@ -290,10 +348,10 @@ class _GalleryViewState extends State<_GalleryView> {
   void _openDropdown(GalleryOverlay type, String anchor, {GalleryCard? card}) {
     final rect = _measureMenuBounds(anchor);
     if (rect != null) _menuRects[anchor] = rect;
-    c.showOverlay(type, card: card);
+    c.showOverlay(type, card: card, anchor: rect);
   }
 
-  Widget _page() => switch (c.page) {
+  Widget _page(GalleryPage page) => switch (page) {
     GalleryPage.home => _home(),
     GalleryPage.trips => _trips(),
     GalleryPage.expert => _expert(),
@@ -311,13 +369,15 @@ class _GalleryViewState extends State<_GalleryView> {
   };
 
   Widget _list(List<Widget> children, {String? id, double? bottom}) => ListView(
-    key: PageStorageKey('gallery-${c.generation}-${id ?? c.page.name}'),
+    key: PageStorageKey(
+      'gallery-${c.generation}-${id ?? '${_viewPage.name}-${_entry.qrView}'}',
+    ),
     padding: EdgeInsets.fromLTRB(
       16,
       6,
       16,
       bottom ??
-          (c.isMainPage
+          (_isMain
               ? (c.docked ? 80 : 108) + MediaQuery.paddingOf(context).bottom
               : 30 + MediaQuery.paddingOf(context).bottom),
     ),

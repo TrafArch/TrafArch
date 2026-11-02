@@ -2,7 +2,7 @@ part of 'gallery_app.dart';
 
 extension _GalleryOverlays on _GalleryViewState {
   List<Widget> _overlay() {
-    final type = c.overlay!;
+    final type = _entry.overlay!;
     if (type == GalleryOverlay.cardMenu ||
         type == GalleryOverlay.source ||
         type == GalleryOverlay.mode) {
@@ -15,14 +15,6 @@ extension _GalleryOverlays on _GalleryViewState {
       GalleryOverlay.rawFeedback,
     ].contains(type);
     return [
-      Positioned.fill(
-        child: ModalBarrier(
-          dismissible: true,
-          onDismiss: c.back,
-          color: const Color(0x99000000),
-          semanticsLabel: '关闭弹层',
-        ),
-      ),
       Align(
         alignment: sheet ? Alignment.bottomCenter : Alignment.center,
         child: SafeArea(
@@ -121,7 +113,7 @@ extension _GalleryOverlays on _GalleryViewState {
     GalleryOverlay.delete => '删除本卡',
     GalleryOverlay.source => '记录来源',
     GalleryOverlay.mode => '交通方式',
-    GalleryOverlay.export => c.exportTitle,
+    GalleryOverlay.export => _entry.exportTitle,
     GalleryOverlay.rawFeedback => '反馈内容预览',
   };
 
@@ -137,9 +129,9 @@ extension _GalleryOverlays on _GalleryViewState {
       },
     ),
     GalleryOverlay.rename => _GalleryNameForm(
-      key: ValueKey('rename-${c.selectedCard.id}-${c.generation}'),
-      initialName: c.selectedCard.name,
-      tail: c.selectedCard.tail,
+      key: ValueKey('rename-${_selectedCard.id}-${c.generation}'),
+      initialName: _selectedCard.name,
+      tail: _selectedCard.tail,
       onCancel: c.back,
       onSubmit: (name) {
         c.rename(name);
@@ -149,7 +141,7 @@ extension _GalleryOverlays on _GalleryViewState {
     GalleryOverlay.delete => Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _text('删除“${c.selectedCard.name}”及其本次会话记录？', size: 14),
+        _text('删除“${_selectedCard.name}”及其本次会话记录？', size: 14),
         _gap(8),
         _text('仅影响当前内存样例。', size: 12, color: t.muted),
         _gap(22),
@@ -177,7 +169,7 @@ extension _GalleryOverlays on _GalleryViewState {
       children: [
         _text('内容预览 · 尚未保存文件', size: 12, color: t.warn),
         _gap(14),
-        _hexBox(c.exportText),
+        _hexBox(_entry.exportText),
         _gap(14),
         _button('关闭预览', c.back, primary: true),
       ],
@@ -199,85 +191,61 @@ extension _GalleryOverlays on _GalleryViewState {
   List<Widget> _dropdownOverlay(GalleryOverlay type) {
     final cardMenu = type == GalleryOverlay.cardMenu;
     final anchor = cardMenu
-        ? 'card-${c.selectedCard.id}'
+        ? 'card-${_selectedCard.id}'
         : 'filter-${type.name}';
     final radius = BorderRadius.circular(cardMenu ? 14 : 12);
     return [
       Positioned.fill(
-        child: ModalBarrier(
-          dismissible: true,
-          onDismiss: c.back,
-          semanticsLabel: '关闭菜单',
-          color: Colors.transparent,
-        ),
-      ),
-      Positioned.fill(
         child: CustomSingleChildLayout(
           delegate: _GalleryMenuLayout(
-            anchor: () => _menuBounds(anchor),
+            anchor: () => _entry.anchor ?? _menuBounds(anchor),
             alignEnd: cardMenu,
             width: (cardMenu ? 158 : 170) * (1 + _extraTextScale),
             bottomInset: MediaQuery.paddingOf(context).bottom,
           ),
-          child: TweenAnimationBuilder<double>(
-            key: ValueKey('menu-${c.generation}-${type.name}-$anchor'),
-            tween: Tween(begin: 0, end: 1),
-            duration: _reduceMotion
-                ? Duration.zero
-                : const Duration(milliseconds: 140),
-            curve: Curves.easeOut,
-            builder: (_, value, child) => Opacity(
-              opacity: value,
-              child: Transform.translate(
-                offset: Offset(0, -4 * (1 - value)),
-                child: child,
-              ),
-            ),
-            child: Semantics(
-              scopesRoute: true,
-              namesRoute: true,
-              label: _overlayTitle(type),
-              explicitChildNodes: true,
-              child: _dropdownFocus(
-                FocusTraversalGroup(
-                  policy: WidgetOrderTraversalPolicy(),
-                  child: Shortcuts(
-                    shortcuts: const {
-                      SingleActivator(LogicalKeyboardKey.arrowDown):
-                          NextFocusIntent(),
-                      SingleActivator(LogicalKeyboardKey.arrowUp):
-                          PreviousFocusIntent(),
-                    },
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        borderRadius: radius,
-                        boxShadow: [
-                          BoxShadow(
-                            color: t.dark
-                                ? Colors.black.withValues(alpha: .55)
-                                : const Color(0xff142846)
-                                      .withValues(alpha: .18),
-                            blurRadius: 36,
-                            offset: const Offset(0, 18),
-                          ),
-                        ],
-                      ),
-                      child: Material(
-                        key: const ValueKey('gallery-dropdown'),
-                        color: t.surface,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: radius,
-                          side: BorderSide(color: t.line),
+          child: Semantics(
+            scopesRoute: true,
+            namesRoute: true,
+            label: _overlayTitle(type),
+            explicitChildNodes: true,
+            child: _dropdownFocus(
+              FocusTraversalGroup(
+                policy: WidgetOrderTraversalPolicy(),
+                child: Shortcuts(
+                  shortcuts: const {
+                    SingleActivator(LogicalKeyboardKey.arrowDown):
+                        NextFocusIntent(),
+                    SingleActivator(LogicalKeyboardKey.arrowUp):
+                        PreviousFocusIntent(),
+                  },
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: radius,
+                      boxShadow: [
+                        BoxShadow(
+                          color: t.dark
+                              ? Colors.black.withValues(alpha: .55)
+                              : const Color(0xff142846).withValues(alpha: .18),
+                          blurRadius: 36,
+                          offset: const Offset(0, 18),
                         ),
-                        clipBehavior: Clip.antiAlias,
-                        child: SingleChildScrollView(
-                          primary: false,
-                          padding: EdgeInsets.all(cardMenu ? 6 : 5),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: _dropdownItems(type),
-                          ),
+                      ],
+                    ),
+                    child: Material(
+                      key: const ValueKey('gallery-dropdown'),
+                      color: t.surface,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: radius,
+                        side: BorderSide(color: t.line),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: SingleChildScrollView(
+                        primary: false,
+                        padding: EdgeInsets.all(cardMenu ? 6 : 5),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: _dropdownItems(type),
                         ),
                       ),
                     ),
@@ -393,7 +361,7 @@ extension _GalleryOverlays on _GalleryViewState {
   }
 
   Widget _tripSheet() {
-    final trip = c.selectedTrip;
+    final trip = _entry.trip;
     if (trip == null) return _text('暂无可用行程信息', color: t.muted);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -423,7 +391,7 @@ extension _GalleryOverlays on _GalleryViewState {
   Widget _faceSheet() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      _face(c.selectedCard),
+      _face(_selectedCard),
       _gap(18),
       _text('卡面预设', size: 13, weight: FontWeight.w600),
       _gap(12),
@@ -441,8 +409,8 @@ extension _GalleryOverlays on _GalleryViewState {
                       padding: const EdgeInsets.symmetric(horizontal: 3),
                       child: TextButton(
                         onPressed: () => c.update(() {
-                          c.selectedCard.face = pair.$1;
-                          c.selectedCard.image = null;
+                          _selectedCard.face = pair.$1;
+                          _selectedCard.image = null;
                         }),
                         style: TextButton.styleFrom(
                           padding: const EdgeInsets.all(4),
@@ -450,8 +418,8 @@ extension _GalleryOverlays on _GalleryViewState {
                             borderRadius: BorderRadius.circular(12),
                             side: BorderSide(
                               color:
-                                  c.selectedCard.face == pair.$1 &&
-                                      c.selectedCard.image == null
+                                  _selectedCard.face == pair.$1 &&
+                                      _selectedCard.image == null
                                   ? t.onTone
                                   : Colors.transparent,
                               width: 2,
@@ -492,7 +460,7 @@ extension _GalleryOverlays on _GalleryViewState {
         _button(
           '选择 TrafArch 路线图案',
           () =>
-              c.update(() => c.selectedCard.image = 'assets/icon/app_icon.png'),
+              c.update(() => _selectedCard.image = 'assets/icon/app_icon.png'),
           icon: Icons.image_outlined,
         ),
       ],
@@ -500,14 +468,14 @@ extension _GalleryOverlays on _GalleryViewState {
       _button(
         '恢复默认卡面',
         () => c.update(() {
-          c.selectedCard.face = c.selectedCard.id == 'shanghai'
+          _selectedCard.face = _selectedCard.id == 'shanghai'
               ? 'blue'
-              : c.selectedCard.id == 'shenzhen'
+              : _selectedCard.id == 'shenzhen'
               ? 'teal'
-              : c.selectedCard.id == 'suica'
+              : _selectedCard.id == 'suica'
               ? 'graphite'
               : 'amber';
-          c.selectedCard.image = null;
+          _selectedCard.image = null;
         }),
       ),
       _gap(10),

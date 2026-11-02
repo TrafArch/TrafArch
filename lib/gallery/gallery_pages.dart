@@ -6,310 +6,329 @@ extension _GalleryPages on _GalleryViewState {
     final reading = c.readState == GalleryReadState.reading;
     final failed = c.readState == GalleryReadState.failed;
     final recent = c.trips.where((r) => r['kind'] != 'event').firstOrNull;
-    return _list([
-      Padding(
-        padding: const EdgeInsets.only(top: 12, bottom: 14),
-        child: SizedBox(
-          height: 44,
-          child: Row(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.asset(
-                  'assets/icon/app_icon.png',
-                  width: 30,
-                  height: 30,
+    return _fade(
+      'home-${c.readState}-${c.hasRead}-${card.saved}',
+      _list([
+        Padding(
+          padding: const EdgeInsets.only(top: 12, bottom: 14),
+          child: SizedBox(
+            height: 44,
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.asset(
+                    'assets/icon/app_icon.png',
+                    width: 30,
+                    height: 30,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _text('TrafArch', size: 18, weight: FontWeight.w700),
-              ),
-              if (MediaQuery.sizeOf(context).width >= 390)
-                _text('10月27日 周二', size: 10, color: t.onTone),
-              const SizedBox(width: 6),
-              _icon(
-                Icons.qr_code_scanner_rounded,
-                '扫码',
-                () => c.navigate(GalleryPage.qr),
-              ),
-              const SizedBox(width: 8),
-              _icon(
-                Icons.settings_outlined,
-                '设置',
-                () => c.navigate(GalleryPage.settings),
-              ),
-            ],
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _text('TrafArch', size: 18, weight: FontWeight.w700),
+                ),
+                if (MediaQuery.sizeOf(context).width >= 390)
+                  _text('10月27日 周二', size: 10, color: t.onTone),
+                const SizedBox(width: 6),
+                _icon(
+                  Icons.qr_code_scanner_rounded,
+                  '扫码',
+                  () => c.navigate(GalleryPage.qr),
+                ),
+                const SizedBox(width: 8),
+                _icon(
+                  Icons.settings_outlined,
+                  '设置',
+                  () => c.navigate(GalleryPage.settings),
+                ),
+              ],
+            ),
           ),
         ),
-      ),
-      Stack(
-        children: [
-          if (!c.hasRead)
-            SizedBox(
-              height: 116 + _extraTextScale * 80,
-              child: _panel(
-                Row(
-                  children: [
-                    Icon(Icons.contactless_outlined, size: 32, color: t.onTone),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
+        Stack(
+          children: [
+            if (!c.hasRead)
+              SizedBox(
+                height: 116 + _extraTextScale * 80,
+                child: _panel(
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.contactless_outlined,
+                        size: 32,
+                        color: t.onTone,
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _text(
+                              reading ? '正在读取卡片…' : '把交通卡贴近手机背面',
+                              size: 16,
+                              weight: FontWeight.w600,
+                            ),
+                            _gap(5),
+                            _text(
+                              reading ? '请保持贴卡，直到读取完成' : '读取余额与行程',
+                              size: 12,
+                              color: t.muted,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  color: t.tone,
+                  border: false,
+                  radius: 22,
+                ),
+              )
+            else if (card.saved)
+              _face(card)
+            else
+              SizedBox(
+                height: 194 + _extraTextScale * 80,
+                child: _panel(
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _text(
-                            reading ? '正在读取卡片…' : '把交通卡贴近手机背面',
-                            size: 16,
-                            weight: FontWeight.w600,
+                          Expanded(
+                            child: _text(
+                              card.name,
+                              size: 17,
+                              weight: FontWeight.w700,
+                              lines: 2,
+                            ),
                           ),
-                          _gap(5),
+                          const SizedBox(width: 12),
                           _text(
-                            reading ? '请保持贴卡，直到读取完成' : '读取余额与行程',
-                            size: 12,
-                            color: t.muted,
+                            '交通联合\nCHINA T-UNION',
+                            size: 10,
+                            color: t.onTone,
+                            align: TextAlign.right,
                           ),
                         ],
                       ),
-                    ),
-                  ],
-                ),
-                color: t.tone,
-                border: false,
-                radius: 22,
-              ),
-            )
-          else if (card.saved)
-            _face(card)
-          else
-            SizedBox(
-              height: 194 + _extraTextScale * 80,
-              child: _panel(
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: _text(
-                            card.name,
-                            size: 17,
-                            weight: FontWeight.w700,
-                            lines: 2,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        _text(
-                          '交通联合\nCHINA T-UNION',
-                          size: 10,
-                          color: t.onTone,
-                          align: TextAlign.right,
-                        ),
-                      ],
-                    ),
-                    _gap(5),
-                    _text(
-                      '**** ${card.tail}',
-                      size: 12,
-                      mono: true,
-                      color: t.onTone,
-                    ),
-                    const Spacer(),
-                    _text('当前余额', size: 11, color: t.muted),
-                    _gap(4),
-                    _amount(card),
-                  ],
-                ),
-                color: t.tone,
-                radius: 22,
-                border: false,
-              ),
-            ),
-          if (reading && c.hasRead)
-            Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: t.bg.withValues(alpha: .88),
-                  borderRadius: BorderRadius.circular(22),
-                ),
-                padding: const EdgeInsets.all(18),
-                child: Row(
-                  children: [
-                    Icon(Icons.contactless_outlined, color: t.onTone, size: 32),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _text(
-                        '请保持贴卡\n正在读取卡片…',
-                        size: 14,
-                        weight: FontWeight.w600,
+                      _gap(5),
+                      _text(
+                        '**** ${card.tail}',
+                        size: 12,
+                        mono: true,
+                        color: t.onTone,
                       ),
-                    ),
+                      const Spacer(),
+                      _text('当前余额', size: 11, color: t.muted),
+                      _gap(4),
+                      _amount(card),
+                    ],
+                  ),
+                  color: t.tone,
+                  radius: 22,
+                  border: false,
+                ),
+              ),
+            if (reading && c.hasRead)
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: t.bg.withValues(alpha: .88),
+                    borderRadius: BorderRadius.circular(22),
+                  ),
+                  padding: const EdgeInsets.all(18),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.contactless_outlined,
+                        color: t.onTone,
+                        size: 32,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _text(
+                          '请保持贴卡\n正在读取卡片…',
+                          size: 14,
+                          weight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+        _gap(10),
+        Row(
+          children: [
+            Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(
+                color: failed ? t.warn : t.ok,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Semantics(
+                liveRegion: true,
+                child: _text(
+                  reading
+                      ? '请保持贴卡 / 读取中'
+                      : failed
+                      ? (c.hasRead ? '读取失败，保留上次结果' : '未能读到卡片')
+                      : c.hasRead
+                      ? '今天 09:41 读取成功'
+                      : '内置卡片已就绪',
+                  size: 12,
+                  color: failed ? t.warn : t.onTone,
+                ),
+              ),
+            ),
+            if (c.hasRead && !reading && !failed)
+              _chip(
+                card.saved
+                    ? c.autoSave
+                          ? '已自动保存'
+                          : '已保存'
+                    : '未保存',
+              ),
+          ],
+        ),
+        if (reading) ...[
+          _gap(8),
+          LinearProgressIndicator(
+            minHeight: 2,
+            color: t.onTone,
+            backgroundColor: t.tone,
+            value: MediaQuery.disableAnimationsOf(context) ? .6 : null,
+          ),
+        ],
+        _gap(16),
+        if (reading)
+          _button(
+            '正在读取…',
+            null,
+            primary: true,
+            icon: Icons.contactless_outlined,
+          )
+        else if (!c.hasRead || failed)
+          _button(
+            failed ? '重新读取' : '开始读取',
+            () => c.read(),
+            primary: true,
+            icon: Icons.contactless_outlined,
+          )
+        else if (!card.saved)
+          Row(
+            children: [
+              Expanded(
+                child: _button(
+                  '保存卡片',
+                  () => c.showOverlay(GalleryOverlay.save),
+                  primary: true,
+                  icon: Icons.save_outlined,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _button(
+                  '再次读取',
+                  () => c.read(),
+                  icon: Icons.refresh_rounded,
+                ),
+              ),
+            ],
+          )
+        else
+          Row(
+            children: [
+              Expanded(
+                child: _button(
+                  '再次读取',
+                  () => c.read(),
+                  primary: true,
+                  icon: Icons.refresh_rounded,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _button(
+                  '更换卡面',
+                  () => c.showOverlay(GalleryOverlay.face, card: card),
+                  icon: Icons.palette_outlined,
+                ),
+              ),
+            ],
+          ),
+        _gap(16),
+        if (c.hasRead && recent != null)
+          _panel(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: _text('最近一次行程', size: 12, color: t.muted)),
+                    _text('今天', size: 12, color: t.muted),
                   ],
                 ),
-              ),
+                _gap(8),
+                _trip(recent),
+              ],
             ),
-        ],
-      ),
-      _gap(10),
-      Row(
-        children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(
-              color: failed ? t.warn : t.ok,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Semantics(
-              liveRegion: true,
-              child: _text(
-                reading
-                    ? '请保持贴卡 / 读取中'
-                    : failed
-                    ? (c.hasRead ? '读取失败，保留上次结果' : '未能读到卡片')
-                    : c.hasRead
-                    ? '今天 09:41 读取成功'
-                    : '内置卡片已就绪',
-                size: 12,
-                color: failed ? t.warn : t.onTone,
-              ),
-            ),
-          ),
-          if (c.hasRead && !reading && !failed)
-            _chip(
-              card.saved
-                  ? c.autoSave
-                        ? '已自动保存'
-                        : '已保存'
-                  : '未保存',
-            ),
-        ],
-      ),
-      if (reading) ...[
-        _gap(8),
-        LinearProgressIndicator(
-          minHeight: 2,
-          color: t.onTone,
-          backgroundColor: t.tone,
-          value: MediaQuery.disableAnimationsOf(context) ? .6 : null,
-        ),
-      ],
-      _gap(16),
-      if (reading)
-        _button('正在读取…', null, primary: true, icon: Icons.contactless_outlined)
-      else if (!c.hasRead || failed)
-        _button(
-          failed ? '重新读取' : '开始读取',
-          () => c.read(),
-          primary: true,
-          icon: Icons.contactless_outlined,
-        )
-      else if (!card.saved)
-        Row(
-          children: [
-            Expanded(
-              child: _button(
-                '保存卡片',
-                () => c.showOverlay(GalleryOverlay.save),
-                primary: true,
-                icon: Icons.save_outlined,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _button(
-                '再次读取',
-                () => c.read(),
-                icon: Icons.refresh_rounded,
-              ),
-            ),
-          ],
-        )
-      else
-        Row(
-          children: [
-            Expanded(
-              child: _button(
-                '再次读取',
-                () => c.read(),
-                primary: true,
-                icon: Icons.refresh_rounded,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _button(
-                '更换卡面',
-                () => c.showOverlay(GalleryOverlay.face, card: card),
-                icon: Icons.palette_outlined,
-              ),
-            ),
-          ],
-        ),
-      _gap(16),
-      if (c.hasRead && recent != null)
-        _panel(
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Expanded(child: _text('最近一次行程', size: 12, color: t.muted)),
-                  _text('今天', size: 12, color: t.muted),
-                ],
-              ),
-              _gap(8),
-              _trip(recent),
-            ],
-          ),
-          padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
-        )
-      else if (c.hasRead)
-        _empty('暂无行程记录', '这张卡片没有可展示的行程', icon: Icons.route_outlined)
-      else
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 22),
-          child: Column(
-            children: [
-              Icon(Icons.nfc_rounded, size: 38, color: t.onTone),
-              _gap(12),
-              _text('贴卡，了解你的每一次出行', size: 15, weight: FontWeight.w600),
-              _gap(8),
-              _text(
-                '支持交通联合、城市一卡通及部分 FeliCa 卡片\n当前使用内置卡片样例',
-                size: 12,
-                color: t.muted,
-                align: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      if (c.hasRead)
-        Padding(
-          padding: const EdgeInsets.only(top: 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Divider(),
-              TextButton(
-                onPressed: () => c.navigate(GalleryPage.trips),
-                style: TextButton.styleFrom(
-                  alignment: Alignment.centerLeft,
-                  padding: EdgeInsets.zero,
-                  foregroundColor: t.onTone,
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
+          )
+        else if (c.hasRead)
+          _empty('暂无行程记录', '这张卡片没有可展示的行程', icon: Icons.route_outlined)
+        else
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 22),
+            child: Column(
+              children: [
+                Icon(Icons.nfc_rounded, size: 38, color: t.onTone),
+                _gap(12),
+                _text('贴卡，了解你的每一次出行', size: 15, weight: FontWeight.w600),
+                _gap(8),
+                _text(
+                  '支持交通联合、城市一卡通及部分 FeliCa 卡片\n当前使用内置卡片样例',
+                  size: 12,
+                  color: t.muted,
+                  align: TextAlign.center,
                 ),
-                child: const Text('查看全部行程  ›', style: TextStyle(fontSize: 12)),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      _gap(8),
-      _text('模拟数据', size: 11, color: t.muted),
-    ]);
+        if (c.hasRead)
+          Padding(
+            padding: const EdgeInsets.only(top: 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Divider(),
+                TextButton(
+                  onPressed: () => c.navigate(GalleryPage.trips),
+                  style: TextButton.styleFrom(
+                    alignment: Alignment.centerLeft,
+                    padding: EdgeInsets.zero,
+                    foregroundColor: t.onTone,
+                  ),
+                  child: const Text(
+                    '查看全部行程  ›',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        _gap(8),
+        _text('模拟数据', size: 11, color: t.muted),
+      ]),
+    );
   }
 
   Widget _trips() {
@@ -661,7 +680,7 @@ extension _GalleryPages on _GalleryViewState {
   ]);
 
   Widget _detail() {
-    final card = c.selectedCard;
+    final card = _selectedCard;
     final ledger = c.ledger(card);
     return _list([
       _header(
@@ -697,7 +716,7 @@ extension _GalleryPages on _GalleryViewState {
             );
           }
         },
-        child: switch (c.detailTab) {
+        child: _fade('detail-${card.id}-${c.detailTab}', switch (c.detailTab) {
           0 => Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -789,7 +808,7 @@ extension _GalleryPages on _GalleryViewState {
               ),
             ],
           ),
-        },
+        }),
       ),
     ], id: 'detail-${card.id}-${c.detailTab}');
   }
@@ -1139,6 +1158,30 @@ extension _GalleryPages on _GalleryViewState {
                     ),
                   );
                 }).toList(),
+              ),
+            ),
+          const Divider(),
+          _switch(
+            '预测性返回手势',
+            _preferences.enabled,
+            _preferences.setEnabled,
+            subtitle: _preferences.loading
+                ? '正在读取偏好…'
+                : '手势返回时预览上一页，松手返回或取消；支持的 Android 系统生效',
+          ),
+          if (_preferences.error != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _text(_preferences.error!, size: 11, color: t.warn),
+                  ),
+                  TextButton(
+                    onPressed: _preferences.loading ? null : _preferences.retry,
+                    child: const Text('重试'),
+                  ),
+                ],
               ),
             ),
           const Divider(),

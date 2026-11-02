@@ -60,6 +60,7 @@ void main() {
     var created = 0;
     await tester.pumpWidget(
       InternalPreviewApp(
+        previewSettingsStore: MemorySettingsStore(),
         createDependencies: () {
           created++;
           return createTestApp();
@@ -88,6 +89,70 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
   });
+  testWidgets(
+    'preview return preference survives UI switching, sample reset and host recreation',
+    (tester) async {
+      tester.view.physicalSize = const Size(412, 892);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final store = MemorySettingsStore();
+      Future<void> enterPreview() async {
+        final scope = BetaUiScope.maybeOf(
+          tester.element(find.byType(TransitCardAnalyzerApp)),
+        )!;
+        scope.onChanged(true);
+        await tester.pumpAndSettle();
+      }
+
+      Future<void> openSettings() async {
+        await tester.tap(find.byTooltip('设置'));
+        await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(find.text('预测性返回手势'), 250);
+        await tester.pumpAndSettle();
+      }
+
+      Finder toggle() => find.widgetWithText(SwitchListTile, '预测性返回手势');
+      await tester.pumpWidget(
+        InternalPreviewApp(
+          createDependencies: createTestApp,
+          previewSettingsStore: store,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await enterPreview();
+      await openSettings();
+      expect(tester.widget<SwitchListTile>(toggle()).value, isTrue);
+      await tester.tap(toggle());
+      await tester.pumpAndSettle();
+      expect(store.values[SettingsKeys.galleryPredictiveBackEnabled], 'false');
+      await tester.scrollUntilVisible(find.text('恢复初始样例'), 350);
+      await tester.tap(find.text('恢复初始样例'));
+      await tester.pumpAndSettle();
+      await openSettings();
+      expect(tester.widget<SwitchListTile>(toggle()).value, isFalse);
+      BetaUiScope.maybeOf(tester.element(find.byType(GalleryApp)))!
+          .onChanged(false);
+      await tester.pumpAndSettle();
+      await enterPreview();
+      await openSettings();
+      expect(tester.widget<SwitchListTile>(toggle()).value, isFalse);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      await tester.pumpWidget(
+        InternalPreviewApp(
+          createDependencies: createTestApp,
+          previewSettingsStore: store,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await enterPreview();
+      await openSettings();
+      expect(tester.widget<SwitchListTile>(toggle()).value, isFalse);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
+  );
 }
 
 class _NoopNfcChannel implements NfcChannel {

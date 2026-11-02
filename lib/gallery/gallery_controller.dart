@@ -37,11 +37,41 @@ enum GalleryOverlay {
 
 enum GalleryReadState { unread, reading, success, failed }
 
+enum GalleryRouteKind { main, page, qrAcquisition, overlay }
+
+/// A stable presentation entry. Payload belongs to this route, including while
+/// it is animating out; it must not be read from the next selected route.
+@immutable
+class GalleryRouteEntry {
+  const GalleryRouteEntry({
+    required this.id,
+    required this.kind,
+    required this.page,
+    required this.cardId,
+    this.qrView = 'inspect',
+    this.overlay,
+    this.trip,
+    this.exportText = '',
+    this.exportTitle = '',
+    this.anchor,
+  });
+  final String id;
+  final GalleryRouteKind kind;
+  final GalleryPage page;
+  final String cardId;
+  final String qrView;
+  final GalleryOverlay? overlay;
+  final GalleryRecord? trip;
+  final String exportText, exportTitle;
+  final Rect? anchor;
+}
+
 /// UI-only session. No repositories, platform channels, IO or real card models.
 class GalleryController extends ChangeNotifier {
   GalleryController(this.data) {
     qr = GalleryQrController(data)..addListener(_qrChanged);
     _reset();
+    _syncNavigation();
   }
 
   final GalleryData data;
@@ -52,6 +82,9 @@ class GalleryController extends ChangeNotifier {
   late List<GalleryRecord> footprints;
   GalleryPage page = GalleryPage.home;
   final List<GalleryPage> _history = [];
+  List<GalleryRouteEntry> _routes = [];
+  int _routeSerial = 0;
+  Rect? _overlayAnchor;
   GalleryOverlay? overlay;
   GalleryReadState readState = GalleryReadState.unread;
   bool hasRead = false;
@@ -86,10 +119,98 @@ class GalleryController extends ChangeNotifier {
       cards.firstWhere((c) => c.id == selectedCardId, orElse: () => current);
   List<GalleryCard> get savedCards => cards.where((c) => c.saved).toList();
   bool get isMainPage => page.index < 5;
+  GalleryPage get mainPage => isMainPage
+      ? page
+      : _history.firstWhere((p) => p.index < 5, orElse: () => GalleryPage.home);
+  List<GalleryRouteEntry> get navigationStack => List.unmodifiable(_routes);
   bool get canGoBack =>
       overlay != null ||
       qr.view != 'inspect' && page == GalleryPage.qr ||
       _history.isNotEmpty;
+
+  void _syncNavigation() {
+    final desired =
+        <
+          ({
+            GalleryRouteKind kind,
+            GalleryPage page,
+            String qrView,
+            GalleryOverlay? overlay,
+          })
+        >[
+          (
+            kind: GalleryRouteKind.main,
+            page: mainPage,
+            qrView: 'inspect',
+            overlay: null,
+          ),
+          for (final p in [
+            ..._history.where((p) => p.index >= 5),
+            if (!isMainPage) page,
+          ])
+            (
+              kind: GalleryRouteKind.page,
+              page: p,
+              qrView: 'inspect',
+              overlay: null,
+            ),
+          if (page == GalleryPage.qr && qr.view != 'inspect')
+            (
+              kind: GalleryRouteKind.qrAcquisition,
+              page: page,
+              qrView: qr.view,
+              overlay: null,
+            ),
+          if (overlay != null)
+            (
+              kind: GalleryRouteKind.overlay,
+              page: page,
+              qrView: qr.view,
+              overlay: overlay,
+            ),
+        ];
+    var prefixMatches = true;
+    _routes = [
+      for (var i = 0; i < desired.length; i++)
+        (() {
+          final d = desired[i];
+          final old = i < _routes.length ? _routes[i] : null;
+          prefixMatches =
+              prefixMatches &&
+              old != null &&
+              old.id.startsWith('$generation:') &&
+              old.kind == d.kind &&
+              (d.kind == GalleryRouteKind.main || old.page == d.page) &&
+              old.qrView == d.qrView &&
+              old.overlay == d.overlay;
+          if (prefixMatches) return old!;
+          return GalleryRouteEntry(
+            id: '$generation:${_routeSerial++}',
+            kind: d.kind,
+            page: d.page,
+            cardId: selectedCardId,
+            qrView: d.qrView,
+            overlay: d.overlay,
+            trip: selectedTrip == null ? null : Map.unmodifiable(selectedTrip!),
+            exportText: exportText,
+            exportTitle: exportTitle,
+            anchor: _overlayAnchor,
+          );
+        })(),
+    ];
+  }
+
+  /// A system/gesture pop commits only the entry that is still on top.
+  void didPopRoute(String id) {
+    if (_routes.length > 1 && _routes.last.id == id) back();
+  }
+
+  @override
+  void notifyListeners() {
+    if (_disposed) return;
+    _syncNavigation();
+    super.notifyListeners();
+  }
 
   void _qrChanged() {
     if (!_disposed) notifyListeners();
@@ -174,10 +295,12 @@ class GalleryController extends ChangeNotifier {
     GalleryOverlay value, {
     GalleryCard? card,
     GalleryRecord? trip,
+    Rect? anchor,
   }) {
     if (card != null) selectedCardId = card.id;
     if (trip != null) selectedTrip = trip;
     overlay = value;
+    _overlayAnchor = anchor;
     record('打开 ${value.name}');
     notifyListeners();
   }

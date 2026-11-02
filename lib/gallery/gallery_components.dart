@@ -476,9 +476,9 @@ extension _GalleryComponents on _GalleryViewState {
                 AnimatedPositioned(
                   duration: _reduceMotion
                       ? Duration.zero
-                      : const Duration(milliseconds: 320),
-                  curve: Curves.easeInOutCubic,
-                  left: c.page.index * (itemWidth + gap),
+                      : _GalleryMotion.capsule,
+                  curve: _GalleryMotion.curve,
+                  left: c.mainPage.index * (itemWidth + gap),
                   top: 0,
                   bottom: 0,
                   width: itemWidth,
@@ -499,72 +499,15 @@ extension _GalleryComponents on _GalleryViewState {
                   for (var i = 0; i < 5; i++) ...[
                     if (i > 0 && !c.docked) const SizedBox(width: 5),
                     Expanded(
-                      child: Semantics(
-                        selected: c.page.index == i,
-                        child: TextButton(
-                          key: ValueKey('nav-${GalleryPage.values[i].name}'),
-                          onPressed: () => c.navigate(GalleryPage.values[i]),
-                          style:
-                              TextButton.styleFrom(
-                                minimumSize: Size.zero,
-                                padding: EdgeInsets.zero,
-                                foregroundColor: c.page.index == i
-                                    ? t.onTone
-                                    : t.muted,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(
-                                    c.docked ? 16 : 25,
-                                  ),
-                                ),
-                                overlayColor: Colors.transparent,
-                                shadowColor: Colors.transparent,
-                                surfaceTintColor: Colors.transparent,
-                                elevation: 0,
-                                splashFactory: NoSplash.splashFactory,
-                              ).copyWith(
-                                // Touch focus must not paint a persistent dark state layer.
-                                // Keyboard focus remains visible as a thin outline.
-                                side: WidgetStateProperty.resolveWith(
-                                  (states) =>
-                                      states.contains(WidgetState.focused)
-                                      ? BorderSide(color: t.onTone)
-                                      : BorderSide.none,
-                                ),
-                              ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              AnimatedContainer(
-                                duration: _reduceMotion
-                                    ? Duration.zero
-                                    : const Duration(milliseconds: 180),
-                                width: c.docked ? 56 : 20,
-                                height: c.docked ? 28 : 20,
-                                decoration: BoxDecoration(
-                                  color: c.docked && c.page.index == i
-                                      ? t.tone
-                                      : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(28),
-                                ),
-                                child: Icon(icons[i], size: c.docked ? 22 : 20),
-                              ),
-                              SizedBox(height: c.docked ? 2 : 3),
-                              Text(
-                                names[i],
-                                maxLines: 1,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  height: c.docked ? 16 / 12 : 1,
-                                  fontWeight: !c.docked
-                                      ? FontWeight.w600
-                                      : c.page.index == i
-                                      ? FontWeight.w700
-                                      : FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                      child: _GalleryNavigationItem(
+                        key: ValueKey('nav-${GalleryPage.values[i].name}'),
+                        label: names[i],
+                        icon: icons[i],
+                        selected: c.mainPage.index == i,
+                        docked: c.docked,
+                        tokens: t,
+                        reduceMotion: _reduceMotion,
+                        onTap: () => c.navigate(GalleryPage.values[i]),
                       ),
                     ),
                   ],
@@ -639,18 +582,14 @@ extension _GalleryComponents on _GalleryViewState {
                 Expanded(
                   child: _text(title, size: 13, weight: FontWeight.w600),
                 ),
-                Icon(
-                  open
-                      ? Icons.keyboard_arrow_up_rounded
-                      : Icons.chevron_right_rounded,
-                  size: 18,
-                ),
+                _expandArrow(open),
               ],
             ),
           ),
         ),
-        if (open)
-          Padding(
+        _collapse(
+          open,
+          (_) => Padding(
             padding: EdgeInsets.fromLTRB(
               surface ? 16 : 0,
               0,
@@ -662,6 +601,7 @@ extension _GalleryComponents on _GalleryViewState {
               children: children,
             ),
           ),
+        ),
       ],
     );
     return Padding(
