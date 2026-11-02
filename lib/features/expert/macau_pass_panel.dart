@@ -19,14 +19,18 @@ class MacauPassPanel extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         ExpertField('卡种', info.cardKindLabel),
+        const ExpertField('识别状态', '澳门通钱包应用已确认'),
         ExpertField('卡号', info.cardNumber.isEmpty ? '未知' : info.cardNumber),
-        ExpertField('钱包币种', info.currencyCode ?? '未知'),
+        ExpertField('发卡地', '未读取'),
+        ExpertField('卡种细分', '未读取'),
         ExpertField(
-          '钱包余额',
+          '余额',
           info.observedBalance == null
               ? '未读取到'
-              : '${info.observedBalance}（原始单位，口径待确认）',
+              : 'MOP \$${info.observedBalance}',
         ),
+        const ExpertField('有效期至', '未读取'),
+        const ExpertField('交通联合状态', '未提供（澳门通钱包应用字段）'),
         ExpertField('交易记录', '${records.length} 条'),
         const Divider(height: 28),
         Align(

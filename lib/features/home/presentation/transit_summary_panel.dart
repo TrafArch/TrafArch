@@ -10,6 +10,13 @@ import 'summary_formatters.dart';
 import 'felica_summary_panel.dart';
 import 'result_labels.dart';
 
+String _summaryRecordTime(DateTime time) {
+  if (time.millisecondsSinceEpoch == 0) return '未知';
+  final date = summaryDate(time);
+  String two(int value) => value.toString().padLeft(2, '0');
+  return '$date ${two(time.hour)}:${two(time.minute)}:${two(time.second)}';
+}
+
 class TransitSummaryPanel extends StatelessWidget {
   const TransitSummaryPanel({super.key, required this.app});
   final AppDependencies app;
@@ -30,6 +37,9 @@ class TransitSummaryPanel extends StatelessWidget {
     final isTUnion = CardParserIds.isTUnionFamily(parsed?.parserId);
     final isCityUnion = parsed?.parserId == CardParserIds.cityUnion;
     final isShanghai = parsed?.parserId == CardParserIds.shanghaiTunion;
+    final isLingnan =
+        parsed?.parserId == CardParserIds.lingnanTong ||
+        parsed?.parserId == CardParserIds.lingnanTunion;
     final isLocal =
         parsed?.parserId == CardParserIds.localCard ||
         parsed?.parserId == CardParserIds.beijingBmac ||
@@ -62,10 +72,12 @@ class TransitSummaryPanel extends StatelessWidget {
     );
     // 发卡地：识别城市优先，回退城市码表（与识别引擎链路一致）。
     final cityName =
-        identified?.identity.cityName ??
-        (isCityUnion
-            ? app.cuCityNameOf(app.cardCityCode)
-            : app.cityNameOf(app.cardCityCode));
+        local?.info.isMacauPass == true
+            ? '澳门'
+            : identified?.identity.cityName ??
+                  (isCityUnion
+                      ? app.cuCityNameOf(app.cardCityCode)
+                      : app.cityNameOf(app.cardCityCode));
     // 卡号（完整，不脱敏）：识别结果优先，回退解析字段，最后回退 UID。
     final String? parsedCardNumber;
     if (isLocal) {
@@ -77,15 +89,31 @@ class TransitSummaryPanel extends StatelessWidget {
       parsedCardNumber = info?.displayCardNumber ?? publicInfo?.cityCardNumber;
     }
     final cardNumber = identified?.cardNumber ?? parsedCardNumber ?? '未读取到卡号';
+    final lingnanRecords = local?.trips ?? const [];
+    final macauRecords =
+        local?.records
+            .where((record) => record.label == '澳门通交易记录')
+            .toList(growable: false) ??
+        const [];
 
     return [
       ...summaryNameLine(context, name),
       if (parsed != null)
-        summaryField(context, '类型', isLocal ? '地方交通卡' : typeLabel)
+        summaryField(
+          context,
+          '类型',
+          isLocal && (local?.info.isMacauPass == true || isLingnan)
+              ? local!.info.cardKindLabel
+              : isLocal
+              ? '地方交通卡'
+              : typeLabel,
+        )
       else if (result?.cardType != null)
         summaryField(context, '卡型', result!.cardType!),
       if (cityName != null && cityName.isNotEmpty)
         summaryField(context, '发卡地', cityName),
+      if (cityName == null && isLingnan)
+        summaryField(context, '发卡地', '未识别'),
       if (isShanghai)
         summaryField(
           context,
@@ -98,6 +126,28 @@ class TransitSummaryPanel extends StatelessWidget {
       // 仅读到 NFC 标签（未解析成功）时补充 UID，与模块文档说明一致。
       if (parsed == null && result != null)
         summaryField(context, 'UID', result.uid),
+      if (local?.info.isMacauPass == true)
+        summaryField(context, '应用状态', '澳门通钱包应用已确认'),
+      if (local?.info.isLNT == true) ...[
+        summaryField(context, '岭南通应用', 'PAY.APPY 已确认'),
+        summaryField(
+          context,
+          '岭南通钱包应用',
+          local!.extras.slots['lnt.ticlConfirmed'] == true
+              ? 'PAY.TICL 已确认'
+              : 'PAY.TICL 未确认',
+        ),
+        if (local.info.issuerCode.isNotEmpty)
+          summaryField(context, '发卡机构编码', local.info.issuerCode),
+        if (local.info.issueDate != null)
+          summaryField(context, '发卡日期', summaryDate(local.info.issueDate!)),
+        if (local.info.expiryDate != null)
+          summaryField(
+            context,
+            '有效期至',
+            summaryDate(local.info.expiryDate!),
+          ),
+      ],
       if (isLocal && local?.info.observedBalance != null)
         summaryField(
           context,
@@ -131,20 +181,40 @@ class TransitSummaryPanel extends StatelessWidget {
           '${(app.cityUnionBalanceFen! / 100).toStringAsFixed(2)} 元',
         ),
       if (parsed?.parserId == CardParserIds.lingnanTunion) ...[
-        summaryField(
-          context,
-          '岭南通应用',
-          local?.info.isLNT == true ? '已确认' : '未确认',
-        ),
         if (local?.info.cardNumber.isNotEmpty == true)
           summaryField(context, '岭南通卡号', local!.info.cardNumber),
         summaryField(
           context,
           '岭南通余额',
-          local?.info.observedBalance == null
-              ? '未读取到'
-              : '${(local!.info.observedBalance! / 100).toStringAsFixed(2)} 元',
+          '${(local!.info.observedBalance! / 100).toStringAsFixed(2)} 元',
         ),
+      ],
+      if (parsed?.parserId == CardParserIds.lingnanTong) ...[
+        summaryField(
+          context,
+          '全国互联互通',
+          local?.extras.slots['lnt.tuConfirmed'] == true
+              ? '交通联合应用已确认，互通状态未解析'
+              : local?.extras.slots['lnt.tuConfirmed'] == false
+              ? '未确认（未检测到交通联合应用）'
+              : '未知（未读取交通联合应用状态）',
+        ),
+        summaryField(context, '交易记录', '${lingnanRecords.length} 条'),
+        if (lingnanRecords.isNotEmpty)
+          summaryField(
+            context,
+            '最近交易',
+            _summaryRecordTime(lingnanRecords.first.timestamp),
+          ),
+      ],
+      if (local?.info.isMacauPass == true) ...[
+        summaryField(context, '交易记录', '${macauRecords.length} 条'),
+        if (macauRecords.isNotEmpty)
+          summaryField(
+            context,
+            '最近交易',
+            _summaryRecordTime(macauRecords.first.timestamp),
+          ),
       ],
       if (expireDate != null)
         summaryField(context, '有效期至', summaryDate(expireDate)),
@@ -157,19 +227,17 @@ class TransitSummaryPanel extends StatelessWidget {
       // - 城市一卡通（CU）：住建部「全国城市一卡通互联互通」网络，启用状态
       //   取自公共应用基本信息文件（SFI 0x15）字节 09 的互联互通启用标识；
       //   未读取到该文件时标记「未知」，不猜测、不隐藏。
-      if (isTUnion)
+      if (isTUnion && info?.isNationalInteropEnabled != null)
         summaryField(
           context,
           '全国互联互通',
           tunionInteropText(info?.isNationalInteropEnabled),
         )
-      else if (isCityUnion)
+      else if (isCityUnion && publicInfo != null)
         summaryField(
           context,
           '全国互联互通',
-          publicInfo == null
-              ? '未知（未读到公共信息文件）'
-              : publicInfo.isInterconnectionEnabled
+          publicInfo.isInterconnectionEnabled
               ? '已启用（城市一卡通）'
               : '未启用',
         ),
@@ -186,15 +254,14 @@ class TransitSummaryPanel extends StatelessWidget {
         if (publicInfo?.cityCardNumber != null &&
             publicInfo!.cityCardNumber!.isNotEmpty)
           summaryField(context, '城市一卡通卡号', publicInfo.cityCardNumber!),
-        summaryField(
-          context,
-          '城市一卡通互联互通',
-          publicInfo == null
-              ? '未知（未读到公共信息文件）'
-              : publicInfo.isInterconnectionEnabled
+        if (publicInfo != null)
+          summaryField(
+            context,
+            '城市一卡通互联互通',
+            publicInfo.isInterconnectionEnabled
               ? '已启用（城市一卡通）'
               : '未启用',
-        ),
+          ),
       ],
     ];
   }
