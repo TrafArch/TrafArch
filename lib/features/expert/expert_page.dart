@@ -12,6 +12,7 @@ import 'compliance_panel.dart';
 import 'expert_formatters.dart';
 import 'expert_widgets.dart';
 import 'identity_panel.dart';
+import 'macau_pass_panel.dart';
 import 'raw_data_panel.dart';
 import 'tunion_panel.dart';
 
@@ -164,6 +165,8 @@ class _ExpertPageState extends State<ExpertPage> {
         RecentResultKind.card =>
           app.felicaResult != null && app.parsedCard == null
               ? FelicaSummaryPanel(felica: app.felicaResult!)
+              : app.localReadResult?.info.isMacauPass == true
+              ? MacauPassPanel(result: app.localReadResult!)
               : IdentityPanel(app: app),
         RecentResultKind.bank => BankSummaryPanel(bank: bank!, detailed: true),
       },

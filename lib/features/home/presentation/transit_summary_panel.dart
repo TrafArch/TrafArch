@@ -69,8 +69,7 @@ class TransitSummaryPanel extends StatelessWidget {
     } else if (isCityUnion) {
       parsedCardNumber = publicInfo?.cityCardNumber;
     } else {
-      parsedCardNumber =
-          info?.displayCardNumber ?? publicInfo?.cityCardNumber;
+      parsedCardNumber = info?.displayCardNumber ?? publicInfo?.cityCardNumber;
     }
     final cardNumber = identified?.cardNumber ?? parsedCardNumber ?? '未读取到卡号';
 
@@ -97,10 +96,14 @@ class TransitSummaryPanel extends StatelessWidget {
       if (isLocal && local?.info.observedBalance != null)
         summaryField(
           context,
-          '余额',
-          '${app.cardCurrency.symbol}'
-              '${(local!.info.balance / 100).toStringAsFixed(2)}',
+          local!.info.isMacauPass ? '钱包余额' : '余额',
+          local.info.isMacauPass
+              ? '${local.info.balance}（原始单位，待确认）'
+              : '${app.cardCurrency.symbol}'
+                    '${(local.info.balance / 100).toStringAsFixed(2)}',
         ),
+      if (local?.info.isMacauPass == true)
+        summaryField(context, '钱包币种', local!.info.currencyCode ?? '未知'),
       if (separateObservation) ...[
         summaryField(context, '余额', interpretation!.accountBalanceText),
         if (interpretation.observedBalanceText case final observed?)
@@ -161,11 +164,7 @@ class TransitSummaryPanel extends StatelessWidget {
           ),
         if (publicInfo?.cityCardNumber != null &&
             publicInfo!.cityCardNumber!.isNotEmpty)
-          summaryField(
-            context,
-            '城市一卡通卡号',
-            publicInfo.cityCardNumber!,
-          ),
+          summaryField(context, '城市一卡通卡号', publicInfo.cityCardNumber!),
         summaryField(
           context,
           '城市一卡通互联互通',
