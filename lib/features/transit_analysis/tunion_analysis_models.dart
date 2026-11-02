@@ -14,7 +14,8 @@ const int kWalletAnchoredBalanceParseVersion = 8;
 
 /// 行程解析口径版本：解析 / 关联规则变更时递增，随读取批次持久化，
 /// 历史数据据此识别产出批次所用的解析口径。
-const int kTripParseVersion = 11;
+/// v12 按受理方证据识别沈阳 EP 轨道金额的小端布局；历史捕获不重写。
+const int kTripParseVersion = 12;
 
 /// 识别证据：来源、说明与权重（0 表示"出场但未命中"）。
 class Evidence {
@@ -162,6 +163,16 @@ class TransitTrip {
   /// 应用分类名称（如 "城市轨道交通" / "公共汽电车"）；
   /// 由 TU 过程记录或已核实的上海本地 CU 终端分类补充；未知时为 null。
   final String? appTypeName;
+
+  /// Captured application classification; missing evidence remains unknown.
+  int? get appTypeCode =>
+      matchedProcessTrip?.appTypeCode ??
+      switch (appTypeName) {
+        '城市轨道交通' => 0x01,
+        '公共汽电车' => 0x02,
+        '市郊铁路' => 0x0E,
+        _ => null,
+      };
 
   /// 交易余额（分）：优先从当前钱包沿连续账本倒推交易后余额；无法
   /// 倒推时仅回退展示配对的 1E 原始记录余额，由来源字段区分口径。
@@ -414,14 +425,19 @@ List<TripEntry> buildTripStream({
   ];
   final applicationKeys = [
     for (final t in trips)
-      if (t.displayApplicationKey != null) t.displayApplicationKey!,
+      if (t.displayApplicationKey != null)
+        (t.displayApplicationKey!, t.appTypeCode),
   ];
   final processKeys = [
     for (final t in trips)
-      if (t.displayProcessKey != null) t.displayProcessKey!,
+      if (t.displayProcessKey != null) (t.displayProcessKey!, t.appTypeCode),
   ];
-  bool consume(List<String> keys, String key) {
-    final index = keys.indexOf(key);
+  bool consume(List<(String, int?)> keys, String key, int? appTypeCode) {
+    final index = keys.indexWhere(
+      (link) =>
+          link.$1 == key &&
+          (link.$2 == null || appTypeCode == null || link.$2 == appTypeCode),
+    );
     if (index < 0) return false;
     keys.removeAt(index);
     return true;
@@ -443,13 +459,20 @@ List<TripEntry> buildTripStream({
   processKeys.addAll([
     for (final t in trips)
       if (t.displayProcessKey == null && t.matchedProcessTrip != null)
-        cycleDisplayKey(t.matchedProcessTrip!),
+        (cycleDisplayKey(t.matchedProcessTrip!), t.appTypeCode),
   ]);
   return <TripEntry>[
     for (final t in trips) TransactionTripEntry(t),
-    ...halves.where((side) => !consume(applicationKeys, sideKey(side))),
+    ...halves.where(
+      (side) => !consume(
+        applicationKeys,
+        sideKey(side),
+        side is RailRecordEntry ? 0x01 : 0x02,
+      ),
+    ),
     for (final p in processTrips)
-      if (!consume(processKeys, cycleDisplayKey(p))) ProcessTripEntry(p),
+      if (!consume(processKeys, cycleDisplayKey(p), p.appTypeCode))
+        ProcessTripEntry(p),
   ]..sort((a, b) => b.time.compareTo(a.time));
 }
 

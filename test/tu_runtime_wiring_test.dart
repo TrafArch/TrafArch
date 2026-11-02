@@ -105,15 +105,17 @@ void main() {
     expect(trip.stationLabel, '象峰');
   });
 
-  test('packaged Qingdao process terminal is used by the trip engine', () {
+  test('packaged Qingdao conflicting line labels stay ambiguous in the trip engine', () {
     final trip = _analyze(
       knowledge,
       cityCode: '4520',
       terminalId: '4520000011210000',
       field: '00000000000000',
     );
-    expect(trip.lineLabel, '11号线');
-    expect(trip.stationLabel, '苗岭路');
+    expect(trip.stationConfidence, StationMatchConfidence.ambiguous);
+    expect(trip.lineLabel, isNull);
+    expect(trip.stationLabel, isNot('苗岭路'));
+    expect(trip.matchedProcessTrip!.terminalId, '4520000011210000');
   });
 
   test('packaged Hefei process terminal hits M0.S.a exactly', () {

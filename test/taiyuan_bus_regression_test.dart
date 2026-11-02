@@ -132,6 +132,14 @@ void main() {
     expect(location.lineLabel, '864');
     expect(location.stationLabel, isNull);
     expect(location.match.confidence, StationMatchConfidence.unmatched);
+    final formulaOnly = resolveTunionBusLocation(
+      stations: StationCodeTable.empty,
+      cityCode: record.cityCode,
+      field: record.lineStationCode,
+    );
+    expect(formulaOnly.lineLabel, '864');
+    expect(formulaOnly.stationLabel, isNull);
+    expect(formulaOnly.match.confidence, StationMatchConfidence.unmatched);
   });
 
   test('paired out-of-city trip displays 864 and keeps original evidence', () {
@@ -211,6 +219,13 @@ void main() {
       );
       expect(location.lineLabel, example.value);
       expect(location.stationLabel, isNull);
+      final formulaOnly = resolveTunionBusLocation(
+        stations: StationCodeTable.empty,
+        cityCode: '1610',
+        field: '${example.key}000000D500',
+      );
+      expect(formulaOnly.lineLabel, example.value);
+      expect(formulaOnly.stationLabel, isNull);
     });
   }
 
@@ -273,24 +288,41 @@ void main() {
     expect(location.lineLabel, '864');
     expect(location.stationLabel, isNull);
   });
+
+  test('formula route-only standalone display retains the raw stop code', () {
+    final record = const TUnionProcessParser().parseCycleTrip(
+      _bytes(_reportedHex),
+    )!;
+    final info = describeTripEntry(
+      ProcessTripEntry(record),
+      _displayForStations(stations),
+      remote: false,
+    );
+    expect(info.line, '864');
+    expect(info.title, contains('0000'));
+    expect(info.rawHex, _reportedHex.replaceAll(' ', ''));
+  });
 }
 
-final _display = TripPresentationContext(
-  currency: Currency.cny,
-  cityNameOf: (_) => null,
-  resolveStationMatch: (_, _, {lineValue}) => StationMatch.unmatched,
-  resolveCycleStationMatch: (_, _, {terminalId, time, appType}) =>
-      StationMatch.unmatched,
-  resolveLineName: (_, _) => null,
-  resolveBusLocation:
-      (city, field, {context = const TunionBusDecodeContext()}) =>
-          resolveTunionBusLocation(
-            stations: StationCodeTable.empty,
-            cityCode: city,
-            field: field,
-            context: context,
-          ),
-);
+final _display = _displayForStations(StationCodeTable.empty);
+
+TripPresentationContext _displayForStations(StationCodeTable stations) =>
+    TripPresentationContext(
+      currency: Currency.cny,
+      cityNameOf: (_) => null,
+      resolveStationMatch: (_, _, {lineValue}) => StationMatch.unmatched,
+      resolveCycleStationMatch: (_, _, {terminalId, time, appType}) =>
+          StationMatch.unmatched,
+      resolveLineName: (_, _) => null,
+      resolveBusLocation:
+          (city, field, {context = const TunionBusDecodeContext()}) =>
+              resolveTunionBusLocation(
+                stations: stations,
+                cityCode: city,
+                field: field,
+                context: context,
+              ),
+    );
 
 List<int> _bytes(String hex) {
   final compact = hex.replaceAll(RegExp(r'\s+'), '');

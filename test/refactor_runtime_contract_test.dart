@@ -39,7 +39,8 @@ void main() {
       expect(kb.cities.lookup('1210')!.name, contains('石家庄'));
       expect(kb.cuCities!.lookup('1210')!.name, contains('锦州'));
       expect(kb.cuRepository!.busRouteCount, 13852);
-      expect(kb.tuStations!.stationCount, 7811);
+      expect(kb.tuStations!.stationCount, 8004);
+      expect(kb.cities.lookup('5210')!.name, '武汉');
       expect(kb.cities.lookup('5840')!.name, '深圳');
       final package = await ReferencePackage.open('CU', bundle: rootBundle);
       try {
@@ -55,17 +56,21 @@ void main() {
           }
         }
         for (final table in ['cu_card_names', 'cu_name_overrides']) {
-          final columns = package.db.select('PRAGMA table_info($table)')
-              .map((row) => row['name']).toList();
+          final columns = package.db
+              .select('PRAGMA table_info($table)')
+              .map((row) => row['name'])
+              .toList();
           expect(columns, contains('name_zh_cn'));
           for (final removed in ['name_zh_tw', 'name_en', 'name_ja']) {
             expect(columns, isNot(contains(removed)));
           }
         }
         expect(
-          package.db.select(
-            "SELECT value FROM cu_name_metadata WHERE key='language_order'",
-          ).single['value'],
+          package.db
+              .select(
+                "SELECT value FROM cu_name_metadata WHERE key='language_order'",
+              )
+              .single['value'],
           'zh-CN (source language index 1)',
         );
         for (final row in names.cast<Map>()) {
@@ -187,6 +192,36 @@ void main() {
         );
       } finally {
         kb.close();
+      }
+    },
+  );
+
+  test(
+    'updated TU installs independently of an existing stale cache',
+    () async {
+      final cache = Directory('${directory.path}/trafarch_reference');
+      cache.createSync();
+      final stale = File('${cache.path}/tu-${'0' * 64}.sqlite');
+      stale.writeAsStringSync('old package');
+      final package = await ReferencePackage.open('TU');
+      try {
+        expect(
+          package.hash,
+          'fa585d815b8f29ec52183e71f783ffa3acd7eacf1ca74907c44f5150e7529deb',
+        );
+        expect(
+          package.db
+              .select('SELECT COUNT(*) AS c FROM all_records')
+              .single['c'],
+          8004,
+        );
+        expect(
+          File('${cache.path}/tu-${package.hash}.sqlite').existsSync(),
+          isTrue,
+        );
+        expect(stale.readAsStringSync(), 'old package');
+      } finally {
+        package.close();
       }
     },
   );

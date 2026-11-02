@@ -7,6 +7,35 @@ import 'package:transit_card_analyzer/features/trips/trip_filters.dart';
 // projection API. Raw balances are deliberately kept separate from confirmed
 // transaction balances: rail and bus records on this card use different timing.
 void main() {
+  test('上海扣除额度后的负余额仍通过原始进出账本核验', () {
+    final events = [
+      _cycle(
+        'exit',
+        role: JourneyEventRole.exit,
+        minute: 25,
+        slot: 1,
+        recordedFen: 300,
+        amountFen: 200,
+        balanceOffsetFen: -800,
+      ),
+      _cycle(
+        'entry',
+        role: JourneyEventRole.entry,
+        minute: 10,
+        slot: 2,
+        recordedFen: 500,
+        amountFen: 0,
+        balanceOffsetFen: -800,
+      ),
+    ];
+    final journey = _exitJourney(projectJourneys(events));
+    expect(journey.state, JourneyState.completed);
+    expect(journey.balanceAfterText, '¥-5.00');
+    expect(journey.amountText, '-¥2.00');
+    expect(events.first.processBalance!.recordedFen, 300);
+    expect(events.last.processBalance!.recordedFen, 500);
+  });
+
   test('异地单次公交15050由同钱包前后相邻余额闭合确认行程后余额', () {
     final events = _singleBus();
     final journey = projectJourneys(events)
@@ -648,6 +677,7 @@ JourneyEvent<String> _cycle(
   int minorUnitDigits = 2,
   int? confirmedBalanceFen,
   String? balanceAfterText,
+  int balanceOffsetFen = 0,
 }) => JourneyEvent<String>(
   payload: id,
   mode: mode,
@@ -671,6 +701,7 @@ JourneyEvent<String> _cycle(
   confirmedBalanceFen: confirmedBalanceFen,
   processBalance: JourneyProcessBalanceEvidence(
     recordedFen: recordedFen,
+    balanceOffsetFen: balanceOffsetFen,
     amountFen: amountFen,
     currencyCode: currencyCode,
     currencySymbol: currencySymbol,

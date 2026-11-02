@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/app_info.dart';
+import '../../../platform/browser/feedback_browser.dart';
 import '../../updates/update_prompt.dart';
 import '../../updates/update_service.dart';
 import 'acknowledgements_page.dart';
@@ -31,10 +32,16 @@ class _AboutPageState extends State<AboutPage> {
     setState(() => _openingPrivacy = true);
     try {
       await widget.openPrivacyPolicy();
+    } on FeedbackBrowserException catch (error) {
+      // 浏览器层已按情况给出可展示文案（含复制链接气泡）。
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('无法打开隐私政策，请安装或启用 Edge 或 Chrome 后重试。')),
+        const SnackBar(content: Text('无法打开隐私政策，请稍后重试。')),
       );
     } finally {
       if (mounted) setState(() => _openingPrivacy = false);

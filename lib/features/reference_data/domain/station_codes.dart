@@ -512,12 +512,27 @@ class StationCodeTable {
         : 'M0.e0.a';
   }
 
+  /// Published Wuhan city rows retain M0.W.a provenance. Admit that exact
+  /// city/source pair without changing the original type-3 map selection.
+  static bool isTuRailSourceField(String city, String? field) {
+    final native = tuRailSourceField(city);
+    return native != null &&
+        (field == native || (city == '5210' && field == 'M0.W.a'));
+  }
+
   static bool _railEntry(StationCodeEntry entry, String city) {
     if (entry.system != null && entry.system != 'tu') return false;
-    if (entry.sourceField != null &&
-        entry.sourceField!.isNotEmpty &&
-        entry.sourceField != tuRailSourceField(city)) {
-      return false;
+    if (entry.sourceField != null && entry.sourceField!.isNotEmpty) {
+      if (!isTuRailSourceField(city, entry.sourceField)) return false;
+      if (entry.sourceField != tuRailSourceField(city) &&
+          !const {
+            'metro',
+            'tram',
+            'light_rail',
+            'intercity_rail',
+          }.contains(entry.kind)) {
+        return false;
+      }
     }
     return entry.kind != 'bus' && entry.kind != 'brt' && entry.kind != 'bike';
   }

@@ -84,6 +84,7 @@ TripEntryInfo describeTripEntry(
 TripEntryInfo _describeEntry(TripEntry entry, TripPresentationContext display) {
   switch (entry) {
     case TransactionTripEntry(:final trip):
+      final balanceText = display.formatBalance(trip.balanceAfterFen);
       final badges = <String>[
         switch (trip.stationConfidence) {
           StationMatchConfidence.ambiguous => '站名歧义',
@@ -103,9 +104,9 @@ TripEntryInfo _describeEntry(TripEntry entry, TripPresentationContext display) {
         timeText: trip.timeText,
         amountText: trip.amountText,
         isConsume: trip.isConsume,
-        subText: trip.balanceAfterText == null
+        subText: balanceText == null
             ? null
-            : '${trip.balanceAfterLabel} ${trip.balanceAfterText}',
+            : '${trip.balanceAfterLabel} $balanceText',
         category: trip.appTypeName,
         badges: badges,
         related: trip.matchedProcessTrip != null
@@ -124,8 +125,7 @@ TripEntryInfo _describeEntry(TripEntry entry, TripPresentationContext display) {
                   : trip.rideStatusSource!,
             ),
           ('金额', trip.amountText),
-          if (trip.balanceAfterText != null)
-            (trip.balanceAfterLabel!, trip.balanceAfterText!),
+          if (balanceText != null) (trip.balanceAfterLabel!, balanceText),
           ('终端编号', trip.terminalId),
           if (trip.cityCode != null) ('城市代码', trip.cityCode!),
           if (trip.cityName != null) ('城市', trip.cityName!),
@@ -177,7 +177,7 @@ TripEntryInfo _describeEntry(TripEntry entry, TripPresentationContext display) {
         isConsume: (amountFen ?? 0) > 0,
         subText: balanceFen == null
             ? null
-            : '余额 $symbol${(balanceFen / 100).toStringAsFixed(2)}',
+            : '余额 ${display.formatBalance(balanceFen)}',
         category: '城市轨道交通',
         badges: _confidenceBadges(
           match,
@@ -195,8 +195,7 @@ TripEntryInfo _describeEntry(TripEntry entry, TripPresentationContext display) {
           ('出闸站点（原始）', _fmtOptText(record.exitStationId)),
           ('进闸终端', _fmtOptText(record.entryTerminalId)),
           ('出闸终端', _fmtOptText(record.exitTerminalId)),
-          if (balanceFen != null)
-            ('进站时余额', '$symbol${(balanceFen / 100).toStringAsFixed(2)}'),
+          if (balanceFen != null) ('进站时余额', display.formatBalance(balanceFen)!),
           if (amountFen != null && amountFen > 0)
             ('本侧金额', '-$symbol${(amountFen / 100).toStringAsFixed(2)}'),
         ],
@@ -278,7 +277,9 @@ TripEntryInfo _describeEntry(TripEntry entry, TripPresentationContext display) {
             );
       final station =
           busLocation?.stationLabel ??
-          match.stationName ??
+          ((match.stationName ?? '').trim().isEmpty
+              ? null
+              : match.stationName) ??
           (isBus ? record.stationCode : null);
       final symbol = display.currency.symbol;
       return TripEntryInfo(
@@ -300,7 +301,7 @@ TripEntryInfo _describeEntry(TripEntry entry, TripPresentationContext display) {
                   ? '-'
                   : ''}$symbol${(record.amountFen / 100).toStringAsFixed(2)}',
         isConsume: record.isConsume && record.amountFen > 0,
-        subText: '记录余额 $symbol${(record.balanceFen / 100).toStringAsFixed(2)}',
+        subText: '记录余额 ${display.formatBalance(record.balanceFen)}',
         category: record.appTypeLabel,
         badges: isBus ? const [] : _confidenceBadges(match),
         related: '未与 0x18 交易关联，作为独立过程事件保留',
@@ -311,7 +312,7 @@ TripEntryInfo _describeEntry(TripEntry entry, TripPresentationContext display) {
           ('终端编号', record.terminalId),
           ('线路站点字段（原始）', record.lineStationCode),
           ('金额', '$symbol${(record.amountFen / 100).toStringAsFixed(2)}'),
-          ('记录余额', '$symbol${(record.balanceFen / 100).toStringAsFixed(2)}'),
+          ('记录余额', display.formatBalance(record.balanceFen)!),
           ('城市代码', _fmtOptText(record.cityCode)),
           ('受理方标识', _fmtOptText(record.acquirerId)),
         ],

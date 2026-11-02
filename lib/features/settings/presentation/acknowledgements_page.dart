@@ -8,6 +8,8 @@ class AcknowledgementsPage extends StatelessWidget {
   /// 读卡识途公开数据源项目地址（数据以 CC BY 4.0 许可开放）。
   static const String tripReaderDataUrl =
       'https://github.com/domosekai/tripreader-data';
+  static const String communityDataUrl =
+      'https://github.com/HaoTian22/tripreader-data';
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +57,26 @@ class AcknowledgementsPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.public),
+              title: const Text('HaoTian22 社区补充数据'),
+              subtitle: const Text(communityDataUrl),
+              trailing: IconButton(
+                icon: const Icon(Icons.copy_outlined),
+                tooltip: '复制社区项目地址',
+                onPressed: () => _copyUrl(context, communityDataUrl),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '感谢 domosekai、HaoTian22 及其他数据贡献者。'
+            '线路与站点资料由开发者按城市整理后随应用提供，保留原始编码与来源。',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 12),
           Text(
             '数据以 CC BY 4.0（知识共享署名 4.0 国际）许可协议开放使用。',
             textAlign: TextAlign.center,
@@ -67,8 +89,11 @@ class AcknowledgementsPage extends StatelessWidget {
     );
   }
 
-  Future<void> _copyUrl(BuildContext context) async {
-    await Clipboard.setData(const ClipboardData(text: tripReaderDataUrl));
+  Future<void> _copyUrl(
+    BuildContext context, [
+    String url = tripReaderDataUrl,
+  ]) async {
+    await Clipboard.setData(ClipboardData(text: url));
     if (!context.mounted) return;
     ScaffoldMessenger.of(context)
         .showSnackBar(const SnackBar(content: Text('项目地址已复制到剪贴板')));

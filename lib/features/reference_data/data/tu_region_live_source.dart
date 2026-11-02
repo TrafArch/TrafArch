@@ -40,6 +40,7 @@ class TuRegionLiveSource implements LiveStationSource, LiveRegionLines {
     String stationNum,
   ) => repository
       .fragLineStation(cityKey, lineNum, stationNum)
+      .where(repository.allowsRailLookup)
       .map(repository.entryForRecord)
       .toList();
 
@@ -47,18 +48,23 @@ class TuRegionLiveSource implements LiveStationSource, LiveRegionLines {
   List<StationCodeEntry> fragStation(String cityKey, String stationNum) =>
       repository
           .fragStation(cityKey, stationNum)
+          .where(repository.allowsRailLookup)
           .map(repository.entryForRecord)
           .toList();
 
   @override
   List<StationCodeEntry> fragLine(String cityKey, String lineNum) => repository
       .fragLine(cityKey, lineNum)
+      .where(repository.allowsRailLookup)
       .map(repository.entryForRecord)
       .toList();
 
   @override
   Iterable<StationCodeEntry> lineNameEntryCandidates(String cityKey) =>
-      repository.entriesOfRegion(cityKey).map(repository.entryForRecord);
+      repository
+          .entriesOfRegion(cityKey)
+          .where(repository.allowsRailLookup)
+          .map(repository.entryForRecord);
 
   @override
   List<StationCodeEntry> lookupLineStationTail(
@@ -67,6 +73,7 @@ class TuRegionLiveSource implements LiveStationSource, LiveRegionLines {
     String stationTail,
   ) => repository
       .lineStationTail(cityKey, lineDigits, stationTail)
+      .where(repository.allowsRailLookup)
       .map(repository.entryForRecord)
       .toList();
 

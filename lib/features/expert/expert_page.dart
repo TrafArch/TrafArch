@@ -101,7 +101,10 @@ class _ExpertPageState extends State<ExpertPage> {
               _tab('expert-parsed', _transitPanels(app)),
               if (isTUnion)
                 _tab('expert-compliance', [
-                  CompliancePanel(analysis: app.analysis),
+                  CompliancePanel(
+                    analysis: app.analysis,
+                    balanceDisplay: app.balanceDisplay,
+                  ),
                 ]),
               _tab('expert-apdu', [
                 RawDataPanel(
@@ -193,9 +196,13 @@ class _ExpertPageState extends State<ExpertPage> {
           fallbackRail: app.railTransitRecord,
           values: ExpertValues(
             currency: app.cardCurrency,
+            balanceDisplay: app.balanceDisplay,
             cityNameOf: app.cityNameOf,
           ),
         ),
+        if (parsed.parserId == CardParserIds.lingnanTunion &&
+            parsed.localCard != null)
+          LingnanTransactionPanel(result: parsed.localCard!),
         if (parsed.cityUnionFiles.isNotEmpty) ...[
           const Divider(height: 32),
           Align(
@@ -221,8 +228,20 @@ class _ExpertPageState extends State<ExpertPage> {
         ],
       ];
     }
+    if (parsed.parserId == CardParserIds.lingnanTong &&
+        parsed.localCard != null) {
+      return [LingnanTransactionPanel(result: parsed.localCard!)];
+    }
     if (parsed.parserId == CardParserIds.cityUnion) {
       return [
+        ExpertField(
+          '余额',
+          app.balanceDisplay.formatBalance(
+                parsed.info.balanceFen,
+                symbol: app.cardCurrency.symbol,
+              ) ??
+              '未知',
+        ),
         CityUnionPanel(
           files: app.cityUnionFiles,
           resolveStationName: app.resolveCuStationName,

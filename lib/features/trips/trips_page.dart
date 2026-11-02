@@ -165,7 +165,11 @@ class _SessionHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  wallet.balanceText ?? '—',
+                  app.balanceDisplay.formatBalance(
+                        wallet.balanceFen,
+                        symbol: wallet.currency.symbol,
+                      ) ??
+                      '—',
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                     color: scheme.primary,

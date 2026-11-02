@@ -13,6 +13,7 @@ import '../../../protocols/transit/tunion/tunion_models.dart';
 import '../../../protocols/transit/tunion/tunion_process_parser.dart';
 import '../../../protocols/bank/domain/models/bank_card_result.dart';
 import 'card_read_outcome.dart';
+import '../../../shared/domain/remote_card_use.dart';
 
 /// Immutable display projection, rebuilt once when an attempt completes.
 /// Original protocol data remains available independently of derived trips.
@@ -89,16 +90,7 @@ class ScanPresentation {
   String? get cardCityCode => cityUnionDetected
       ? cityUnionPublicInfo?.cityCode
       : analysis?.identity.cityCode ?? parsedCard?.info.cityCode;
-  bool isRemoteUse(String? code) {
-    final local = cardCityCode;
-    if (local == null ||
-        code == null ||
-        local.replaceAll('0', '').isEmpty ||
-        code.replaceAll('0', '').isEmpty) {
-      return false;
-    }
-    return local.trim().toUpperCase() != code.trim().toUpperCase();
-  }
+  bool isRemoteUse(String? code) => isRemoteCardUse(cardCityCode, code);
 
   TransitRecord? _deriveRail() {
     TUnionProcessRecord? whole;

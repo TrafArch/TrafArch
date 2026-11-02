@@ -66,7 +66,7 @@ class RailProcessPanel extends StatelessWidget {
       ExpertField('入站线路号', hexByteCell(rec.entryLineCode)),
       ExpertField('出站线路号', hexByteCell(rec.exitLineCode)),
       ExpertField('进站交易金额', values.amountCell(rec.entryAmountFen)),
-      ExpertField('进站钱包余额', values.amountCell(rec.entryBalanceFen)),
+      ExpertField('进站钱包余额', values.balanceCell(rec.entryBalanceFen)),
       ExpertField('出闸交易金额', values.amountCell(rec.exitAmountFen)),
       if (rec.issuerCustom != null)
         ExpertField('发卡机构自定义', hexLower(rec.issuerCustom)),

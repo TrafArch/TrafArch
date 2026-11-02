@@ -22,10 +22,10 @@ if (hasGoogleServicesConfig && !repairBuild) {
 
 // ===================== 版本号自动递增 =====================
 // pubspec.yaml 的 "version: x.y.z+N" 为版本唯一来源（N = 构建版本号，如 2003）：
-// - release 构建（assembleRelease / bundleRelease）时，本次产物直接使用当前 N；
-// - 构建成功后把 N 预分配为下一个号并写回 pubspec.yaml；构建失败不消耗号；
+// - Debug / Profile / Release 的 APK / AAB 构建均使用当前 N，包括 repairBuild；
+// - 生成安装包后把 N+1 预留为下一次构建号，写回 pubspec.yaml；
 // - 构建开始前同步 lib/app/app_info.dart，保证产物内 UI 显示的即本次号；
-// - debug 构建（flutter run 等）不递增、不修改任何文件。
+// - test / lint / help / tasks 及 --dry-run 不递增；同次调用多个打包任务只递增一次。
 val pubspecFile = rootProject.file("../pubspec.yaml")
 val appInfoFile = rootProject.file("../lib/app/app_info.dart")
 val versionRegex = Regex("""(?m)^version:\s*([^\s+]+)\+(\d+)""")
@@ -36,11 +36,24 @@ val versionMatch = versionRegex.find(pubspecText)
 val appVersionName = versionMatch.groupValues[1]
 val appVersionCode = versionMatch.groupValues[2].toInt()
 
-val isReleaseBuild = gradle.startParameter.taskNames.any {
-    val taskName = it.substringAfterLast(':')
-    taskName == "assembleRelease" || taskName == "bundleRelease"
-}
-if (isReleaseBuild && !repairBuild) {
+val buildModes = listOf("Debug", "Profile", "Release")
+val artifactTaskNames = buildModes.flatMap { mode ->
+    listOf("package$mode", "assemble$mode", "bundle$mode")
+}.toSet()
+val buildEntryTaskNames = artifactTaskNames + setOf("assemble", "build", "bundle") +
+    buildModes.map { "install$it" }
+val isApplicationBuild = !gradle.startParameter.isDryRun &&
+    gradle.startParameter.taskNames.any {
+        val taskName = it.substringAfterLast(':')
+        val taskProject = it.substringBeforeLast(':', "")
+        (taskProject.isEmpty() || taskProject.removePrefix(":") == project.path.removePrefix(":")) &&
+            taskName in buildEntryTaskNames
+    }
+if (isApplicationBuild) {
+    // 每次打包必须重新读取源码版本并同步 Dart 信息，不复用配置缓存中的旧版本。
+    tasks.matching { it.name in artifactTaskNames }.configureEach {
+        notCompatibleWithConfigurationCache("Updates AppInfo and reserves the next build number")
+    }
     // 同步 app_info（发生在 Dart 编译之前，本次产物内显示的就是本次号）
     if (appInfoFile.exists()) {
         val original = appInfoFile.readText()
@@ -55,13 +68,13 @@ if (isReleaseBuild && !repairBuild) {
             appInfoFile.writeText(updated)
         }
     }
-    // 构建成功后预分配下一个号；失败则保留当前值，下次构建继续使用。
+    // APK 包装 / AAB 构建任务成功后预留下一个号。
     // Gradle 9 起 gradle.buildFinished(Closure) 已废弃（配置缓存不兼容，Gradle 10 移除），
     // 且 Kotlin lambda 无法再隐式转换为 Groovy Closure；改为挂在发布产物任务的 doLast：
-    // 任一依赖任务失败时 assembleRelease/bundleRelease 被跳过、不会执行到 doLast，
-    // 与“构建成功才递增”语义一致。buildNumberBumped 防止同一次调用两个任务重复递增。
+    // 包装之前失败不会执行 doLast；安装包已经生成时即消耗本次号。
+    // buildNumberBumped 防止同一次调用经 package、assemble 或多个模式重复递增。
     var buildNumberBumped = false
-    tasks.matching { it.name == "assembleRelease" || it.name == "bundleRelease" }.configureEach {
+    tasks.matching { it.name in artifactTaskNames }.configureEach {
         doLast {
             if (!buildNumberBumped) {
                 buildNumberBumped = true
@@ -72,7 +85,7 @@ if (isReleaseBuild && !repairBuild) {
                     )
                 )
                 logger.lifecycle(
-                    "Build number consumed: ${appVersionCode}; next release build will use ${appVersionCode + 1}"
+                    "Build number consumed: ${appVersionCode}; next build will use ${appVersionCode + 1}"
                 )
             }
         }

@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/tunion_bus_location.dart';
 import 'package:transit_card_analyzer/features/reference_data/domain/station_codes.dart';
 import 'package:transit_card_analyzer/features/transit_analysis/tunion_analysis_models.dart';
+import 'package:transit_card_analyzer/features/transit_analysis/shanghai_balance_display.dart';
 import 'package:transit_card_analyzer/features/trips/journey_presentation.dart';
 import 'package:transit_card_analyzer/features/trips/trip_entry_presenter.dart';
 import 'package:transit_card_analyzer/features/trips/trip_filters.dart';
@@ -10,6 +11,43 @@ import 'package:transit_card_analyzer/features/trips/trip_presentation_context.d
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_models.dart';
 
 void main() {
+  test('上海展示偏移同步记录及行程余额，扣款和原始证据保持原值', () {
+    final trip = _trip(status: '出站', balance: 500, recorded: false);
+    final entry = TransactionTripEntry(trip);
+    final display = _display(
+      balanceDisplay: const ShanghaiBalanceDisplay(offsetFen: -800),
+    );
+    final info = describeTripEntry(entry, display, remote: false);
+    final event = describeJourneyEvent(entry, display, info);
+    expect(info.subText, '交易后余额 ¥-3.00');
+    expect(info.amountText, '-¥7.00');
+    expect(event.balanceAfterText, '¥-3.00');
+    expect(event.confirmedBalanceFen, 500);
+    expect(trip.balanceAfterFen, 500);
+    expect(trip.amountFen, 700);
+  });
+
+  test('上海独立过程记录保留原始账本，展示余额统一扣除额度', () {
+    final process = _cycle(type: 4);
+    final entry = ProcessTripEntry(process);
+    final display = _display(
+      balanceDisplay: const ShanghaiBalanceDisplay(offsetFen: -800),
+    );
+    final info = describeTripEntry(entry, display, remote: false);
+    final event = describeJourneyEvent(
+      entry,
+      display,
+      info,
+      processPositions: {'live': 1},
+    );
+    expect(info.subText, '记录余额 ¥92.00');
+    expect(info.fields, contains(('记录余额', '¥92.00')));
+    expect(event.processBalance!.recordedFen, 10000);
+    expect(event.processBalance!.format(500), '¥-3.00');
+    expect(process.balanceFen, 10000);
+    expect(process.amountFen, 100);
+  });
+
   test('大兴机场线50元消费按指定规则标注商务座且深圳11号线不推断', () {
     for (final (line, amount, consume, expected) in [
       ('大兴机场线', 5000, true, '商务座'),
@@ -513,10 +551,12 @@ TransitRecord _rail({int status = 2, int? exitAmount}) => TransitRecord(
 
 TripPresentationContext _display({
   Currency currency = Currency.cny,
+  ShanghaiBalanceDisplay balanceDisplay = const ShanghaiBalanceDisplay(),
   String? busStation = '第10站',
   String? busLine,
 }) => TripPresentationContext(
   currency: currency,
+  balanceDisplay: balanceDisplay,
   cityNameOf: (code) => switch (code) {
     '3100' => '上海市',
     '1000' => '北京市',

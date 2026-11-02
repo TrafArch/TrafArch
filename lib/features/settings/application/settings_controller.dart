@@ -22,8 +22,15 @@ class SettingsController extends OwnedNotifier {
   bool openingFeedbackSurvey = false;
   String? feedbackBrowserError;
 
+  /// 无可用浏览器时链接已自动复制到剪贴板，界面据此弹一次气泡提示。
+  String? feedbackBrowserNotice;
+
+  void clearFeedbackBrowserNotice() => feedbackBrowserNotice = null;
+
   bool get loggingEnabled => _values[SettingsKeys.loggingEnabled] ?? false;
   bool get autoSaveEnabled => _values[SettingsKeys.autoSaveEnabled] ?? false;
+  bool get includeShanghaiOverdraft =>
+      _values[SettingsKeys.includeShanghaiOverdraft] ?? false;
   bool get monetEnabled => _values[SettingsKeys.monetEnabled] ?? true;
 
   Future<bool> openFeedbackEmail(String address) async {
@@ -37,6 +44,34 @@ class SettingsController extends OwnedNotifier {
     }
   }
 
+  Future<bool> openFeedbackQqGroup(String groupNumber, Uri joinUrl) async {
+    final qqUrl = Uri(
+      scheme: 'mqqapi',
+      host: 'card',
+      path: '/show_pslcard',
+      queryParameters: {
+        'src_type': 'internal',
+        'version': '1',
+        'uin': groupNumber,
+        'card_type': 'group',
+        'source': 'qrcode',
+      },
+    );
+    // 直接启动 QQ；未安装或唤起失败时交给外部浏览器打开原邀请页。
+    // 不先用 canLaunchUrl 查询，避免 Android 包可见性限制导致误判。
+    for (final url in [qqUrl, joinUrl]) {
+      if (disposed) return false;
+      try {
+        if (await launchUrl(url, mode: LaunchMode.externalApplication)) {
+          return true;
+        }
+      } catch (_) {
+        // 启动失败继续尝试网页，均不可用时由反馈页提示复制群号。
+      }
+    }
+    return false;
+  }
+
   Future<void> openPrivacyPolicy() =>
       _browser.open(Uri.parse('https://www.trafarch.top/privacy.html'));
 
@@ -48,7 +83,13 @@ class SettingsController extends OwnedNotifier {
     try {
       await _browser.open(url);
     } on FeedbackBrowserException catch (error) {
-      if (!disposed) feedbackBrowserError = error.message;
+      if (disposed) return;
+      if (error.copiedToClipboard) {
+        // 链接已在浏览器层复制入剪贴板：不阻塞页面，仅提示气泡。
+        feedbackBrowserNotice = error.message;
+      } else {
+        feedbackBrowserError = error.message;
+      }
     } catch (_) {
       if (!disposed) feedbackBrowserError = '问卷暂时无法打开，请重试或复制问卷链接。';
     } finally {
@@ -63,6 +104,7 @@ class SettingsController extends OwnedNotifier {
     for (final key in [
       SettingsKeys.loggingEnabled,
       SettingsKeys.autoSaveEnabled,
+      SettingsKeys.includeShanghaiOverdraft,
       SettingsKeys.monetEnabled,
     ]) {
       final revision = _revisions[key] ?? 0;
@@ -95,6 +137,8 @@ class SettingsController extends OwnedNotifier {
 
   Future<void> setAutoSaveEnabled(bool value) =>
       _set(SettingsKeys.autoSaveEnabled, value);
+  Future<void> setIncludeShanghaiOverdraft(bool value) =>
+      _set(SettingsKeys.includeShanghaiOverdraft, value);
   Future<void> setMonetEnabled(bool value) =>
       _set(SettingsKeys.monetEnabled, value);
 

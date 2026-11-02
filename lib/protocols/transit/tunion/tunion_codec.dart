@@ -1,6 +1,6 @@
 /// 交通联合（T-Union）字节编解码工具（读取层与解析层共用）。
 ///
-/// 集中 BCD / 大端整数 / HEX 转换逻辑，避免读取器（TUnionParser）与
+/// 集中 BCD / 整数字节序 / HEX 转换逻辑，避免读取器（TUnionParser）与
 /// 各解析器重复实现导致的口径不一致。
 class TUnionCodec {
   TUnionCodec._();
@@ -81,6 +81,15 @@ class TUnionCodec {
     var v = 0;
     for (var i = offset; i < offset + len && i < data.length; i++) {
       v = (v << 8) | data[i];
+    }
+    return v;
+  }
+
+  /// 小端无符号整数；只用于已独立确认采用该布局的字段。
+  static int leInt(List<int> data, int offset, int len) {
+    var v = 0;
+    for (var i = 0; i < len && offset + i < data.length; i++) {
+      v |= data[offset + i] << (8 * i);
     }
     return v;
   }

@@ -237,6 +237,8 @@ class TUnionProcessRecord {
 /// - [0x2A-0x2F] 预留字段。
 ///
 /// 个别发卡方若存在写入差异，以原始数据为准（见 [TUnionProcessRecord.rawHex]）。
+/// 已核实的沈阳 EP 轨道格式由解析器按受理方证据解码小端金额与余额；
+/// 模型中的金额单位仍为分，原始字段字节完整保留于 [rawHex]。
 class TUnionTripRecord {
   final int typeCode; // [0x00] 交易类型原始值
   final String terminalId; // [0x01-0x08] 终端编号（BCD 或 HEX 回退）
@@ -279,6 +281,10 @@ class TUnionTripRecord {
 
   /// 是否城市轨道交通行业记录（[0x09] 应用分类码标准值 0x01）。
   bool get isCityRail => appTypeCode == 0x01;
+
+  /// Rail journey presentation includes the separately identified suburban
+  /// railway application. Keep its original classification distinct.
+  bool get isRailTransit => isCityRail || appTypeCode == 0x0E;
 
   /// 是否公共汽电车行业记录（[0x09] 应用分类码标准值 0x02）。
   bool get isBus => appTypeCode == 0x02;

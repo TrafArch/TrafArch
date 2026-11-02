@@ -53,6 +53,15 @@ Map<TripEntry, LiveJourneyEvidence> buildLiveJourneyEvidence({
             cityCode: _applicationCity(side),
             terminalId: side.terminal,
             amountFen: _applicationAmount(side),
+            stationId: side.isEntry
+                ? side.rail?.entryStationId
+                : side.rail?.exitStationId,
+            lineCode: side.isEntry
+                ? side.rail?.entryLineCode
+                : side.rail?.exitLineCode,
+            agencyId: side.isEntry
+                ? side.rail?.entryAgencyId
+                : side.rail?.exitAgencyId,
             cycle: cycle,
           ),
         )
@@ -103,6 +112,9 @@ Map<TripEntry, LiveJourneyEvidence> buildLiveJourneyEvidence({
                     (side.rail != null
                         ? TripModeFilter.rail
                         : TripModeFilter.bus) &&
+                (side.rail == null ||
+                    trip.appTypeCode == null ||
+                    trip.appTypeCode == 0x01) &&
                 (_applicationAmount(side) == null ||
                     trip.amountFen == _applicationAmount(side)),
           )
@@ -186,18 +198,25 @@ int? _applicationAmount(TunionApplicationSide side) => side.rail != null
 bool _transactionMatchesCycle(TransitTrip trip, TUnionTripRecord cycle) {
   final mode = isTunionBusCycle(cycle)
       ? TripModeFilter.bus
-      : cycle.isCityRail
+      : cycle.isRailTransit
       ? TripModeFilter.rail
       : TripModeFilter.other;
   final role = cycle.isEntry
       ? JourneyEventRole.entry
       : const {0x02, 0x04}.contains(cycle.typeCode)
       ? JourneyEventRole.exit
+      : mode == TripModeFilter.rail &&
+            const {0x07, 0x08}.contains(cycle.typeCode)
+      ? JourneyEventRole.fareAdjustment
+      : mode == TripModeFilter.bus &&
+            const {0x05, 0x06}.contains(cycle.typeCode)
+      ? JourneyEventRole.single
       : JourneyEventRole.unknown;
   return role != JourneyEventRole.unknown &&
       mode != TripModeFilter.other &&
       _transactionRole(trip) == role &&
       _transactionMode(trip) == mode &&
+      (trip.appTypeCode == null || trip.appTypeCode == cycle.appTypeCode) &&
       trip.time == cycle.time &&
       trip.amountFen == cycle.amountFen &&
       _city(trip.cityCode) != null &&
@@ -208,7 +227,15 @@ JourneyEventRole _transactionRole(TransitTrip trip) =>
     switch (trip.rideStatusName) {
       '进站' || '进闸' || '上车' => JourneyEventRole.entry,
       '出站' || '出闸' || '下车' => JourneyEventRole.exit,
-      '单次消费' || '充值' || '补票' => JourneyEventRole.unknown,
+      '补票' =>
+        _transactionMode(trip) == TripModeFilter.rail
+            ? JourneyEventRole.fareAdjustment
+            : JourneyEventRole.unknown,
+      '单次消费' =>
+        _transactionMode(trip) == TripModeFilter.bus && trip.isConsume
+            ? JourneyEventRole.single
+            : JourneyEventRole.unknown,
+      '充值' => JourneyEventRole.unknown,
       _ =>
         trip.isEntry
             ? JourneyEventRole.entry
@@ -216,6 +243,13 @@ JourneyEventRole _transactionRole(TransitTrip trip) =>
             ? JourneyEventRole.entry
             : const {0x02, 0x04}.contains(trip.matchedProcessTrip?.typeCode)
             ? JourneyEventRole.exit
+            : _transactionMode(trip) == TripModeFilter.rail &&
+                  const {0x07, 0x08}.contains(trip.matchedProcessTrip?.typeCode)
+            ? JourneyEventRole.fareAdjustment
+            : _transactionMode(trip) == TripModeFilter.bus &&
+                  trip.isConsume &&
+                  const {0x05, 0x06}.contains(trip.matchedProcessTrip?.typeCode)
+            ? JourneyEventRole.single
             : JourneyEventRole.unknown,
     };
 

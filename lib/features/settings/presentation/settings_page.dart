@@ -95,6 +95,19 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
             Card(
+              child: SwitchListTile(
+                secondary: const Icon(Icons.account_balance_wallet_outlined),
+                title: const Text('上海交通卡可透支余额'),
+                subtitle: Text(
+                  app.includeShanghaiOverdraft
+                      ? '已开启：总余额包含固定的 8 元可透支额度，城市一卡通余额保持原值'
+                      : '默认关闭：总余额和相关记录余额扣除 8 元，城市一卡通余额不重复扣除',
+                ),
+                value: app.includeShanghaiOverdraft,
+                onChanged: (value) => app.setIncludeShanghaiOverdraft(value),
+              ),
+            ),
+            Card(
               child: ListTile(
                 leading: const Icon(Icons.menu_book_outlined),
                 title: const Text('知识库'),
@@ -117,7 +130,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   app.monetEnabled
                       ? '已开启（默认）：主题色跟随系统壁纸动态取色（需 Android 12 及以上，'
                             '低版本系统自动回落到内置主题色）'
-                      : '已关闭：使用应用内置固定主题色（青绿色）',
+                      : '已关闭：使用应用内置固定主题色（蓝色）',
                 ),
                 value: app.monetEnabled,
                 onChanged: (value) => app.setMonetEnabled(value),

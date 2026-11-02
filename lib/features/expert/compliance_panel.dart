@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 
 import '../transit_analysis/tunion_analysis_models.dart';
+import '../transit_analysis/shanghai_balance_display.dart';
 import 'expert_widgets.dart';
 
 class CompliancePanel extends StatelessWidget {
-  const CompliancePanel({super.key, required this.analysis});
+  const CompliancePanel({
+    super.key,
+    required this.analysis,
+    this.balanceDisplay = const ShanghaiBalanceDisplay(),
+  });
   final CardAnalysisResult? analysis;
+  final ShanghaiBalanceDisplay balanceDisplay;
   @override
   Widget build(BuildContext context) => Column(
     children: [
@@ -18,6 +24,15 @@ class CompliancePanel extends StatelessWidget {
     ],
   );
   Widget _complianceRow(BuildContext context, ComplianceItem item) {
+    final displayedBalance = balanceDisplay.balanceFen(
+      analysis?.wallet.balanceFen,
+    );
+    final detail =
+        item.id == 'balance' &&
+            balanceDisplay.offsetFen != 0 &&
+            displayedBalance != null
+        ? '余额 ${(displayedBalance / 100).toStringAsFixed(2)} ${analysis!.currency.unit}'
+        : item.detail;
     final scheme = Theme.of(context).colorScheme;
     final (IconData icon, Color color) = switch (item.status) {
       ComplianceStatus.pass => (Icons.check_circle_outline, Colors.green),
@@ -38,7 +53,7 @@ class CompliancePanel extends StatelessWidget {
               children: [
                 Text(item.title),
                 Text(
-                  item.detail,
+                  detail,
                   style: Theme.of(context).textTheme.bodySmall
                       ?.copyWith(color: scheme.outline),
                 ),

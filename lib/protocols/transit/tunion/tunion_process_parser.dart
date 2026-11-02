@@ -59,6 +59,9 @@ class TUnionProcessParser {
   /// [10] 预留字段　[11-14] 交易金额（大端，分）　[15-18] 记录余额（大端，分）
   /// [19-1F] 交易日期时间（BCD YYYYMMDDhhmmss）　[20-21] 受理方城市代码（HEX）
   /// [22-29] 受理方机构标识（HEX）　[2A-2F] 预留字段。
+  /// 沈阳已核实的 EP 轨道格式仅在受理城市、终端前缀、收单机构、应用
+  /// 分类及交易类型同时符合时，对金额与记录余额采用小端；其他字段及
+  /// 其他记录仍按标准大端解析，不按发卡城市或金额大小猜测字节序。
   ///
   /// 记录过短（< 32 字节）、未写入（首字节 0x00 / 0xFF）或时间非法时
   /// 返回 null（保持未知，不猜测）。
@@ -69,26 +72,43 @@ class TUnionProcessParser {
     if (typeCode == 0x00 || typeCode == 0xFF) return null;
     final time = TUnionCodec.parseBcdDateTime(data.sublist(0x19, 0x20));
     if (time == null) return null;
+    final terminalId =
+        TUnionCodec.bcdString(data.sublist(0x01, 0x09)) ??
+        TUnionCodec.hexBytes(data.sublist(0x01, 0x09)) ??
+        '';
+    final cityCode = data.length >= 0x22
+        ? TUnionCodec.hexBytes(data.sublist(0x20, 0x22))
+        : null;
+    final acquirerId = data.length >= 0x2A
+        ? TUnionCodec.hexBytes(data.sublist(0x22, 0x2A))
+        : null;
+    // transit_card_log_20261030_195428, complete 19:51 read: EP 03/04
+    // balances are corroborated by adjacent EC records and the 0x18 ledger.
+    // The same capture's EC rail and EP bus fields are big endian. Beijing
+    // and Hangzhou EP rail samples are also big endian, so EP alone is not
+    // sufficient evidence. Keep the decision local to each receiving record.
+    final shenyangEpRailMoney =
+        (typeCode == 0x03 || typeCode == 0x04) &&
+        data[0x09] == 0x01 &&
+        cityCode == '2210' &&
+        terminalId.startsWith('22104131') &&
+        acquirerId == '1217221000000000';
+    final moneyInt = shenyangEpRailMoney
+        ? TUnionCodec.leInt
+        : TUnionCodec.beInt;
     return TUnionTripRecord(
       typeCode: typeCode,
-      terminalId:
-          TUnionCodec.bcdString(data.sublist(0x01, 0x09)) ??
-          TUnionCodec.hexBytes(data.sublist(0x01, 0x09)) ??
-          '',
+      terminalId: terminalId,
       appTypeCode: data[0x09],
       lineStationCode:
           TUnionCodec.bcdString(data.sublist(0x0A, 0x11)) ??
           TUnionCodec.hexBytes(data.sublist(0x0A, 0x11)) ??
           '',
-      amountFen: TUnionCodec.beInt(data, 0x11, 4),
-      balanceFen: TUnionCodec.beInt(data, 0x15, 4),
+      amountFen: moneyInt(data, 0x11, 4),
+      balanceFen: moneyInt(data, 0x15, 4),
       time: time,
-      cityCode: data.length >= 0x22
-          ? TUnionCodec.hexBytes(data.sublist(0x20, 0x22))
-          : null,
-      acquirerId: data.length >= 0x2A
-          ? TUnionCodec.hexBytes(data.sublist(0x22, 0x2A))
-          : null,
+      cityCode: cityCode,
+      acquirerId: acquirerId,
       rawHex: TUnionCodec.hexBytes(data),
     );
   }

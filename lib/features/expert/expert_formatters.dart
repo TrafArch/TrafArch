@@ -1,4 +1,5 @@
 import '../transit_analysis/tunion_analysis_models.dart';
+import '../transit_analysis/shanghai_balance_display.dart';
 import '../../protocols/transit/tunion/tunion_models.dart';
 import '../../protocols/transit/city_union/city_union_models.dart';
 
@@ -175,8 +176,13 @@ String hexBytes(List<int> bytes) => bytes
 
 /// The formatter knows the captured currency and a namespace-specific lookup.
 class ExpertValues {
-  const ExpertValues({required this.currency, required this.cityNameOf});
+  const ExpertValues({
+    required this.currency,
+    required this.cityNameOf,
+    this.balanceDisplay = const ShanghaiBalanceDisplay(),
+  });
   final Currency currency;
+  final ShanghaiBalanceDisplay balanceDisplay;
   final String? Function(String?) cityNameOf;
   String cityCell(String? code) {
     if (code == null || code.isEmpty) return '未知';
@@ -188,6 +194,13 @@ class ExpertValues {
     if (fen == null) return '未知';
     final hex = fen.toRadixString(16).padLeft(8, '0').toLowerCase();
     return '($hex)${(fen / 100).toString()}${currency.unit}';
+  }
+
+  String balanceCell(int? fen) {
+    if (fen == null) return '未知';
+    // Keep the hexadecimal observation unchanged beside the adjusted balance.
+    final hex = fen.toRadixString(16).padLeft(8, '0').toLowerCase();
+    return '($hex)${(balanceDisplay.balanceFen(fen)! / 100).toString()}${currency.unit}';
   }
 
   String processRecordSubtitle(TUnionProcessRecord r) {

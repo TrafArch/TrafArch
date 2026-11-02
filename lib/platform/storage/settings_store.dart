@@ -10,6 +10,10 @@ abstract final class SettingsKeys {
   /// 「读取后自动保存」开关（'true' / 'false'；缺省视为关闭）。
   static const autoSaveEnabled = 'auto_save_enabled';
 
+  /// 「上海交通卡可透支余额」开关（'true' / 'false'；缺省视为关闭）。
+  /// 开启显示包含固定 8 元可透支额度的余额，关闭时从余额中扣除该额度。
+  static const includeShanghaiOverdraft = 'include_shanghai_overdraft';
+
   /// 「莫奈取色（动态取色）」开关（'true' / 'false'；缺省视为开启）。
   /// 开启后主题色跟随系统壁纸取色（Android 12+ Dynamic Color）；
   /// 关闭时使用应用内置固定主题色。
