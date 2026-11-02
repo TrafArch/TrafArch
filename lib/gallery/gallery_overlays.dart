@@ -3,6 +3,8 @@ part of 'gallery_app.dart';
 extension _GalleryOverlays on _GalleryViewState {
   List<Widget> _overlay() {
     final type = _entry.overlay!;
+    final nameForm =
+        type == GalleryOverlay.save || type == GalleryOverlay.rename;
     if (type == GalleryOverlay.cardMenu ||
         type == GalleryOverlay.source ||
         type == GalleryOverlay.mode) {
@@ -60,7 +62,7 @@ extension _GalleryOverlays on _GalleryViewState {
                         ),
                         clipBehavior: Clip.antiAlias,
                         child: SingleChildScrollView(
-                          padding: const EdgeInsets.all(22),
+                          padding: EdgeInsets.all(nameForm ? 18 : 22),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -87,7 +89,7 @@ extension _GalleryOverlays on _GalleryViewState {
                                   ),
                                 ],
                               ),
-                              _gap(12),
+                              _gap(nameForm ? 8 : 12),
                               _overlayBody(type),
                             ],
                           ),
@@ -121,7 +123,6 @@ extension _GalleryOverlays on _GalleryViewState {
     GalleryOverlay.save => _GalleryNameForm(
       key: ValueKey('save-${c.generation}'),
       initialName: c.current.name,
-      tail: c.current.tail,
       onCancel: c.back,
       onSubmit: (name) {
         c.save(name);
@@ -131,7 +132,6 @@ extension _GalleryOverlays on _GalleryViewState {
     GalleryOverlay.rename => _GalleryNameForm(
       key: ValueKey('rename-${_selectedCard.id}-${c.generation}'),
       initialName: _selectedCard.name,
-      tail: _selectedCard.tail,
       onCancel: c.back,
       onSubmit: (name) {
         c.rename(name);
@@ -529,11 +529,10 @@ class _GalleryNameForm extends StatefulWidget {
   const _GalleryNameForm({
     super.key,
     required this.initialName,
-    required this.tail,
     required this.onCancel,
     required this.onSubmit,
   });
-  final String initialName, tail;
+  final String initialName;
   final VoidCallback onCancel;
   final ValueChanged<String> onSubmit;
   @override
@@ -556,21 +555,27 @@ class _GalleryNameFormState extends State<_GalleryNameForm> {
 
   @override
   Widget build(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      Text('卡号尾号 ${widget.tail}', style: Theme.of(context).textTheme.bodySmall),
-      const SizedBox(height: 14),
-      TextField(
-        controller: _input,
-        autofocus: true,
-        maxLength: 80,
-        decoration: const InputDecoration(labelText: '卡片名称'),
-        onChanged: (_) => setState(() {}),
-        onSubmitted: (value) {
-          if (value.trim().isNotEmpty) widget.onSubmit(value);
-        },
+      Semantics(
+        label: '卡片名称',
+        child: TextField(
+          controller: _input,
+          autofocus: true,
+          maxLength: 80,
+          decoration: const InputDecoration(
+            isDense: true,
+            contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            counterText: '',
+          ),
+          onChanged: (_) => setState(() {}),
+          onSubmitted: (value) {
+            if (value.trim().isNotEmpty) widget.onSubmit(value);
+          },
+        ),
       ),
-      const SizedBox(height: 18),
+      const SizedBox(height: 12),
       Row(
         children: [
           Expanded(

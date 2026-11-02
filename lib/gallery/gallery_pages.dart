@@ -1099,8 +1099,9 @@ extension _GalleryPages on _GalleryViewState {
             (value) => c.update(() => c.monet = value),
             subtitle: c.monet ? '当前使用雾蓝回退配色' : '使用手动选择的主题配色',
           ),
-          if (!c.monet)
-            Padding(
+          _collapse(
+            !c.monet,
+            (_) => Padding(
               padding: const EdgeInsets.fromLTRB(10, 0, 10, 14),
               child: Row(
                 children: c.data.palettes.entries.map((entry) {
@@ -1160,6 +1161,7 @@ extension _GalleryPages on _GalleryViewState {
                 }).toList(),
               ),
             ),
+          ),
           const Divider(),
           _switch(
             '预测性返回手势',
@@ -1169,8 +1171,9 @@ extension _GalleryPages on _GalleryViewState {
                 ? '正在读取偏好…'
                 : '手势返回时预览上一页，松手返回或取消；支持的 Android 系统生效',
           ),
-          if (_preferences.error != null)
-            Padding(
+          _collapse(
+            _preferences.error != null,
+            (_) => Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Row(
                 children: [
@@ -1184,6 +1187,7 @@ extension _GalleryPages on _GalleryViewState {
                 ],
               ),
             ),
+          ),
           const Divider(),
           Padding(
             padding: const EdgeInsets.all(14),
@@ -1214,15 +1218,20 @@ extension _GalleryPages on _GalleryViewState {
             c.setLogs,
             subtitle: '仅记录本次会话中的界面操作',
           ),
-          if (c.logsEnabled) ...[
-            const Divider(),
-            _settingRow(
-              '导出日志',
-              () => c.export(log: true),
-              subtitle: '预览模拟日志，不保存文件',
-              icon: Icons.download_outlined,
+          _collapse(
+            c.logsEnabled,
+            (_) => Column(
+              children: [
+                const Divider(),
+                _settingRow(
+                  '导出日志',
+                  () => c.export(log: true),
+                  subtitle: '预览模拟日志，不保存文件',
+                  icon: Icons.download_outlined,
+                ),
+              ],
             ),
-          ],
+          ),
         ],
       ),
       padding: EdgeInsets.zero,

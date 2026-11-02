@@ -36,6 +36,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('保存卡片'));
     await tester.pumpAndSettle();
+    expect(find.text('卡片名称'), findsNothing);
+    expect(find.textContaining('卡号尾号'), findsNothing);
+    final form = find
+        .ancestor(of: find.byType(TextField), matching: find.byType(Material))
+        .first;
+    expect(tester.getSize(form).height, lessThan(250));
     await tester.enterText(find.byType(TextField), '我的通勤卡');
     await tester.tap(find.text('确认'));
     await tester.pumpAndSettle();

@@ -30,14 +30,6 @@ extension _GalleryInspection on _GalleryViewState {
           else
             ...switch (c.expertTab) {
               0 => [
-                _tabs(
-                  ['交通卡', '银行卡', 'FeliCa'],
-                  ['card', 'bank', 'felica'].indexOf(c.expertKind),
-                  (i) => c.update(
-                    () => c.expertKind = ['card', 'bank', 'felica'][i],
-                  ),
-                ),
-                _gap(14),
                 ..._expertSections(c.expertKind),
                 _text('以上为内置样例，未保留的字段显示未知。', size: 12, color: t.muted),
               ],

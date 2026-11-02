@@ -254,10 +254,10 @@ extension _GalleryComponents on _GalleryViewState {
           style: TextButton.styleFrom(
             minimumSize: const Size(0, 42),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            backgroundColor: selected == i ? t.tone : Colors.transparent,
+            backgroundColor: Colors.transparent,
             foregroundColor: selected == i ? t.onTone : t.muted,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(13),
             ),
             textStyle: const TextStyle(
               fontSize: 12,
@@ -268,6 +268,53 @@ extension _GalleryComponents on _GalleryViewState {
         ),
       ),
     );
+    Widget track(List<double> widths) => Stack(
+      children: [
+        AnimatedPositionedDirectional(
+          duration: _reduceMotion ? Duration.zero : _GalleryMotion.capsule,
+          curve: _GalleryMotion.curve,
+          start: widths.take(selected).fold(0.0, (a, b) => a + b) + 3,
+          top: 3,
+          bottom: 3,
+          width: widths[selected] - 6,
+          child: IgnorePointer(
+            child: DecoratedBox(
+              key: ValueKey('segments-${id ?? labels.first}-indicator'),
+              decoration: BoxDecoration(
+                color: t.tone,
+                borderRadius: BorderRadius.circular(13),
+              ),
+            ),
+          ),
+        ),
+        Row(
+          children: List.generate(
+            labels.length,
+            (i) => SizedBox(width: widths[i], child: button(i)),
+          ),
+        ),
+      ],
+    );
+    // Scrollable segments keep their natural text widths. The same indicator
+    // moves across both equal-width and scrolling tracks without replacing it.
+    final naturalWidths = scroll
+        ? labels.map((label) {
+            final painter = TextPainter(
+              text: TextSpan(
+                text: label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              textDirection: Directionality.of(context),
+              textScaler: MediaQuery.textScalerOf(context),
+            )..layout();
+            final width = painter.width.ceilToDouble() + 32;
+            painter.dispose();
+            return width;
+          }).toList()
+        : <double>[];
     return Focus(
       onKeyEvent: (_, event) {
         if (event is! KeyDownEvent) return KeyEventResult.ignored;
@@ -296,12 +343,14 @@ extension _GalleryComponents on _GalleryViewState {
                     ? null
                     : PageStorageKey('gallery-${c.generation}-$id'),
                 scrollDirection: Axis.horizontal,
-                child: Row(children: List.generate(labels.length, button)),
+                child: track(naturalWidths),
               )
-            : Row(
-                children: List.generate(
-                  labels.length,
-                  (i) => Expanded(child: button(i)),
+            : LayoutBuilder(
+                builder: (context, constraints) => track(
+                  List.filled(
+                    labels.length,
+                    constraints.maxWidth / labels.length,
+                  ),
                 ),
               ),
       ),
@@ -460,7 +509,7 @@ extension _GalleryComponents on _GalleryViewState {
         c.docked ? inset : 5,
       ),
       decoration: BoxDecoration(
-        color: c.docked ? t.surface2 : t.surface.withValues(alpha: .97),
+        color: c.docked ? t.surface2 : t.surface.withValues(alpha: .78),
         borderRadius: c.docked
             ? null
             : BorderRadius.circular(31 + _extraTextScale * 10),
@@ -523,7 +572,13 @@ extension _GalleryComponents on _GalleryViewState {
       padding: EdgeInsets.only(left: 16, right: 16, bottom: 18 + inset),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 352),
-        child: bar,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(31 + _extraTextScale * 10),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: bar,
+          ),
+        ),
       ),
     );
   }

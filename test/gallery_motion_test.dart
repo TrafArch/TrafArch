@@ -460,6 +460,63 @@ void main() {
   );
 
   testWidgets(
+    'theme segment slides continuously and reverses from its current position',
+    (tester) async {
+      c.navigate(GalleryPage.settings);
+      await mount(tester);
+      final indicator = find.byKey(const ValueKey('segments-跟随系统-indicator'));
+      await tester.ensureVisible(indicator);
+      await tester.pumpAndSettle();
+      final start = tester.getCenter(indicator).dx;
+      await tester.tap(find.text('深色'));
+      await tester.pump();
+      expect(tester.getCenter(indicator).dx, closeTo(start, .1));
+      await tester.pump(const Duration(milliseconds: 60));
+      final partial = tester.getCenter(indicator).dx;
+      final destination = tester.getCenter(find.text('深色')).dx;
+      expect(partial, inExclusiveRange(start, destination));
+      await tester.tap(find.text('跟随系统'));
+      await tester.pump();
+      expect(tester.getCenter(indicator).dx, closeTo(partial, .1));
+      await tester.pump(const Duration(milliseconds: 45));
+      expect(tester.getCenter(indicator).dx, inExclusiveRange(start, partial));
+      await tester.pumpAndSettle();
+      expect(tester.getCenter(indicator).dx, closeTo(start, .1));
+    },
+  );
+
+  testWidgets(
+    'conditional settings animate height and disable outgoing actions immediately',
+    (tester) async {
+      c.navigate(GalleryPage.settings);
+      await mount(tester);
+      final logs = find.widgetWithText(SwitchListTile, '启用运行日志');
+      await tester.ensureVisible(logs);
+      await tester.pumpAndSettle();
+      final tile = tester.getRect(logs);
+      final panel = find
+          .ancestor(of: logs, matching: find.byType(Material))
+          .first;
+      final collapsedHeight = tester.getSize(panel).height;
+      await tester.tap(logs);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 60));
+      final partialHeight = tester.getSize(panel).height;
+      expect(partialHeight, greaterThan(collapsedHeight));
+      await tester.pumpAndSettle();
+      expect(tester.getSize(panel).height, greaterThan(partialHeight));
+      expect(find.text('导出日志').hitTestable(), findsOneWidget);
+      await tester.tapAt(tile.center);
+      await tester.pump();
+      expect(find.text('导出日志'), findsOneWidget);
+      expect(find.text('导出日志').hitTestable(), findsNothing);
+      await tester.pumpAndSettle();
+      expect(find.text('导出日志'), findsNothing);
+      expect(tester.getSize(panel).height, closeTo(collapsedHeight, .1));
+    },
+  );
+
+  testWidgets(
     'navigation pixels stay inside palette bounds during every selected-color transition',
     (tester) async {
       await mount(tester);
