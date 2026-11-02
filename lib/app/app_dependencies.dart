@@ -305,6 +305,8 @@ class AppDependencies extends OwnedNotifier {
       settings.setIncludeShanghaiOverdraft(enabled);
   Future<bool> openFeedbackEmail(String address) =>
       settings.openFeedbackEmail(address);
+  Future<bool> openFeedbackQqGroup(String groupNumber, Uri joinUrl) =>
+      settings.openFeedbackQqGroup(groupNumber, joinUrl);
   Future<void> openPrivacyPolicy() => settings.openPrivacyPolicy();
   Future<void> openFeedbackSurvey(Uri url) => settings.openFeedbackSurvey(url);
   Future<void> exportLog() => diagnostics.exportLog();

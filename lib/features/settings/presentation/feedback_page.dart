@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../app/app_dependencies.dart';
-import 'survey_page.dart';
 
 class FeedbackPage extends StatelessWidget {
   const FeedbackPage({super.key, required this.app});
@@ -14,7 +13,7 @@ class FeedbackPage extends StatelessWidget {
   /// 用户反馈 QQ 群号。
   static const String qqGroupNumber = '1106608008';
 
-  /// QQ 加群链接（应用内 WebView 直接打开加群页）。
+  /// 无法直接唤起 QQ 时使用的加群网页。
   static const String qqGroupJoinUrl = 'https://qm.qq.com/q/I8Ba9gEise';
 
   /// 反馈问卷地址（飞书问卷，Edge / Chrome / Firefox 打开）。
@@ -62,18 +61,13 @@ class FeedbackPage extends StatelessWidget {
             child: ListTile(
               leading: const Icon(Icons.groups_outlined),
               title: const Text('QQ 群'),
-              subtitle: const Text('$qqGroupNumber\n点按即可打开加群页'),
+              subtitle: const Text('$qqGroupNumber\n点按即可跳转 QQ 加群'),
               trailing: IconButton(
                 icon: const Icon(Icons.copy_outlined),
                 tooltip: '复制群号',
                 onPressed: () => _copyQqGroup(context),
               ),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) =>
-                      const SurveyPage(title: '加入 QQ 群', url: qqGroupJoinUrl),
-                ),
-              ),
+              onTap: () => _openQqGroup(context),
             ),
           ),
           const SizedBox(height: 12),
@@ -158,9 +152,8 @@ class FeedbackPage extends StatelessWidget {
     final notice = app.feedbackBrowserNotice;
     if (notice != null) {
       app.clearFeedbackBrowserNotice();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(notice)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(notice)));
     }
   }
 
@@ -169,6 +162,17 @@ class FeedbackPage extends StatelessWidget {
     if (!context.mounted || opened) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('无法打开邮件应用，请安装或启用邮件应用，或复制邮箱地址。')),
+    );
+  }
+
+  Future<void> _openQqGroup(BuildContext context) async {
+    final opened = await app.openFeedbackQqGroup(
+      qqGroupNumber,
+      Uri.parse(qqGroupJoinUrl),
+    );
+    if (!context.mounted || opened) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('无法打开 QQ 或加群页，请复制群号后在 QQ 中搜索。')),
     );
   }
 
