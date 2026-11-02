@@ -13,6 +13,7 @@ import '../../trips/trip_cards_view.dart';
 import 'archive_trip_presenter.dart';
 import 'imported_archive_records.dart';
 import 'shanghai_archive_mirrored_records.dart';
+import 'local_card_history_records.dart';
 import 'archive_balance_display.dart';
 import '../../settings/application/settings_controller.dart';
 
@@ -202,6 +203,7 @@ class _CardDetailBody extends StatelessWidget {
             records: cuRecords,
             sourceLabels: cityUnion.sourceLabels,
           ),
+        LocalCardHistoryRecords(records: history.localCardRecords),
         for (final issue in cityUnion.issues)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
