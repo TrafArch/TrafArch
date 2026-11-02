@@ -86,7 +86,7 @@ ParsedCard _macauCard() {
 }
 
 void main() {
-  testWidgets('岭南通·羊城通摘要展示已读取字段和未确认的互通状态', (tester) async {
+  testWidgets('岭南通·羊城通摘要仅显示卡片字段且隐藏未确认互通状态', (tester) async {
     final app = _App(_lingnanCard());
     addTearDown(app.dispose);
     await tester.pumpWidget(
@@ -96,14 +96,15 @@ void main() {
     );
 
     expect(find.text('岭南通·羊城通'), findsWidgets);
-    expect(find.text('发卡日期'), findsOneWidget);
-    expect(find.text('2016-08-15'), findsOneWidget);
+    expect(find.text('发卡日期'), findsNothing);
+    expect(find.text('岭南通应用'), findsNothing);
+    expect(find.text('岭南通钱包应用'), findsNothing);
+    expect(find.text('发卡机构编码'), findsNothing);
     expect(find.text('2026-12-31'), findsOneWidget);
     expect(find.text('¥41.25'), findsOneWidget);
-    expect(find.text('PAY.APPY 已确认'), findsOneWidget);
-    expect(find.text('PAY.TICL 已确认'), findsOneWidget);
-    expect(find.text('未确认（未检测到交通联合应用）'), findsOneWidget);
-    expect(find.text('1 条'), findsOneWidget);
+    expect(find.text('全国互联互通'), findsNothing);
+    expect(find.text('交易记录'), findsNothing);
+    expect(find.text('最近交易'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

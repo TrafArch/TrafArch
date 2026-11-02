@@ -89,7 +89,6 @@ class TransitSummaryPanel extends StatelessWidget {
       parsedCardNumber = info?.displayCardNumber ?? publicInfo?.cityCardNumber;
     }
     final cardNumber = identified?.cardNumber ?? parsedCardNumber ?? '未读取到卡号';
-    final lingnanRecords = local?.trips ?? const [];
     final macauRecords =
         local?.records
             .where((record) => record.label == '澳门通交易记录')
@@ -129,23 +128,11 @@ class TransitSummaryPanel extends StatelessWidget {
       if (local?.info.isMacauPass == true)
         summaryField(context, '应用状态', '澳门通钱包应用已确认'),
       if (local?.info.isLNT == true) ...[
-        summaryField(context, '岭南通应用', 'PAY.APPY 已确认'),
-        summaryField(
-          context,
-          '岭南通钱包应用',
-          local!.extras.slots['lnt.ticlConfirmed'] == true
-              ? 'PAY.TICL 已确认'
-              : 'PAY.TICL 未确认',
-        ),
-        if (local.info.issuerCode.isNotEmpty)
-          summaryField(context, '发卡机构编码', local.info.issuerCode),
-        if (local.info.issueDate != null)
-          summaryField(context, '发卡日期', summaryDate(local.info.issueDate!)),
-        if (local.info.expiryDate != null)
+        if (local?.info.expiryDate != null)
           summaryField(
             context,
             '有效期至',
-            summaryDate(local.info.expiryDate!),
+            summaryDate(local!.info.expiryDate!),
           ),
       ],
       if (isLocal && local?.info.observedBalance != null)
@@ -190,21 +177,11 @@ class TransitSummaryPanel extends StatelessWidget {
         ),
       ],
       if (parsed?.parserId == CardParserIds.lingnanTong) ...[
-        summaryField(
-          context,
-          '全国互联互通',
-          local?.extras.slots['lnt.tuConfirmed'] == true
-              ? '交通联合应用已确认，互通状态未解析'
-              : local?.extras.slots['lnt.tuConfirmed'] == false
-              ? '未确认（未检测到交通联合应用）'
-              : '未知（未读取交通联合应用状态）',
-        ),
-        summaryField(context, '交易记录', '${lingnanRecords.length} 条'),
-        if (lingnanRecords.isNotEmpty)
+        if (local?.extras.slots['lnt.tuConfirmed'] == true)
           summaryField(
             context,
-            '最近交易',
-            _summaryRecordTime(lingnanRecords.first.timestamp),
+            '全国互联互通',
+            '交通联合应用已确认，互通状态未解析',
           ),
       ],
       if (local?.info.isMacauPass == true) ...[
