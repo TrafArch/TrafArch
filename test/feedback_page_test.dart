@@ -54,14 +54,9 @@ void main() {
     expect(find.text('暂时无法打开问卷'), findsNothing);
   });
 
-  testWidgets('无浏览器失败留页，可复制问卷地址并重新尝试', (tester) async {
-    var launches = 0;
+  testWidgets('没有可用浏览器时自动复制链接并弹出气泡', (tester) async {
     String? copied;
-    messenger.setMockMethodCallHandler(browserChannel, (_) async {
-      launches++;
-      if (launches == 1) throw PlatformException(code: 'BROWSER_UNAVAILABLE');
-      return 'com.android.chrome';
-    });
+    messenger.setMockMethodCallHandler(browserChannel, (_) async => null);
     messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
       if (call.method == 'Clipboard.setData') {
         copied = (call.arguments as Map)['text'] as String;
@@ -73,27 +68,13 @@ void main() {
     await tester.tap(find.text('填写反馈问卷'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(FeedbackPage), findsOneWidget);
-    expect(find.byType(SurveyPage), findsNothing);
-    expect(find.text('暂时无法打开问卷'), findsOneWidget);
-    expect(find.textContaining('Edge、Chrome 或 Firefox'), findsWidgets);
-    await tester.drag(find.byType(ListView), const Offset(0, -300));
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('复制问卷链接'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('复制问卷链接'));
-    await tester.pumpAndSettle();
     expect(
       copied,
       'https://trafarch.feishu.cn/share/base/form/shrcniZ6QaPgqGazU1bpdmZyNPh',
     );
-
-    await tester.ensureVisible(find.text('重新打开问卷'));
-    await tester.tap(find.text('重新打开问卷'));
-    await tester.pumpAndSettle();
-    expect(launches, 2);
-    expect(find.text('暂时无法打开问卷'), findsNothing);
+    expect(find.text('链接已复制到剪贴板，请前往浏览器打开'), findsOneWidget);
     expect(find.byType(FeedbackPage), findsOneWidget);
+    expect(find.text('暂时无法打开问卷'), findsNothing);
   });
 
   testWidgets('浏览器调用未完成时防止重复启动', (tester) async {
@@ -208,11 +189,18 @@ void main() {
     expect(find.byType(SurveyPage), findsNothing);
   });
 
-  testWidgets('隐私政策浏览器启动失败可重试', (tester) async {
+  testWidgets('隐私政策无浏览器时复制链接并弹出气泡', (tester) async {
     var calls = 0;
+    String? copied;
     messenger.setMockMethodCallHandler(browserChannel, (_) async {
-      if (++calls == 1) throw PlatformException(code: 'BROWSER_UNAVAILABLE');
-      return 'com.android.chrome';
+      calls++;
+      return null; // 没有 Custom Tabs 浏览器
+    });
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') {
+        copied = (call.arguments as Map)['text'] as String;
+      }
+      return null;
     });
     final app = createApp();
     await tester.pumpWidget(
@@ -226,10 +214,9 @@ void main() {
     await tester.scrollUntilVisible(find.text('隐私政策'), 150);
     await tester.tap(find.text('隐私政策'));
     await tester.pumpAndSettle();
-    expect(find.text('无法打开隐私政策，请安装或启用 Edge、Chrome 或 Firefox 后重试。'), findsOneWidget);
-    await tester.tap(find.text('隐私政策'));
-    await tester.pumpAndSettle();
-    expect(calls, 2);
+    expect(calls, 1);
+    expect(copied, 'https://www.trafarch.top/privacy.html');
+    expect(find.text('链接已复制到剪贴板，请前往浏览器打开'), findsOneWidget);
     expect(find.byType(AboutPage), findsOneWidget);
   });
 

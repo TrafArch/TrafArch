@@ -5,26 +5,18 @@ import java.net.URISyntaxException
 import java.util.Locale
 
 /**
- * Browser selection stays deterministic even if a provider disappears after discovery.
+ * Opens a web page in any installed browser that provides a Custom Tabs service.
  *
- * Edge and Chrome expose a Custom Tabs service. Firefox for Android does not bind a
- * `CustomTabsService` (it only handles `ACTION_VIEW`), so it is listed as an external
- * fallback: still pinned to its package name, never an implicit "any browser" intent.
+ * The system Custom Tabs lookup returns the best matching provider, so the launcher no
+ * longer pins a fixed allowlist: Edge, Chrome, Firefox Beta/Nightly, Brave, Vivaldi, Kiwi,
+ * Samsung Internet and any other browser that declares `CustomTabsService` are all eligible.
+ * When no provider is available the caller receives `null` and decides the fallback
+ * (the Dart layer copies the link to the clipboard).
  */
 internal class PreferredCustomTabsLauncher(
-    private val supportsCustomTabs: (String) -> Boolean,
-    private val isInstalled: (String) -> Boolean,
+    private val anyCustomTabsProvider: () -> String?,
     private val launchCustomTab: (String, String) -> Unit,
-    private val launchExternal: (String, String) -> Unit,
 ) {
-    private data class Provider(val packageName: String, val externalFallback: Boolean)
-
-    private val providers = listOf(
-        Provider(EDGE, externalFallback = false),
-        Provider(CHROME, externalFallback = false),
-        Provider(FIREFOX, externalFallback = true),
-    )
-
     fun open(url: String): String? {
         val uri = try {
             URI(url)
@@ -34,27 +26,19 @@ internal class PreferredCustomTabsLauncher(
         require(uri.scheme?.lowercase(Locale.ROOT) in setOf("http", "https") &&
             !uri.host.isNullOrEmpty()) { "Only absolute HTTP(S) URLs are supported" }
 
-        for (provider in providers) {
-            try {
-                if (supportsCustomTabs(provider.packageName)) {
-                    launchCustomTab(provider.packageName, url)
-                    return provider.packageName
-                }
-                if (provider.externalFallback && isInstalled(provider.packageName)) {
-                    launchExternal(provider.packageName, url)
-                    return provider.packageName
-                }
-            } catch (_: RuntimeException) {
-                // Package visibility, disabled activities or a failed launch may change
-                // between lookup and startActivity. Try the next supported provider.
-            }
+        val provider = try {
+            anyCustomTabsProvider()
+        } catch (_: RuntimeException) {
+            // Package visibility may change between discovery and this call; treat as absent.
+            null
         }
-        return null
-    }
-
-    private companion object {
-        const val EDGE = "com.microsoft.emmx"
-        const val CHROME = "com.android.chrome"
-        const val FIREFOX = "org.mozilla.firefox"
+        if (provider == null) return null
+        return try {
+            launchCustomTab(provider, url)
+            provider
+        } catch (_: RuntimeException) {
+            // The provider could be disabled or uninstalled between discovery and launch.
+            null
+        }
     }
 }
