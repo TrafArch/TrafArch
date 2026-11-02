@@ -49,7 +49,7 @@ class CardIdentificationService {
           fingerprint: fingerprint,
           identity: resolve(
             cardType: CardTypes.lingnanTong,
-            officialName: '岭南通',
+            officialName: '岭南通·羊城通',
             source: CardIdentificationSources.parserOnly,
           ),
           cardNumber: card.info.applicationSerial,
