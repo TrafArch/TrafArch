@@ -101,14 +101,12 @@ class TransitSummaryPanel extends StatelessWidget {
       if (isLocal && local?.info.observedBalance != null)
         summaryField(
           context,
-          local!.info.isMacauPass ? '钱包余额' : '余额',
-          local.info.isMacauPass
-              ? '${local.info.balance}（原始单位，待确认）'
+          '余额',
+          local!.info.isMacauPass
+              ? 'MOP \$${local.info.balance}'
               : '${app.cardCurrency.symbol}'
                     '${(local.info.balance / 100).toStringAsFixed(2)}',
         ),
-      if (local?.info.isMacauPass == true)
-        summaryField(context, '钱包币种', local!.info.currencyCode ?? '未知'),
       if (separateObservation) ...[
         summaryField(context, '余额', interpretation!.accountBalanceText),
         if (interpretation.observedBalanceText case final observed?)
