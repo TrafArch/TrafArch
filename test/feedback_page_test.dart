@@ -54,6 +54,48 @@ void main() {
     expect(find.text('暂时无法打开问卷'), findsNothing);
   });
 
+  for (final privacyPolicy in [false, true]) {
+    testWidgets('默认浏览器打开成功后不复制链接（隐私政策：$privacyPolicy）', (tester) async {
+      final calls = <MethodCall>[];
+      var clipboardWrites = 0;
+      messenger.setMockMethodCallHandler(browserChannel, (call) async {
+        calls.add(call);
+        return 'default_browser';
+      });
+      messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') clipboardWrites++;
+        return null;
+      });
+      final app = createApp();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: privacyPolicy
+              ? AboutPage(
+                  updates: app.updates,
+                  openPrivacyPolicy: app.openPrivacyPolicy,
+                )
+              : FeedbackPage(app: app),
+        ),
+      );
+      final entry = find.text(privacyPolicy ? '隐私政策' : '填写反馈问卷');
+      if (privacyPolicy) await tester.scrollUntilVisible(entry, 150);
+      await tester.tap(entry);
+      await tester.pumpAndSettle();
+
+      expect(calls, hasLength(1));
+      expect(calls.single.method, 'openCustomTab');
+      expect(calls.single.arguments, {
+        'url': privacyPolicy ? 'https://www.trafarch.top/privacy.html' : 'https://trafarch.feishu.cn/share/base/form/shrcniZ6QaPgqGazU1bpdmZyNPh',
+      });
+      expect(clipboardWrites, 0);
+      expect(find.text('链接已复制到剪贴板，请前往浏览器打开'), findsNothing);
+      expect(
+        find.byType(privacyPolicy ? AboutPage : FeedbackPage),
+        findsOneWidget,
+      );
+    });
+  }
+
   testWidgets('没有可用浏览器时自动复制链接并弹出气泡', (tester) async {
     String? copied;
     messenger.setMockMethodCallHandler(browserChannel, (_) async => null);
@@ -194,7 +236,7 @@ void main() {
     String? copied;
     messenger.setMockMethodCallHandler(browserChannel, (_) async {
       calls++;
-      return null; // 没有 Custom Tabs 浏览器
+      return null; // Custom Tabs 和默认浏览器都无法打开
     });
     messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
       if (call.method == 'Clipboard.setData') {

@@ -4,7 +4,7 @@
 
 - 修复扫码解析等子页面返回后悬浮底栏停在隐藏态的问题：壳页经 `RouteObserver` 感知重新回到前台并回显底栏，滚动静显的弹簧动画从可见态重新开始，补充逐帧过渡帧回归；不改底栏库版本与滚动拦截规则。
 - 关闭莫奈取色时的内置主题色由青绿改为应用图标蓝 `#4E7098`（图标底色 `#D5E4F1`），设置页文案同步为蓝色，补充种子色相回归。
-- 反馈问卷与隐私政策的浏览器打开改为不固定包名：原生层通过 `CustomTabsClient.getPackageName(context, null)` 发现任意提供 `CustomTabsService` 的浏览器（Edge / Chrome / Firefox Beta・Nightly / Brave / Vivaldi / Kiwi / 三星互联网等）并优先交给系统选定的最佳实现 Custom Tab；删除原来的 Edge・Chrome・Firefox 三个硬编码白名单与 Firefox 的 `ACTION_VIEW` 回退，并移除清单中三个 `<package>` 可见性声明（保留 `CustomTabsService` intent 查询）。系统内没有任何可用 Custom Tabs 浏览器时，链接自动复制到剪贴板并以气泡提示“链接已复制到剪贴板，请前往浏览器打开”；隐私政策与问卷两条链路共用该回退。补充任意提供方、null 回退、无效地址不假报复制等原生与 Dart 回归。
+- 反馈问卷与隐私政策先检测已安装浏览器的 Custom Tabs 支持：原生层通过 `CustomTabsClient.getPackageName(context, null)` 发现任意提供 `CustomTabsService` 的浏览器（Edge / Chrome / Firefox Beta・Nightly / Brave / Vivaldi / Kiwi / 三星互联网等）并优先打开系统选定提供方的 Custom Tab；移除固定浏览器包名白名单与清单中三个 `<package>` 可见性声明，保留 `CustomTabsService` intent 查询。没有提供方或启动失败时，通过 `ACTION_VIEW` 调用默认浏览器直接访问原网址；仅两种方式均失败时才复制链接并提示“链接已复制到剪贴板，请前往浏览器打开”。补充任意提供方、默认浏览器回退、成功时不复制链接及无效地址等原生与 Dart 回归，不修改数据库及配套 manifest。
 - 新增 `mipmap-night-*` 暗色启动图标（底色 `#233044`、图形 `#ACC1DF`），沿用亮色图层的几何与抗锯齿并复用 `mipmap-anydpi` 自适应图标，随系统深色模式切换；补充暗色图层回归。
 
 - 主版本号更新为 `1.0.3-beta.1`，保留当前构建号；后续安装包继续按既有规则自动递增构建号。

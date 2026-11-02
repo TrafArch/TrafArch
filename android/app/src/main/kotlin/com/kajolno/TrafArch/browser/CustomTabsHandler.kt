@@ -1,6 +1,7 @@
 package com.kajolno.TrafArch.browser
 
 import android.app.Activity
+import android.content.Intent
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabsClient
 import androidx.browser.customtabs.CustomTabsIntent
@@ -22,6 +23,12 @@ internal class CustomTabsHandler(activity: Activity, messenger: BinaryMessenger)
             tab.intent.setPackage(provider)
             tab.launchUrl(activity, Uri.parse(url))
         },
+        launchDefaultBrowser = { url ->
+            activity.startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                    .addCategory(Intent.CATEGORY_BROWSABLE),
+            )
+        },
     )
 
     init {
@@ -34,7 +41,7 @@ internal class CustomTabsHandler(activity: Activity, messenger: BinaryMessenger)
                     result.error("INVALID_URL", "问卷地址无效", null)
                 } else {
                     try {
-                        // null means no Custom Tabs browser could handle the URL;
+                        // null means neither Custom Tabs nor the default browser opened;
                         // the Dart layer falls back to copying the link.
                         result.success(launcher.open(url))
                     } catch (_: IllegalArgumentException) {
