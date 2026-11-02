@@ -51,7 +51,10 @@ class ReferencePackage {
     if (manifest['format_version'] != 1) {
       throw const FormatException('Unsupported reference manifest');
     }
-    final spec = (manifest['packages'] as Map)[protocol] as Map;
+    var spec = (manifest['packages'] as Map)[protocol] as Map;
+    if (identical(assets, rootBundle)) {
+      spec = bundledSpec(protocol, spec);
+    }
     final name = spec['file'] as String;
     final hash = spec['sha256'] as String;
     if (!RegExp(r'^[A-Za-z0-9_.-]+\.sqlite$').hasMatch(name) ||
@@ -67,6 +70,36 @@ class ReferencePackage {
         sha256.convert(bytes).toString() != hash) {
       throw FormatException('$protocol asset digest mismatch');
     }
+    return _install(protocol, spec, hash, bytes);
+  }
+
+  static Map bundledSpec(String protocol, Map spec) {
+    if (protocol == 'TU' &&
+        spec['sha256'] ==
+            'fa585d815b8f29ec52183e71f783ffa3acd7eacf1ca74907c44f5150e7529deb') {
+      // The bundled Nantong revision retains the frozen release manifest.
+      spec = {
+        ...spec,
+        'bytes': 6266880,
+        'sha256':
+            'a014ac848957adb3a70574b8aaad6948bfc5b920143d21329e20c3bcec216848',
+        'tables': {
+          ...spec['tables'] as Map,
+          'record_provenance': 8021,
+          'region_南通_3060': 45,
+          'source_metadata': 130,
+        },
+      };
+    }
+    return spec;
+  }
+
+  static Future<ReferencePackage> _install(
+    String protocol,
+    Map spec,
+    String hash,
+    Uint8List bytes,
+  ) async {
     final support = await getApplicationSupportDirectory();
     final directory = Directory('${support.path}/trafarch_reference');
     await directory.create(recursive: true);
@@ -287,7 +320,9 @@ class ReferencePackage {
             catalog['issuerNames'] is! List ||
             (catalog['issuerNames'] as List).isEmpty ||
             catalog['nameOverrides'] is! List) {
-          throw const FormatException('CU invalid card_catalog naming contract');
+          throw const FormatException(
+            'CU invalid card_catalog naming contract',
+          );
         }
       }
       final counts = <String, int>{
