@@ -133,6 +133,7 @@ class _CardDetailBody extends StatelessWidget {
     );
     final trips = presentArchiveTrips(
       history.records,
+      batches: history.batches,
       includeShanghaiOverdraft: includeShanghaiOverdraft,
       cardType: history.card!.cardType,
       onDiagnostics: (record) => _showEvidence(
@@ -192,6 +193,7 @@ class _CardDetailBody extends StatelessWidget {
           TripCardsView(
             key: ValueKey(history.card!.id),
             entries: trips.entries,
+            projectedJourneys: trips.journeys,
             sourceLabels: archiveTripSourceLabels,
             summaryText: trips.summaryText,
           ),

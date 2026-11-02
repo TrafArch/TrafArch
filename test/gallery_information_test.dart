@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:transit_card_analyzer/app/app_info.dart';
 import 'package:transit_card_analyzer/gallery/gallery_app.dart';
 import 'package:transit_card_analyzer/gallery/gallery_controller.dart';
 import 'package:transit_card_analyzer/gallery/gallery_data.dart';
@@ -32,8 +33,8 @@ void main() {
       c.navigate(GalleryPage.settings);
       await tester.pumpWidget(GalleryApp(controller: c));
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('版本 1.0.2-beta.2'), 450);
-      await tester.tap(find.text('版本 1.0.2-beta.2'));
+      await tester.scrollUntilVisible(find.text('版本 ${AppInfo.version}'), 450);
+      await tester.tap(find.text('版本 ${AppInfo.version}'));
       await tester.pumpAndSettle();
       expect(c.page, GalleryPage.about);
       expect(c.overlay, isNull);

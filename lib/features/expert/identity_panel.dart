@@ -39,6 +39,22 @@ class IdentityPanel extends StatelessWidget {
         if (app.shanghaiTransitUnion?.matchedPrefix != null)
           ExpertField('辅助前缀', app.shanghaiTransitUnion!.matchedPrefix!),
       ],
+      if (parsed?.parserId == CardParserIds.lingnanTunion ||
+          parsed?.parserId == CardParserIds.lingnanTong) ...[
+        ExpertField(
+          '岭南通应用',
+          parsed?.localCard?.info.isLNT == true ? '已确认' : '未确认',
+        ),
+        ExpertField('岭南通卡号', parsed?.localCard?.info.cardNumber ?? '未知'),
+        ExpertField(
+          '岭南通钱包余额',
+          parsed?.localCard?.info.observedBalance == null
+              ? '未知'
+              : 'CNY ${(parsed!.localCard!.info.observedBalance! / 100).toStringAsFixed(2)}',
+        ),
+        if (parsed?.localCard?.readError != null)
+          ExpertField('岭南通读取异常', '${parsed!.localCard!.readError}'),
+      ],
       // 城市一卡通应用：城市一卡通解析器命中，或同一张卡上附带住建部
       // 应用时展示（后者标注「双应用卡」）。
       if (isCityUnion || app.cityUnionFiles.isNotEmpty)

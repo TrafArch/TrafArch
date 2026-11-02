@@ -36,6 +36,11 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp> {
   /// 才通知上层重建主题。
   final ValueNotifier<bool> _monetEnabled = ValueNotifier<bool>(true);
 
+  /// AppShell 需要感知“被其他页面覆盖后再回显”：扫码解析、设置等页面
+  /// pop 回来时靠它恢复悬浮底栏的显隐动画。
+  final RouteObserver<PageRoute<dynamic>> _routeObserver =
+      RouteObserver<PageRoute<dynamic>>();
+
   @override
   void initState() {
     super.initState();
@@ -70,13 +75,14 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp> {
           child: widget.enableUpdateChecks
               ? UpdatePrompt(
                   service: _app.updates,
-                  child: AppShell(app: _app),
+                  child: AppShell(app: _app, routeObserver: _routeObserver),
                 )
-              : AppShell(app: _app),
+              : AppShell(app: _app, routeObserver: _routeObserver),
           builder: (context, monet, child) {
             return MaterialApp(
               title: AppInfo.appName,
               debugShowCheckedModeBanner: false,
+              navigatorObservers: [_routeObserver],
               localizationsDelegates: const [
                 GlobalMaterialLocalizations.delegate,
                 GlobalWidgetsLocalizations.delegate,
@@ -84,8 +90,9 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp> {
               ],
               supportedLocales: const [Locale('zh'), Locale('en')],
               // 莫奈取色开关关闭时忽略 dynamic_color 提供的系统色，
-              // 回落到内置青绿色 seed；开关开启但系统不支持（Android 12
-              // 以下 / 非 Android 平台）时，dynamic 为 null 同样回落。
+              // 回落到内置蓝色 seed（取自应用图标的卡片图形 #4E7098）；
+              // 开关开启但系统不支持（Android 12 以下 / 非 Android 平台）
+              // 时，dynamic 为 null 同样回落。
               theme: AppTheme.light(monet ? lightDynamic : null),
               darkTheme: AppTheme.dark(monet ? darkDynamic : null),
               themeMode: ThemeMode.system,

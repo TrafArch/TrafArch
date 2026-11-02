@@ -150,8 +150,8 @@ void main() {
     () async {
       final link = _CardLink((command) {
         final hex = _hex(command);
-        if (hex.startsWith('00A40400085041592E41505059') ||
-            hex.startsWith('00A40400085041592E5449434C')) {
+        if (hex == '00A40400085041592E4150505900' ||
+            hex == '00A40400085041592E5449434C00') {
           return _ok([]);
         }
         if (hex == '00B0950046') {
@@ -166,10 +166,8 @@ void main() {
       final bank = _BankProbe();
       final result = await LocalCardReader(link.call, bankProbe: bank).read();
       expect(result, isNotNull);
-      expect(
-        result!.parsedCard!.info.applicationSerial,
-        '00010203040506070809',
-      );
+      expect(result!.parsedCard!.info.applicationSerial, '0304050607');
+      expect(result.parsedCard!.parserId, CardParserIds.lingnanTong);
       expect(result.parsedCard!.info.balanceFen, isNull);
       expect(result.readResult!.info.observedBalance, isNull);
       expect(result.readResult!.transportFailure, same(_tagLost));

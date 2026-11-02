@@ -18,7 +18,8 @@
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="https" />
         </intent>
-        <!-- 反馈问卷：检测 Edge / Chrome 的 Custom Tabs 服务。 -->
+        <!-- 反馈问卷 / 隐私政策：查询所有提供 Custom Tabs 服务的浏览器，
+             不再固定包名，Edge / Chrome / Firefox Beta 等均按此发现。 -->
         <intent>
             <action android:name="android.support.customtabs.action.CustomTabsService" />
         </intent>

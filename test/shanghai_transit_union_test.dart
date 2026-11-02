@@ -194,7 +194,7 @@ void main() {
     expect(result.parsedCard!.parserId, CardParserIds.tunion);
     expect(result.readResult!.transportFailure, same(_tagLost));
     expect(result.readResult!.readError, isA<ApduTransportException>());
-    expect(stages, [CommonUnitTu.moduleName]);
+    expect(stages, ['岭南通', CommonUnitTu.moduleName]);
     expect(link.callsAfterFailure, 0);
   });
 

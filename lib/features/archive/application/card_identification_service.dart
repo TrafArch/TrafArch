@@ -26,6 +26,50 @@ class CardIdentificationService {
         return _identifyTUnion(card, analysisIdentity);
       case CardParserIds.shanghaiTunion:
         return _identifyShanghaiTransitUnion(card, analysisIdentity);
+      case CardParserIds.shenzhenTunion:
+        return _identifyTUnion(
+          card,
+          analysisIdentity,
+          cardType: CardTypes.shenzhenTunion,
+        );
+      case CardParserIds.lingnanTunion:
+        return _identifyTUnion(
+          card,
+          analysisIdentity,
+          cardType: CardTypes.lingnanTunion,
+        );
+      case CardParserIds.lingnanTong:
+        final fingerprint = CardFingerprint.build(
+          system: CardParserIds.lingnanTong,
+          issuerId: card.info.issuerId,
+          cardNumber: card.info.applicationSerial,
+        );
+        if (fingerprint == null) return null;
+        return IdentifiedCard(
+          fingerprint: fingerprint,
+          identity: resolve(
+            cardType: CardTypes.lingnanTong,
+            officialName: '岭南通',
+            source: CardIdentificationSources.parserOnly,
+          ),
+          cardNumber: card.info.applicationSerial,
+        );
+      case CardParserIds.beijingBmac:
+        final fingerprint = CardFingerprint.build(
+          system: CardParserIds.beijingBmac,
+          cardNumber: card.info.applicationSerial,
+        );
+        if (fingerprint == null) return null;
+        return IdentifiedCard(
+          fingerprint: fingerprint,
+          identity: resolve(
+            cardType: CardTypes.beijingBmac,
+            officialName: '北京市政交通一卡通（BMAC）',
+            cityName: '北京',
+            source: CardIdentificationSources.parserOnly,
+          ),
+          cardNumber: card.info.applicationSerial,
+        );
       case CardParserIds.cityUnion:
         return _identifyCityUnion(card);
       default:

@@ -234,6 +234,8 @@ class AppDependencies extends OwnedNotifier {
   bool get monetEnabled => settings.monetEnabled;
   bool get openingFeedbackSurvey => settings.openingFeedbackSurvey;
   String? get feedbackBrowserError => settings.feedbackBrowserError;
+  String? get feedbackBrowserNotice => settings.feedbackBrowserNotice;
+  void clearFeedbackBrowserNotice() => settings.clearFeedbackBrowserNotice();
   String? get autoSaveNotice => archive.autoSaveNotice;
   List<String> get apduLog => scan.trace;
   JtT1179QrData? get qrData => qr.qrData;

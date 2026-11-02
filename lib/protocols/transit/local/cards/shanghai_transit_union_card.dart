@@ -40,14 +40,15 @@ class ShanghaiTransitUnionCardParser implements CardParser {
   void _report(double progress) => onProgress?.call(progress.clamp(0.0, 1.0));
 
   /// 先确认上海 TU，再读取 CU；未命中时保留真实的 CU 未探测状态。
-  Future<ShanghaiTransitUnionResult> read() async {
+  Future<ShanghaiTransitUnionResult> read({bool probeCu = true}) async {
     final apdu = ApduExchange(transceive: _transceive);
     _report(0);
 
     final tu = await _readTu(apdu);
     _report(0.5);
 
-    final cu = tu.isShanghaiTu && tu.transportFailure?.stopsSession != true
+    final cu =
+        probeCu && tu.isShanghaiTu && tu.transportFailure?.stopsSession != true
         ? await _readCu(apdu)
         : ShanghaiTransitApplication(
             system: ShanghaiTransitUnionIds.cuSystem,

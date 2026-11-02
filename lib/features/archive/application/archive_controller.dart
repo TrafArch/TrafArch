@@ -145,6 +145,39 @@ class ArchiveController extends OwnedNotifier {
         context: context,
         extensions: {
           'captureAttemptId': attemptId,
+          if (parsed.localCard?.info.isBmac == true)
+            'beijingBmac': {
+              'cardNumber': parsed.localCard!.info.cardNumber,
+              'balanceFen': parsed.localCard!.info.observedBalance,
+              'readError': parsed.localCard!.readError?.toString(),
+              'observations': parsed.localCard!.extras.slots,
+            },
+          if (parsed.localCard?.info.isLNT == true)
+            'lingnanTong': {
+              'cardNumber': parsed.localCard!.info.cardNumber,
+              'issuerCode': parsed.localCard!.info.issuerCode,
+              'balanceFen': parsed.localCard!.info.observedBalance,
+              'readError': parsed.localCard!.readError?.toString(),
+              'observations': parsed.localCard!.extras.slots,
+            },
+          if (parsed.parserId == CardParserIds.shenzhenTunion &&
+              parsed.localCard != null)
+            'shenzhenTong': {
+              'cardNumber': parsed.localCard!.info.cardNumber,
+              'balanceFen': parsed.localCard!.info.observedBalance,
+              'rawInfo': parsed.localCard!.info.rawInfo,
+              'readError': parsed.localCard!.readError?.toString(),
+              'observations': parsed.localCard!.extras.slots,
+              'records': [
+                for (final record in parsed.localCard!.records)
+                  {
+                    'recordNumber': record.recordNumber,
+                    'fileSelector': record.fileSelector,
+                    'response': record.response,
+                    'hasError': record.hasError,
+                  },
+              ],
+            },
           if (view.cityUnionTransactions.isNotEmpty)
             'cuProjection': captureCuProjection(view.cityUnionTransactions),
         },

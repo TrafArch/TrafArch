@@ -65,11 +65,13 @@ class CardInfo {
   bool isTU = false;
   bool isCU = false;
   bool isBeijing = false;
+  bool isBmac = false;
   bool isWHCTC = false;
   bool isTFT = false;
   bool isMacauPass = false;
   bool isSZT = false;
   bool isYCT = false;
+  bool isLNT = false;
   bool isSuxin = false;
   bool isCika = false;
   bool isCikaMode = false;
@@ -102,11 +104,13 @@ class CardInfo {
     ..isTU = isTU
     ..isCU = isCU
     ..isBeijing = isBeijing
+    ..isBmac = isBmac
     ..isWHCTC = isWHCTC
     ..isTFT = isTFT
     ..isMacauPass = isMacauPass
     ..isSZT = isSZT
     ..isYCT = isYCT
+    ..isLNT = isLNT
     ..isSuxin = isSuxin
     ..isCika = isCika
     ..isCikaMode = isCikaMode
@@ -115,6 +119,7 @@ class CardInfo {
 
   /// 是否属于地方卡（非通用 TU/CU）识别出的卡种 —— 供上层判定是否认领。
   bool get isLocalCard =>
+      isBmac ||
       isBeijing ||
       isWHCTC ||
       isYCT ||
@@ -125,8 +130,10 @@ class CardInfo {
 
   /// 卡种可读名（用于展示层回退标题）。
   String get cardKindLabel {
+    if (isBmac) return '北京市政交通一卡通（BMAC）';
     if (isBeijing) return '北京互通卡';
     if (isWHCTC) return '武汉通';
+    if (isLNT) return '岭南通';
     if (isYCT) return '羊城通';
     if (isSZT) return '深圳通';
     if (isSuzhou) return isCika ? '苏州·计次卡' : '苏州·苏薪卡';

@@ -34,11 +34,16 @@ class TripCardsView<S extends Enum> extends StatefulWidget {
     required this.entries,
     required this.sourceLabels,
     required this.summaryText,
+    this.projectedJourneys,
   });
 
   final List<TripCardPresentation<S>> entries;
   final Map<S, String> sourceLabels;
   final String summaryText;
+
+  /// Saved history has already validated each capture independently. Do not
+  /// pair it again after repeated observations have been joined for display.
+  final List<JourneyPresentation<TripCardPresentation<S>>>? projectedJourneys;
 
   @override
   State<TripCardsView<S>> createState() => _TripCardsViewState<S>();
@@ -51,23 +56,25 @@ class _TripCardsViewState<S extends Enum> extends State<TripCardsView<S>> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final journeys = projectJourneys(
-      widget.entries.map(
-        (entry) =>
-            entry.journeyEvent?.withPayload(entry) ??
-            JourneyEvent(
-              payload: entry,
-              mode: entry.mode,
-              role: JourneyEventRole.unknown,
-              endpoint: JourneyEndpoint(
-                line: entry.info.line,
-                time: DateTime.tryParse(entry.info.timeText ?? ''),
-                timeText: entry.info.timeText,
-              ),
-              amountText: entry.info.amountText,
-            ),
-      ),
-    );
+    final journeys =
+        widget.projectedJourneys ??
+        projectJourneys(
+          widget.entries.map(
+            (entry) =>
+                entry.journeyEvent?.withPayload(entry) ??
+                JourneyEvent(
+                  payload: entry,
+                  mode: entry.mode,
+                  role: JourneyEventRole.unknown,
+                  endpoint: JourneyEndpoint(
+                    line: entry.info.line,
+                    time: DateTime.tryParse(entry.info.timeText ?? ''),
+                    timeText: entry.info.timeText,
+                  ),
+                  amountText: entry.info.amountText,
+                ),
+          ),
+        );
     final visible = journeys
         .where(
           (journey) =>

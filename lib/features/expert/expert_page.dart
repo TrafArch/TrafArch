@@ -197,6 +197,9 @@ class _ExpertPageState extends State<ExpertPage> {
             cityNameOf: app.cityNameOf,
           ),
         ),
+        if (parsed.parserId == CardParserIds.lingnanTunion &&
+            parsed.localCard != null)
+          LingnanTransactionPanel(result: parsed.localCard!),
         if (parsed.cityUnionFiles.isNotEmpty) ...[
           const Divider(height: 32),
           Align(
@@ -221,6 +224,10 @@ class _ExpertPageState extends State<ExpertPage> {
           ),
         ],
       ];
+    }
+    if (parsed.parserId == CardParserIds.lingnanTong &&
+        parsed.localCard != null) {
+      return [LingnanTransactionPanel(result: parsed.localCard!)];
     }
     if (parsed.parserId == CardParserIds.cityUnion) {
       return [

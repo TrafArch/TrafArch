@@ -10,11 +10,11 @@ import io.flutter.plugin.common.MethodChannel
 internal class CustomTabsHandler(activity: Activity, messenger: BinaryMessenger) {
     private val channel = MethodChannel(messenger, "transit_card_analyzer/browser")
     private val launcher = PreferredCustomTabsLauncher(
-        supportsCustomTabs = { provider ->
-            // Ignore the system default browser; only the ordered allowlist is eligible.
-            CustomTabsClient.getPackageName(activity, listOf(provider), true) == provider
-        },
-        launch = { provider, url ->
+        // Any installed browser exposing CustomTabsService qualifies; the system picks the
+        // best match. Passing null means "no allowlist", so Firefox Beta/Nightly, Brave,
+        // Vivaldi, Kiwi, Samsung Internet and others are all eligible.
+        anyCustomTabsProvider = { CustomTabsClient.getPackageName(activity, null) },
+        launchCustomTab = { provider, url ->
             val tab = CustomTabsIntent.Builder()
                 .setShowTitle(true)
                 .setCloseButtonPosition(CustomTabsIntent.CLOSE_BUTTON_POSITION_START)
@@ -34,12 +34,9 @@ internal class CustomTabsHandler(activity: Activity, messenger: BinaryMessenger)
                     result.error("INVALID_URL", "问卷地址无效", null)
                 } else {
                     try {
-                        val provider = launcher.open(url)
-                        if (provider == null) {
-                            result.error("BROWSER_UNAVAILABLE", "无法启动 Edge 或 Chrome 的应用内浏览器", null)
-                        } else {
-                            result.success(provider)
-                        }
+                        // null means no Custom Tabs browser could handle the URL;
+                        // the Dart layer falls back to copying the link.
+                        result.success(launcher.open(url))
                     } catch (_: IllegalArgumentException) {
                         result.error("INVALID_URL", "问卷地址无效", null)
                     }

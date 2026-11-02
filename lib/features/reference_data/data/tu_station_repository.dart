@@ -87,14 +87,16 @@ class TuStationRepository implements TuLookupDataSource, TuCityRailFieldSource {
     return _lookupValues = values;
   }
 
-  /// Native rail source maps only. Local terminals and bus/BRT maps never
-  /// share this prefix namespace, even if their raw keys happen to collide.
+  /// Native rail maps and explicitly admitted city-owned rail sources only.
+  /// Local terminals and bus/BRT maps never share this prefix namespace.
   @override
   Iterable<StationCodeEntry> railCandidates(String city) sync* {
     for (final record in entriesOfRegion(city)) {
-      if (record.sourceField == StationCodeTable.tuRailSourceField(city)) {
-        yield entryForRecord(record);
+      if (!StationCodeTable.isTuRailSourceField(city, record.sourceField) ||
+          !allowsRailLookup(record)) {
+        continue;
       }
+      yield entryForRecord(record);
     }
     for (final value
         in _lookup['rail_prefixes|$city'] ?? const <TuLookupValue>[]) {
@@ -114,15 +116,30 @@ class TuStationRepository implements TuLookupDataSource, TuCityRailFieldSource {
     }
   }
 
+  /// The additional Wuhan source needs the same guard in prefix and legacy
+  /// fragment lookups. Other sources retain their established behavior,
+  /// including Shanghai's compound source-region provenance.
+  bool allowsRailLookup(TuStationRecord record) {
+    if (record.regionCode != '5210' || record.sourceField != 'M0.W.a') {
+      return true;
+    }
+    return const {
+          'metro',
+          'tram',
+          'light_rail',
+          'intercity_rail',
+        }.contains(record.rawTransportType) &&
+        (record.sourceRegionCode == null || record.sourceRegionCode == '5210');
+  }
+
   /// Developer-maintained location keys live in their owning city table.
   /// Source fields retain the existing city-specific rail namespace. Local
   /// 0x18 aliases never become 1E position fields.
   @override
   Iterable<StationCodeEntry> cityRailFieldCandidates(String city) sync* {
-    final field = StationCodeTable.tuRailSourceField(city);
     const railKinds = {'metro', 'tram', 'light_rail', 'intercity_rail'};
     for (final record in entriesOfRegion(city)) {
-      if (record.sourceField != field ||
+      if (!StationCodeTable.isTuRailSourceField(city, record.sourceField) ||
           !railKinds.contains(record.rawTransportType) ||
           (record.sourceRegionCode != null &&
               record.sourceRegionCode != city) ||

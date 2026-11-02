@@ -177,6 +177,8 @@ class TuLookupService {
       time: time,
       appType: appType,
     );
+    final verified = _verifiedCycleStation(original, city, field, appType);
+    if (verified != null) return verified;
     final citySource = source;
     final raw = field.toUpperCase();
     if (appType != 1 ||
@@ -237,6 +239,51 @@ class TuLookupService {
     );
   }
 
+  StationMatch? _verifiedCycleStation(
+    StationMatch original,
+    String? city,
+    String field,
+    int? appType,
+  ) {
+    // 2026-11-01 physical capture: both Shiqiao entry and exit carry this
+    // complete 1E position. The packaged Qintai label was inferred from a
+    // station order, not independently observed. Correct only this verified
+    // layout at runtime; do not reverse the other unverified Line 6 codes.
+    if (city != '5210' ||
+        appType != 1 ||
+        !const {'000606510651', '00060651065100'}.contains(field) ||
+        original.confidence != StationMatchConfidence.exact ||
+        original.candidates.isEmpty ||
+        original.candidates.any(
+          (row) =>
+              row.userOverride ||
+              row.system != 'tu' ||
+              row.kind != 'metro' ||
+              row.sourceField != 'M0.W.a' ||
+              row.sourceKey != '521000060651' ||
+              row.line != '6号线' ||
+              row.station != '琴台',
+        )) {
+      return null;
+    }
+    return StationMatch.fromCandidates(
+      [
+        for (final row in original.candidates)
+          _presentation(row, type: row.type, line: row.line, station: '石桥'),
+      ],
+      evidence: [
+        ...original.evidence,
+        const StationMatchEvidence(
+          sourceField: 'TrafArch.verified_cycle_station',
+          sourceKey: '5210/1E/000606510651',
+          rawValueJson:
+              '{"station":"石桥","basis":"user-confirmed-20261101",'
+              '"captureSha256":"8c762b58313cee6238692239105b07184647eaafbf52c45c3740e25394da9ec2"}',
+        ),
+      ],
+    );
+  }
+
   StationMatch _resolveCycleNative({
     required String? city,
     required String field,
@@ -252,6 +299,12 @@ class TuLookupService {
     }
     final pos = raw.substring(0, 12);
     final q = terminalId?.toUpperCase();
+    // The Beijing suburban railway capture uses the same full native
+    // city/line/station key as metro, with industry 0E retained verbatim.
+    // Do not enable metro terminal aliases or byte-fragment fallbacks here.
+    if (appType == 0x0E && city == '1000') {
+      return resolveRailKey(city: city, key: '$city$pos', time: time);
+    }
     if (appType != 0x01) {
       if (appType != 0x00 || !TunionBusCaller.hasBeijingRailTerminal(city, q)) {
         return StationMatch.unmatched;

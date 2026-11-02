@@ -23,6 +23,11 @@ class SettingsController extends OwnedNotifier {
   bool openingFeedbackSurvey = false;
   String? feedbackBrowserError;
 
+  /// 无可用浏览器时链接已自动复制到剪贴板，界面据此弹一次气泡提示。
+  String? feedbackBrowserNotice;
+
+  void clearFeedbackBrowserNotice() => feedbackBrowserNotice = null;
+
   bool get loggingEnabled => _values[SettingsKeys.loggingEnabled] ?? false;
   bool get autoSaveEnabled => _values[SettingsKeys.autoSaveEnabled] ?? false;
   bool get includeShanghaiOverdraft =>
@@ -51,7 +56,13 @@ class SettingsController extends OwnedNotifier {
     try {
       await _browser.open(url);
     } on FeedbackBrowserException catch (error) {
-      if (!disposed) feedbackBrowserError = error.message;
+      if (disposed) return;
+      if (error.copiedToClipboard) {
+        // 链接已在浏览器层复制入剪贴板：不阻塞页面，仅提示气泡。
+        feedbackBrowserNotice = error.message;
+      } else {
+        feedbackBrowserError = error.message;
+      }
     } catch (_) {
       if (!disposed) feedbackBrowserError = '问卷暂时无法打开，请重试或复制问卷链接。';
     } finally {
