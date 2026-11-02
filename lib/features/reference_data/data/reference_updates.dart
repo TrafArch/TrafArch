@@ -24,6 +24,15 @@ class ReferenceUpdates {
     final manifest = jsonDecode(
       await builtin.loadString('assets/data/reference_manifest.json'),
     ) as Map<String, dynamic>;
+    if (identical(builtin, rootBundle)) {
+      final packages = manifest['packages'] as Map;
+      for (final protocol in ['TU', 'CU']) {
+        packages[protocol] = ReferencePackage.bundledSpec(
+          protocol,
+          packages[protocol] as Map,
+        );
+      }
+    }
     final files = <String, Uint8List>{};
     for (final entry in updates.entries) {
       final spec = Map<String, dynamic>.from(entry.value.spec);

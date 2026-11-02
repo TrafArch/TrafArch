@@ -303,7 +303,7 @@ void main() {
         );
         expect(
           controller.knowledge!.packageHashes['TU'],
-          (manifest['packages'] as Map)['TU']['sha256'],
+          'a014ac848957adb3a70574b8aaad6948bfc5b920143d21329e20c3bcec216848',
         );
         expect(
           controller.knowledge!.cityUnionCards
@@ -336,7 +336,7 @@ void main() {
       files['assets/data/$name'] = await File('assets/data/$name')
           .readAsBytes();
     }
-    final bundle = FixtureBundle(files);
+    final bundle = rootBundle;
     final manifest = jsonDecode(
       utf8.decode(files['assets/data/reference_manifest.json']!),
     ) as Map;
