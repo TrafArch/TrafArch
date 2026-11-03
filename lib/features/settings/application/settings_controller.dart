@@ -45,6 +45,34 @@ class SettingsController extends OwnedNotifier {
     }
   }
 
+  Future<bool> openFeedbackQqGroup(String groupNumber, Uri joinUrl) async {
+    final qqUrl = Uri(
+      scheme: 'mqqapi',
+      host: 'card',
+      path: '/show_pslcard',
+      queryParameters: {
+        'src_type': 'internal',
+        'version': '1',
+        'uin': groupNumber,
+        'card_type': 'group',
+        'source': 'qrcode',
+      },
+    );
+    // 直接启动 QQ；未安装或唤起失败时交给外部浏览器打开原邀请页。
+    // 不先用 canLaunchUrl 查询，避免 Android 包可见性限制导致误判。
+    for (final url in [qqUrl, joinUrl]) {
+      if (disposed) return false;
+      try {
+        if (await launchUrl(url, mode: LaunchMode.externalApplication)) {
+          return true;
+        }
+      } catch (_) {
+        // 启动失败继续尝试网页，均不可用时由反馈页提示复制群号。
+      }
+    }
+    return false;
+  }
+
   Future<void> openPrivacyPolicy() =>
       _browser.open(Uri.parse(AppSupport.privacy));
 

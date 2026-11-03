@@ -21,6 +21,7 @@ abstract final class CardTypes {
   static const String lingnanTunion = 'lingnan_tunion';
   static const String shenzhenTunion = 'shenzhen_tunion';
   static const String beijingBmac = 'beijing_bmac';
+  static const String macauPass = 'macau_pass';
 
   /// Suica（预留：FeliCa 解析器接入后启用）。
   static const String suica = 'suica';
@@ -36,10 +37,11 @@ String cardTypeLabel(String cardType) => switch (cardType) {
   CardTypes.cityUnion => '城市一卡通',
   CardTypes.octopusTunion => '八达通全国通卡',
   CardTypes.shanghaiTransitUnion => '上海交通卡（交通联合版）',
-  CardTypes.lingnanTong => '岭南通',
+  CardTypes.lingnanTong => '岭南通·羊城通',
   CardTypes.lingnanTunion => '岭南通（交通联合版）',
   CardTypes.shenzhenTunion => '深圳通（交通联合版）',
   CardTypes.beijingBmac => '北京市政交通一卡通（BMAC）',
+  CardTypes.macauPass => '澳门通',
   CardTypes.suica => 'Suica',
   _ => '未识别交通卡',
 };

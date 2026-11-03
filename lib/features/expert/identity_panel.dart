@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'expert_widgets.dart';
+import 'expert_formatters.dart';
 import '../../app/app_dependencies.dart';
 import '../../protocols/transit/card_parser.dart';
 import '../transit_analysis/tunion_analysis_models.dart';
@@ -52,6 +53,39 @@ class IdentityPanel extends StatelessWidget {
               ? '未知'
               : 'CNY ${(parsed!.localCard!.info.observedBalance! / 100).toStringAsFixed(2)}',
         ),
+        ExpertField(
+          '发行方编码',
+          parsed?.localCard?.info.issuerCode.isNotEmpty == true
+              ? parsed!.localCard!.info.issuerCode
+              : '未读取',
+        ),
+        ExpertField(
+          '发卡日期',
+          parsed?.localCard?.info.issueDate == null
+              ? '未读取'
+              : expertDate(parsed!.localCard!.info.issueDate),
+        ),
+        ExpertField(
+          '有效期至',
+          parsed?.localCard?.info.expiryDate == null
+              ? '未读取'
+              : expertDate(parsed!.localCard!.info.expiryDate),
+        ),
+        ExpertField(
+          '岭南通钱包应用',
+          parsed?.localCard?.extras.slots['lnt.ticlConfirmed'] == true
+              ? 'PAY.TICL 已确认'
+              : 'PAY.TICL 未确认',
+        ),
+        if (parsed?.parserId == CardParserIds.lingnanTong)
+          ExpertField(
+            '交通联合应用',
+            parsed?.localCard?.extras.slots['lnt.tuConfirmed'] == true
+                ? '已确认'
+                : parsed?.localCard?.extras.slots['lnt.tuConfirmed'] == false
+                ? '未确认'
+                : '未读取状态',
+          ),
         if (parsed?.localCard?.readError != null)
           ExpertField('岭南通读取异常', '${parsed!.localCard!.readError}'),
       ],

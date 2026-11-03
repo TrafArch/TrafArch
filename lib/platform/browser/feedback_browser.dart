@@ -4,7 +4,8 @@ import 'package:flutter/services.dart';
 ///
 /// 原生层不再固定浏览器包名：任何提供 Custom Tabs 服务的浏览器（Edge、Chrome、
 /// Firefox Beta/Nightly、Brave、Vivaldi、Kiwi、三星互联网等）都可以打开。
-/// 当系统里没有任何受支持浏览器时，链接会自动复制到剪贴板，并抛出
+/// Custom Tabs 不可用或启动失败时改用默认浏览器；两种方式都无法打开时，
+/// 链接会自动复制到剪贴板，并抛出
 /// [FeedbackBrowserException] （`copiedToClipboard == true`）供界面提示用户。
 abstract interface class FeedbackBrowser {
   Future<void> open(Uri url);
@@ -44,18 +45,27 @@ class MethodChannelFeedbackBrowser implements FeedbackBrowser {
       });
     } on MissingPluginException {
       await _copyToClipboard(url);
-      throw const FeedbackBrowserException(_copiedMessage, copiedToClipboard: true);
+      throw const FeedbackBrowserException(
+        _copiedMessage,
+        copiedToClipboard: true,
+      );
     } on PlatformException catch (error) {
       if (error.code == 'INVALID_URL') {
         throw const FeedbackBrowserException('问卷地址无效，请复制链接检查。');
       }
       await _copyToClipboard(url);
-      throw const FeedbackBrowserException(_copiedMessage, copiedToClipboard: true);
+      throw const FeedbackBrowserException(
+        _copiedMessage,
+        copiedToClipboard: true,
+      );
     }
     if (provider == null) {
-      // 原生层没有找到任何支持 Custom Tabs 的浏览器：复制链接并提示用户手动打开。
+      // Custom Tabs 和默认浏览器均无法打开：复制链接并提示用户手动打开。
       await _copyToClipboard(url);
-      throw const FeedbackBrowserException(_copiedMessage, copiedToClipboard: true);
+      throw const FeedbackBrowserException(
+        _copiedMessage,
+        copiedToClipboard: true,
+      );
     }
   }
 

@@ -38,7 +38,11 @@ class _ExpertApp extends AppDependencies {
 ReadResult _local({bool empty = false, int type = 0x09}) => ReadResult(
   info: CardInfo()
     ..isLNT = true
+    ..isYCT = true
     ..cardNumber = '9534635882'
+    ..issuerCode = '01015100'
+    ..issueDate = DateTime(2016, 8, 15)
+    ..expiryDate = DateTime(2026, 12, 31)
     ..balance = 3840,
   records: [
     ApduRecord()..label = 'SELECT PAY.APPY',
@@ -52,7 +56,9 @@ ReadResult _local({bool empty = false, int type = 0x09}) => ReadResult(
         ..timestamp = DateTime.utc(2024, 10, 27, 21, 13)
         ..terminalHex = '010203040506',
   ],
-  extras: CardExtras(),
+  extras: CardExtras()
+    ..slots['lnt.ticlConfirmed'] = true
+    ..slots['lnt.tuConfirmed'] = false,
   readError: 'LNT partial read',
 );
 
@@ -98,7 +104,24 @@ void main() {
         final identity = _fields(tester, IdentityPanel);
         expect(
           identity.map((f) => f.label),
-          containsAll(['岭南通应用', '岭南通卡号', '岭南通钱包余额', '岭南通读取异常']),
+          containsAll([
+            '岭南通应用',
+            '岭南通卡号',
+            '岭南通钱包余额',
+            '发行方编码',
+            '发卡日期',
+            '有效期至',
+            '岭南通钱包应用',
+            '岭南通读取异常',
+          ]),
+        );
+        expect(
+          identity.singleWhere((field) => field.label == '发行方编码').value,
+          '01015100',
+        );
+        expect(
+          identity.singleWhere((field) => field.label == '有效期至').value,
+          '2026-12-31',
         );
         expect(identity.any((f) => f.label.contains('交易')), isFalse);
 

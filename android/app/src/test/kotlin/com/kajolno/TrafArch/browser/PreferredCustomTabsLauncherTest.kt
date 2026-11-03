@@ -11,9 +11,11 @@ class PreferredCustomTabsLauncherTest {
     private fun launcher(
         anyCustomTabsProvider: () -> String? = { "com.microsoft.emmx" },
         launchCustomTab: (String, String) -> Unit = { _, _ -> },
+        launchDefaultBrowser: (String) -> Unit = { throw IllegalStateException("no browser") },
     ) = PreferredCustomTabsLauncher(
         anyCustomTabsProvider = anyCustomTabsProvider,
         launchCustomTab = launchCustomTab,
+        launchDefaultBrowser = launchDefaultBrowser,
     )
 
     @Test fun launchesWhateverCustomTabsBrowserTheSystemReports() {
@@ -21,6 +23,7 @@ class PreferredCustomTabsLauncherTest {
         val launcher = launcher(
             anyCustomTabsProvider = { "org.mozilla.firefox_beta" },
             launchCustomTab = { provider, address -> launched.add(provider to address) },
+            launchDefaultBrowser = { throw AssertionError("Custom Tabs already opened") },
         )
 
         assertEquals("org.mozilla.firefox_beta", launcher.open(url))
@@ -38,7 +41,41 @@ class PreferredCustomTabsLauncherTest {
         assertEquals(listOf("com.brave.browser"), launched)
     }
 
-    @Test fun missingCustomTabsBrowserReturnsNullWithoutLaunching() {
+    @Test fun missingCustomTabsBrowserOpensDefaultBrowserWithOriginalUrl() {
+        val launched = mutableListOf<String>()
+        val launcher = launcher(
+            anyCustomTabsProvider = { null },
+            launchCustomTab = { _, _ -> throw AssertionError("No provider") },
+            launchDefaultBrowser = { launched.add(it) },
+        )
+
+        assertEquals("default_browser", launcher.open(url))
+        assertEquals(listOf(url), launched)
+    }
+
+    @Test fun discoveryFailureStillOpensDefaultBrowser() {
+        val launched = mutableListOf<String>()
+        val launcher = launcher(
+            anyCustomTabsProvider = { throw SecurityException("hidden") },
+            launchDefaultBrowser = { launched.add(it) },
+        )
+
+        assertEquals("default_browser", launcher.open(url))
+        assertEquals(listOf(url), launched)
+    }
+
+    @Test fun customTabLaunchFailureStillOpensDefaultBrowser() {
+        val launched = mutableListOf<String>()
+        val launcher = launcher(
+            launchCustomTab = { _, _ -> throw IllegalStateException("provider removed") },
+            launchDefaultBrowser = { launched.add(it) },
+        )
+
+        assertEquals("default_browser", launcher.open(url))
+        assertEquals(listOf(url), launched)
+    }
+
+    @Test fun missingCustomTabsAndDefaultBrowserReturnsNull() {
         var launched = false
         val launcher = launcher(
             anyCustomTabsProvider = { null },

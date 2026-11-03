@@ -65,6 +65,8 @@ class ArchiveController extends OwnedNotifier {
       final separateObservation =
           CardParserIds.isTUnionFamily(parsed.parserId) &&
           balance?.semantics != BalanceSemantics.direct;
+      final observedBalanceFen =
+          parsed.localCard?.info.observedBalance ?? parsed.info.balanceFen;
       // Ordinary cards retain their established currency policy. Unknown TU
       // identities keep the integer but cannot acquire a currency from metadata.
       final currency = separateObservation
@@ -117,6 +119,11 @@ class ArchiveController extends OwnedNotifier {
       final transactionsObserved =
           parsed.transactionFileObserved ||
           parsed.transactions.isNotEmpty ||
+          (parsed.localCard?.trips.isNotEmpty ?? false) ||
+          (parsed.localCard?.info.isMacauPass == true &&
+              parsed.localCard!.records.any(
+                (record) => record.label == '澳门通交易记录',
+              )) ||
           (parsed.parserId == CardParserIds.cityUnion &&
               view.cityUnionTransactions.isNotEmpty);
       final processPositions = buildProcessJourneyPositions(
@@ -136,7 +143,7 @@ class ArchiveController extends OwnedNotifier {
         referencePackages: Map.unmodifiable(packages),
         observedFields: {
           'cardNumber': identity.cardNumber != null,
-          'balanceFen': parsed.info.balanceFen != null,
+          'balanceFen': observedBalanceFen != null,
           'transactionCount': transactionsObserved,
         },
       );
@@ -159,6 +166,41 @@ class ArchiveController extends OwnedNotifier {
               'balanceFen': parsed.localCard!.info.observedBalance,
               'readError': parsed.localCard!.readError?.toString(),
               'observations': parsed.localCard!.extras.slots,
+              'records': [
+                for (final record in parsed.localCard!.trips)
+                  {
+                    'recordNumber': record.recordNumber,
+                    'fileSelector': record.fileSelector,
+                    'timestamp': record.timestamp.millisecondsSinceEpoch,
+                    'type': record.type,
+                    'subtype': record.posType,
+                    'amountDelta': record.balanceDelta,
+                    'terminalHex': record.terminalHex,
+                    'isMetro': record.isMetro,
+                    'rawBody': record.rawBody == null
+                        ? null
+                        : List<int>.of(record.rawBody!),
+                  },
+              ],
+            },
+          if (parsed.localCard?.info.isMacauPass == true)
+            'macauPass': {
+              'cardNumber': parsed.localCard!.info.cardNumber,
+              'balance': parsed.localCard!.info.observedBalance,
+              'currencyCode': parsed.localCard!.info.currencyCode,
+              'records': [
+                for (final record in parsed.localCard!.records.where(
+                  (record) => record.label == '澳门通交易记录',
+                ))
+                  {
+                    'recordNumber': record.recordNumber,
+                    'fileSelector': record.fileSelector,
+                    'timestamp': record.timestamp.millisecondsSinceEpoch,
+                    'rawBody': record.rawBody == null
+                        ? null
+                        : List<int>.of(record.rawBody!),
+                  },
+              ],
             },
           if (parsed.parserId == CardParserIds.shenzhenTunion &&
               parsed.localCard != null)
@@ -276,10 +318,16 @@ class ArchiveController extends OwnedNotifier {
         fingerprint: identity.fingerprint,
         identity: identity.identity,
         cardNumber: identity.cardNumber,
-        balanceFen: parsed.info.balanceFen,
+        balanceFen: observedBalanceFen,
         currencyCode: currency,
         transactionCount: transactionsObserved
-            ? (parsed.parserId == CardParserIds.cityUnion
+            ? (parsed.localCard?.info.isMacauPass == true
+                  ? parsed.localCard!.records
+                        .where((r) => r.label == '澳门通交易记录')
+                        .length
+                  : parsed.localCard?.info.isLNT == true
+                  ? parsed.localCard!.trips.length
+                  : parsed.parserId == CardParserIds.cityUnion
                   ? view.cityUnionTransactions.length
                   : parsed.transactions.length)
             : null,

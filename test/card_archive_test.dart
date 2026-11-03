@@ -8,6 +8,7 @@ import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/tunion_knowledge_base.dart';
 import 'package:transit_card_analyzer/protocols/transit/city_union/city_union_models.dart';
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_models.dart';
+import 'package:transit_card_analyzer/protocols/transit/local/local_card_models.dart';
 import 'package:transit_card_analyzer/features/archive/data/app_database.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_archive_identity.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_fingerprint.dart';
@@ -139,6 +140,32 @@ void main() {
         isNull,
       );
     });
+  });
+
+  test('澳门通以已确认钱包卡号生成稳定档案身份', () {
+    final localInfo = CardInfo()
+      ..isMacauPass = true
+      ..cardNumber = '6132766247'
+      ..balance = 165;
+    final card = ParsedCard(
+      parserId: CardParserIds.localCard,
+      parserName: '地方交通卡 · 澳门通',
+      info: TUnionCardInfo(),
+      transactions: const [],
+      localCard: ReadResult(
+        info: localInfo,
+        records: const [],
+        extras: CardExtras(),
+      ),
+    );
+
+    final identified = CardIdentificationService(KnowledgeBase.empty())
+        .identify(card)!;
+    expect(identified.identity.cardType, CardTypes.macauPass);
+    expect(identified.identity.officialName, '澳门通');
+    expect(identified.identity.cityName, '澳门');
+    expect(identified.fingerprint, 'local_card::6132766247');
+    expect(identified.cardNumber, '6132766247');
   });
 
   group('城市一卡通卡识别', () {
