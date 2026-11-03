@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_process_parser.dart';
+import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_trip_matcher.dart';
 
 // Exact 1E bodies from the complete 19:51 read in
 // transit_card_log_20261030_195428.txt; no card identity is included.
@@ -133,6 +134,81 @@ void main() {
     expect(trip.amountFen, 540);
     expect(trip.balanceFen, 1000);
     expect(trip.rawHex, _epRail[1].$1);
+  });
+
+  test('沈阳实测15/16按受理方证据识别进出站且不改变原类型或大端金额', () {
+    // Observed 1E bodies from transit_card_log_20261103_202948.txt.
+    const samples = [
+      (
+        '150000413101760747010001009F000300000000000000060E2026093017193022101217221000000000000002BC0000',
+        true,
+        0,
+        1550,
+      ),
+      (
+        '160000413101760738010001009F000300000001C20000060E2026093012524222101217221000000000000002BC0000',
+        false,
+        450,
+        1550,
+      ),
+      (
+        '1622104131060340140100010079000300000001C2000003482026102514014222101217221000000000000002BC0000',
+        false,
+        450,
+        840,
+      ),
+    ];
+    for (final (raw, entry, amount, balance) in samples) {
+      final trip = parser.parseCycleTrip(_hex(raw))!;
+      expect(trip.typeCode, entry ? 0x15 : 0x16);
+      expect(trip.isEntry, entry);
+      expect(trip.isConsume, !entry);
+      expect(trip.statusShortName, entry ? '进站' : '出站');
+      expect(trip.amountFen, amount);
+      expect(trip.balanceFen, balance);
+      expect(trip.rawHex, raw);
+      expect(
+        matchesTunionJourneySide(
+          isEntry: entry,
+          isRail: true,
+          time: trip.time,
+          cityCode: '2210',
+          terminalId: trip.terminalId,
+          amountFen: amount,
+          cycle: trip,
+        ),
+        isTrue,
+      );
+    }
+  });
+
+  test('合成边界：15/16缺少沈阳轨道受理方证据时仍为未知类型', () {
+    final original = _hex(
+      '160000413101760738010001009F000300000001C20000060E2026093012524222101217221000000000000002BC0000',
+    );
+    // Synthetic rejection cases: a receiving city, application, terminal or
+    // acquirer mismatch cannot acquire a local direction from the low nibble.
+    final rejected = <List<int>>[
+      [...original]..[9] = 0x02,
+      [...original]..[9] = 0x0E,
+      [...original]..[0x20] = 0x10,
+      [...original]..[3] = 0x30,
+      [...original]..[0x22] = 0x01,
+      [...original]..[0x29] = 0x01,
+      original.sublist(0, 0x22),
+    ];
+    for (final bytes in rejected) {
+      for (final type in [0x15, 0x16]) {
+        final trip = parser.parseCycleTrip([...bytes]..[0] = type)!;
+        expect(trip.typeCode, type);
+        expect(trip.isEntry, isFalse);
+        expect(trip.isConsume, isFalse);
+        expect(trip.statusShortName, isNull);
+        expect(trip.typeName, startsWith('未知'));
+        expect(trip.amountFen, 450);
+        expect(trip.balanceFen, 1550);
+      }
+    }
   });
 }
 

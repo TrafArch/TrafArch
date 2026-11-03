@@ -1,6 +1,7 @@
 import '../domain/archive_context.dart';
 import '../application/archive_history.dart';
 import '../domain/captured_transaction_balance.dart';
+import '../domain/captured_cycle_money.dart';
 import '../../../protocols/transit/tunion/tunion_models.dart';
 
 /// Shared detail/export text. No resolver may replace captured identifiers or
@@ -17,10 +18,12 @@ String archiveRecordTitle(ArchiveHistoryRecord record) => switch (record.kind) {
   ArchiveRecordKind.process => '0x1E 过程 · 类型 ${record.fields['typeCode']}',
 };
 
-/// 按捕获版本展示保存的余额与来源；独立 1E 始终保留原始记录余额。
+/// 按捕获版本展示余额来源；已核实的旧 1E 字节序仅作派生展示。
 int? archiveRecordBalanceFen(ArchiveHistoryRecord record) {
   final fields = record.fields;
   if (record.kind == ArchiveRecordKind.process) {
+    final money = verifiedArchivedCycleMoney(fields, record.context);
+    if (money != null) return money.balanceFen;
     return fields['balanceFen'] is int ? fields['balanceFen'] as int : null;
   }
   if (record.kind != ArchiveRecordKind.transaction) return null;
@@ -61,7 +64,11 @@ String archiveRecordText(ArchiveHistoryRecord record) {
   }
 
   void amount(String key, String label) {
-    if (fields[key] case final int value) {
+    final projected =
+        record.kind == ArchiveRecordKind.process && key == 'amountFen'
+        ? verifiedArchivedCycleMoney(fields, context)?.amountFen
+        : null;
+    if (projected ?? fields[key] case final int value) {
       final debit =
           key == 'amountFen' && fields['consume'] == true && value > 0;
       parts.add('$label ${debit ? '-' : ''}${context.formatAmount(value)}');
