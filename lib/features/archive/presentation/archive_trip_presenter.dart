@@ -14,6 +14,7 @@ import '../../trips/trip_entry_presenter.dart';
 import '../../trips/trip_filters.dart';
 import '../application/archive_history.dart';
 import '../domain/archive_context.dart';
+import '../domain/captured_cycle_money.dart';
 import 'archive_record_presenter.dart';
 import 'archive_journey_merge.dart';
 import 'archive_journey_identity.dart';
@@ -276,13 +277,19 @@ ArchiveTripProjection _presentArchiveRecords(
   );
 }
 
-TUnionTripRecord? _processFromFields(Map<String, dynamic> fields) {
+TUnionTripRecord? _processFromFields(
+  Map<String, dynamic> fields, {
+  ArchiveContext? context,
+}) {
+  final money = context == null
+      ? null
+      : verifiedArchivedCycleMoney(fields, context);
   final typeCode = fields['typeCode'];
   final terminalId = fields['terminalId'];
   final appTypeCode = fields['appTypeCode'];
   final lineStationCode = fields['lineStationCode'];
-  final amountFen = fields['amountFen'];
-  final balanceFen = fields['balanceFen'];
+  final amountFen = money?.amountFen ?? fields['amountFen'];
+  final balanceFen = money?.balanceFen ?? fields['balanceFen'];
   final time = fields['time'];
   if (typeCode is! int ||
       terminalId is! String ||
@@ -341,7 +348,12 @@ _archiveTransactionProcessLinks(List<ArchiveHistoryRecord> records) {
     final event = source.journeyEvent(source.info);
     var key = _text(record.fields['displayProcessKey']);
     if (key == null) {
-      final cycle = source.matchedProcess;
+      // Saved display links use captured amounts in their identity. Derived
+      // money is for presentation and must not rename an existing link.
+      final captured = record.fields['matchedProcess'];
+      final cycle = captured is Map<String, dynamic>
+          ? _processFromFields(captured)
+          : null;
       if (cycle != null) key = cycleDisplayKey(cycle);
     }
     final candidates = cycles[key];
@@ -617,11 +629,13 @@ class _ArchiveEvent {
 
   TUnionTripRecord? get process => record.kind != ArchiveRecordKind.process
       ? null
-      : _processFromFields(fields);
+      : _processFromFields(fields, context: record.context);
 
   TUnionTripRecord? get matchedProcess {
     final matched = fields['matchedProcess'];
-    return matched is Map<String, dynamic> ? _processFromFields(matched) : null;
+    return matched is Map<String, dynamic>
+        ? _processFromFields(matched, context: record.context)
+        : null;
   }
 
   int? get railAppTypeCode => mode != TripModeFilter.rail
@@ -876,7 +890,11 @@ class _ArchiveEvent {
   }
 
   String? amount(String key, {bool debit = false}) {
-    final value = fields[key];
+    final projected =
+        record.kind == ArchiveRecordKind.process && key == 'amountFen'
+        ? verifiedArchivedCycleMoney(fields, record.context)?.amountFen
+        : null;
+    final value = projected ?? fields[key];
     if (value is! int) return null;
     final displayed = key == 'entryBalanceFen'
         ? balanceDisplay.balanceFen(value)!
@@ -1096,7 +1114,7 @@ JourneyEventRole? _archiveProcessRole(
   TripModeFilter mode,
 ) => process == null
     ? null
-    : switch (process.typeCode) {
+    : switch (process.journeyTypeCode) {
         1 || 3 => JourneyEventRole.entry,
         2 || 4 => JourneyEventRole.exit,
         7 ||
