@@ -54,44 +54,56 @@ extension _GalleryOverlays on _GalleryViewState {
                       namesRoute: true,
                       label: _overlayTitle(type),
                       explicitChildNodes: true,
-                      child: Material(
-                        color: t.surface,
-                        borderRadius: BorderRadius.vertical(
-                          top: Radius.circular(sheet ? 26 : 24),
-                          bottom: Radius.circular(sheet ? 0 : 24),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(sheet ? 26 : 24),
+                            bottom: Radius.circular(sheet ? 0 : 24),
+                          ),
+                          boxShadow: t.shadows(GalleryElevation.modal),
                         ),
-                        clipBehavior: Clip.antiAlias,
-                        child: SingleChildScrollView(
-                          padding: EdgeInsets.all(nameForm ? 18 : 22),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: _text(
-                                      _overlayTitle(type),
-                                      size: 18,
-                                      weight: FontWeight.w600,
+                        child: Material(
+                          color: t.raised,
+                          shape: RoundedRectangleBorder(
+                            side: BorderSide(color: t.line),
+                            borderRadius: BorderRadius.vertical(
+                              top: Radius.circular(sheet ? 26 : 24),
+                              bottom: Radius.circular(sheet ? 0 : 24),
+                            ),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: SingleChildScrollView(
+                            padding: EdgeInsets.all(nameForm ? 18 : 22),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _text(
+                                        _overlayTitle(type),
+                                        role: GalleryTypography.section,
+                                        weight: FontWeight.w600,
+                                      ),
                                     ),
-                                  ),
-                                  IconButton(
-                                    autofocus:
-                                        type != GalleryOverlay.save &&
-                                        type != GalleryOverlay.rename,
-                                    tooltip: '关闭',
-                                    onPressed: c.back,
-                                    icon: const Icon(
-                                      Icons.close_rounded,
-                                      size: 21,
+                                    IconButton(
+                                      autofocus:
+                                          type != GalleryOverlay.save &&
+                                          type != GalleryOverlay.rename,
+                                      tooltip: '关闭',
+                                      onPressed: c.back,
+                                      icon: const Icon(
+                                        Icons.close_rounded,
+                                        size: 21,
+                                      ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                              _gap(nameForm ? 8 : 12),
-                              _overlayBody(type),
-                            ],
+                                  ],
+                                ),
+                                _gap(nameForm ? 8 : 12),
+                                _overlayBody(type),
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -143,7 +155,7 @@ extension _GalleryOverlays on _GalleryViewState {
       children: [
         _text('删除“${_selectedCard.name}”及其本次会话记录？', size: 14),
         _gap(8),
-        _text('仅影响当前内存样例。', size: 12, color: t.muted),
+        _text('仅影响当前内存样例。', role: GalleryTypography.caption, color: t.muted),
         _gap(22),
         Row(
           children: [
@@ -167,7 +179,7 @@ extension _GalleryOverlays on _GalleryViewState {
     GalleryOverlay.export => Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _text('内容预览 · 尚未保存文件', size: 12, color: t.warn),
+        _text('内容预览 · 尚未保存文件', role: GalleryTypography.caption, color: t.warn),
         _gap(14),
         _hexBox(_entry.exportText),
         _gap(14),
@@ -177,7 +189,11 @@ extension _GalleryOverlays on _GalleryViewState {
     GalleryOverlay.rawFeedback => Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _text('反馈草稿保留在本页，不会自动提交。', size: 13, color: t.muted),
+        _text(
+          '反馈草稿保留在本页，不会自动提交。',
+          role: GalleryTypography.label,
+          color: t.muted,
+        ),
         _gap(14),
         _hexBox(
           'TrafArch 新界面 beta\n设计版本：2.4.0\n场景：${c.sceneId ?? c.page.name}\n数据：内置样例\n\n请描述看到的问题、操作步骤和期望结果。',
@@ -194,58 +210,65 @@ extension _GalleryOverlays on _GalleryViewState {
         ? 'card-${_selectedCard.id}'
         : 'filter-${type.name}';
     final radius = BorderRadius.circular(cardMenu ? 14 : 12);
+    final geometry = _GalleryMenuGeometry(alignEnd: cardMenu);
     return [
       Positioned.fill(
         child: CustomSingleChildLayout(
           delegate: _GalleryMenuLayout(
-            anchor: () => _entry.anchor ?? _menuBounds(anchor),
+            anchor: _entry.anchor ?? _menuBounds(anchor),
+            geometry: geometry,
             alignEnd: cardMenu,
             width: (cardMenu ? 158 : 170) * (1 + _extraTextScale),
             bottomInset: MediaQuery.paddingOf(context).bottom,
           ),
-          child: Semantics(
-            scopesRoute: true,
-            namesRoute: true,
-            label: _overlayTitle(type),
-            explicitChildNodes: true,
-            child: _dropdownFocus(
-              FocusTraversalGroup(
-                policy: WidgetOrderTraversalPolicy(),
-                child: Shortcuts(
-                  shortcuts: const {
-                    SingleActivator(LogicalKeyboardKey.arrowDown):
-                        NextFocusIntent(),
-                    SingleActivator(LogicalKeyboardKey.arrowUp):
-                        PreviousFocusIntent(),
-                  },
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      borderRadius: radius,
-                      boxShadow: [
-                        BoxShadow(
-                          color: t.dark
-                              ? Colors.black.withValues(alpha: .55)
-                              : const Color(0xff142846).withValues(alpha: .18),
-                          blurRadius: 36,
-                          offset: const Offset(0, 18),
-                        ),
-                      ],
-                    ),
-                    child: Material(
-                      key: const ValueKey('gallery-dropdown'),
-                      color: t.surface,
-                      shape: RoundedRectangleBorder(
+          child: _GalleryMenuTransition(
+            geometry: geometry,
+            child: Semantics(
+              scopesRoute: true,
+              namesRoute: true,
+              label: _overlayTitle(type),
+              explicitChildNodes: true,
+              child: _dropdownFocus(
+                FocusTraversalGroup(
+                  policy: WidgetOrderTraversalPolicy(),
+                  child: Shortcuts(
+                    shortcuts: const {
+                      SingleActivator(LogicalKeyboardKey.arrowDown):
+                          NextFocusIntent(),
+                      SingleActivator(LogicalKeyboardKey.arrowUp):
+                          PreviousFocusIntent(),
+                    },
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
                         borderRadius: radius,
-                        side: BorderSide(color: t.line),
+                        boxShadow: t.shadows(GalleryElevation.floating),
                       ),
-                      clipBehavior: Clip.antiAlias,
-                      child: SingleChildScrollView(
-                        primary: false,
-                        padding: EdgeInsets.all(cardMenu ? 6 : 5),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: _dropdownItems(type),
+                      child: Material(
+                        key: const ValueKey('gallery-dropdown'),
+                        color: t.raised,
+                        shape: RoundedRectangleBorder(borderRadius: radius),
+                        clipBehavior: Clip.antiAlias,
+                        child: SingleChildScrollView(
+                          primary: false,
+                          padding: EdgeInsets.all(cardMenu ? 6 : 5),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              for (final (i, item) in _dropdownItems(
+                                type,
+                              ).indexed) ...[
+                                if (i > 0)
+                                  Divider(
+                                    height: 1,
+                                    color: t.line,
+                                    indent: 10,
+                                    endIndent: 10,
+                                  ),
+                                item,
+                              ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -349,7 +372,9 @@ extension _GalleryOverlays on _GalleryViewState {
               Icon(icon, size: 16, color: danger ? t.danger : t.muted),
               const SizedBox(width: 9),
             ],
-            Expanded(child: _text(label, size: 14, color: color)),
+            Expanded(
+              child: _text(label, role: GalleryTypography.body, color: color),
+            ),
             if (selected) ...[
               const SizedBox(width: 8),
               Icon(Icons.check_rounded, size: 14, color: t.control),
@@ -381,7 +406,11 @@ extension _GalleryOverlays on _GalleryViewState {
         _kv('受理城市', trip['city'] as String? ?? '未记录'),
         _kv('交易金额', trip['amount'] as String?),
         _gap(16),
-        _text('本行程为内置样例摘要。未保留各侧原始字段，不据此补造记录。', size: 12, color: t.muted),
+        _text(
+          '本行程为内置样例摘要。未保留各侧原始字段，不据此补造记录。',
+          role: GalleryTypography.caption,
+          color: t.muted,
+        ),
         _gap(16),
         _button('关闭', c.back, primary: true),
       ],
@@ -393,15 +422,15 @@ extension _GalleryOverlays on _GalleryViewState {
     children: [
       _face(_selectedCard),
       _gap(18),
-      _text('卡面预设', size: 13, weight: FontWeight.w600),
+      _text('卡面预设', role: GalleryTypography.label, weight: FontWeight.w600),
       _gap(12),
       Row(
         children:
             [
-                  ('blue', '蔚蓝'),
-                  ('teal', '青绿'),
-                  ('graphite', '石墨'),
-                  ('amber', '赭金'),
+                  ('blue', '海蓝'),
+                  ('teal', '青玉'),
+                  ('graphite', '鸢紫'),
+                  ('amber', '暖铜'),
                 ]
                 .map(
                   (pair) => Expanded(
@@ -438,7 +467,11 @@ extension _GalleryOverlays on _GalleryViewState {
                               ),
                             ),
                             _gap(8),
-                            _text(pair.$2, size: 11, color: t.muted),
+                            _text(
+                              pair.$2,
+                              role: GalleryTypography.caption,
+                              color: t.muted,
+                            ),
                           ],
                         ),
                       ),
@@ -455,7 +488,7 @@ extension _GalleryOverlays on _GalleryViewState {
       ),
       if (c.expanded.contains('face:samples')) ...[
         _gap(12),
-        _text('内置样例图片', size: 12, color: t.muted),
+        _text('内置样例图片', role: GalleryTypography.caption, color: t.muted),
         _gap(8),
         _button(
           '选择 TrafArch 路线图案',
@@ -487,11 +520,13 @@ extension _GalleryOverlays on _GalleryViewState {
 class _GalleryMenuLayout extends SingleChildLayoutDelegate {
   _GalleryMenuLayout({
     required this.anchor,
+    required this.geometry,
     required this.alignEnd,
     required this.width,
     required this.bottomInset,
   });
-  final Rect Function() anchor;
+  final Rect anchor;
+  final _GalleryMenuGeometry geometry;
   final bool alignEnd;
   final double width, bottomInset;
 
@@ -508,13 +543,12 @@ class _GalleryMenuLayout extends SingleChildLayoutDelegate {
 
   @override
   Offset getPositionForChild(Size size, Size childSize) {
-    final rect = anchor();
+    final rect = anchor;
     final x = alignEnd ? rect.right - childSize.width : rect.left;
     final below = rect.bottom + 6;
     final bottom = size.height - bottomInset - 8;
-    final y = below + childSize.height <= bottom
-        ? below
-        : rect.top - childSize.height - 6;
+    geometry.opensUp = below + childSize.height > bottom;
+    final y = geometry.opensUp ? rect.top - childSize.height - 6 : below;
     return Offset(
       x.clamp(12.0, math.max(12.0, size.width - childSize.width - 12)),
       y.clamp(8.0, math.max(8.0, bottom - childSize.height)),
@@ -522,7 +556,12 @@ class _GalleryMenuLayout extends SingleChildLayoutDelegate {
   }
 
   @override
-  bool shouldRelayout(covariant _GalleryMenuLayout oldDelegate) => true;
+  bool shouldRelayout(covariant _GalleryMenuLayout oldDelegate) =>
+      anchor != oldDelegate.anchor ||
+      alignEnd != oldDelegate.alignEnd ||
+      width != oldDelegate.width ||
+      bottomInset != oldDelegate.bottomInset ||
+      geometry != oldDelegate.geometry;
 }
 
 class _GalleryNameForm extends StatefulWidget {
@@ -597,4 +636,46 @@ class _GalleryNameFormState extends State<_GalleryNameForm> {
       ),
     ],
   );
+}
+
+class _GalleryMenuGeometry {
+  _GalleryMenuGeometry({required this.alignEnd});
+  final bool alignEnd;
+  bool opensUp = false;
+}
+
+class _GalleryMenuTransition extends StatelessWidget {
+  const _GalleryMenuTransition({required this.geometry, required this.child});
+  final _GalleryMenuGeometry geometry;
+  final Widget child;
+  @override
+  Widget build(BuildContext context) {
+    final route = ModalRoute.of(context)! as _GalleryPopupRoute;
+    return AnimatedBuilder(
+      animation: route.animation!,
+      child: RepaintBoundary(child: child),
+      builder: (context, child) {
+        final value = route.configuration.reduceMotion
+            ? 1.0
+            : route.motionProgress(route.animation!);
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, (geometry.opensUp ? 4 : -4) * (1 - value)),
+            child: Transform.scale(
+              scale: .96 + .04 * value,
+              alignment: geometry.opensUp
+                  ? (geometry.alignEnd
+                        ? Alignment.bottomRight
+                        : Alignment.bottomLeft)
+                  : (geometry.alignEnd
+                        ? Alignment.topRight
+                        : Alignment.topLeft),
+              child: child,
+            ),
+          ),
+        );
+      },
+    );
+  }
 }

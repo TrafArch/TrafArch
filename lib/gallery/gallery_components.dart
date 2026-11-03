@@ -1,14 +1,35 @@
 part of 'gallery_app.dart';
 
+/// Recolors the original two-color artwork without tinting its entire bitmap.
+class _GalleryBrandColors extends ColorMapper {
+  const _GalleryBrandColors(this.foreground, this.background);
+  final Color foreground, background;
+  @override
+  Color substitute(
+    String? id,
+    String elementName,
+    String attributeName,
+    Color color,
+  ) => color == const Color(0xff4e7098) ? foreground : background;
+  @override
+  bool operator ==(Object other) =>
+      other is _GalleryBrandColors &&
+      other.foreground == foreground &&
+      other.background == background;
+  @override
+  int get hashCode => Object.hash(foreground, background);
+}
+
 extension _GalleryComponents on _GalleryViewState {
   double get _extraTextScale =>
       math.max(0, MediaQuery.textScalerOf(context).scale(14) / 14 - 1);
   Widget _text(
     String value, {
-    double size = 14.5,
+    double? size,
+    TextStyle role = GalleryTypography.body,
     Color? color,
-    FontWeight weight = FontWeight.w400,
-    double height = 1.5,
+    FontWeight? weight,
+    double? height,
     int? lines,
     TextAlign? align,
     bool mono = false,
@@ -17,7 +38,7 @@ extension _GalleryComponents on _GalleryViewState {
     maxLines: lines,
     overflow: lines == null ? null : TextOverflow.ellipsis,
     textAlign: align,
-    style: TextStyle(
+    style: role.copyWith(
       fontSize: size,
       height: height,
       color: color ?? t.text,
@@ -33,14 +54,21 @@ extension _GalleryComponents on _GalleryViewState {
     Color? color,
     double radius = 18,
     bool border = true,
-  }) => Material(
-    color: color ?? t.surface,
-    shape: RoundedRectangleBorder(
+    GalleryElevation elevation = GalleryElevation.card,
+  }) => DecoratedBox(
+    decoration: BoxDecoration(
       borderRadius: BorderRadius.circular(radius),
-      side: border ? BorderSide(color: t.line) : BorderSide.none,
+      boxShadow: t.shadows(elevation),
     ),
-    clipBehavior: Clip.antiAlias,
-    child: Padding(padding: padding, child: child),
+    child: Material(
+      color: color ?? t.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(radius),
+        side: border ? BorderSide(color: t.line) : BorderSide.none,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(padding: padding, child: child),
+    ),
   );
 
   Widget _header(
@@ -53,8 +81,8 @@ extension _GalleryComponents on _GalleryViewState {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(
-          height: 44,
+        ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
           child: Row(
             children: [
               if (back) ...[
@@ -64,12 +92,7 @@ extension _GalleryComponents on _GalleryViewState {
               Expanded(
                 child: Semantics(
                   header: true,
-                  child: _text(
-                    title,
-                    size: 23,
-                    height: 28 / 23,
-                    weight: FontWeight.w700,
-                  ),
+                  child: _text(title, role: GalleryTypography.page),
                 ),
               ),
               ...?actions,
@@ -85,7 +108,12 @@ extension _GalleryComponents on _GalleryViewState {
         if (subtitle != null)
           Padding(
             padding: const EdgeInsets.only(top: 2),
-            child: _text(subtitle, size: 12, color: t.muted, height: 20 / 12),
+            child: _text(
+              subtitle,
+              role: GalleryTypography.caption,
+              color: t.muted,
+              height: 20 / 12,
+            ),
           ),
       ],
     ),
@@ -138,12 +166,8 @@ extension _GalleryComponents on _GalleryViewState {
       side: WidgetStatePropertyAll(
         BorderSide(color: primary ? Colors.transparent : t.line),
       ),
-      shape: WidgetStatePropertyAll(
-        RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      ),
-      textStyle: const WidgetStatePropertyAll(
-        TextStyle(fontSize: 14.5, height: 1.4, fontWeight: FontWeight.w600),
-      ),
+      shape: const WidgetStatePropertyAll(GalleryGeometry.buttonShape),
+      textStyle: const WidgetStatePropertyAll(GalleryTypography.button),
     );
     return TextButton(
       onPressed: action,
@@ -162,57 +186,61 @@ extension _GalleryComponents on _GalleryViewState {
   Widget _chip(String label, {Color? color}) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
     decoration: BoxDecoration(
-      color: t.tone,
+      color: t.secondaryContainer,
       borderRadius: BorderRadius.circular(30),
     ),
     child: _text(
       label,
-      size: 11,
+      role: GalleryTypography.caption,
       height: 18 / 11,
-      color: color ?? t.onTone,
+      color: color ?? t.onSecondaryContainer,
       weight: FontWeight.w500,
     ),
   );
 
   Widget _sectionTitle(String title, {String? trailing}) => Padding(
     padding: const EdgeInsets.fromLTRB(2, 20, 2, 10),
-    child: Row(
+    child: Wrap(
+      alignment: WrapAlignment.spaceBetween,
+      spacing: 12,
+      runSpacing: 4,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Expanded(child: _text(title, size: 14, weight: FontWeight.w600)),
-        if (trailing != null) _text(trailing, size: 11, color: t.muted),
+        _text(title, role: GalleryTypography.section),
+        if (trailing != null)
+          _text(trailing, role: GalleryTypography.caption, color: t.muted),
       ],
     ),
   );
 
-  Widget _kv(String label, String? value, {double labelWidth = 112}) =>
-      Container(
-        constraints: const BoxConstraints(minHeight: 44),
-        padding: const EdgeInsets.symmetric(vertical: 11),
-        decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: t.line)),
+  Widget _kv(
+    String label,
+    String? value, {
+    double labelWidth = 112,
+  }) => Container(
+    constraints: const BoxConstraints(minHeight: 44),
+    padding: const EdgeInsets.symmetric(vertical: 11),
+    decoration: BoxDecoration(
+      border: Border(bottom: BorderSide(color: t.line)),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: math.min(labelWidth, MediaQuery.sizeOf(context).width * .35),
+          child: _text(label, role: GalleryTypography.label, color: t.muted),
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: math.min(
-                labelWidth,
-                MediaQuery.sizeOf(context).width * .35,
-              ),
-              child: _text(label, size: 12, color: t.muted),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _text(
-                value ?? '未知',
-                size: 12,
-                weight: FontWeight.w500,
-                align: TextAlign.right,
-              ),
-            ),
-          ],
+        const SizedBox(width: 12),
+        Expanded(
+          child: _text(
+            value ?? '未知',
+            role: GalleryTypography.field,
+            align: TextAlign.right,
+          ),
         ),
-      );
+      ],
+    ),
+  );
 
   Widget _empty(
     String title,
@@ -227,12 +255,17 @@ extension _GalleryComponents on _GalleryViewState {
         _gap(16),
         _text(
           title,
-          size: 17,
+          role: GalleryTypography.card,
           weight: FontWeight.w600,
           align: TextAlign.center,
         ),
         _gap(8),
-        _text(subtitle, size: 13, color: t.muted, align: TextAlign.center),
+        _text(
+          subtitle,
+          role: GalleryTypography.label,
+          color: t.muted,
+          align: TextAlign.center,
+        ),
         if (action != null) ...[_gap(18), action],
       ],
     ),
@@ -259,10 +292,7 @@ extension _GalleryComponents on _GalleryViewState {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(13),
             ),
-            textStyle: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
+            textStyle: GalleryTypography.label,
           ),
           child: Text(labels[i], textAlign: TextAlign.center),
         ),
@@ -300,13 +330,7 @@ extension _GalleryComponents on _GalleryViewState {
     final naturalWidths = scroll
         ? labels.map((label) {
             final painter = TextPainter(
-              text: TextSpan(
-                text: label,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+              text: TextSpan(text: label, style: GalleryTypography.label),
               textDirection: Directionality.of(context),
               textScaler: MediaQuery.textScalerOf(context),
             )..layout();
@@ -334,7 +358,7 @@ extension _GalleryComponents on _GalleryViewState {
       },
       child: Container(
         decoration: BoxDecoration(
-          color: t.surface2,
+          color: t.segmentTrack,
           borderRadius: BorderRadius.circular(16),
         ),
         child: scroll
@@ -373,7 +397,7 @@ extension _GalleryComponents on _GalleryViewState {
                     : value.length > 11
                     ? size * .78
                     : size,
-                weight: FontWeight.w700,
+                weight: FontWeight.w600,
                 color: color,
                 height: 1.2,
               ),
@@ -382,16 +406,22 @@ extension _GalleryComponents on _GalleryViewState {
         },
       );
 
-  List<Color> _faceColors(String face) => switch (face) {
-    'teal' => [const Color(0xff1d5955), const Color(0xff102f36)],
-    'graphite' => [const Color(0xff434c59), const Color(0xff202733)],
-    'amber' => [const Color(0xff73532d), const Color(0xff302b24)],
-    _ => [const Color(0xff355777), const Color(0xff182d48)],
-  };
+  List<Color> _faceColors(String face) {
+    final palette = GalleryCardFace.byId(face);
+    return [palette.start, palette.end];
+  }
 
-  Widget _face(GalleryCard card, {bool miniature = false}) => Container(
-    height: miniature ? 44 : 204 + _extraTextScale * 80,
-    width: miniature ? 66 : double.infinity,
+  Widget _face(
+    GalleryCard card, {
+    bool miniature = false,
+    bool minimal = false,
+  }) => Container(
+    key: miniature ? null : ValueKey('card-face-${card.id}'),
+    height: miniature ? 44 : null,
+    constraints: miniature
+        ? null
+        : BoxConstraints(minHeight: 204 + _extraTextScale * 80),
+    width: miniature ? 52 : double.infinity,
     clipBehavior: Clip.antiAlias,
     decoration: BoxDecoration(
       borderRadius: BorderRadius.circular(miniature ? 11 : 22),
@@ -417,74 +447,88 @@ extension _GalleryComponents on _GalleryViewState {
             child: Icon(
               Icons.contactless_outlined,
               size: 24,
-              color: const Color(0xffc5d7e8),
+              color: GalleryCardFace.byId(card.face).secondaryForeground,
             ),
           )
-        : Stack(
-            children: [
-              Positioned(
-                top: 18,
-                left: 18,
-                right: 108,
-                child: _text(
-                  card.name,
-                  size: 17,
-                  weight: FontWeight.w600,
-                  color: Colors.white,
+        : Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        card.name,
+                        key: ValueKey('face-title-${card.id}'),
+                        style: GalleryTypography.card.copyWith(
+                          color: GalleryCardFace.byId(card.face).foreground,
+                        ),
+                      ),
+                    ),
+                    if (card.type == '交通联合卡') ...[
+                      const SizedBox(width: 12),
+                      SvgPicture.asset(
+                        'assets/gallery/tunion-logo.svg',
+                        width: 78,
+                        height: 49,
+                        semanticsLabel: '交通联合 CHINA T-UNION',
+                      ),
+                    ],
+                  ],
                 ),
-              ),
-              if (card.type == '交通联合卡')
-                Positioned(
-                  top: 17,
-                  right: 16,
-                  child: SvgPicture.asset(
-                    'assets/gallery/tunion-logo.svg',
-                    width: 78,
-                    height: 49,
-                    semanticsLabel: '交通联合 CHINA T-UNION',
+                const SizedBox(height: 18),
+                Text(
+                  '**** ${card.tail}',
+                  key: ValueKey('face-tail-${card.id}'),
+                  style: GalleryTypography.label.copyWith(
+                    fontFamily: 'monospace',
+                    color: GalleryCardFace.byId(card.face).secondaryForeground,
                   ),
                 ),
-              Positioned(
-                left: 18,
-                bottom: 60,
-                child: _text(
-                  '**** ${card.tail}',
-                  size: 13,
-                  color: const Color(0xffacc1df),
-                  mono: true,
-                ),
-              ),
-              Positioned(
-                left: 18,
-                bottom: 18,
-                right: 18,
-                child: Row(
+                const SizedBox(height: 12),
+                Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _text(
-                            '当前余额',
-                            size: 11,
-                            color: const Color(0xffacc1df),
-                          ),
+                          if (!minimal)
+                            Text(
+                              '当前余额',
+                              key: ValueKey('face-balance-label-${card.id}'),
+                              style: GalleryTypography.caption.copyWith(
+                                color: GalleryCardFace.byId(card.face)
+                                    .secondaryForeground,
+                              ),
+                            ),
                           _gap(4),
-                          _amount(card, size: 34, color: Colors.white),
+                          _amount(
+                            card,
+                            size: 34,
+                            color: GalleryCardFace.byId(card.face).foreground,
+                          ),
                         ],
                       ),
                     ),
-                    _text(
-                      '最近读取\n${card.when}',
-                      size: 10,
-                      color: const Color(0xffacc1df),
-                      align: TextAlign.right,
-                    ),
+                    if (!minimal) const SizedBox(width: 12),
+                    if (!minimal)
+                      Flexible(
+                        child: _text(
+                          '最近读取\n${card.when}',
+                          role: GalleryTypography.caption,
+                          color: GalleryCardFace.byId(card.face)
+                              .secondaryForeground,
+                          align: TextAlign.right,
+                        ),
+                      ),
                   ],
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
   );
 
@@ -497,16 +541,14 @@ extension _GalleryComponents on _GalleryViewState {
       Icons.credit_card_outlined,
       Icons.location_on_outlined,
     ];
-    final inset = MediaQuery.paddingOf(context).bottom;
+    final layout = _navLayout;
     final bar = Container(
-      height: c.docked
-          ? 64 + inset + _extraTextScale * 20
-          : 62 + _extraTextScale * 20,
+      height: layout.contentHeight,
       padding: EdgeInsets.fromLTRB(
         c.docked ? 8 : 5,
         c.docked ? 4 : 5,
         c.docked ? 8 : 5,
-        c.docked ? inset : 5,
+        c.docked ? 0 : 5,
       ),
       decoration: BoxDecoration(
         color: c.docked ? t.surface2 : t.surface.withValues(alpha: .78),
@@ -567,16 +609,31 @@ extension _GalleryComponents on _GalleryViewState {
         },
       ),
     );
-    if (c.docked) return bar;
+    if (c.docked) {
+      return ColoredBox(
+        key: const ValueKey('gallery-docked-bar'),
+        color: t.surface2,
+        child: Padding(
+          padding: EdgeInsets.only(bottom: layout.bottomSpace),
+          child: bar,
+        ),
+      );
+    }
     return Padding(
-      padding: EdgeInsets.only(left: 16, right: 16, bottom: 18 + inset),
+      padding: EdgeInsets.only(left: 16, right: 16, bottom: layout.bottomSpace),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 352),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(31 + _extraTextScale * 10),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-            child: bar,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(31 + _extraTextScale * 10),
+            boxShadow: t.shadows(GalleryElevation.floating),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(31 + _extraTextScale * 10),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+              child: bar,
+            ),
           ),
         ),
       ),
@@ -587,17 +644,15 @@ extension _GalleryComponents on _GalleryViewState {
     width: double.infinity,
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
-      color: const Color(0xff171c23),
+      color: t.surface2,
       borderRadius: BorderRadius.circular(14),
     ),
     child: SelectionArea(
       child: Text(
         value,
-        style: const TextStyle(
+        style: GalleryTypography.caption.copyWith(
           fontFamily: 'monospace',
-          fontSize: 11,
-          height: 1.9,
-          color: Color(0xffd2dae4),
+          color: t.text,
         ),
       ),
     ),
@@ -635,7 +690,11 @@ extension _GalleryComponents on _GalleryViewState {
             child: Row(
               children: [
                 Expanded(
-                  child: _text(title, size: 13, weight: FontWeight.w600),
+                  child: _text(
+                    title,
+                    role: GalleryTypography.label,
+                    weight: FontWeight.w600,
+                  ),
                 ),
                 _expandArrow(open),
               ],
@@ -664,4 +723,113 @@ extension _GalleryComponents on _GalleryViewState {
       child: surface ? _panel(body, padding: EdgeInsets.zero) : body,
     );
   }
+}
+
+/// Keep the segment strip mounted while restoring each pane's scroll offset.
+class _GalleryTabbedList extends StatefulWidget {
+  const _GalleryTabbedList({
+    super.key,
+    required this.listKey,
+    required this.positionId,
+    required this.padding,
+    required this.children,
+  });
+  final PageStorageKey<String> listKey;
+  final String positionId;
+  final EdgeInsets padding;
+  final List<Widget> children;
+
+  @override
+  State<_GalleryTabbedList> createState() => _GalleryTabbedListState();
+}
+
+class _GalleryTabbedListState extends State<_GalleryTabbedList> {
+  late final ScrollController _scroll;
+  PageStorageBucket? _bucket;
+  final Map<String, double> _offsets = {};
+  bool _ready = false, _restoring = false;
+  ValueKey<String> get _storageKey =>
+      ValueKey('offsets-${widget.listKey.value}');
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _bucket = PageStorage.maybeOf(context);
+    if (_ready) return;
+    _ready = true;
+    final saved = _bucket?.readState(context, identifier: _storageKey);
+    if (saved is Map<String, double>) _offsets.addAll(saved);
+    _scroll = ScrollController(
+      keepScrollOffset: false,
+      initialScrollOffset: _offsets[widget.positionId] ?? 0,
+    );
+  }
+
+  void _remember(String positionId) {
+    if (_restoring || !_scroll.hasClients) return;
+    _offsets[positionId] = _scroll.offset;
+    _bucket?.writeState(
+      context,
+      Map<String, double>.of(_offsets),
+      identifier: _storageKey,
+    );
+  }
+
+  @override
+  void didUpdateWidget(_GalleryTabbedList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.positionId == oldWidget.positionId) return;
+    _remember(oldWidget.positionId);
+    _restoring = true;
+    final target = widget.positionId;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || target != widget.positionId || !_scroll.hasClients) {
+        return;
+      }
+      // The outgoing crossfade can be taller than the incoming content. During
+      // that overlap the stored incoming offset is still a valid scroll target.
+      _scroll.jumpTo(
+        (_offsets[target] ?? 0).clamp(0.0, _scroll.position.maxScrollExtent),
+      );
+      _restoring = false;
+    });
+  }
+
+  @override
+  void deactivate() {
+    _remember(widget.positionId);
+    super.deactivate();
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => ListView(
+    key: widget.listKey,
+    controller: _scroll,
+    padding: widget.padding,
+    children: widget.children,
+  );
+}
+
+class _GalleryBalanceParts {
+  _GalleryBalanceParts(this.original) {
+    final match = RegExp(r'[-−]?\d[\d,.]*').firstMatch(original);
+    known = match != null;
+    if (match == null) return;
+    prefix = original.substring(0, match.start).trim();
+    number = match.group(0)!;
+    suffix = original.substring(match.end).trim();
+    if (prefix.contains('−') || prefix.contains('-')) {
+      number = '−$number';
+      prefix = prefix.replaceAll(RegExp('[-−]'), '').trim();
+    }
+  }
+  final String original;
+  late final bool known;
+  String prefix = '', number = '', suffix = '';
 }

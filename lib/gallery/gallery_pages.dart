@@ -7,28 +7,36 @@ extension _GalleryPages on _GalleryViewState {
     final failed = c.readState == GalleryReadState.failed;
     final recent = c.trips.where((r) => r['kind'] != 'event').firstOrNull;
     return _fade(
-      'home-${c.readState}-${c.hasRead}-${card.saved}',
+      'home',
       _list([
         Padding(
           padding: const EdgeInsets.only(top: 12, bottom: 14),
-          child: SizedBox(
-            height: 44,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 44),
             child: Row(
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.asset(
-                    'assets/icon/app_icon.png',
-                    width: 30,
-                    height: 30,
-                  ),
+                SvgPicture.asset(
+                  'assets/icon/app_mark.svg',
+                  key: const ValueKey('gallery-brand-mark'),
+                  width: 30,
+                  height: 30,
+                  colorMapper: _GalleryBrandColors(t.action, t.tone),
+                  semanticsLabel: 'TrafArch',
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: _text('TrafArch', size: 18, weight: FontWeight.w700),
+                  child: _text(
+                    'TrafArch',
+                    role: GalleryTypography.section,
+                    weight: FontWeight.w600,
+                  ),
                 ),
                 if (MediaQuery.sizeOf(context).width >= 390)
-                  _text('10月27日 周二', size: 10, color: t.onTone),
+                  _text(
+                    '10月27日 周二',
+                    role: GalleryTypography.caption,
+                    color: t.onTone,
+                  ),
                 const SizedBox(width: 6),
                 _icon(
                   Icons.qr_code_scanner_rounded,
@@ -45,121 +53,127 @@ extension _GalleryPages on _GalleryViewState {
             ),
           ),
         ),
-        Stack(
-          children: [
-            if (!c.hasRead)
-              SizedBox(
-                height: 116 + _extraTextScale * 80,
-                child: _panel(
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.contactless_outlined,
-                        size: 32,
-                        color: t.onTone,
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
+        _homeCard(
+          Stack(
+            children: [
+              if (!c.hasRead)
+                SizedBox(
+                  height: 116 + _extraTextScale * 80,
+                  child: _panel(
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.contactless_outlined,
+                          size: 32,
+                          color: t.onTone,
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _text(
+                                reading ? '正在读取卡片…' : '把交通卡贴近手机背面',
+                                role: GalleryTypography.lead,
+                                weight: FontWeight.w600,
+                              ),
+                              _gap(5),
+                              _text(
+                                reading ? '请保持贴卡，直到读取完成' : '读取余额与行程',
+                                role: GalleryTypography.caption,
+                                color: t.muted,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    color: t.tone,
+                    border: false,
+                    radius: 22,
+                  ),
+                )
+              else if (card.saved)
+                _face(card)
+              else
+                SizedBox(
+                  height: 194 + _extraTextScale * 80,
+                  child: _panel(
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _text(
-                              reading ? '正在读取卡片…' : '把交通卡贴近手机背面',
-                              size: 16,
-                              weight: FontWeight.w600,
+                            Expanded(
+                              child: _text(
+                                card.name,
+                                role: GalleryTypography.card,
+                                weight: FontWeight.w600,
+                                lines: 2,
+                              ),
                             ),
-                            _gap(5),
-                            _text(
-                              reading ? '请保持贴卡，直到读取完成' : '读取余额与行程',
-                              size: 12,
-                              color: t.muted,
+                            const SizedBox(width: 12),
+                            SvgPicture.asset(
+                              'assets/gallery/tunion-logo.svg',
+                              width: 78,
+                              height: 49,
+                              semanticsLabel: '交通联合 CHINA T-UNION',
                             ),
                           ],
                         ),
-                      ),
-                    ],
-                  ),
-                  color: t.tone,
-                  border: false,
-                  radius: 22,
-                ),
-              )
-            else if (card.saved)
-              _face(card)
-            else
-              SizedBox(
-                height: 194 + _extraTextScale * 80,
-                child: _panel(
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: _text(
-                              card.name,
-                              size: 17,
-                              weight: FontWeight.w700,
-                              lines: 2,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          _text(
-                            '交通联合\nCHINA T-UNION',
-                            size: 10,
-                            color: t.onTone,
-                            align: TextAlign.right,
-                          ),
-                        ],
-                      ),
-                      _gap(5),
-                      _text(
-                        '**** ${card.tail}',
-                        size: 12,
-                        mono: true,
-                        color: t.onTone,
-                      ),
-                      const Spacer(),
-                      _text('当前余额', size: 11, color: t.muted),
-                      _gap(4),
-                      _amount(card),
-                    ],
-                  ),
-                  color: t.tone,
-                  radius: 22,
-                  border: false,
-                ),
-              ),
-            if (reading && c.hasRead)
-              Positioned.fill(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: t.bg.withValues(alpha: .88),
-                    borderRadius: BorderRadius.circular(22),
-                  ),
-                  padding: const EdgeInsets.all(18),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.contactless_outlined,
-                        color: t.onTone,
-                        size: 32,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _text(
-                          '请保持贴卡\n正在读取卡片…',
-                          size: 14,
-                          weight: FontWeight.w600,
+                        _gap(5),
+                        _text(
+                          '**** ${card.tail}',
+                          role: GalleryTypography.caption,
+                          mono: true,
+                          color: t.onTone,
                         ),
-                      ),
-                    ],
+                        const Spacer(),
+                        _text(
+                          '当前余额',
+                          role: GalleryTypography.caption,
+                          color: t.muted,
+                        ),
+                        _gap(4),
+                        _amount(card),
+                      ],
+                    ),
+                    color: t.tone,
+                    radius: 22,
+                    border: false,
                   ),
                 ),
-              ),
-          ],
+              if (reading && c.hasRead)
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: t.bg.withValues(alpha: .88),
+                      borderRadius: BorderRadius.circular(22),
+                    ),
+                    padding: const EdgeInsets.all(18),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.contactless_outlined,
+                          color: t.onTone,
+                          size: 32,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _text(
+                            '请保持贴卡\n正在读取卡片…',
+                            role: GalleryTypography.body,
+                            weight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
         _gap(10),
         Row(
@@ -184,7 +198,7 @@ extension _GalleryPages on _GalleryViewState {
                       : c.hasRead
                       ? '今天 09:41 读取成功'
                       : '内置卡片已就绪',
-                  size: 12,
+                  role: GalleryTypography.caption,
                   color: failed ? t.warn : t.onTone,
                 ),
               ),
@@ -273,8 +287,18 @@ extension _GalleryPages on _GalleryViewState {
               children: [
                 Row(
                   children: [
-                    Expanded(child: _text('最近一次行程', size: 12, color: t.muted)),
-                    _text('今天', size: 12, color: t.muted),
+                    Expanded(
+                      child: _text(
+                        '最近一次行程',
+                        role: GalleryTypography.caption,
+                        color: t.muted,
+                      ),
+                    ),
+                    _text(
+                      '今天',
+                      role: GalleryTypography.caption,
+                      color: t.muted,
+                    ),
                   ],
                 ),
                 _gap(8),
@@ -292,11 +316,15 @@ extension _GalleryPages on _GalleryViewState {
               children: [
                 Icon(Icons.nfc_rounded, size: 38, color: t.onTone),
                 _gap(12),
-                _text('贴卡，了解你的每一次出行', size: 15, weight: FontWeight.w600),
+                _text(
+                  '贴卡，了解你的每一次出行',
+                  role: GalleryTypography.body,
+                  weight: FontWeight.w600,
+                ),
                 _gap(8),
                 _text(
                   '支持交通联合、城市一卡通及部分 FeliCa 卡片\n当前使用内置卡片样例',
-                  size: 12,
+                  role: GalleryTypography.caption,
                   color: t.muted,
                   align: TextAlign.center,
                 ),
@@ -319,17 +347,27 @@ extension _GalleryPages on _GalleryViewState {
                   ),
                   child: const Text(
                     '查看全部行程  ›',
-                    style: TextStyle(fontSize: 12),
+                    style: GalleryTypography.caption,
                   ),
                 ),
               ],
             ),
           ),
         _gap(8),
-        _text('模拟数据', size: 11, color: t.muted),
+        _text('模拟数据', role: GalleryTypography.caption, color: t.muted),
       ]),
     );
   }
+
+  Widget _homeCard(Widget child) => _reduceMotion
+      ? SizedBox(key: const ValueKey('home-card-expansion'), child: child)
+      : AnimatedSize(
+          key: const ValueKey('home-card-expansion'),
+          duration: _GalleryMotion.expand,
+          curve: _GalleryMotion.curve,
+          alignment: Alignment.topCenter,
+          child: child,
+        );
 
   Widget _trips() {
     final trips = c.filteredTrips;
@@ -348,9 +386,17 @@ extension _GalleryPages on _GalleryViewState {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _text('交易 $count 笔', size: 13, weight: FontWeight.w600),
+                    _text(
+                      '交易 $count 笔',
+                      role: GalleryTypography.label,
+                      weight: FontWeight.w600,
+                    ),
                     _gap(12),
-                    _text('行程 $count 次', size: 12, color: t.onTone),
+                    _text(
+                      '行程 $count 次',
+                      role: GalleryTypography.caption,
+                      color: t.onTone,
+                    ),
                   ],
                 ),
               ),
@@ -427,7 +473,7 @@ extension _GalleryPages on _GalleryViewState {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(label, style: const TextStyle(fontSize: 12)),
+              Text(label, style: GalleryTypography.caption),
               const SizedBox(width: 7),
               const Icon(Icons.expand_more_rounded, size: 16),
             ],
@@ -460,67 +506,92 @@ extension _GalleryPages on _GalleryViewState {
                 runSpacing: 2,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  _text(phase, size: 11, color: t.muted, height: 18 / 11),
+                  _text(
+                    phase,
+                    role: GalleryTypography.caption,
+                    color: t.muted,
+                    height: 18 / 11,
+                  ),
                   _chip(line),
-                  _text(time, size: 10, color: t.onTone, height: 1.8),
+                  _text(
+                    time,
+                    role: GalleryTypography.caption,
+                    color: t.onTone,
+                    height: 1.8,
+                  ),
                 ],
               ),
             ),
             _gap(6),
-            _text(station, size: 14, height: 22 / 14, weight: FontWeight.w600),
+            _text(
+              station,
+              role: GalleryTypography.body,
+              height: 22 / 14,
+              weight: FontWeight.w600,
+            ),
           ],
         );
     final body = Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: event
-          ? Row(
+          ? Wrap(
+              spacing: 12,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Icon(Icons.login_rounded, size: 18, color: t.onTone),
                 const SizedBox(width: 12),
                 _text(
                   trip['time'] as String,
-                  size: 11,
+                  role: GalleryTypography.caption,
                   mono: true,
                   color: t.muted,
                 ),
                 const SizedBox(width: 12),
-                Expanded(child: _text(trip['title'] as String, size: 13)),
-                _text('过程记录', size: 10, color: t.muted),
+                _text(trip['title'] as String, role: GalleryTypography.label),
+                _text('过程记录', role: GalleryTypography.caption, color: t.muted),
               ],
             )
           : Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Row(
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  spacing: 8,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Container(
-                      width: 28,
-                      height: 28,
-                      decoration: BoxDecoration(
-                        color: rail ? t.tone : t.ok.withValues(alpha: .08),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        rail
-                            ? Icons.train_outlined
-                            : Icons.directions_bus_outlined,
-                        size: 17,
-                        color: rail ? t.onTone : t.ok,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    _text(
-                      rail ? '轨道交通' : '公交',
-                      size: 13,
-                      weight: FontWeight.w600,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _text(
-                        trip['city'] as String? ?? '',
-                        size: 11,
-                        color: t.muted,
-                      ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: rail ? t.tone : t.ok.withValues(alpha: .08),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            rail
+                                ? Icons.train_outlined
+                                : Icons.directions_bus_outlined,
+                            size: 17,
+                            color: rail ? t.onTone : t.ok,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        _text(
+                          rail ? '轨道交通' : '公交',
+                          role: GalleryTypography.label,
+                          weight: FontWeight.w600,
+                        ),
+                        const SizedBox(width: 8),
+                        _text(
+                          trip['city'] as String? ?? '',
+                          role: GalleryTypography.caption,
+                          color: t.muted,
+                        ),
+                      ],
                     ),
                     if (trip['foreign'] == true) ...[
                       _chip('异地用卡'),
@@ -528,8 +599,8 @@ extension _GalleryPages on _GalleryViewState {
                     ],
                     _text(
                       trip['amount'] as String,
-                      size: 13,
-                      weight: FontWeight.w700,
+                      role: GalleryTypography.label,
+                      weight: FontWeight.w600,
                     ),
                   ],
                 ),
@@ -565,7 +636,11 @@ extension _GalleryPages on _GalleryViewState {
                 ),
                 if (rail && trip['transferKnown'] == false) ...[
                   _gap(10),
-                  _text('未记录换乘站', size: 11, color: t.onTone),
+                  _text(
+                    '未记录换乘站',
+                    role: GalleryTypography.caption,
+                    color: t.onTone,
+                  ),
                 ],
               ],
             ),
@@ -582,235 +657,367 @@ extension _GalleryPages on _GalleryViewState {
         : body;
   }
 
-  Widget _cards() => _list([
-    _header(
-      '卡包',
-      subtitle: '已保存 ${c.savedCards.length} 张',
-      actions: [
-        _icon(Icons.download_outlined, '导出卡片记录', () => c.export(all: true)),
-        const SizedBox(width: 8),
-        _icon(
-          Icons.settings_outlined,
-          '设置',
-          () => c.navigate(GalleryPage.settings),
+  Widget _cards() {
+    final cards = c.savedCards;
+    final parts = {
+      for (final card in cards)
+        card.id: _GalleryBalanceParts(card.balance(c.includeOverdraft)),
+    };
+    double measure(String value, TextStyle style) {
+      final painter = TextPainter(
+        text: TextSpan(
+          text: value,
+          style: style.copyWith(
+            fontFamily: 'sans-serif',
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
         ),
-      ],
-    ),
-    if (c.savedCards.isEmpty)
-      _empty(
-        '还没有保存的卡片',
-        '读取一张交通卡并保存到卡包',
-        action: _button(
-          '前往首页',
-          () => c.navigate(GalleryPage.home),
-          primary: true,
+        textDirection: Directionality.of(context),
+        textScaler: MediaQuery.textScalerOf(context),
+      )..layout();
+      final width = painter.width.ceilToDouble() + 2;
+      painter.dispose();
+      return width;
+    }
+
+    var numberWidth = 0.0, unitWidth = 0.0;
+    for (final value in parts.values) {
+      if (!value.known) continue;
+      numberWidth = math.max(
+        numberWidth,
+        measure(value.number, GalleryTypography.amount),
+      );
+      unitWidth = math.max(
+        unitWidth,
+        math.max(
+          measure(value.prefix, GalleryTypography.caption),
+          measure(value.suffix, GalleryTypography.caption),
         ),
-      ),
-    ...c.savedCards.map(
-      (card) => Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: _panel(
-          InkWell(
-            onTap: () => c.openCard(card),
-            child: Row(
-              children: [
-                _face(card, miniature: true),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+      );
+    }
+    numberWidth = math.max(64, numberWidth);
+    final amountWidth = numberWidth + unitWidth * 2 + 16;
+    final available = MediaQuery.sizeOf(context).width - 32 - 24;
+    final balanceColumnWidth = math.min(amountWidth, available * .4);
+    final stacked = _extraTextScale >= .5;
+    Widget amount(GalleryCard card) {
+      final value = parts[card.id]!;
+      return Semantics(
+        label: '余额，${value.original}',
+        excludeSemantics: true,
+        child: Column(
+          children: [
+            if (!value.known)
+              _text(
+                value.original,
+                role: GalleryTypography.label,
+                color: t.muted,
+                align: TextAlign.center,
+              )
+            else
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: SizedBox(
+                  width: amountWidth,
+                  child: Row(
                     children: [
-                      _text(
-                        card.name,
-                        size: 14,
-                        weight: FontWeight.w600,
-                        lines: 1,
-                      ),
-                      _gap(3),
-                      _text(
-                        '${card.city} ${card.type}',
-                        size: 11,
-                        color: t.muted,
-                        lines: 1,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  width: 96,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
+                      SizedBox(
+                        width: unitWidth,
                         child: _text(
-                          card.balance(c.includeOverdraft),
-                          size: 14,
-                          weight: FontWeight.w700,
+                          value.prefix,
+                          role: GalleryTypography.caption,
+                          color: t.muted,
+                          align: TextAlign.right,
                         ),
                       ),
-                      _gap(4),
-                      _text(card.count, size: 10, color: t.muted),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: numberWidth,
+                        child: Text(
+                          value.number,
+                          key: ValueKey('wallet-number-${card.id}'),
+                          textAlign: TextAlign.center,
+                          style: GalleryTypography.amount.copyWith(
+                            color: t.text,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: unitWidth,
+                        child: _text(
+                          value.suffix,
+                          role: GalleryTypography.caption,
+                          color: t.muted,
+                        ),
+                      ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 4),
-                _menuAnchor(
-                  'card-${card.id}',
-                  _icon(
-                    Icons.more_horiz_rounded,
-                    '${card.name} 管理',
-                    () => _openDropdown(
-                      GalleryOverlay.cardMenu,
-                      'card-${card.id}',
-                      card: card,
-                    ),
-                    size: 36,
-                    background: t.surface2,
-                  ),
-                ),
-              ],
+              ),
+            _gap(4),
+            _text(
+              card.count,
+              role: GalleryTypography.caption,
+              color: t.muted,
+              align: TextAlign.center,
             ),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 18),
+          ],
         ),
+      );
+    }
+
+    Widget identity(GalleryCard card) => Row(
+      children: [
+        _face(card, miniature: true),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _text(card.name, role: GalleryTypography.card, lines: 2),
+              _gap(3),
+              _text(
+                '${card.city} ${card.type}',
+                role: GalleryTypography.caption,
+                color: t.muted,
+                lines: stacked ? null : 1,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+    Widget menu(GalleryCard card) => _menuAnchor(
+      'card-${card.id}',
+      _icon(
+        Icons.more_horiz_rounded,
+        '${card.name} 管理',
+        () => _openDropdown(
+          GalleryOverlay.cardMenu,
+          'card-${card.id}',
+          card: card,
+        ),
+        size: 36,
+        background: t.surface2,
       ),
-    ),
-  ]);
+    );
+    return _list([
+      _header(
+        '卡包',
+        subtitle: '已保存 ${cards.length} 张',
+        actions: [
+          _icon(Icons.download_outlined, '导出卡片记录', () => c.export(all: true)),
+          const SizedBox(width: 8),
+          _icon(
+            Icons.settings_outlined,
+            '设置',
+            () => c.navigate(GalleryPage.settings),
+          ),
+        ],
+      ),
+      if (cards.isEmpty)
+        _empty(
+          '还没有保存的卡片',
+          '读取一张交通卡并保存到卡包',
+          action: _button(
+            '前往首页',
+            () => c.navigate(GalleryPage.home),
+            primary: true,
+          ),
+        ),
+      for (final card in cards)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _panel(
+            InkWell(
+              onTap: () => c.openCard(card),
+              child: stacked
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(child: identity(card)),
+                            const SizedBox(width: 8),
+                            menu(card),
+                          ],
+                        ),
+                        _gap(12),
+                        amount(card),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        Expanded(child: identity(card)),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: balanceColumnWidth,
+                          child: amount(card),
+                        ),
+                        const SizedBox(width: 4),
+                        menu(card),
+                      ],
+                    ),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 18),
+          ),
+        ),
+    ], id: 'cards');
+  }
 
   Widget _detail() {
     final card = _selectedCard;
     final ledger = c.ledger(card);
-    return _list([
-      _header(
-        '卡片详情',
-        back: true,
-        actions: [_icon(Icons.download_outlined, '导出本卡记录', () => c.export())],
-      ),
-      _face(card),
-      _gap(16),
-      _text(card.name, size: 18, weight: FontWeight.w600),
-      _gap(4),
-      _text(
-        '${card.city} · 尾号 ${card.tail}   上次读取 ${card.when}',
-        size: 11,
-        color: t.muted,
-      ),
-      _gap(18),
-      _tabs(
-        ['最近交易', '本周消费', '卡片信息'],
-        c.detailTab,
-        (i) => c.update(() => c.detailTab = i),
-      ),
-      _gap(16),
-      GestureDetector(
-        onHorizontalDragEnd: (details) {
-          final velocity = details.primaryVelocity ?? 0;
-          if (velocity.abs() > 100) {
-            c.update(
-              () => c.detailTab = (c.detailTab + (velocity < 0 ? 1 : -1)).clamp(
-                0,
-                2,
-              ),
-            );
-          }
-        },
-        child: _fade('detail-${card.id}-${c.detailTab}', switch (c.detailTab) {
-          0 => Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (ledger.isEmpty) _empty('暂无交易记录', '卡内记录可能不完整'),
-              ...ledger.map(
-                (r) => Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _sectionTitle(r['date'] as String? ?? '日期未记录'),
-                    _panel(
-                      _trip(r),
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                    ),
-                  ],
-                ),
-              ),
-              _gap(16),
-              _text('仅展示样例中保留的记录，可能不代表完整历史。', size: 11, color: t.muted),
-            ],
-          ),
-          1 => _weekly(card),
-          _ => Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _panel(
-                Column(
-                  children: [
-                    for (final row in <(String, String)>[
-                      ('完整卡号', card.pan),
-                      ('发卡地', card.city),
-                      ('卡种', card.type),
-                      ('有效期', card.valid == '—' ? '未知' : '${card.valid}（未记录日）'),
-                      ('当前余额', card.balance(c.includeOverdraft)),
-                      ('最近读取', card.when),
-                      (
-                        '协议',
-                        card.type == 'FeliCa' ? 'FeliCa' : 'ISO-DEP / 交通联合',
+    return _list(
+      [
+        _header(
+          '卡片详情',
+          back: true,
+          actions: [_icon(Icons.download_outlined, '导出本卡记录', () => c.export())],
+        ),
+        _face(card, minimal: true),
+        _gap(16),
+        _text(
+          card.name,
+          role: GalleryTypography.section,
+          weight: FontWeight.w600,
+        ),
+        _gap(4),
+        _text(
+          '${card.city} · 尾号 ${card.tail}   上次读取 ${card.when}',
+          role: GalleryTypography.caption,
+          color: t.muted,
+        ),
+        _gap(18),
+        _tabs(
+          ['最近交易', '本周消费', '卡片信息'],
+          c.detailTab,
+          (i) => c.update(() => c.detailTab = i),
+          id: 'detail-tabs',
+        ),
+        _gap(16),
+        GestureDetector(
+          onHorizontalDragEnd: (details) {
+            final velocity = details.primaryVelocity ?? 0;
+            if (velocity.abs() > 100) {
+              c.update(
+                () => c.detailTab = (c.detailTab + (velocity < 0 ? 1 : -1))
+                    .clamp(0, 2),
+              );
+            }
+          },
+          child: _fade('detail-${card.id}-${c.detailTab}', switch (c
+              .detailTab) {
+            0 => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (ledger.isEmpty) _empty('暂无交易记录', '卡内记录可能不完整'),
+                ...ledger.map(
+                  (r) => Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _sectionTitle(r['date'] as String? ?? '日期未记录'),
+                      _panel(
+                        _trip(r),
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
                       ),
-                    ])
-                      _kv(row.$1, row.$2),
-                  ],
-                ),
-              ),
-              _sectionTitle('原始数据', trailing: '模拟样例'),
-              if (c.data.raw[card.id] case final Map raw) ...[
-                _hexBox(
-                  'SFI 0x18\n${raw['sfi18']}\n\nSFI 0x1E\n${raw['sfi1e']}',
-                ),
-                _gap(8),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    TextButton.icon(
-                      onPressed: () {
-                        Clipboard.setData(
-                          ClipboardData(
-                            text: '${raw['sfi18']}\n${raw['sfi1e']}',
-                          ),
-                        );
-                        _toast('已复制模拟原始数据');
-                      },
-                      icon: const Icon(Icons.copy_outlined, size: 16),
-                      label: const Text('复制'),
-                    ),
-                    TextButton.icon(
-                      onPressed: () =>
-                          c.showOverlay(GalleryOverlay.rawFeedback),
-                      icon: const Icon(Icons.feedback_outlined, size: 16),
-                      label: const Text('反馈预览'),
-                    ),
-                  ],
-                ),
-              ] else
-                _text('本样例未保留原始数据', size: 12, color: t.muted),
-              _gap(16),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  _button('重命名', () => c.showOverlay(GalleryOverlay.rename)),
-                  _button('更换卡面', () => c.showOverlay(GalleryOverlay.face)),
-                  _button('导出记录', () => c.export()),
-                  _button(
-                    '删除本卡',
-                    () => c.showOverlay(GalleryOverlay.delete),
-                    danger: true,
+                    ],
                   ),
-                ],
-              ),
-            ],
-          ),
-        }),
-      ),
-    ], id: 'detail-${card.id}-${c.detailTab}');
+                ),
+                _gap(16),
+                _text(
+                  '仅展示样例中保留的记录，可能不代表完整历史。',
+                  role: GalleryTypography.caption,
+                  color: t.muted,
+                ),
+              ],
+            ),
+            1 => _weekly(card),
+            _ => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _panel(
+                  Column(
+                    children: [
+                      for (final row in <(String, String)>[
+                        ('完整卡号', card.pan),
+                        ('发卡地', card.city),
+                        ('卡种', card.type),
+                        (
+                          '有效期',
+                          card.valid == '—' ? '未知' : '${card.valid}（未记录日）',
+                        ),
+                        ('当前余额', card.balance(c.includeOverdraft)),
+                        ('最近读取', card.when),
+                        (
+                          '协议',
+                          card.type == 'FeliCa' ? 'FeliCa' : 'ISO-DEP / 交通联合',
+                        ),
+                      ])
+                        _kv(row.$1, row.$2),
+                    ],
+                  ),
+                ),
+                _sectionTitle('原始数据', trailing: '模拟样例'),
+                if (c.data.raw[card.id] case final Map raw) ...[
+                  _hexBox(
+                    'SFI 0x18\n${raw['sfi18']}\n\nSFI 0x1E\n${raw['sfi1e']}',
+                  ),
+                  _gap(8),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      TextButton.icon(
+                        onPressed: () {
+                          Clipboard.setData(
+                            ClipboardData(
+                              text: '${raw['sfi18']}\n${raw['sfi1e']}',
+                            ),
+                          );
+                          _toast('已复制模拟原始数据');
+                        },
+                        icon: const Icon(Icons.copy_outlined, size: 16),
+                        label: const Text('复制'),
+                      ),
+                      TextButton.icon(
+                        onPressed: () =>
+                            c.showOverlay(GalleryOverlay.rawFeedback),
+                        icon: const Icon(Icons.feedback_outlined, size: 16),
+                        label: const Text('反馈预览'),
+                      ),
+                    ],
+                  ),
+                ] else
+                  _text(
+                    '本样例未保留原始数据',
+                    role: GalleryTypography.caption,
+                    color: t.muted,
+                  ),
+                _gap(16),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    _button('重命名', () => c.showOverlay(GalleryOverlay.rename)),
+                    _button('更换卡面', () => c.showOverlay(GalleryOverlay.face)),
+                    _button('导出记录', () => c.export()),
+                    _button(
+                      '删除本卡',
+                      () => c.showOverlay(GalleryOverlay.delete),
+                      danger: true,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          }),
+        ),
+      ],
+      id: 'detail-${card.id}',
+      positionId: '${c.detailTab}',
+    );
   }
 
   Widget _weekly(GalleryCard card) {
@@ -826,9 +1033,18 @@ extension _GalleryPages on _GalleryViewState {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _text('本周消费', size: 12, color: t.muted),
+              _text(
+                '本周消费',
+                role: GalleryTypography.caption,
+                color: t.onAccentContainer,
+              ),
               _gap(6),
-              _text(weekly.format(total), size: 36, weight: FontWeight.w700),
+              _text(
+                weekly.format(total),
+                role: GalleryTypography.hero,
+                color: t.onAccentContainer,
+                weight: FontWeight.w600,
+              ),
               _gap(12),
               Row(
                 children: [
@@ -836,7 +1052,7 @@ extension _GalleryPages on _GalleryViewState {
                   Flexible(
                     child: _text(
                       '日均 ${weekly.format((total / 7).round())}',
-                      size: 12,
+                      role: GalleryTypography.caption,
                       color: t.muted,
                     ),
                   ),
@@ -844,7 +1060,7 @@ extension _GalleryPages on _GalleryViewState {
               ),
             ],
           ),
-          color: t.tone,
+          color: t.accentContainer,
           border: false,
         ),
         _sectionTitle('每日消费', trailing: '10月26日 — 11月1日'),
@@ -870,7 +1086,7 @@ extension _GalleryPages on _GalleryViewState {
                               : weekly.currency == GalleryCurrency.jpy
                               ? '${values[i]}'
                               : formatGalleryMoney(values[i]),
-                          size: 10,
+                          role: GalleryTypography.caption,
                         ),
                         _gap(8),
                         Container(
@@ -883,7 +1099,7 @@ extension _GalleryPages on _GalleryViewState {
                           child: Container(
                             height: math.max(2, values[i] / max * 92),
                             decoration: BoxDecoration(
-                              color: t.onTone,
+                              color: t.secondary,
                               borderRadius: BorderRadius.circular(6),
                             ),
                           ),
@@ -891,7 +1107,7 @@ extension _GalleryPages on _GalleryViewState {
                         _gap(8),
                         _text(
                           ['一', '二', '三', '四', '五', '六', '日'][i],
-                          size: 11,
+                          role: GalleryTypography.caption,
                           color: t.muted,
                         ),
                       ],
@@ -905,7 +1121,7 @@ extension _GalleryPages on _GalleryViewState {
         _gap(16),
         _sectionTitle('分类开销'),
         if (categories.isEmpty)
-          _text('暂无本周可统计的样例记录', size: 12, color: t.muted)
+          _text('暂无本周可统计的样例记录', role: GalleryTypography.caption, color: t.muted)
         else
           _panel(
             Column(
@@ -915,35 +1131,58 @@ extension _GalleryPages on _GalleryViewState {
             ),
           ),
         _gap(12),
-        _text('仅统计本周有明确日期、币种和扣款金额的样例记录；未记录日期的交易不计入。', size: 11, color: t.muted),
+        _text(
+          '仅统计本周有明确日期、币种和扣款金额的样例记录；未记录日期的交易不计入。',
+          role: GalleryTypography.caption,
+          color: t.muted,
+        ),
       ],
     );
   }
 
   Widget _footprints() => _list([
     _header('足迹'),
-    Row(
-      children:
-          [('${c.footprints.length}', '去过站点'), ('16', '累计到访'), ('3', '本月新站点')]
-              .map(
-                (pair) => Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 3),
-                    child: _panel(
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _text(pair.$1, size: 24, weight: FontWeight.w700),
-                          _gap(4),
-                          _text(pair.$2, size: 11, color: t.muted),
-                        ],
+    IntrinsicHeight(
+      child: Row(
+        key: const ValueKey('footprint-summary'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final (i, pair) in [
+            ('${c.footprints.length}', '去过站点'),
+            ('16', '累计到访'),
+            ('3', '本月新站点'),
+          ].indexed) ...[
+            if (i > 0) const SizedBox(width: 8),
+            Expanded(
+              child: _panel(
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      height: MediaQuery.textScalerOf(context).scale(30),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: _text(pair.$1, role: GalleryTypography.stat),
                       ),
-                      padding: const EdgeInsets.all(13),
                     ),
-                  ),
+                    _gap(4),
+                    _text(
+                      pair.$2,
+                      role: GalleryTypography.caption,
+                      color: t.muted,
+                      align: TextAlign.center,
+                    ),
+                  ],
                 ),
-              )
-              .toList(),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 13,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     ),
     _gap(18),
     ClipRRect(
@@ -986,47 +1225,64 @@ extension _GalleryPages on _GalleryViewState {
     _sectionTitle('全部站点'),
     _panel(
       Column(
-        children: c.footprints
-            .map(
-              (s) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Row(
-                  children: [
-                    Icon(
-                      s['kind'] == 'rail'
-                          ? Icons.train_outlined
-                          : Icons.directions_bus_outlined,
-                      color: t.onTone,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _text(
-                            s['name'] as String,
-                            size: 14,
-                            weight: FontWeight.w600,
-                          ),
-                          _gap(3),
-                          _text(s['line'] as String, size: 11, color: t.muted),
-                        ],
+        children: [
+          for (final station in c.footprints)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        station['kind'] == 'rail'
+                            ? Icons.train_outlined
+                            : Icons.directions_bus_outlined,
+                        color: t.onTone,
+                        size: 20,
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        _text('${s['visits']} 次到访', size: 12),
-                        _text(s['last'] as String, size: 10, color: t.muted),
-                      ],
-                    ),
-                  ],
-                ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _text(
+                              station['name'] as String,
+                              role: GalleryTypography.body,
+                              weight: FontWeight.w600,
+                            ),
+                            _gap(3),
+                            _text(
+                              station['line'] as String,
+                              role: GalleryTypography.caption,
+                              color: t.muted,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  _gap(6),
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    spacing: 12,
+                    runSpacing: 4,
+                    children: [
+                      _text(
+                        '${station['visits']} 次到访',
+                        role: GalleryTypography.caption,
+                      ),
+                      _text(
+                        station['last'] as String,
+                        role: GalleryTypography.caption,
+                        color: t.muted,
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            )
-            .toList(),
+            ),
+        ],
       ),
     ),
   ]);
@@ -1097,33 +1353,31 @@ extension _GalleryPages on _GalleryViewState {
             '莫奈取色',
             c.monet,
             (value) => c.update(() => c.monet = value),
-            subtitle: c.monet ? '当前使用雾蓝回退配色' : '使用手动选择的主题配色',
+            subtitle: c.monet
+                ? (t.dynamic ? '当前使用系统莫奈配色' : '系统取色不可用，使用靛蓝配色')
+                : '使用手动选择的主题配色',
           ),
           _collapse(
             !c.monet,
             (_) => Padding(
               padding: const EdgeInsets.fromLTRB(10, 0, 10, 14),
               child: Row(
-                children: c.data.palettes.entries.map((entry) {
-                  final value = entry.value as GalleryRecord;
-                  final swatch = Color(
-                    int.parse(
-                      (value['swatch'] as String).replaceFirst('#', 'ff'),
-                      radix: 16,
-                    ),
-                  );
+                children: GalleryPalette.values.map((palette) {
+                  final swatch = t.dark
+                      ? palette.darkPrimary
+                      : palette.lightPrimary;
                   return Expanded(
                     child: Semantics(
-                      selected: c.palette == entry.key,
+                      selected: c.palette == palette.id,
                       child: TextButton(
-                        onPressed: () => c.update(() => c.palette = entry.key),
+                        onPressed: () => c.update(() => c.palette = palette.id),
                         style: TextButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 8),
                           minimumSize: Size.zero,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
                             side: BorderSide(
-                              color: c.palette == entry.key
+                              color: c.palette == palette.id
                                   ? t.onTone
                                   : Colors.transparent,
                               width: 2,
@@ -1139,7 +1393,7 @@ extension _GalleryPages on _GalleryViewState {
                                 color: swatch,
                                 shape: BoxShape.circle,
                               ),
-                              child: c.palette == entry.key
+                              child: c.palette == palette.id
                                   ? const Icon(
                                       Icons.check_rounded,
                                       color: Colors.white,
@@ -1149,8 +1403,8 @@ extension _GalleryPages on _GalleryViewState {
                             ),
                             _gap(7),
                             _text(
-                              value['name'] as String,
-                              size: 11,
+                              palette.name,
+                              role: GalleryTypography.caption,
                               color: t.muted,
                             ),
                           ],
@@ -1178,7 +1432,11 @@ extension _GalleryPages on _GalleryViewState {
               child: Row(
                 children: [
                   Expanded(
-                    child: _text(_preferences.error!, size: 11, color: t.warn),
+                    child: _text(
+                      _preferences.error!,
+                      role: GalleryTypography.caption,
+                      color: t.warn,
+                    ),
                   ),
                   TextButton(
                     onPressed: _preferences.loading ? null : _preferences.retry,
@@ -1293,7 +1551,7 @@ extension _GalleryPages on _GalleryViewState {
     _gap(20),
     _text(
       '当前卡片和行程来自内置样例\n重启后恢复初始样例',
-      size: 11,
+      role: GalleryTypography.caption,
       color: t.muted,
       align: TextAlign.center,
     ),
@@ -1309,7 +1567,7 @@ extension _GalleryPages on _GalleryViewState {
     title: _text(label, size: 14),
     subtitle: subtitle == null
         ? null
-        : _text(subtitle, size: 11, color: t.muted),
+        : _text(subtitle, role: GalleryTypography.caption, color: t.muted),
     value: value,
     onChanged: onChanged,
   );
@@ -1324,7 +1582,7 @@ extension _GalleryPages on _GalleryViewState {
     title: _text(label, size: 14),
     subtitle: subtitle == null
         ? null
-        : _text(subtitle, size: 11, color: t.muted),
+        : _text(subtitle, role: GalleryTypography.caption, color: t.muted),
     trailing: const Icon(Icons.chevron_right_rounded, size: 18),
     onTap: onTap,
   );
@@ -1336,7 +1594,11 @@ extension _GalleryPages on _GalleryViewState {
     }
     return _list([
       _header('内置场景', back: true),
-      _text('切换场景将载入独立的固定样例。所有操作仅在本次运行中保留。', size: 12, color: t.muted),
+      _text(
+        '切换场景将载入独立的固定样例。所有操作仅在本次运行中保留。',
+        role: GalleryTypography.caption,
+        color: t.muted,
+      ),
       _gap(12),
       _button('恢复初始样例', c.reset, icon: Icons.restart_alt_rounded),
       ...grouped.entries.expand(

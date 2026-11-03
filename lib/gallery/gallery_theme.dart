@@ -1,68 +1,112 @@
 import 'package:flutter/material.dart';
 
 import 'gallery_data.dart';
+import 'gallery_design.dart';
 
 @immutable
 class GalleryTokens extends ThemeExtension<GalleryTokens> {
   const GalleryTokens({
-    required this.dark,
-    required this.bg,
-    required this.surface,
-    required this.surface2,
-    required this.text,
-    required this.muted,
-    required this.line,
-    required this.tone,
-    required this.onTone,
-    required this.action,
-    required this.onAction,
-    required this.control,
-    required this.thumb,
-    required this.outline,
+    required this.scheme,
+    this.dynamic = false,
+    this.success,
+    this.warning,
+    this.elevationDarkness,
   });
-  final bool dark;
-  final Color bg, surface, surface2, text, muted, line;
-  final Color tone, onTone, action, onAction, control, thumb, outline;
-  Color get ok => dark ? const Color(0xff4bd08b) : const Color(0xff178a56);
-  Color get warn => dark ? const Color(0xffe8b04b) : const Color(0xffa66a12);
-  Color get danger => const Color(0xfff06464);
+  final ColorScheme scheme;
+  final bool dynamic;
+  final Color? success, warning;
+  final double? elevationDarkness;
+  double get _depth => elevationDarkness ?? (dark ? 1 : 0);
+  double _shadowAlpha(double light, double dark) =>
+      light + (dark - light) * _depth;
+  bool get dark => scheme.brightness == Brightness.dark;
+  Color get bg => scheme.surface;
+  Color get surface => scheme.surfaceContainerLow;
+  Color get surface2 => scheme.surfaceContainerHighest;
+  Color get segmentTrack => Color.lerp(surface, surface2, .25)!;
+  Color get raised => scheme.surfaceContainerHigh;
+  Color get text => scheme.onSurface;
+  Color get muted => scheme.onSurfaceVariant;
+  Color get line => scheme.outlineVariant;
+  Color get outline => scheme.outline;
+  Color get tone => scheme.primaryContainer;
+  Color get onTone => scheme.onPrimaryContainer;
+  Color get action => scheme.primary;
+  Color get onAction => scheme.onPrimary;
+  Color get secondary => scheme.secondary;
+  Color get secondaryContainer => scheme.secondaryContainer;
+  Color get onSecondaryContainer => scheme.onSecondaryContainer;
+  Color get accent => scheme.tertiary;
+  Color get accentContainer => scheme.tertiaryContainer;
+  Color get onAccentContainer => scheme.onTertiaryContainer;
+  Color get control => scheme.primary;
+  Color get thumb => scheme.onPrimary;
+  Color get danger => scheme.error;
+  Color get dangerContainer => scheme.errorContainer;
+  Color get onDangerContainer => scheme.onErrorContainer;
+  Color get ok =>
+      success ?? (dark ? const Color(0xff90dab0) : const Color(0xff176b43));
+  Color get warn =>
+      warning ?? (dark ? const Color(0xffefc078) : const Color(0xff875409));
 
-  static GalleryTokens from(GalleryData data, bool dark, String palette) {
-    final roles =
-        ((data.palettes[palette] as GalleryRecord)[dark ? 'dark' : 'light']
-                as List)
-            .map(
-              (value) => Color(
-                int.parse((value as String).replaceFirst('#', 'ff'), radix: 16),
-              ),
-            )
-            .toList();
-    return GalleryTokens(
-      dark: dark,
-      bg: Color(dark ? 0xff0a0d12 : 0xfff2f4f8),
-      surface: Color(dark ? 0xff12171f : 0xffffffff),
-      surface2: Color(dark ? 0xff171d27 : 0xfff7f9fc),
-      text: Color(dark ? 0xfff1f5fb : 0xff15212c),
-      muted: Color(dark ? 0xff93a0b4 : 0xff5e6b78),
-      line: Color(dark ? 0x16ffffff : 0x1515212c),
-      tone: roles[0],
-      onTone: roles[1],
-      action: roles[2],
-      onAction: roles[3],
-      control: roles[4],
-      thumb: roles[5],
-      outline: roles[6],
-    );
-  }
+  /// Keep scene callers compatible; runtime design data is independent of fixtures.
+  static GalleryTokens from(
+    GalleryData data,
+    bool dark,
+    String palette, {
+    ColorScheme? dynamicScheme,
+  }) => GalleryTokens(
+    scheme: dynamicScheme ?? GalleryPalette.byId(palette).scheme(dark),
+    dynamic: dynamicScheme != null,
+  );
+
+  Color get _shadow => Color.alphaBlend(
+    action.withValues(alpha: .12),
+    Color.lerp(const Color(0xff152d4a), const Color(0xff00030a), _depth)!,
+  );
+  List<BoxShadow> shadows(GalleryElevation level) => switch (level) {
+    GalleryElevation.flat => const [],
+    GalleryElevation.card => [
+      BoxShadow(
+        color: _shadow.withValues(alpha: _shadowAlpha(.07, .18)),
+        offset: const Offset(0, 2),
+        blurRadius: 8,
+      ),
+    ],
+    GalleryElevation.floating => [
+      BoxShadow(
+        color: _shadow.withValues(alpha: _shadowAlpha(.14, .32)),
+        offset: const Offset(0, 3),
+        blurRadius: 8,
+      ),
+      BoxShadow(
+        color: _shadow.withValues(alpha: _shadowAlpha(.17, .40)),
+        offset: const Offset(0, 12),
+        blurRadius: 28,
+      ),
+    ],
+    GalleryElevation.modal => [
+      BoxShadow(
+        color: _shadow.withValues(alpha: _shadowAlpha(.16, .35)),
+        offset: const Offset(0, 6),
+        blurRadius: 18,
+      ),
+      BoxShadow(
+        color: _shadow.withValues(alpha: _shadowAlpha(.20, .50)),
+        offset: const Offset(0, 20),
+        blurRadius: 48,
+      ),
+    ],
+  };
 
   ThemeData theme() {
     final feedback = WidgetStateProperty.resolveWith<Color?>((states) {
       if (states.contains(WidgetState.pressed)) return Colors.transparent;
       if (states.contains(WidgetState.focused)) {
-        return onTone.withValues(alpha: .12);
+        return action.withValues(alpha: .12);
       }
       if (states.contains(WidgetState.hovered)) {
-        return onTone.withValues(alpha: .04);
+        return action.withValues(alpha: .04);
       }
       return Colors.transparent;
     });
@@ -72,39 +116,30 @@ class GalleryTokens extends ThemeExtension<GalleryTokens> {
       surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
       overlayColor: feedback,
       splashFactory: NoSplash.splashFactory,
+      textStyle: WidgetStatePropertyAll(GalleryTypography.button),
     );
-    final scheme =
-        ColorScheme.fromSeed(
-          seedColor: onTone,
-          brightness: dark ? Brightness.dark : Brightness.light,
-        ).copyWith(
-          primary: onTone,
-          onPrimary: bg,
-          surface: surface,
-          onSurface: text,
-          secondaryContainer: tone,
-          onSecondaryContainer: onTone,
-          outline: outline,
-        );
+    final actionButton = flatButton.copyWith(
+      shape: const WidgetStatePropertyAll(GalleryGeometry.buttonShape),
+    );
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
       scaffoldBackgroundColor: bg,
       fontFamily: 'sans-serif',
       extensions: [this],
-      textTheme: TextTheme(
-        bodyMedium: TextStyle(fontSize: 14.5, height: 1.5, color: text),
-        bodySmall: TextStyle(fontSize: 12, height: 1.6, color: muted),
+      textTheme: GalleryTypography.theme.apply(
+        bodyColor: text,
+        displayColor: text,
       ),
       iconTheme: IconThemeData(color: muted, size: 20),
       dividerTheme: DividerThemeData(color: line, space: 1, thickness: 1),
       splashFactory: NoSplash.splashFactory,
       splashColor: Colors.transparent,
       highlightColor: Colors.transparent,
-      textButtonTheme: TextButtonThemeData(style: flatButton),
-      filledButtonTheme: FilledButtonThemeData(style: flatButton),
-      outlinedButtonTheme: OutlinedButtonThemeData(style: flatButton),
-      elevatedButtonTheme: ElevatedButtonThemeData(style: flatButton),
+      textButtonTheme: TextButtonThemeData(style: actionButton),
+      filledButtonTheme: FilledButtonThemeData(style: actionButton),
+      outlinedButtonTheme: OutlinedButtonThemeData(style: actionButton),
+      elevatedButtonTheme: ElevatedButtonThemeData(style: actionButton),
       iconButtonTheme: IconButtonThemeData(style: flatButton),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -115,7 +150,7 @@ class GalleryTokens extends ThemeExtension<GalleryTokens> {
         ),
       ),
       dialogTheme: DialogThemeData(
-        backgroundColor: surface,
+        backgroundColor: raised,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       ),
       switchTheme: SwitchThemeData(
@@ -132,8 +167,27 @@ class GalleryTokens extends ThemeExtension<GalleryTokens> {
   }
 
   @override
-  GalleryTokens copyWith() => this;
+  GalleryTokens copyWith({
+    ColorScheme? scheme,
+    bool? dynamic,
+    Color? success,
+    Color? warning,
+    double? elevationDarkness,
+  }) => GalleryTokens(
+    scheme: scheme ?? this.scheme,
+    dynamic: dynamic ?? this.dynamic,
+    success: success ?? this.success,
+    warning: warning ?? this.warning,
+    elevationDarkness: elevationDarkness ?? this.elevationDarkness,
+  );
   @override
-  GalleryTokens lerp(covariant GalleryTokens? other, double t) =>
-      other == null || t < .5 ? this : other;
+  GalleryTokens lerp(covariant GalleryTokens? other, double t) => other == null
+      ? this
+      : GalleryTokens(
+          scheme: ColorScheme.lerp(scheme, other.scheme, t),
+          dynamic: t < .5 ? dynamic : other.dynamic,
+          success: Color.lerp(ok, other.ok, t),
+          warning: Color.lerp(warn, other.warn, t),
+          elevationDarkness: _depth + (other._depth - _depth) * t,
+        );
 }

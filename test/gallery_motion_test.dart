@@ -187,7 +187,12 @@ void main() {
           ValueKey('route-${c.navigationStack.last.id}'),
         );
         final opacity = find
-            .ancestor(of: route, matching: find.byType(Opacity))
+            .ancestor(
+              of: overlay == GalleryOverlay.source
+                  ? find.byKey(const ValueKey('gallery-dropdown'))
+                  : route,
+              matching: find.byType(Opacity),
+            )
             .first;
         expect(tester.widget<Opacity>(opacity).opacity, inExclusiveRange(0, 1));
         await tester.pumpAndSettle();
@@ -422,21 +427,20 @@ void main() {
       c.navigate(GalleryPage.settings);
       c.navigate(GalleryPage.knowledge);
       await mount(tester);
-      final tu = find.byKey(
-        PageStorageKey('gallery-${c.generation}-knowledge-tu'),
+      final list = find.byKey(
+        PageStorageKey('gallery-${c.generation}-knowledge'),
       );
-      final cu = find.byKey(
-        PageStorageKey('gallery-${c.generation}-knowledge-cu'),
-      );
-      await tester.drag(tu, const Offset(0, -240));
+      final tu = find.text('交通联合参考数据');
+      final cu = find.text('城市一卡通参考数据');
+      await tester.drag(list, const Offset(0, -240));
       await tester.pumpAndSettle();
-      double offset(Finder list) => tester
+      double offset() => tester
           .state<ScrollableState>(
             find.descendant(of: list, matching: find.byType(Scrollable)),
           )
           .position
           .pixels;
-      final savedOffset = offset(tu);
+      final savedOffset = offset();
       expect(savedOffset, greaterThan(0));
       c.update(() => c.knowledgeTab = 'cu');
       await tester.pump();
@@ -453,9 +457,10 @@ void main() {
       expect(tu.hitTestable(), findsNothing);
       await tester.pumpAndSettle();
       expect(tu, findsNothing);
+      expect(offset(), 0);
       c.update(() => c.knowledgeTab = 'tu');
       await tester.pumpAndSettle();
-      expect(offset(tu), closeTo(savedOffset, .1));
+      expect(offset(), closeTo(savedOffset, .1));
     },
   );
 
@@ -484,6 +489,161 @@ void main() {
       expect(tester.getCenter(indicator).dx, closeTo(start, .1));
     },
   );
+
+  for (final page in [GalleryPage.detail, GalleryPage.knowledge]) {
+    for (final reduced in [false, true]) {
+      testWidgets('$page segment slides and reverses, reduced=$reduced', (
+        tester,
+      ) async {
+        if (page == GalleryPage.detail) {
+          c.openCard(c.current);
+        } else {
+          c.navigate(page);
+        }
+        await mount(tester);
+        if (reduced) {
+          tester.platformDispatcher.accessibilityFeaturesTestValue =
+              const FakeAccessibilityFeatures(disableAnimations: true);
+          addTearDown(
+            tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+          );
+          await tester.pumpAndSettle();
+        }
+        final detail = page == GalleryPage.detail;
+        final indicator = find.byKey(
+          ValueKey(
+            'segments-${detail ? 'detail' : 'knowledge'}-tabs-indicator',
+          ),
+        );
+        final first = find.text(detail ? '最近交易' : '交通联合 TU');
+        final last = find.text(detail ? '卡片信息' : '城市一卡通 CU');
+        await tester.ensureVisible(indicator);
+        await tester.pumpAndSettle();
+        final start = tester.getCenter(indicator).dx;
+        final state = tester.state(
+          find.ancestor(
+            of: indicator,
+            matching: find.byType(AnimatedPositionedDirectional),
+          ),
+        );
+        await tester.tap(last);
+        await tester.pump();
+        if (reduced) {
+          await tester.pump();
+          expect(
+            tester.getCenter(indicator).dx,
+            closeTo(tester.getCenter(last).dx, .1),
+          );
+        } else {
+          expect(tester.getCenter(indicator).dx, closeTo(start, .1));
+          await tester.pump(const Duration(milliseconds: 50));
+          final partial = tester.getCenter(indicator).dx;
+          expect(partial, inExclusiveRange(start, tester.getCenter(last).dx));
+          expect(
+            tester.state(
+              find.ancestor(
+                of: indicator,
+                matching: find.byType(AnimatedPositionedDirectional),
+              ),
+            ),
+            same(state),
+          );
+          await tester.tap(first);
+          await tester.pump();
+          expect(tester.getCenter(indicator).dx, closeTo(partial, .1));
+          await tester.pump(const Duration(milliseconds: 40));
+          expect(
+            tester.getCenter(indicator).dx,
+            inExclusiveRange(start, partial),
+          );
+          await tester.pumpAndSettle();
+          expect(tester.getCenter(indicator).dx, closeTo(start, .1));
+        }
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
+  testWidgets('detail content crossfades while its selector remains mounted', (
+    tester,
+  ) async {
+    c.openCard(c.current);
+    await mount(tester);
+    final list = find.byKey(
+      PageStorageKey('gallery-${c.generation}-detail-${c.current.id}'),
+    );
+    final scroll = tester.state<ScrollableState>(
+      find.descendant(of: list, matching: find.byType(Scrollable)),
+    );
+    final tabs = find.byKey(const ValueKey('segments-detail-tabs-indicator'));
+    await tester.ensureVisible(tabs);
+    await tester.pumpAndSettle();
+    final originalOffset = scroll.position.pixels;
+    await tester.tap(find.text('卡片信息'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 40));
+    final content = find.text('完整卡号');
+    final fade = find
+        .ancestor(of: content, matching: find.byType(FadeTransition))
+        .first;
+    expect(
+      tester.widget<FadeTransition>(fade).opacity.value,
+      inExclusiveRange(0, 1),
+    );
+    expect(
+      tester.state<ScrollableState>(
+        find.descendant(of: list, matching: find.byType(Scrollable)),
+      ),
+      same(scroll),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(tabs);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('最近交易'));
+    await tester.pumpAndSettle();
+    expect(scroll.position.pixels, closeTo(originalOffset, .1));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('save and rename popup actions share the main button corners', (
+    tester,
+  ) async {
+    await mount(tester);
+    ShapeBorder shape(Finder label) => tester
+        .widget<Material>(
+          find.ancestor(of: label, matching: find.byType(Material)).first,
+        )
+        .shape!;
+    final mainCorners =
+        (shape(find.text('开始读取')) as RoundedRectangleBorder).borderRadius;
+    for (final overlay in [GalleryOverlay.save, GalleryOverlay.rename]) {
+      c.showOverlay(overlay, card: c.current);
+      await tester.pumpAndSettle();
+      expect(
+        (shape(find.text('确认')) as RoundedRectangleBorder).borderRadius,
+        mainCorners,
+      );
+      expect(
+        (shape(find.text('取消')) as RoundedRectangleBorder).borderRadius,
+        mainCorners,
+      );
+      await tester.enterText(find.byType(TextField), '');
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, '确认'))
+            .onPressed,
+        isNull,
+      );
+      expect(
+        (shape(find.text('确认')) as RoundedRectangleBorder).borderRadius,
+        mainCorners,
+      );
+      c.back();
+      await tester.pumpAndSettle();
+    }
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'conditional settings animate height and disable outgoing actions immediately',

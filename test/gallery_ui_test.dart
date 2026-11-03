@@ -78,6 +78,14 @@ void main() {
     await tester.tap(find.text('全部来源'));
     await tester.pumpAndSettle();
     final menu = find.byKey(const ValueKey('gallery-dropdown'));
+    expect(
+      (tester.widget<Material>(menu).shape! as RoundedRectangleBorder).side,
+      BorderSide.none,
+    );
+    expect(
+      find.descendant(of: menu, matching: find.byType(Divider)),
+      findsNWidgets(3),
+    );
     expect(find.byType(CheckedPopupMenuItem<String>), findsNothing);
     expect(
       find.descendant(of: menu, matching: find.byType(TextButton)),
@@ -324,7 +332,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('更改卡面'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('蔚蓝'));
+    await tester.tap(find.text('海蓝'));
     await tester.pumpAndSettle();
     expect(c.selectedCard.face, 'blue');
     c.back();

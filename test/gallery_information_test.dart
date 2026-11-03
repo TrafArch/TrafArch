@@ -34,6 +34,11 @@ void main() {
       await tester.pumpWidget(GalleryApp(controller: c));
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(find.text('版本 ${AppInfo.version}'), 450);
+      await Scrollable.ensureVisible(
+        tester.element(find.text('版本 ${AppInfo.version}')),
+        alignment: .5,
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.text('版本 ${AppInfo.version}'));
       await tester.pumpAndSettle();
       expect(c.page, GalleryPage.about);

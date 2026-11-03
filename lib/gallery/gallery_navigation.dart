@@ -8,7 +8,8 @@ abstract final class _GalleryMotion {
   static const sheetBack = Duration(milliseconds: 200);
   static const dialog = Duration(milliseconds: 180);
   static const dialogBack = Duration(milliseconds: 140);
-  static const menu = Duration(milliseconds: 140);
+  static const menu = Duration(milliseconds: 180);
+  static const menuBack = Duration(milliseconds: 120);
   static const expand = Duration(milliseconds: 180);
   static const content = Duration(milliseconds: 160);
   static const capsule = Duration(milliseconds: 180);
@@ -382,7 +383,7 @@ class _GalleryPopupRoute extends PopupRoute<void> with _GalleryPredictiveRoute {
   Duration get reverseTransitionDuration => configuration.reduceMotion
       ? Duration.zero
       : _menu
-      ? _GalleryMotion.menu
+      ? _GalleryMotion.menuBack
       : _sheet
       ? _GalleryMotion.sheetBack
       : _GalleryMotion.dialogBack;
@@ -407,14 +408,10 @@ class _GalleryPopupRoute extends PopupRoute<void> with _GalleryPredictiveRoute {
         child: content,
       );
     }
+    if (_menu) return content;
     return Opacity(
       opacity: value,
-      child: _menu
-          ? Transform.translate(
-              offset: Offset(0, -4 * (1 - value)),
-              child: content,
-            )
-          : Transform.scale(scale: .96 + .04 * value, child: content),
+      child: Transform.scale(scale: .96 + .04 * value, child: content),
     );
   }
 }
@@ -422,11 +419,11 @@ class _GalleryPopupRoute extends PopupRoute<void> with _GalleryPredictiveRoute {
 class _GalleryMainTransition extends StatefulWidget {
   const _GalleryMainTransition({
     required this.page,
-    required this.child,
+    required this.builder,
     required this.reduceMotion,
   });
   final GalleryPage page;
-  final Widget child;
+  final Widget Function(GalleryPage) builder;
   final bool reduceMotion;
   @override
   State<_GalleryMainTransition> createState() => _GalleryMainTransitionState();
@@ -452,10 +449,12 @@ class _GalleryMainTransitionState extends State<_GalleryMainTransition>
         }
       });
   final Map<GalleryPage, _GalleryMainSlot> _slots = {};
+  double get _value => _GalleryMotion.curve.transform(_animation.value);
+
   @override
   void initState() {
     super.initState();
-    _slots[widget.page] = _GalleryMainSlot(widget.child, 0, 0);
+    _slots[widget.page] = _GalleryMainSlot(widget.builder(widget.page), 0, 0);
   }
 
   @override
@@ -464,29 +463,31 @@ class _GalleryMainTransitionState extends State<_GalleryMainTransition>
     if (widget.reduceMotion) {
       _animation.stop();
       _slots.clear();
-      _slots[widget.page] = _GalleryMainSlot(widget.child, 0, 0);
+      _slots[widget.page] = _GalleryMainSlot(widget.builder(widget.page), 0, 0);
+      _animation.value = 1;
     } else if (widget.page != oldWidget.page) {
-      final value = _GalleryMotion.curve.transform(_animation.value);
+      final progress = _value;
+      _animation.stop();
       for (final item in _slots.entries) {
-        item.value.begin = item.value.position(value);
+        item.value.begin = item.value.position(progress);
         item.value.end = item.key.index < widget.page.index ? -1 : 1;
       }
       final incoming = _slots.putIfAbsent(
         widget.page,
         () => _GalleryMainSlot(
-          widget.child,
-          // A third tap can arrive before the previous destination reaches
-          // zero. Start beside that moving page so their edges stay joined.
+          widget.builder(widget.page),
           _slots[oldWidget.page]!.begin +
               (widget.page.index > oldWidget.page.index ? 1 : -1),
           0,
         ),
       );
-      incoming.child = widget.child;
+      incoming.child = widget.builder(widget.page);
       incoming.end = 0;
       _animation.forward(from: 0);
     } else {
-      _slots[widget.page]!.child = widget.child;
+      for (final item in _slots.entries) {
+        item.value.child = widget.builder(item.key);
+      }
     }
   }
 
@@ -506,12 +507,7 @@ class _GalleryMainTransitionState extends State<_GalleryMainTransition>
           for (final item in _slots.entries)
             FractionalTranslation(
               key: ValueKey(item.key),
-              translation: Offset(
-                item.value.position(
-                  _GalleryMotion.curve.transform(_animation.value),
-                ),
-                0,
-              ),
+              translation: Offset(item.value.position(_value), 0),
               child: IgnorePointer(
                 ignoring: item.key != widget.page,
                 child: ExcludeFocus(

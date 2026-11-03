@@ -31,14 +31,18 @@ extension _GalleryInspection on _GalleryViewState {
             ...switch (c.expertTab) {
               0 => [
                 ..._expertSections(c.expertKind),
-                _text('以上为内置样例，未保留的字段显示未知。', size: 12, color: t.muted),
+                _text(
+                  '以上为内置样例，未保留的字段显示未知。',
+                  role: GalleryTypography.caption,
+                  color: t.muted,
+                ),
               ],
               1 => [..._expertSections('transit')],
               2 => [_compliance()],
               _ => [
                 _text(
                   '保留的示例帧按原顺序完整展示。SELECT、GET BALANCE 和 0x1A 原始响应未保留。',
-                  size: 12,
+                  role: GalleryTypography.caption,
                   color: t.muted,
                 ),
                 ...['sfi18', 'sfi1e'].indexed.expand(
@@ -146,7 +150,11 @@ extension _GalleryInspection on _GalleryViewState {
         _panel(
           Column(
             children: [
-              _text('JT/T 978 符合性', size: 14, weight: FontWeight.w600),
+              _text(
+                'JT/T 978 符合性',
+                role: GalleryTypography.field,
+                weight: FontWeight.w600,
+              ),
               _kv('综合覆盖度', '$score%'),
               _kv('检查项', '${rows.length} 项'),
               ...rows.map(
@@ -172,12 +180,20 @@ extension _GalleryInspection on _GalleryViewState {
                           children: [
                             _text(r[0], size: 13),
                             _gap(4),
-                            _text(r[1], size: 11, color: t.muted),
+                            _text(
+                              r[1],
+                              role: GalleryTypography.caption,
+                              color: t.muted,
+                            ),
                           ],
                         ),
                       ),
                       const SizedBox(width: 8),
-                      _text(r[2], size: 11, color: t.muted),
+                      _text(
+                        r[2],
+                        role: GalleryTypography.caption,
+                        color: t.muted,
+                      ),
                     ],
                   ),
                 ),
@@ -186,7 +202,11 @@ extension _GalleryInspection on _GalleryViewState {
           ),
         ),
         _gap(12),
-        _text('覆盖度为示例字段完整度，未保留字段需进一步核验。', size: 12, color: t.muted),
+        _text(
+          '覆盖度为示例字段完整度，未保留字段需进一步核验。',
+          role: GalleryTypography.caption,
+          color: t.muted,
+        ),
       ],
     );
   }
@@ -195,230 +215,265 @@ extension _GalleryInspection on _GalleryViewState {
     final data =
         ((c.data.knowledge['systems'] as Map)[c.knowledgeTab] as GalleryRecord);
     final regions = (data['regions'] as List).cast<GalleryRecord>();
-    return _fade(
-      'knowledge-${c.knowledgeTab}',
-      _list([
+    return _list(
+      [
         _header('知识库', back: true),
         _tabs(
           ['交通联合 TU', '城市一卡通 CU'],
           c.knowledgeTab == 'tu' ? 0 : 1,
           (i) => c.update(() => c.knowledgeTab = i == 0 ? 'tu' : 'cu'),
+          id: 'knowledge-tabs',
         ),
         _gap(16),
-        _panel(
+        _fade(
+          'knowledge-${c.knowledgeTab}',
           Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: _text(
-                      '${data['name']}参考数据',
-                      size: 15,
-                      weight: FontWeight.w600,
-                    ),
-                  ),
-                  _text('本地数据', size: 11, color: t.onTone),
-                ],
-              ),
-              _gap(18),
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              _panel(
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
                       children: [
-                        _text(
-                          '${regions.length}',
-                          size: 28,
-                          weight: FontWeight.w700,
+                        Expanded(
+                          child: _text(
+                            '${data['name']}参考数据',
+                            role: GalleryTypography.body,
+                            weight: FontWeight.w600,
+                          ),
                         ),
-                        _text('覆盖地区', size: 12, color: t.muted),
+                        _text(
+                          '本地数据',
+                          role: GalleryTypography.caption,
+                          color: t.onTone,
+                        ),
                       ],
                     ),
-                  ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    _gap(18),
+                    Row(
                       children: [
-                        _text(
-                          _groupNumber(data['entries'] as int),
-                          size: 28,
-                          weight: FontWeight.w700,
-                        ),
-                        _text('站点编码条目', size: 12, color: t.muted),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              _gap(14),
-              _text(
-                '用于识别读卡结果中的城市、线路与站点。\n数据快照 ${c.data.knowledge['captured']}，两个体系独立统计。',
-                size: 11,
-                color: t.muted,
-              ),
-            ],
-          ),
-          color: t.tone,
-          border: false,
-          radius: 20,
-        ),
-        _gap(16),
-        _expand('knowledge:meta', '数据概况', [
-          _kv('源文件', data['source'] as String),
-          _kv('数据库版本', data['version'].toString()),
-          _kv('数据包版本', '${data['formatVersion']}'),
-          _kv('来源 SHA256', data['sha256'] as String),
-          for (final pair in [
-            ('cities', '城市码表'),
-            ('cards', '机构指纹'),
-            ('terminals', '终端规则'),
-            ('routes', '线路规则'),
-            ('bus', '公交资料'),
-            ('prefixes', '前缀规则'),
-          ])
-            if (data[pair.$1] != null)
-              _kv(pair.$2, _groupNumber(data[pair.$1] as int)),
-        ], initiallyOpen: c.knowledgeMetadata),
-        _sectionTitle('覆盖地区', trailing: '按城市编码排序'),
-        ...regions.indexed.map((item) {
-          final r = item.$2;
-          final key = '${c.knowledgeTab}:${item.$1}';
-          final open = c.knowledgeExpanded.contains(key);
-          final lines = (r['lines'] as List).cast<GalleryRecord>();
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: _panel(
-              Column(
-                children: [
-                  ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    title: _text(
-                      r['name'] as String,
-                      size: 15,
-                      weight: FontWeight.w600,
-                    ),
-                    subtitle: _text(
-                      '${r['lineCount']} 条线路 · ${_groupNumber(r['entries'] as int)} 条编码\n${r['province'] ?? ''}',
-                      size: 11,
-                      color: t.muted,
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _text(
-                          r['code'] as String,
-                          size: 11,
-                          mono: true,
-                          color: t.muted,
-                        ),
-                        const SizedBox(width: 8),
-                        _expandArrow(open, size: 18),
-                      ],
-                    ),
-                    onTap: () => c.update(
-                      () => open
-                          ? c.knowledgeExpanded.remove(key)
-                          : c.knowledgeExpanded.add(key),
-                    ),
-                  ),
-                  _collapse(
-                    open,
-                    (_) => Column(
-                      children: [
-                        const Divider(),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                        Expanded(
                           child: Column(
-                            children: lines.indexed.map((lineItem) {
-                              final line = lineItem.$2;
-                              final lineKey = '$key:${lineItem.$1}';
-                              final lineOpen = c.knowledgeExpanded.contains(
-                                lineKey,
-                              );
-                              final stations = (line['stations'] as List)
-                                  .cast<String>();
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  InkWell(
-                                    onTap: () => c.update(
-                                      () => lineOpen
-                                          ? c.knowledgeExpanded.remove(lineKey)
-                                          : c.knowledgeExpanded.add(lineKey),
-                                    ),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 14,
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Expanded(
-                                            child: _text(
-                                              line['name'] as String,
-                                              size: 13,
-                                            ),
-                                          ),
-                                          _text(
-                                            '${stations.length} 站',
-                                            size: 11,
-                                            color: t.muted,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          _expandArrow(lineOpen, size: 16),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                  _collapse(
-                                    lineOpen,
-                                    (_) => Padding(
-                                      padding: const EdgeInsets.only(
-                                        bottom: 14,
-                                      ),
-                                      child: Wrap(
-                                        spacing: 6,
-                                        runSpacing: 6,
-                                        children: stations
-                                            .map(
-                                              (s) => Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 9,
-                                                      vertical: 5,
-                                                    ),
-                                                decoration: BoxDecoration(
-                                                  color: t.surface2,
-                                                  borderRadius:
-                                                      BorderRadius.circular(8),
-                                                ),
-                                                child: _text(s, size: 12),
-                                              ),
-                                            )
-                                            .toList(),
-                                      ),
-                                    ),
-                                  ),
-                                  const Divider(),
-                                ],
-                              );
-                            }).toList(),
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _text(
+                                '${regions.length}',
+                                size: 28,
+                                weight: FontWeight.w600,
+                              ),
+                              _text(
+                                '覆盖地区',
+                                role: GalleryTypography.caption,
+                                color: t.muted,
+                              ),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _text(
+                                _groupNumber(data['entries'] as int),
+                                size: 28,
+                                weight: FontWeight.w600,
+                              ),
+                              _text(
+                                '站点编码条目',
+                                role: GalleryTypography.caption,
+                                color: t.muted,
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
-                  ),
-                ],
+                    _gap(14),
+                    _text(
+                      '用于识别读卡结果中的城市、线路与站点。\n数据快照 ${c.data.knowledge['captured']}，两个体系独立统计。',
+                      role: GalleryTypography.caption,
+                      color: t.muted,
+                    ),
+                  ],
+                ),
+                color: t.tone,
+                border: false,
+                radius: 20,
               ),
-              padding: EdgeInsets.zero,
-            ),
-          );
-        }),
-      ], id: 'knowledge-${c.knowledgeTab}'),
+              _gap(16),
+              _expand('knowledge:meta', '数据概况', [
+                _kv('源文件', data['source'] as String),
+                _kv('数据库版本', data['version'].toString()),
+                _kv('数据包版本', '${data['formatVersion']}'),
+                _kv('来源 SHA256', data['sha256'] as String),
+                for (final pair in [
+                  ('cities', '城市码表'),
+                  ('cards', '机构指纹'),
+                  ('terminals', '终端规则'),
+                  ('routes', '线路规则'),
+                  ('bus', '公交资料'),
+                  ('prefixes', '前缀规则'),
+                ])
+                  if (data[pair.$1] != null)
+                    _kv(pair.$2, _groupNumber(data[pair.$1] as int)),
+              ], initiallyOpen: c.knowledgeMetadata),
+              _sectionTitle('覆盖地区', trailing: '按城市编码排序'),
+              ...regions.indexed.map((item) {
+                final r = item.$2;
+                final key = '${c.knowledgeTab}:${item.$1}';
+                final open = c.knowledgeExpanded.contains(key);
+                final lines = (r['lines'] as List).cast<GalleryRecord>();
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _panel(
+                    Column(
+                      children: [
+                        ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          title: _text(
+                            r['name'] as String,
+                            role: GalleryTypography.body,
+                            weight: FontWeight.w600,
+                          ),
+                          subtitle: _text(
+                            '${r['lineCount']} 条线路 · ${_groupNumber(r['entries'] as int)} 条编码\n${r['province'] ?? ''}',
+                            role: GalleryTypography.caption,
+                            color: t.muted,
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _text(
+                                r['code'] as String,
+                                role: GalleryTypography.caption,
+                                mono: true,
+                                color: t.muted,
+                              ),
+                              const SizedBox(width: 8),
+                              _expandArrow(open, size: 18),
+                            ],
+                          ),
+                          onTap: () => c.update(
+                            () => open
+                                ? c.knowledgeExpanded.remove(key)
+                                : c.knowledgeExpanded.add(key),
+                          ),
+                        ),
+                        _collapse(
+                          open,
+                          (_) => Column(
+                            children: [
+                              const Divider(),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
+                                child: Column(
+                                  children: lines.indexed.map((lineItem) {
+                                    final line = lineItem.$2;
+                                    final lineKey = '$key:${lineItem.$1}';
+                                    final lineOpen = c.knowledgeExpanded
+                                        .contains(lineKey);
+                                    final stations = (line['stations'] as List)
+                                        .cast<String>();
+                                    return Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        InkWell(
+                                          onTap: () => c.update(
+                                            () => lineOpen
+                                                ? c.knowledgeExpanded.remove(
+                                                    lineKey,
+                                                  )
+                                                : c.knowledgeExpanded.add(
+                                                    lineKey,
+                                                  ),
+                                          ),
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 14,
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                Expanded(
+                                                  child: _text(
+                                                    line['name'] as String,
+                                                    role:
+                                                        GalleryTypography.label,
+                                                  ),
+                                                ),
+                                                _text(
+                                                  '${stations.length} 站',
+                                                  role:
+                                                      GalleryTypography.caption,
+                                                  color: t.muted,
+                                                ),
+                                                const SizedBox(width: 8),
+                                                _expandArrow(
+                                                  lineOpen,
+                                                  size: 16,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                        _collapse(
+                                          lineOpen,
+                                          (_) => Padding(
+                                            padding: const EdgeInsets.only(
+                                              bottom: 14,
+                                            ),
+                                            child: Wrap(
+                                              spacing: 6,
+                                              runSpacing: 6,
+                                              children: stations
+                                                  .map(
+                                                    (s) => Container(
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 9,
+                                                            vertical: 5,
+                                                          ),
+                                                      decoration: BoxDecoration(
+                                                        color: t.surface2,
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              8,
+                                                            ),
+                                                      ),
+                                                      child: _text(s, size: 12),
+                                                    ),
+                                                  )
+                                                  .toList(),
+                                            ),
+                                          ),
+                                        ),
+                                        const Divider(),
+                                      ],
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    padding: EdgeInsets.zero,
+                  ),
+                );
+              }),
+            ],
+          ),
+        ),
+      ],
+      id: 'knowledge',
+      positionId: c.knowledgeTab,
     );
   }
 
@@ -437,7 +492,7 @@ extension _GalleryInspection on _GalleryViewState {
     };
     final note = _text(
       '使用内置二维码样例预览扫码与导入流程',
-      size: 11,
+      role: GalleryTypography.caption,
       color: t.muted,
       align: TextAlign.center,
     );
@@ -465,7 +520,11 @@ extension _GalleryInspection on _GalleryViewState {
                         color: t.onTone,
                       ),
                       _gap(14),
-                      _text('扫码取景', size: 12, color: t.muted),
+                      _text(
+                        '扫码取景',
+                        role: GalleryTypography.caption,
+                        color: t.muted,
+                      ),
                     ],
                   ),
                 ),
@@ -473,7 +532,7 @@ extension _GalleryInspection on _GalleryViewState {
               _gap(20),
               _text(
                 '将乘车码二维码对准取景框',
-                size: 13,
+                role: GalleryTypography.label,
                 color: t.muted,
                 align: TextAlign.center,
               ),
@@ -538,7 +597,11 @@ extension _GalleryInspection on _GalleryViewState {
         _gap(20),
         note,
       ] else if (view == 'gallery') ...[
-        _text('选择一张内置图片，查看识别结果。', size: 13, color: t.muted),
+        _text(
+          '选择一张内置图片，查看识别结果。',
+          role: GalleryTypography.label,
+          color: t.muted,
+        ),
         _gap(18),
         for (final sample in [
           ('valid', '有效乘车码', 'JT/T 1179 模拟载荷 · 335 字节'),
@@ -558,8 +621,16 @@ extension _GalleryInspection on _GalleryViewState {
                   size: 30,
                   color: t.onTone,
                 ),
-                title: _text(sample.$2, size: 14, weight: FontWeight.w600),
-                subtitle: _text(sample.$3, size: 12, color: t.muted),
+                title: _text(
+                  sample.$2,
+                  role: GalleryTypography.field,
+                  weight: FontWeight.w600,
+                ),
+                subtitle: _text(
+                  sample.$3,
+                  role: GalleryTypography.caption,
+                  color: t.muted,
+                ),
                 onTap: q.busy ? null : () => q.acquire(sample.$1),
               ),
               padding: const EdgeInsets.all(16),
@@ -569,7 +640,11 @@ extension _GalleryInspection on _GalleryViewState {
         _gap(16),
         note,
       ] else ...[
-        _text('只读解析交通一卡通乘车码，查看账户、机构、时效和原始数据。', size: 13, color: t.muted),
+        _text(
+          '只读解析交通一卡通乘车码，查看账户、机构、时效和原始数据。',
+          role: GalleryTypography.label,
+          color: t.muted,
+        ),
         _gap(18),
         Row(
           children: [
@@ -600,14 +675,18 @@ extension _GalleryInspection on _GalleryViewState {
               children: [
                 _text(
                   q.error!.startsWith('图片') ? '图片未识别到二维码' : '解析失败',
-                  size: 16,
+                  role: GalleryTypography.lead,
                   weight: FontWeight.w600,
                   color: t.warn,
                 ),
                 _gap(8),
-                _text(q.error!, size: 13, color: t.muted),
+                _text(q.error!, role: GalleryTypography.label, color: t.muted),
                 _gap(8),
-                _text('可重新扫描二维码或从相册导入。', size: 12, color: t.muted),
+                _text(
+                  '可重新扫描二维码或从相册导入。',
+                  role: GalleryTypography.caption,
+                  color: t.muted,
+                ),
               ],
             ),
           ),
@@ -649,7 +728,7 @@ extension _GalleryInspection on _GalleryViewState {
           child: CircularProgressIndicator(strokeWidth: 2, color: t.onTone),
         ),
         const SizedBox(width: 12),
-        _text('正在获取并解析…', size: 13, color: t.onTone),
+        _text('正在获取并解析…', role: GalleryTypography.label, color: t.onTone),
       ],
     ),
   );
@@ -711,10 +790,14 @@ extension _GalleryInspection on _GalleryViewState {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _text('乘车码解析成功', size: 16, weight: FontWeight.w600),
+                      _text(
+                        '乘车码解析成功',
+                        role: GalleryTypography.lead,
+                        weight: FontWeight.w600,
+                      ),
                       _text(
                         'JT/T 1179 · ${c.qr.origin == 'gallery' ? '相册导入' : '扫描二维码'} · 模拟数据',
-                        size: 11,
+                        role: GalleryTypography.caption,
                         color: t.muted,
                       ),
                     ],
@@ -725,7 +808,7 @@ extension _GalleryInspection on _GalleryViewState {
             _gap(16),
             _text(
               '${expired ? '二维码已过期' : '获取时有效'}　有效时间 300 秒',
-              size: 12,
+              role: GalleryTypography.caption,
               color: expired ? t.warn : t.ok,
             ),
           ],
@@ -745,7 +828,11 @@ extension _GalleryInspection on _GalleryViewState {
         [
           ...timing.map((row) => _kv(row[0], row[1])),
           _gap(8),
-          _text('时间均以 UTC+08:00 显示；状态按获取时刻展示。', size: 11, color: t.muted),
+          _text(
+            '时间均以 UTC+08:00 显示；状态按获取时刻展示。',
+            role: GalleryTypography.caption,
+            color: t.muted,
+          ),
         ],
         initiallyOpen: true,
         surface: false,
@@ -764,7 +851,11 @@ extension _GalleryInspection on _GalleryViewState {
       _expand('qr:raw', '二维码原始数据（${raw.length} 字节）', [
         _hexBox(galleryHex(raw)),
       ], surface: false),
-      _text('仅展示解析信息，未进行密码学签名验证。', size: 11, color: t.muted),
+      _text(
+        '仅展示解析信息，未进行密码学签名验证。',
+        role: GalleryTypography.caption,
+        color: t.muted,
+      ),
     ];
   }
 }

@@ -85,12 +85,9 @@ class _GalleryNavigationItemState extends State<_GalleryNavigationItem> {
                   Text(
                     widget.label,
                     maxLines: 1,
-                    style: TextStyle(
+                    style: GalleryTypography.navigation.copyWith(
                       inherit: false,
-                      fontFamily: 'sans-serif',
-                      fontSize: 12,
                       height: widget.docked ? 16 / 12 : 1,
-                      fontWeight: FontWeight.w600,
                       color: foreground,
                       shadows: const [],
                     ),

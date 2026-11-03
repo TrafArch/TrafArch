@@ -6,12 +6,15 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:dynamic_color/dynamic_color.dart';
 
 import '../app/app_info.dart';
 import '../shared/app_support.dart';
 import 'gallery_controller.dart';
 import 'gallery_data.dart';
 import 'gallery_theme.dart';
+import 'gallery_design.dart';
+import 'gallery_layout.dart';
 import 'gallery_preferences.dart';
 
 part 'gallery_components.dart';
@@ -88,35 +91,74 @@ class _GalleryAppState extends State<GalleryApp> {
       }
       return AnimatedBuilder(
         animation: c,
-        builder: (context, _) => MaterialApp(
-          title: 'TrafArch',
-          debugShowCheckedModeBanner: false,
-          locale: const Locale('zh', 'CN'),
-          supportedLocales: const [Locale('zh', 'CN'), Locale('en')],
-          localizationsDelegates: GlobalMaterialLocalizations.delegates,
-          themeMode: c.themeMode,
-          theme: GalleryTokens.from(
-            c.data,
-            false,
-            c.monet ? 'blue' : c.palette,
-          ).theme(),
-          darkTheme: GalleryTokens.from(
-            c.data,
-            true,
-            c.monet ? 'blue' : c.palette,
-          ).theme(),
-          home: _GalleryNavigator(
-            key: ValueKey(c.generation),
-            controller: c,
-            preferences: _preferences,
-            onDisableBeta: widget.onDisableBeta,
-            openWebLink: widget.openWebLink,
-            openEmail: widget.openEmail,
+        builder: (context, _) => _GallerySystemColors(
+          builder: (lightDynamic, darkDynamic) => MaterialApp(
+            title: 'TrafArch',
+            debugShowCheckedModeBanner: false,
+            locale: const Locale('zh', 'CN'),
+            supportedLocales: const [Locale('zh', 'CN'), Locale('en')],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
+            themeMode: c.themeMode,
+            theme: GalleryTokens.from(
+              c.data,
+              false,
+              c.monet ? 'blue' : c.palette,
+              dynamicScheme: c.monet ? lightDynamic : null,
+            ).theme(),
+            darkTheme: GalleryTokens.from(
+              c.data,
+              true,
+              c.monet ? 'blue' : c.palette,
+              dynamicScheme: c.monet ? darkDynamic : null,
+            ).theme(),
+            home: _GalleryNavigator(
+              key: ValueKey(c.generation),
+              controller: c,
+              preferences: _preferences,
+              onDisableBeta: widget.onDisableBeta,
+              openWebLink: widget.openWebLink,
+              openEmail: widget.openEmail,
+            ),
           ),
         ),
       );
     },
   );
+}
+
+/// Refresh the wallpaper palette on returning from Android's wallpaper settings.
+class _GallerySystemColors extends StatefulWidget {
+  const _GallerySystemColors({required this.builder});
+  final Widget Function(ColorScheme?, ColorScheme?) builder;
+  @override
+  State<_GallerySystemColors> createState() => _GallerySystemColorsState();
+}
+
+class _GallerySystemColorsState extends State<_GallerySystemColors>
+    with WidgetsBindingObserver {
+  final _builder = GlobalKey<DynamicColorBuilderState>();
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _builder.currentState?.initPlatformState();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      DynamicColorBuilder(key: _builder, builder: widget.builder);
 }
 
 class _GalleryView extends StatefulWidget {
@@ -144,7 +186,21 @@ class _GalleryViewState extends State<_GalleryView> {
   GalleryTokens get t => Theme.of(context).extension<GalleryTokens>()!;
   GalleryRouteEntry get _entry => widget.entry;
   GalleryPage get _viewPage =>
-      _entry.kind == GalleryRouteKind.main ? c.mainPage : _entry.page;
+      _buildingMainPage ??
+      (_entry.kind == GalleryRouteKind.main ? c.mainPage : _entry.page);
+  GalleryPage? _buildingMainPage;
+  GalleryNavigationLayout get _navLayout =>
+      GalleryNavigationLayout(MediaQuery.of(context), docked: c.docked);
+
+  Widget _mainPage(GalleryPage page) {
+    _buildingMainPage = page;
+    try {
+      return _page(page);
+    } finally {
+      _buildingMainPage = null;
+    }
+  }
+
   bool get _isMain => _entry.kind == GalleryRouteKind.main;
   GalleryCard get _selectedCard => c.cards.firstWhere(
     (card) => card.id == _entry.cardId,
@@ -280,7 +336,7 @@ class _GalleryViewState extends State<_GalleryView> {
                           ? _GalleryMainTransition(
                               page: _viewPage,
                               reduceMotion: _reduceMotion,
-                              child: _page(_viewPage),
+                              builder: _mainPage,
                             )
                           : KeyedSubtree(
                               key: ValueKey(_viewPage),
@@ -369,21 +425,35 @@ class _GalleryViewState extends State<_GalleryView> {
     GalleryPage.licenses => _licensePage(),
   };
 
-  Widget _list(List<Widget> children, {String? id, double? bottom}) => ListView(
-    key: PageStorageKey(
+  Widget _list(
+    List<Widget> children, {
+    String? id,
+    double? bottom,
+    String? positionId,
+  }) {
+    final key = PageStorageKey(
       'gallery-${c.generation}-${id ?? '${_viewPage.name}-${_entry.qrView}'}',
-    ),
-    padding: EdgeInsets.fromLTRB(
+    );
+    final padding = EdgeInsets.fromLTRB(
       16,
       6,
       16,
       bottom ??
           (_isMain
-              ? (c.docked ? 80 : 108) + MediaQuery.paddingOf(context).bottom
+              ? _navLayout.listBottom
               : 30 + MediaQuery.paddingOf(context).bottom),
-    ),
-    children: children,
-  );
+    );
+    if (positionId != null) {
+      return _GalleryTabbedList(
+        key: ValueKey('tabbed-${key.value}'),
+        listKey: key,
+        positionId: positionId,
+        padding: padding,
+        children: children,
+      );
+    }
+    return ListView(key: key, padding: padding, children: children);
+  }
 
   void _toast(String text) {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -396,7 +466,7 @@ class _GalleryViewState extends State<_GalleryView> {
           16,
           0,
           16,
-          (c.isMainPage ? 100 : 16) + MediaQuery.paddingOf(context).bottom,
+          c.isMainPage ? _navLayout.toastBottom : 16 + _navLayout.safeBottom,
         ),
       ),
     );
