@@ -350,7 +350,7 @@ List<ArchiveJourney> mergeArchiveJourneys(
     ],
     originalCaptures: captures,
     observations: transactionObservations,
-  );
+  ).toList();
   result.sort((a, b) {
     DateTime? latest(ArchiveJourney journey) => journey.events
         .map((event) => event.endpoint.time)

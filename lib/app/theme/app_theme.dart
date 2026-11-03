@@ -29,12 +29,17 @@ abstract final class AppTheme {
     ),
   );
 
+  /// 关闭莫奈取色时的固定主题色：取应用图标卡片图形的灰蓝 #4E7098
+  /// （图标底色为淡蓝 #D5E4F1），生成整套 Material 3 蓝色方案，
+  /// 与设计规范的“雾蓝”角色色系一致。
+  static const seedColor = Color(0xFF4E7098);
+
   static final fallbackLight = ColorScheme.fromSeed(
-    seedColor: Colors.teal,
+    seedColor: seedColor,
     brightness: Brightness.light,
   );
   static final fallbackDark = ColorScheme.fromSeed(
-    seedColor: Colors.teal,
+    seedColor: seedColor,
     brightness: Brightness.dark,
   );
 

@@ -234,6 +234,8 @@ class AppDependencies extends OwnedNotifier {
   bool get monetEnabled => settings.monetEnabled;
   bool get openingFeedbackSurvey => settings.openingFeedbackSurvey;
   String? get feedbackBrowserError => settings.feedbackBrowserError;
+  String? get feedbackBrowserNotice => settings.feedbackBrowserNotice;
+  void clearFeedbackBrowserNotice() => settings.clearFeedbackBrowserNotice();
   String? get autoSaveNotice => archive.autoSaveNotice;
   List<String> get apduLog => scan.trace;
   JtT1179QrData? get qrData => qr.qrData;
@@ -303,6 +305,8 @@ class AppDependencies extends OwnedNotifier {
       settings.setIncludeShanghaiOverdraft(enabled);
   Future<bool> openFeedbackEmail(String address) =>
       settings.openFeedbackEmail(address);
+  Future<bool> openFeedbackQqGroup(String groupNumber, Uri joinUrl) =>
+      settings.openFeedbackQqGroup(groupNumber, joinUrl);
   Future<void> openPrivacyPolicy() => settings.openPrivacyPolicy();
   Future<void> openFeedbackSurvey(Uri url) => settings.openFeedbackSurvey(url);
   Future<void> exportLog() => diagnostics.exportLog();

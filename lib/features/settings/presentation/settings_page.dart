@@ -130,7 +130,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   app.monetEnabled
                       ? '已开启（默认）：主题色跟随系统壁纸动态取色（需 Android 12 及以上，'
                             '低版本系统自动回落到内置主题色）'
-                      : '已关闭：使用应用内置固定主题色（青绿色）',
+                      : '已关闭：使用应用内置固定主题色（蓝色）',
                 ),
                 value: app.monetEnabled,
                 onChanged: (value) => app.setMonetEnabled(value),

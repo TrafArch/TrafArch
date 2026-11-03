@@ -49,7 +49,7 @@ class CardIdentificationService {
           fingerprint: fingerprint,
           identity: resolve(
             cardType: CardTypes.lingnanTong,
-            officialName: '岭南通',
+            officialName: '岭南通·羊城通',
             source: CardIdentificationSources.parserOnly,
           ),
           cardNumber: card.info.applicationSerial,
@@ -69,6 +69,24 @@ class CardIdentificationService {
             source: CardIdentificationSources.parserOnly,
           ),
           cardNumber: card.info.applicationSerial,
+        );
+      case CardParserIds.localCard:
+        final local = card.localCard;
+        if (local?.info.isMacauPass != true) return null;
+        final fingerprint = CardFingerprint.build(
+          system: CardParserIds.localCard,
+          cardNumber: local!.info.cardNumber,
+        );
+        if (fingerprint == null) return null;
+        return IdentifiedCard(
+          fingerprint: fingerprint,
+          identity: resolve(
+            cardType: CardTypes.macauPass,
+            officialName: '澳门通',
+            cityName: '澳门',
+            source: CardIdentificationSources.parserOnly,
+          ),
+          cardNumber: local.info.cardNumber,
         );
       case CardParserIds.cityUnion:
         return _identifyCityUnion(card);

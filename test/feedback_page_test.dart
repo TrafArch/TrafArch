@@ -54,14 +54,51 @@ void main() {
     expect(find.text('暂时无法打开问卷'), findsNothing);
   });
 
-  testWidgets('无浏览器失败留页，可复制问卷地址并重新尝试', (tester) async {
-    var launches = 0;
-    String? copied;
-    messenger.setMockMethodCallHandler(browserChannel, (_) async {
-      launches++;
-      if (launches == 1) throw PlatformException(code: 'BROWSER_UNAVAILABLE');
-      return 'com.android.chrome';
+  for (final privacyPolicy in [false, true]) {
+    testWidgets('默认浏览器打开成功后不复制链接（隐私政策：$privacyPolicy）', (tester) async {
+      final calls = <MethodCall>[];
+      var clipboardWrites = 0;
+      messenger.setMockMethodCallHandler(browserChannel, (call) async {
+        calls.add(call);
+        return 'default_browser';
+      });
+      messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') clipboardWrites++;
+        return null;
+      });
+      final app = createApp();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: privacyPolicy
+              ? AboutPage(
+                  updates: app.updates,
+                  openPrivacyPolicy: app.openPrivacyPolicy,
+                )
+              : FeedbackPage(app: app),
+        ),
+      );
+      final entry = find.text(privacyPolicy ? '隐私政策' : '填写反馈问卷');
+      if (privacyPolicy) await tester.scrollUntilVisible(entry, 150);
+      await tester.tap(entry);
+      await tester.pumpAndSettle();
+
+      expect(calls, hasLength(1));
+      expect(calls.single.method, 'openCustomTab');
+      expect(calls.single.arguments, {
+        'url': privacyPolicy ? 'https://www.trafarch.top/privacy.html' : 'https://trafarch.feishu.cn/share/base/form/shrcniZ6QaPgqGazU1bpdmZyNPh',
+      });
+      expect(clipboardWrites, 0);
+      expect(find.text('链接已复制到剪贴板，请前往浏览器打开'), findsNothing);
+      expect(
+        find.byType(privacyPolicy ? AboutPage : FeedbackPage),
+        findsOneWidget,
+      );
     });
+  }
+
+  testWidgets('没有可用浏览器时自动复制链接并弹出气泡', (tester) async {
+    String? copied;
+    messenger.setMockMethodCallHandler(browserChannel, (_) async => null);
     messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
       if (call.method == 'Clipboard.setData') {
         copied = (call.arguments as Map)['text'] as String;
@@ -73,27 +110,13 @@ void main() {
     await tester.tap(find.text('填写反馈问卷'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(FeedbackPage), findsOneWidget);
-    expect(find.byType(SurveyPage), findsNothing);
-    expect(find.text('暂时无法打开问卷'), findsOneWidget);
-    expect(find.textContaining('Edge 或 Chrome'), findsWidgets);
-    await tester.drag(find.byType(ListView), const Offset(0, -300));
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('复制问卷链接'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('复制问卷链接'));
-    await tester.pumpAndSettle();
     expect(
       copied,
       'https://trafarch.feishu.cn/share/base/form/shrcniZ6QaPgqGazU1bpdmZyNPh',
     );
-
-    await tester.ensureVisible(find.text('重新打开问卷'));
-    await tester.tap(find.text('重新打开问卷'));
-    await tester.pumpAndSettle();
-    expect(launches, 2);
-    expect(find.text('暂时无法打开问卷'), findsNothing);
+    expect(find.text('链接已复制到剪贴板，请前往浏览器打开'), findsOneWidget);
     expect(find.byType(FeedbackPage), findsOneWidget);
+    expect(find.text('暂时无法打开问卷'), findsNothing);
   });
 
   testWidgets('浏览器调用未完成时防止重复启动', (tester) async {
@@ -208,11 +231,18 @@ void main() {
     expect(find.byType(SurveyPage), findsNothing);
   });
 
-  testWidgets('隐私政策浏览器启动失败可重试', (tester) async {
+  testWidgets('隐私政策无浏览器时复制链接并弹出气泡', (tester) async {
     var calls = 0;
+    String? copied;
     messenger.setMockMethodCallHandler(browserChannel, (_) async {
-      if (++calls == 1) throw PlatformException(code: 'BROWSER_UNAVAILABLE');
-      return 'com.android.chrome';
+      calls++;
+      return null; // Custom Tabs 和默认浏览器都无法打开
+    });
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') {
+        copied = (call.arguments as Map)['text'] as String;
+      }
+      return null;
     });
     final app = createApp();
     await tester.pumpWidget(
@@ -226,15 +256,111 @@ void main() {
     await tester.scrollUntilVisible(find.text('隐私政策'), 150);
     await tester.tap(find.text('隐私政策'));
     await tester.pumpAndSettle();
-    expect(find.text('无法打开隐私政策，请安装或启用 Edge 或 Chrome 后重试。'), findsOneWidget);
-    await tester.tap(find.text('隐私政策'));
-    await tester.pumpAndSettle();
-    expect(calls, 2);
+    expect(calls, 1);
+    expect(copied, 'https://www.trafarch.top/privacy.html');
+    expect(find.text('链接已复制到剪贴板，请前往浏览器打开'), findsOneWidget);
     expect(find.byType(AboutPage), findsOneWidget);
   });
 
-  testWidgets('QQ 群号仍可复制', (tester) async {
+  testWidgets('QQ 群入口直接唤起客户端，不先打开网页', (tester) async {
+    final calls = <MethodCall>[];
+    messenger.setMockMethodCallHandler(emailChannel, (call) async {
+      calls.add(call);
+      return true;
+    });
+    await tester.pumpWidget(MaterialApp(home: FeedbackPage(app: createApp())));
+
+    await tester.tap(find.text('QQ 群'));
+    await tester.pumpAndSettle();
+
+    expect(calls, hasLength(1));
+    expect(calls.single.method, 'launch');
+    final arguments = calls.single.arguments as Map;
+    final url = Uri.parse(arguments['url'] as String);
+    expect(url.scheme, 'mqqapi');
+    expect(url.host, 'card');
+    expect(url.path, '/show_pslcard');
+    expect(url.queryParameters, {
+      'src_type': 'internal',
+      'version': '1',
+      'uin': '1106608008',
+      'card_type': 'group',
+      'source': 'qrcode',
+    });
+    expect(arguments['useWebView'], isFalse);
+    expect(find.byType(FeedbackPage), findsOneWidget);
+    expect(find.byType(SurveyPage), findsNothing);
+  });
+
+  for (final throwsError in [false, true]) {
+    testWidgets('QQ 唤起失败时打开原邀请网页（异常：$throwsError）', (tester) async {
+      final calls = <MethodCall>[];
+      messenger.setMockMethodCallHandler(emailChannel, (call) async {
+        calls.add(call);
+        if (calls.length == 1) {
+          if (throwsError) throw PlatformException(code: 'ACTIVITY_NOT_FOUND');
+          return false;
+        }
+        return true;
+      });
+      await tester.pumpWidget(
+        MaterialApp(home: FeedbackPage(app: createApp())),
+      );
+
+      await tester.tap(find.text('QQ 群'));
+      await tester.pumpAndSettle();
+
+      expect(calls, hasLength(2));
+      expect((calls.first.arguments as Map)['url'], startsWith('mqqapi://'));
+      expect(calls.last.method, 'launch');
+      expect(
+        (calls.last.arguments as Map)['url'],
+        'https://qm.qq.com/q/I8Ba9gEise',
+      );
+      expect((calls.last.arguments as Map)['useWebView'], isFalse);
+      expect(find.byType(FeedbackPage), findsOneWidget);
+      expect(find.byType(SurveyPage), findsNothing);
+      expect(find.text('无法打开 QQ 或加群页，请复制群号后在 QQ 中搜索。'), findsNothing);
+    });
+
+    testWidgets('QQ 和网页均启动失败时提示且可复制群号（异常：$throwsError）', (tester) async {
+      var launches = 0;
+      String? copied;
+      messenger.setMockMethodCallHandler(emailChannel, (_) async {
+        launches++;
+        if (throwsError) throw PlatformException(code: 'ACTIVITY_NOT_FOUND');
+        return false;
+      });
+      messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied = (call.arguments as Map)['text'] as String;
+        }
+        return null;
+      });
+      await tester.pumpWidget(
+        MaterialApp(home: FeedbackPage(app: createApp())),
+      );
+
+      await tester.tap(find.text('QQ 群'));
+      await tester.pumpAndSettle();
+
+      expect(launches, 2);
+      expect(copied, isNull);
+      expect(find.text('无法打开 QQ 或加群页，请复制群号后在 QQ 中搜索。'), findsOneWidget);
+      await tester.tap(find.byTooltip('复制群号'));
+      await tester.pumpAndSettle();
+      expect(copied, '1106608008');
+      expect(launches, 2);
+    });
+  }
+
+  testWidgets('QQ 群号仍可复制且不会唤起客户端', (tester) async {
     String? copied;
+    var launches = 0;
+    messenger.setMockMethodCallHandler(emailChannel, (_) async {
+      launches++;
+      return true;
+    });
     messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
       if (call.method == 'Clipboard.setData') {
         copied = (call.arguments as Map)['text'] as String;
@@ -247,6 +373,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(copied, '1106608008');
+    expect(launches, 0);
     expect(find.text('QQ 群号已复制到剪贴板'), findsOneWidget);
   });
 }

@@ -117,7 +117,7 @@ void main() {
     () {
       expect(
         tu.select('SELECT COUNT(*) AS c FROM all_records').single['c'],
-        8004,
+        8021,
       );
       expect(
         tu.select('SELECT COUNT(*) AS c FROM "region_南京_3010"').single['c'],
@@ -132,6 +132,42 @@ void main() {
       );
     },
   );
+
+  test('Nantong line two codes resolve through the cycle lookup', () {
+    const names = [
+      '幸福',
+      '南通火车站',
+      '长岸',
+      '北大街',
+      '北城大桥',
+      '钟秀西路',
+      '和平桥',
+      '体育公园',
+      '易家桥',
+      '文峰',
+      '五一路',
+      '园林路',
+      '汽车东站',
+      '通富北路',
+      '观音山',
+      '南通东站',
+      '先锋',
+    ];
+    final lookup = TuLookupService(repository);
+    for (var i = 0; i < names.length; i++) {
+      final code =
+          '0002${(0x15 + i).toRadixString(16).toUpperCase().padLeft(4, '0')}';
+      final result = lookup.resolveCycle(
+        city: '3060',
+        field: '${code}000000',
+        appType: 1,
+      );
+      expect(result.stationName, names[i], reason: code);
+      expect(result.entry?.sourceKey, '3060$code');
+      expect(result.entry?.line, '2号线');
+    }
+    expect(repository.queryIssue, isNull);
+  });
 
   test('TU synchronization preserves the approved CU Jinan package', () {
     expect(

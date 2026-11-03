@@ -11,17 +11,62 @@ import 'floating_nav_bar.dart';
 import 'navigation_scroll_policy.dart';
 
 class AppShell extends StatefulWidget {
-  const AppShell({super.key, required this.app});
+  const AppShell({
+    super.key,
+    required this.app,
+    this.routeObserver,
+    this.bottomBarController,
+  });
 
   final AppDependencies app;
+
+  /// 用于感知本壳页被其他页面（扫码解析、设置等）覆盖后再回显。
+  final RouteObserver<PageRoute<dynamic>>? routeObserver;
+
+  /// 可选的底栏控制器；缺省时由壳页自建并负责释放。
+  final BottomBarController? bottomBarController;
 
   @override
   State<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends State<AppShell> with RouteAware {
   int index = 0;
+  late final BottomBarController _barController =
+      widget.bottomBarController ?? BottomBarController();
+  PageRoute<dynamic>? _subscribedRoute;
   AppDependencies get app => widget.app;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute<dynamic> && route != _subscribedRoute) {
+      widget.routeObserver?.subscribe(this, route);
+      _subscribedRoute = route;
+    }
+  }
+
+  /// 从扫码解析等页面返回时恢复底栏。
+  ///
+  /// 底栏的弹簧显隐由 motor 驱动，其 Ticker 在壳页被不透明路由覆盖时会被
+  /// Route 的 TickerMode 静音：遮挡期间启动的动画要等恢复后才有首帧，
+  /// 若进入前底栏正处于“已隐藏”的终态，返回后会停留在隐藏状态、
+  /// 只剩“回到顶部”圆钮，看起来就是底栏动画没了。回到壳页时统一回显，
+  /// 让滚动静显动画从可见态重新开始。
+  @override
+  void didPopNext() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _barController.show();
+    });
+  }
+
+  @override
+  void dispose() {
+    widget.routeObserver?.unsubscribe(this);
+    if (widget.bottomBarController == null) _barController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,6 +89,7 @@ class _AppShellState extends State<AppShell> {
       },
       child: Scaffold(
         body: BottomBar(
+          controller: _barController,
           layout: BottomBarLayout(
             width: UiConstants.floatingNavBarWidth,
             offset: UiConstants.floatingNavBarInset,

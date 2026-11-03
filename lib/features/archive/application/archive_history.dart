@@ -68,11 +68,24 @@ class ArchiveHistoryRecord {
   }
 }
 
+class LocalCardHistoryRecord {
+  final String cardType;
+  final Map<String, dynamic> fields;
+  final String batchId;
+
+  const LocalCardHistoryRecord({
+    required this.cardType,
+    required this.fields,
+    required this.batchId,
+  });
+}
+
 class ArchiveHistoryResult {
   static const projectionVersion = 1;
   final SavedCard? card;
   final List<ArchiveBatchEvidence> batches;
   final List<ArchiveHistoryRecord> records;
+  final List<LocalCardHistoryRecord> localCardRecords;
   final List<Map<String, dynamic>> importedRecords;
   final SnapshotDecodeResult? latestCapture;
   final int? balanceObservedAt;
@@ -82,6 +95,7 @@ class ArchiveHistoryResult {
     required this.card,
     this.batches = const [],
     this.records = const [],
+    this.localCardRecords = const [],
     this.importedRecords = const [],
     this.latestCapture,
     this.balanceObservedAt,
@@ -346,6 +360,7 @@ class ArchiveHistory {
       card: card,
       batches: List.unmodifiable(batches),
       records: projectRecords(batches),
+      localCardRecords: projectLocalCardRecords(batches),
       importedRecords: rows.importedRecords,
       latestCapture: scalar == null
           ? null
@@ -353,6 +368,51 @@ class ArchiveHistory {
       balanceObservedAt: balanceObservedAt,
       documentReadIssue: rows.documentReadIssue,
     );
+  }
+
+  static List<LocalCardHistoryRecord> projectLocalCardRecords(
+    Iterable<ArchiveBatchEvidence> batches,
+  ) {
+    final unique = <String, LocalCardHistoryRecord>{};
+    for (final batch in batches) {
+      final snapshot = batch.decoded.snapshot;
+      if (snapshot == null) continue;
+      for (final section in const ['lingnanTong', 'macauPass']) {
+        final payload = snapshot.extensions[section];
+        if (payload is! Map) continue;
+        final rows = payload['records'];
+        if (rows is! List) continue;
+        for (final row in rows) {
+          if (row is! Map) continue;
+          final fields = Map<String, dynamic>.from(row);
+          final raw = fields['rawBody'];
+          final key = jsonEncode(
+            _canonical({
+              'type': section,
+              'recordNumber': fields['recordNumber'],
+              'rawBody': raw,
+              if (raw == null) 'timestamp': fields['timestamp'],
+            }),
+          );
+          unique.putIfAbsent(
+            key,
+            () => LocalCardHistoryRecord(
+              cardType: section,
+              fields: Map.unmodifiable(fields),
+              batchId: batch.id,
+            ),
+          );
+        }
+      }
+    }
+    final result = unique.values.toList()
+      ..sort((a, b) {
+        final at = a.fields['timestamp'];
+        final bt = b.fields['timestamp'];
+        final time = (bt is int ? bt : 0).compareTo(at is int ? at : 0);
+        return time != 0 ? time : a.batchId.compareTo(b.batchId);
+      });
+    return List.unmodifiable(result);
   }
 
   /// Project original captures without borrowing the newest capture's fields
