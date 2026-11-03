@@ -101,7 +101,7 @@ void main() {
               docked: docked,
             );
             expect(layout.safeBottom, keyboard > 0 ? 0 : safe);
-            expect(layout.contentHeight, (docked ? 64 : 62) + (scale - 1) * 20);
+            expect(layout.contentHeight, (docked ? 65 : 62) + (scale - 1) * 20);
             expect(layout.listBottom, layout.occupiedHeight + 16);
             expect(layout.toastBottom, layout.occupiedHeight + 12);
           }

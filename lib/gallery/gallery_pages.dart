@@ -659,9 +659,17 @@ extension _GalleryPages on _GalleryViewState {
 
   Widget _cards() {
     final cards = c.savedCards;
+    final numberStyle = GalleryTypography.amount.copyWith(
+      inherit: false,
+      color: t.text,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
+    final currencyStyle = GalleryTypography.caption.copyWith(
+      inherit: false,
+      color: t.muted,
+    );
     final parts = {
-      for (final card in cards)
-        card.id: _GalleryBalanceParts(card.balance(c.includeOverdraft)),
+      for (final card in cards) card.id: _balancePresentation(card),
     };
     double measure(String value, TextStyle style) {
       final painter = TextPainter(
@@ -683,87 +691,86 @@ extension _GalleryPages on _GalleryViewState {
     var numberWidth = 0.0, unitWidth = 0.0;
     for (final value in parts.values) {
       if (!value.known) continue;
-      numberWidth = math.max(
-        numberWidth,
-        measure(value.number, GalleryTypography.amount),
-      );
+      numberWidth = math.max(numberWidth, measure(value.number, numberStyle));
       unitWidth = math.max(
         unitWidth,
-        math.max(
-          measure(value.prefix, GalleryTypography.caption),
-          measure(value.suffix, GalleryTypography.caption),
-        ),
+        measure(value.currencyLabel, currencyStyle),
       );
     }
     numberWidth = math.max(64, numberWidth);
-    final amountWidth = numberWidth + unitWidth * 2 + 16;
+    final unitSpace = unitWidth > 0 ? unitWidth + 8 : 0.0;
+    final amountWidth = numberWidth + unitSpace;
     final available = MediaQuery.sizeOf(context).width - 32 - 24;
     final balanceColumnWidth = math.min(amountWidth, available * .4);
     final stacked = _extraTextScale >= .5;
     Widget amount(GalleryCard card) {
       final value = parts[card.id]!;
       return Semantics(
-        label: '余额，${value.original}',
+        label: '余额，${value.displayText}',
         excludeSemantics: true,
-        child: Column(
-          children: [
-            if (!value.known)
-              _text(
-                value.original,
-                role: GalleryTypography.label,
-                color: t.muted,
-                align: TextAlign.center,
-              )
-            else
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: SizedBox(
-                  width: amountWidth,
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: unitWidth,
-                        child: _text(
-                          value.prefix,
-                          role: GalleryTypography.caption,
-                          color: t.muted,
-                          align: TextAlign.right,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      SizedBox(
-                        width: numberWidth,
-                        child: Text(
-                          value.number,
-                          key: ValueKey('wallet-number-${card.id}'),
-                          textAlign: TextAlign.center,
-                          style: GalleryTypography.amount.copyWith(
-                            color: t.text,
-                            fontFeatures: const [FontFeature.tabularFigures()],
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final scale = math.min(1.0, constraints.maxWidth / amountWidth);
+            return Column(
+              children: [
+                if (!value.known)
+                  _text(
+                    value.displayText,
+                    role: GalleryTypography.label,
+                    color: t.muted,
+                    align: TextAlign.center,
+                  )
+                else
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: SizedBox(
+                      width: amountWidth,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          if (unitWidth > 0) ...[
+                            SizedBox(
+                              width: unitWidth,
+                              child: Text(
+                                value.currencyLabel,
+                                key: ValueKey('wallet-currency-${card.id}'),
+                                maxLines: 1,
+                                softWrap: false,
+                                textAlign: TextAlign.right,
+                                style: currencyStyle,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          SizedBox(
+                            width: numberWidth,
+                            child: Text(
+                              value.number,
+                              key: ValueKey('wallet-number-${card.id}'),
+                              maxLines: 1,
+                              softWrap: false,
+                              textAlign: TextAlign.center,
+                              style: numberStyle,
+                            ),
                           ),
-                        ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      SizedBox(
-                        width: unitWidth,
-                        child: _text(
-                          value.suffix,
-                          role: GalleryTypography.caption,
-                          color: t.muted,
-                        ),
-                      ),
-                    ],
+                    ),
+                  ),
+                _gap(4),
+                Padding(
+                  padding: EdgeInsets.only(left: unitSpace * scale),
+                  child: Text(
+                    card.count,
+                    key: ValueKey('wallet-count-${card.id}'),
+                    textAlign: TextAlign.center,
+                    style: GalleryTypography.caption.copyWith(color: t.muted),
                   ),
                 ),
-              ),
-            _gap(4),
-            _text(
-              card.count,
-              role: GalleryTypography.caption,
-              color: t.muted,
-              align: TextAlign.center,
-            ),
-          ],
+              ],
+            );
+          },
         ),
       );
     }
@@ -1501,7 +1508,7 @@ extension _GalleryPages on _GalleryViewState {
           _settingRow(
             '内置场景',
             () => c.navigate(GalleryPage.scenes),
-            subtitle: '52 个预置场景 · 切换后载入固定样例',
+            subtitle: '${c.visibleScenes.length} 个预置场景 · 切换后载入固定样例',
             icon: Icons.dashboard_customize_outlined,
           ),
           const Divider(),
@@ -1589,7 +1596,7 @@ extension _GalleryPages on _GalleryViewState {
 
   Widget _scenes() {
     final grouped = <String, List<GalleryScene>>{};
-    for (final s in c.data.scenes) {
+    for (final s in c.visibleScenes) {
       grouped.putIfAbsent(s.group, () => []).add(s);
     }
     return _list([

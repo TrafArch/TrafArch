@@ -44,7 +44,7 @@ void main() {
     'horizontal drags leave every main destination and its capsule in place',
     (tester) async {
       await mount(tester);
-      for (final page in GalleryPage.values.take(5)) {
+      for (final page in GalleryController.visibleMainPages) {
         c.navigate(page);
         await tester.pumpAndSettle();
         final capsule = find.byKey(const ValueKey('nav-capsule'));
@@ -325,8 +325,13 @@ void main() {
         final label = tester.getRect(
           find.byKey(const ValueKey('face-balance-label-shanghai')),
         );
+        final balance = tester.getRect(
+          find.byKey(const ValueKey('face-number-shanghai')),
+        );
         expect(tail.top, greaterThan(title.bottom));
-        expect(label.top, greaterThan(tail.bottom));
+        expect(label.top, greaterThan(title.bottom));
+        expect(balance.top, greaterThan(label.bottom));
+        expect(balance.overlaps(tail), isFalse);
         expect(tester.takeException(), isNull);
       }
     },

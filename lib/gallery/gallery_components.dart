@@ -411,20 +411,37 @@ extension _GalleryComponents on _GalleryViewState {
     return [palette.start, palette.end];
   }
 
+  GalleryBalancePresentation _balancePresentation(GalleryCard card) =>
+      GalleryBalancePresentation.parse(
+        card.balance(c.includeOverdraft),
+        currencyCode: card.currency?.name.toUpperCase(),
+      );
+
+  Size _measureText(String value, TextStyle style) {
+    final painter = TextPainter(
+      text: TextSpan(text: value, style: style),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout();
+    final size = painter.size;
+    painter.dispose();
+    return size;
+  }
+
   Widget _face(
     GalleryCard card, {
     bool miniature = false,
     bool minimal = false,
   }) => Container(
-    key: miniature ? null : ValueKey('card-face-${card.id}'),
-    height: miniature ? 44 : null,
+    key: ValueKey('${miniature ? 'card-thumbnail' : 'card-face'}-${card.id}'),
+    height: miniature ? 60 / (85.60 / 53.98) : null,
     constraints: miniature
         ? null
         : BoxConstraints(minHeight: 204 + _extraTextScale * 80),
-    width: miniature ? 52 : double.infinity,
+    width: miniature ? 60 : double.infinity,
     clipBehavior: Clip.antiAlias,
     decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(miniature ? 11 : 22),
+      borderRadius: BorderRadius.circular(miniature ? 8 : 22),
       gradient: LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
@@ -446,101 +463,189 @@ extension _GalleryComponents on _GalleryViewState {
         ? Center(
             child: Icon(
               Icons.contactless_outlined,
-              size: 24,
+              size: 20,
               color: GalleryCardFace.byId(card.face).secondaryForeground,
             ),
           )
         : Padding(
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        card.name,
-                        key: ValueKey('face-title-${card.id}'),
-                        style: GalleryTypography.card.copyWith(
-                          color: GalleryCardFace.byId(card.face).foreground,
-                        ),
-                      ),
-                    ),
-                    if (card.type == '交通联合卡') ...[
-                      const SizedBox(width: 12),
-                      SvgPicture.asset(
-                        'assets/gallery/tunion-logo.svg',
-                        width: 78,
-                        height: 49,
-                        semanticsLabel: '交通联合 CHINA T-UNION',
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 18),
-                Text(
-                  '**** ${card.tail}',
-                  key: ValueKey('face-tail-${card.id}'),
-                  style: GalleryTypography.label.copyWith(
-                    fontFamily: 'monospace',
-                    color: GalleryCardFace.byId(card.face).secondaryForeground,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (!minimal)
-                            Text(
-                              '当前余额',
-                              key: ValueKey('face-balance-label-${card.id}'),
-                              style: GalleryTypography.caption.copyWith(
-                                color: GalleryCardFace.byId(card.face)
-                                    .secondaryForeground,
+            padding: const EdgeInsets.all(20),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final face = GalleryCardFace.byId(card.face);
+                final balance = _balancePresentation(card);
+                final numberStyle = GalleryTypography.hero.copyWith(
+                  inherit: false,
+                  color: face.foreground,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                );
+                final unitStyle = GalleryTypography.caption.copyWith(
+                  inherit: false,
+                  color: face.secondaryForeground,
+                );
+                final tailStyle = GalleryTypography.label.copyWith(
+                  inherit: false,
+                  fontFamily: 'monospace',
+                  letterSpacing: .6,
+                  color: face.secondaryForeground,
+                );
+                final tailText = '**** ${card.tail}';
+                final amountWidth = balance.known
+                    ? _measureText(balance.number, numberStyle).width +
+                          (balance.currencyLabel.isEmpty
+                              ? 0
+                              : _measureText(
+                                      balance.currencyLabel,
+                                      unitStyle,
+                                    ).width +
+                                    8)
+                    : _measureText(balance.displayText, unitStyle).width;
+                final stacked =
+                    _extraTextScale >= .5 ||
+                    amountWidth + 16 + _measureText(tailText, tailStyle).width >
+                        constraints.maxWidth;
+                final amount = Semantics(
+                  label: '余额，${balance.displayText}',
+                  excludeSemantics: true,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: balance.known
+                        ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
+                            children: [
+                              if (balance.currencyLabel.isNotEmpty) ...[
+                                Text(
+                                  balance.currencyLabel,
+                                  key: ValueKey('face-currency-${card.id}'),
+                                  maxLines: 1,
+                                  softWrap: false,
+                                  style: unitStyle,
+                                ),
+                                const SizedBox(width: 8),
+                              ],
+                              Text(
+                                balance.number,
+                                key: ValueKey('face-number-${card.id}'),
+                                maxLines: 1,
+                                softWrap: false,
+                                style: numberStyle,
                               ),
+                            ],
+                          )
+                        : Text(
+                            balance.displayText,
+                            key: ValueKey('face-unknown-${card.id}'),
+                            style: GalleryTypography.section.copyWith(
+                              color: face.secondaryForeground,
                             ),
-                          _gap(4),
-                          _amount(
-                            card,
-                            size: 34,
-                            color: GalleryCardFace.byId(card.face).foreground,
+                          ),
+                  ),
+                );
+                final tail = Text(
+                  tailText,
+                  key: ValueKey('face-tail-${card.id}'),
+                  style: tailStyle,
+                );
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            card.name,
+                            key: ValueKey('face-title-${card.id}'),
+                            style: GalleryTypography.card.copyWith(
+                              fontSize: 20,
+                              height: 26 / 20,
+                              color: face.foreground,
+                            ),
+                          ),
+                        ),
+                        if (card.type == '交通联合卡') ...[
+                          const SizedBox(width: 12),
+                          SvgPicture.asset(
+                            'assets/gallery/tunion-logo.svg',
+                            width: 68,
+                            height: 68 * 49 / 78,
+                            semanticsLabel: '交通联合 CHINA T-UNION',
                           ),
                         ],
-                      ),
+                      ],
                     ),
-                    if (!minimal) const SizedBox(width: 12),
-                    if (!minimal)
-                      Flexible(
-                        child: _text(
-                          '最近读取\n${card.when}',
-                          role: GalleryTypography.caption,
-                          color: GalleryCardFace.byId(card.face)
-                              .secondaryForeground,
-                          align: TextAlign.right,
-                        ),
-                      ),
+                    const SizedBox(height: 32),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (!minimal) ...[
+                          Wrap(
+                            alignment: WrapAlignment.spaceBetween,
+                            spacing: 12,
+                            runSpacing: 4,
+                            children: [
+                              Text(
+                                '当前余额',
+                                key: ValueKey('face-balance-label-${card.id}'),
+                                style: unitStyle,
+                              ),
+                              Text('最近读取 ${card.when}', style: unitStyle),
+                            ],
+                          ),
+                          _gap(4),
+                        ],
+                        if (stacked)
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: amount,
+                              ),
+                              _gap(12),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: tail,
+                              ),
+                            ],
+                          )
+                        else
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Expanded(
+                                child: Align(
+                                  alignment: Alignment.bottomLeft,
+                                  child: amount,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              tail,
+                            ],
+                          ),
+                      ],
+                    ),
                   ],
-                ),
-              ],
+                );
+              },
             ),
           ),
   );
 
   Widget _navigation() {
-    const names = ['首页', '行程', '专家', '卡包', '足迹'];
+    const pages = GalleryController.visibleMainPages;
+    const names = ['首页', '行程', '专家', '卡包'];
     const icons = [
       Icons.home_outlined,
       Icons.route_outlined,
       Icons.science_outlined,
       Icons.credit_card_outlined,
-      Icons.location_on_outlined,
     ];
+    final selectedIndex = pages.indexOf(c.mainPage);
     final layout = _navLayout;
     final bar = Container(
       height: layout.contentHeight,
@@ -560,16 +665,17 @@ extension _GalleryComponents on _GalleryViewState {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final gap = c.docked ? 0.0 : 5.0;
-          final itemWidth = (constraints.maxWidth - gap * 4) / 5;
+          final itemWidth =
+              (constraints.maxWidth - gap * (pages.length - 1)) / pages.length;
           return Stack(
             children: [
-              if (!c.docked)
+              if (!c.docked && selectedIndex >= 0)
                 AnimatedPositioned(
                   duration: _reduceMotion
                       ? Duration.zero
                       : _GalleryMotion.capsule,
                   curve: _GalleryMotion.curve,
-                  left: c.mainPage.index * (itemWidth + gap),
+                  left: selectedIndex * (itemWidth + gap),
                   top: 0,
                   bottom: 0,
                   width: itemWidth,
@@ -587,18 +693,18 @@ extension _GalleryComponents on _GalleryViewState {
                 ),
               Row(
                 children: [
-                  for (var i = 0; i < 5; i++) ...[
+                  for (var i = 0; i < pages.length; i++) ...[
                     if (i > 0 && !c.docked) const SizedBox(width: 5),
                     Expanded(
                       child: _GalleryNavigationItem(
-                        key: ValueKey('nav-${GalleryPage.values[i].name}'),
+                        key: ValueKey('nav-${pages[i].name}'),
                         label: names[i],
                         icon: icons[i],
-                        selected: c.mainPage.index == i,
+                        selected: selectedIndex == i,
                         docked: c.docked,
                         tokens: t,
                         reduceMotion: _reduceMotion,
-                        onTap: () => c.navigate(GalleryPage.values[i]),
+                        onTap: () => c.navigate(pages[i]),
                       ),
                     ),
                   ],
@@ -622,18 +728,12 @@ extension _GalleryComponents on _GalleryViewState {
     return Padding(
       padding: EdgeInsets.only(left: 16, right: 16, bottom: layout.bottomSpace),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 352),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(31 + _extraTextScale * 10),
-            boxShadow: t.shadows(GalleryElevation.floating),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(31 + _extraTextScale * 10),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-              child: bar,
-            ),
+        constraints: const BoxConstraints(maxWidth: 320),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(31 + _extraTextScale * 10),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+            child: bar,
           ),
         ),
       ),
@@ -814,22 +914,4 @@ class _GalleryTabbedListState extends State<_GalleryTabbedList> {
     padding: widget.padding,
     children: widget.children,
   );
-}
-
-class _GalleryBalanceParts {
-  _GalleryBalanceParts(this.original) {
-    final match = RegExp(r'[-−]?\d[\d,.]*').firstMatch(original);
-    known = match != null;
-    if (match == null) return;
-    prefix = original.substring(0, match.start).trim();
-    number = match.group(0)!;
-    suffix = original.substring(match.end).trim();
-    if (prefix.contains('−') || prefix.contains('-')) {
-      number = '−$number';
-      prefix = prefix.replaceAll(RegExp('[-−]'), '').trim();
-    }
-  }
-  final String original;
-  late final bool known;
-  String prefix = '', number = '', suffix = '';
 }

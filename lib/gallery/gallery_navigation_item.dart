@@ -68,17 +68,33 @@ class _GalleryNavigationItemState extends State<_GalleryNavigationItem> {
                     curve: _GalleryMotion.curve,
                     width: widget.docked ? 56 : 20,
                     height: widget.docked ? 28 : 20,
-                    decoration: BoxDecoration(
-                      color: widget.docked && widget.selected
-                          ? t.tone
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(28),
-                    ),
-                    child: Icon(
-                      widget.icon,
-                      size: widget.docked ? 22 : 20,
-                      color: foreground,
-                      shadows: const [],
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        TweenAnimationBuilder<double>(
+                          tween: Tween<double>(
+                            end: widget.docked && widget.selected ? 1 : 0,
+                          ),
+                          duration: widget.reduceMotion
+                              ? Duration.zero
+                              : _GalleryMotion.capsule,
+                          curve: _GalleryMotion.curve,
+                          builder: (context, opacity, _) => DecoratedBox(
+                            decoration: BoxDecoration(
+                              // Fade only alpha: transparent black would
+                              // darken the capsule during color interpolation.
+                              color: t.tone.withValues(alpha: opacity),
+                              borderRadius: BorderRadius.circular(28),
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          widget.icon,
+                          size: widget.docked ? 22 : 20,
+                          color: foreground,
+                          shadows: const [],
+                        ),
+                      ],
                     ),
                   ),
                   SizedBox(height: widget.docked ? 2 : 3),

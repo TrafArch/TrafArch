@@ -35,6 +35,7 @@ void main() {
       tester.view.viewPadding = const FakeViewPadding(top: 24, bottom: 24);
       tester.view.padding = const FakeViewPadding(top: 24, bottom: 24);
       addTearDown(tester.view.reset);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
       await tester.runAsync(() async {
         final sans = FontLoader('sans-serif')
           ..addFont(
@@ -107,6 +108,11 @@ void main() {
         c.back();
         c.navigate(GalleryPage.expert);
         await capture('$mode-expert');
+        for (final card in [c.cards[1], c.cards[2]]) {
+          c.openCard(card);
+          await capture('$mode-detail-${card.id}');
+          c.back();
+        }
         c.openCard(c.current);
         c.update(() => c.detailTab = 1);
         await capture('$mode-weekly');
@@ -129,6 +135,19 @@ void main() {
         c.navigate(GalleryPage.cards);
         c.update(() => c.docked = true);
         await capture('$mode-wallet-docked');
+        final normalSize = tester.view.physicalSize;
+        tester.view.physicalSize = const Size(320, 1000);
+        tester.platformDispatcher.textScaleFactorTestValue = 2;
+        c.update(() => c.docked = false);
+        await capture('$mode-wallet-320-2x');
+        c.openCard(c.cards[1]);
+        c.update(() {
+          c.cards[1].name = '深圳通 全国交通一卡通互联互通版';
+          c.cards[1].rawBalance = '-1,234,567.89';
+        });
+        await capture('$mode-detail-long-320-2x');
+        tester.platformDispatcher.clearTextScaleFactorTestValue();
+        tester.view.physicalSize = normalSize;
       }
       await tester.pumpWidget(const SizedBox.shrink());
     } finally {

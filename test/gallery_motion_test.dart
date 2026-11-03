@@ -374,7 +374,7 @@ void main() {
       await mount(tester);
       void expectCovered() {
         final rectangles = <Rect>[];
-        for (final page in GalleryPage.values.take(5)) {
+        for (final page in GalleryController.visibleMainPages) {
           final lists = find.descendant(
             of: find.byKey(ValueKey(page)),
             matching: find.byType(ListView),
@@ -402,7 +402,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 60));
       for (final page in [
         GalleryPage.trips,
-        GalleryPage.footprints,
+        GalleryPage.cards,
         GalleryPage.home,
         GalleryPage.expert,
       ]) {
@@ -709,7 +709,7 @@ void main() {
           final minB = colors
               .map((v) => (v.b * 255).round())
               .reduce((a, b) => a < b ? a : b);
-          await tester.tap(find.byKey(const ValueKey('nav-footprints')));
+          await tester.tap(find.byKey(const ValueKey('nav-cards')));
           await tester.pump();
           for (final elapsed in [0, 45, 45, 90]) {
             await tester.pump(Duration(milliseconds: elapsed));

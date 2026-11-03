@@ -11,6 +11,7 @@ import 'package:dynamic_color/dynamic_color.dart';
 import '../app/app_info.dart';
 import '../shared/app_support.dart';
 import 'gallery_controller.dart';
+import 'gallery_balance_presentation.dart';
 import 'gallery_data.dart';
 import 'gallery_theme.dart';
 import 'gallery_design.dart';

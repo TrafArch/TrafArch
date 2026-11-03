@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/gallery/gallery_app.dart';
+import 'package:transit_card_analyzer/gallery/gallery_balance_presentation.dart';
 import 'package:transit_card_analyzer/gallery/gallery_controller.dart';
 import 'package:transit_card_analyzer/gallery/gallery_data.dart';
 import 'package:transit_card_analyzer/gallery/gallery_theme.dart';
@@ -118,8 +119,12 @@ void main() {
             .toList();
         expect(texts, [
           c.current.name,
+          'CNY ¥',
+          GalleryBalancePresentation.parse(
+            c.current.balance(c.includeOverdraft),
+            currencyCode: 'CNY',
+          ).number,
           '**** ${c.current.tail}',
-          c.current.balance(c.includeOverdraft),
         ]);
         final title = tester.getRect(
           find.byKey(ValueKey('face-title-${c.current.id}')),

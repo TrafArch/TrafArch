@@ -13,7 +13,7 @@ class GalleryNavigationLayout {
       extraHeight = math.max(0, media.textScaler.scale(14) / 14 - 1) * 20;
   final bool docked;
   final double safeBottom, extraHeight;
-  double get contentHeight => (docked ? 64 : 62) + extraHeight;
+  double get contentHeight => (docked ? 65 : 62) + extraHeight;
   double get gap => docked ? (safeBottom > 0 ? 8 : 0) : 18;
   double get bottomSpace => safeBottom + gap;
   double get occupiedHeight => contentHeight + bottomSpace;

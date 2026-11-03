@@ -77,6 +77,12 @@ class GalleryController extends ChangeNotifier {
   final GalleryData data;
   late final GalleryQrController qr;
   static final clock = DateTime.parse('2026-10-27T09:41:00+08:00');
+  static const visibleMainPages = [
+    GalleryPage.home,
+    GalleryPage.trips,
+    GalleryPage.expert,
+    GalleryPage.cards,
+  ];
   late List<GalleryCard> cards;
   late List<GalleryRecord> trips;
   late List<GalleryRecord> footprints;
@@ -118,6 +124,10 @@ class GalleryController extends ChangeNotifier {
   GalleryCard get selectedCard =>
       cards.firstWhere((c) => c.id == selectedCardId, orElse: () => current);
   List<GalleryCard> get savedCards => cards.where((c) => c.saved).toList();
+  List<GalleryScene> get visibleScenes => data.scenes
+      .where((scene) => scene.query['screen'] != 'footprints')
+      .toList(growable: false);
+  // The dormant footprints frontend remains a main page for internal previews.
   bool get isMainPage => page.index < 5;
   GalleryPage get mainPage => isMainPage
       ? page

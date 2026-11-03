@@ -12,6 +12,8 @@ Gallery 运行时样式由 GalleryPalette／GalleryTokens、GalleryTypography �
 
 主页面转场协调器只响应底栏点击，保留横向进入／退出、跨项直达与中途反向；正文横滑不再触发功能页切换。页面按稳定 key 构建并沿用 PageStorage，底栏胶囊保留平滑移动，专家内部标签只点击选择，其横向滚动独立消费手势。底栏、列表留白与提示条共用 GalleryNavigationLayout，从根 viewPadding／viewInsets 计算系统导航避让，键盘高度仍由 Scaffold 单独处理；两种底栏按钮行均在系统安全区之上。
 
+可见底栏目的地由 `GalleryController.visibleMainPages` 明确列出首页、行程、专家、卡包四项，不依赖枚举数量计算。足迹前端、主页面分类和冻结场景保留供内部预览，用户场景列表通过 `visibleScenes` 隐藏足迹，不提供设置开关。下沉选中指示器固定使用当前主题色，仅对 alpha 动画，避免透明黑颜色插值造成灰黑中间帧。
+
 `assets/gallery/fixtures.json` 保存 Demo 2.4.0 的 52 个场景、合成卡片／二维码、固定演示时钟及 2026-10-30 知识库快照。专用快照与发布参考数据库分离，由 `dev/gallery/extract_demo.cjs` 离线提取，保留来源哈希，不修改 SQLite 资产或 manifest。相册使用内置样例，导出显示预览；模拟操作和样例设置只存在于内存；“预测性返回手势”是独立的持久化界面偏好，不随恢复样例重置。将来由正式装配层提供展示模型与动作适配器接入业务。
 
 Gallery 预测性返回使用 Flutter 公开的手势生命周期与自定义 PageRoute／PopupRoute：子页面水平跟手，抽屉向下跟手，取消恢复当前路由，提交从当前进度完成并仅返回一次。手势取消不取消二维码获取，真正返回时才取消；获取在手势中完成或场景重置时使旧手势失效。系统减少动画、关闭选项或不支持时保留普通返回，根主页面退出仍由系统处理。
@@ -19,6 +21,8 @@ Gallery 预测性返回使用 Flutter 公开的手势生命周期与自定义 Pa
 `InternalPreviewApp` 通过既有 `SettingsStore` 注入 `GalleryPreferences` 的读写回调，新增 `gallery_predictive_back_enabled` 文本键（默认开启），不创建数据库。偏好跨新版会话及应用重启保留，读写失败在设置中显示重试入口，串行保存及修订标识防止迟到结果覆盖新选择。Gallery 不直接访问文件；其余新版样例状态仍不持久化。底栏文字、图标使用统一显式颜色动画与固定字重，无投影或触摸状态描边，键盘焦点单独绘制。
 
 Gallery 周统计在独立展示模型中按固定演示周汇总，使用样例的明确币种及最小货币单位；只统计有明确日期的对应币种扣款。人民币／港币保留两位小数，日元使用整数；未知币种保留不可用，不从真实卡号、地区或当前时间推断。
+
+卡包列表与共用大卡面通过纯展示帮助模型 `GalleryBalancePresentation` 分离币种与数字，输入现有余额文本和明确币种代码，统一显示 CNY ¥、JPY ¥、HKD $、USD $、MOP ¥。裸 ¥／$ 不补猜币种；原余额字段、交易明细、导出与周统计接口不受展示格式影响。
 
 Android Gradle 根据 Dart target 的文件名识别内部构建，仅该入口排除 Google Services 插件与 Firebase Analytics 依赖；包名、显示名称、原签名和每次打包预留下一构建号的流程保持统一。详见 [GALLERY.md](GALLERY.md)。
 
