@@ -1,104 +1,277 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
-import 'package:path_provider/path_provider.dart';
+import '../../shared/application/owned_notifier.dart';
+import '../../shared/diagnostics/diagnostic_event.dart';
+import 'diagnostic_log_store.dart';
 
-/// 运行日志本地存储抽象：文本行追加与整体读取。
-abstract class LogStore {
-  /// 追加一行日志（含换行符）。
-  Future<void> append(String line);
+export 'diagnostic_log_store.dart';
 
-  /// 读取全部日志文本；无日志时返回空字符串。
-  Future<String> readAll();
-}
-
-/// 文件实现：应用私有文档目录下的 app_log.txt。
-/// 超过 [maxBytes] 时滚动，仅保留最近 [keepLines] 条，防止无限增长。
-class FileLogStore implements LogStore {
-  static const fileName = 'app_log.txt';
-  static const int maxBytes = 512 * 1024;
-  static const int keepLines = 500;
-
-  Future<File> _file() async {
-    final dir = await getApplicationDocumentsDirectory();
-    return File('${dir.path}${Platform.pathSeparator}$fileName');
-  }
-
-  @override
-  Future<void> append(String line) async {
-    final file = await _file();
-    await file.writeAsString(line, mode: FileMode.append, flush: true);
-    if (await file.length() > maxBytes) {
-      await _roll(file);
-    }
-  }
-
-  /// 滚动降载：保留最近条目，避免日志无限增长。
-  Future<void> _roll(File file) async {
-    try {
-      final lines = const LineSplitter().convert(await file.readAsString());
-      final tail = lines.length > keepLines
-          ? lines.sublist(lines.length - keepLines)
-          : lines;
-      await file.writeAsString(
-        '--- 日志已超过上限，滚动保留最近 $keepLines 条 ---\n'
-        '${tail.join('\n')}\n',
-        flush: true,
-      );
-    } catch (_) {
-      // 滚动失败时保留原文件，后续追加继续尝试
-    }
-  }
-
-  @override
-  Future<String> readAll() async {
-    try {
-      final file = await _file();
-      if (!await file.exists()) return '';
-      return await file.readAsString();
-    } catch (_) {
-      // 目录/文件不可用（如平台插件缺失）时按无日志降级
-      return '';
-    }
-  }
-}
-
-/// 内存实现：测试与无文件系统环境使用。
-class MemoryLogStore implements LogStore {
-  final List<String> lines = [];
-
-  @override
-  Future<void> append(String line) async => lines.add(line);
-
-  @override
-  Future<String> readAll() async => lines.join();
-}
-
-/// 应用运行日志：带时间戳记录，文件写入串行异步执行，不阻塞调用方。
-class AppLogger {
-  AppLogger({LogStore? store}) : _store = store ?? FileLogStore();
-
+/// Bounded, serial, batched local diagnostics. Logging never fails card I/O.
+class AppLogger extends OwnedNotifier implements DiagnosticRecorder {
+  AppLogger({
+    LogStore? store,
+    this.appVersion = 'unknown',
+    this.buildNumber = 'unknown',
+    this.maxBytes = 20 * 1024 * 1024,
+    this.maxSessions = 30,
+    this.maxAge = const Duration(days: 7),
+    this.maxQueueBytes = 1024 * 1024,
+    this.maxSessionBytes = 8 * 1024 * 1024,
+    DateTime Function()? now,
+  }) : _store = store ?? FileLogStore(),
+       _now = now ?? DateTime.now;
   final LogStore _store;
-
-  /// 日志记录开关（由 AppDependencies 按持久化设置控制；默认关闭）。
-  bool enabled = false;
-
-  /// 文件写入串行链：保证追加顺序，单条失败不打断后续写入。
+  final String appVersion;
+  final String buildNumber;
+  final int maxBytes;
+  final int maxSessions;
+  final Duration maxAge;
+  final int maxQueueBytes;
+  final int maxSessionBytes;
+  final DateTime Function() _now;
+  final _active = <String, _SessionSink>{};
+  final _incomplete = <String>{};
+  final _pending = <(String, String, int)>[];
+  final _writesBySession = <String, int>{};
+  int _queuedBytes = 0;
+  int _bufferBytes = 0;
+  Timer? _timer;
   Future<void> _chain = Future.value();
-
-  /// 记录一条日志（立即返回；文件写入后台串行执行）。
-  void log(String entry) {
-    if (!enabled) return;
-    final line = '[${formatTimestamp(DateTime.now())}] $entry\n';
-    _chain = _chain.then((_) => _store.append(line)).catchError((_) {});
+  bool _enabled = false;
+  bool _accepting = true;
+  String? _storageIssue;
+  String? get storageIssue => _storageIssue;
+  bool get enabled => _enabled;
+  set enabled(bool value) {
+    if (_enabled == value || !_accepting) return;
+    if (!value) {
+      for (final sink in _active.values.toList()) {
+        sink.end(DiagnosticOutcome.recordingStopped);
+      }
+      unawaited(flush());
+    }
+    _enabled = value;
   }
 
-  /// 等待已排队的日志写入完成（导出前调用，确保内容完整）。
-  Future<void> flush() => _chain;
+  @override
+  DiagnosticSessionSink startSession(
+    String id, {
+    DiagnosticSessionKind kind = DiagnosticSessionKind.scan,
+  }) {
+    if (!enabled || !_accepting || kind != DiagnosticSessionKind.scan) {
+      return const _SilentSink();
+    }
+    final existing = _active[id];
+    if (existing != null) return existing;
+    final sink = _SessionSink(this, id);
+    _active[id] = sink;
+    sink.event(
+      'session_start',
+      data: {
+        'kind': kind.name,
+        'appVersion': appVersion,
+        'buildNumber': buildNumber,
+      },
+    );
+    return sink;
+  }
 
-  /// 读取全部日志文本（无日志时返回空字符串）。
-  Future<String> readAll() => _store.readAll();
+  void _issue(String message, [String? id]) {
+    if (id != null) _incomplete.add(id);
+    if (_storageIssue == message) return;
+    _storageIssue = message;
+    notifyListeners();
+  }
+
+  void _append(
+    _SessionSink sink,
+    DiagnosticEvent event, {
+    bool control = false,
+  }) {
+    try {
+      final line = '${jsonEncode(event.toJson())}\n';
+      final bytes = utf8.encode(line).length;
+      if ((!control && _queuedBytes + bytes > maxQueueBytes) ||
+          (!control && sink.bytes + bytes > maxSessionBytes) ||
+          (control && _queuedBytes + bytes > maxQueueBytes + 16384)) {
+        sink.dropped++;
+        _issue('日志未完整保存：记录量超过上限。', sink.id);
+        return;
+      }
+      sink.bytes += bytes;
+      _queuedBytes += bytes;
+      _bufferBytes += bytes;
+      _pending.add((sink.id, line, bytes));
+      _writesBySession.update(sink.id, (count) => count + 1, ifAbsent: () => 1);
+      if (_bufferBytes >= 32 * 1024 ||
+          control ||
+          event.level == DiagnosticSeverity.error) {
+        _drain();
+      } else {
+        _timer ??= Timer(const Duration(milliseconds: 200), _drain);
+      }
+    } catch (_) {
+      sink.dropped++;
+      _issue('日志未完整保存：记录无法编码。', sink.id);
+    }
+  }
+
+  void _drain() {
+    _timer?.cancel();
+    _timer = null;
+    if (_pending.isEmpty) return;
+    final batch = List.of(_pending);
+    _pending.clear();
+    _bufferBytes = 0;
+    _chain = _chain.then((_) async {
+      final grouped = <String, StringBuffer>{};
+      for (final (id, line, _) in batch) {
+        (grouped[id] ??= StringBuffer()).write(line);
+      }
+      try {
+        for (final entry in grouped.entries) {
+          try {
+            await _store.append(entry.key, entry.value.toString());
+          } catch (_) {
+            _issue('日志未完整保存：文件写入失败，请检查可用空间。', entry.key);
+          }
+        }
+      } finally {
+        for (final (id, _, bytes) in batch) {
+          _queuedBytes -= bytes;
+          final remaining = _writesBySession[id]! - 1;
+          if (remaining == 0) {
+            _writesBySession.remove(id);
+          } else {
+            _writesBySession[id] = remaining;
+          }
+        }
+      }
+    });
+  }
+
+  Future<void> flush() {
+    _drain();
+    return _chain;
+  }
+
+  /// Reads follow the accepted prefix and precede subsequently queued writes.
+  Future<T> _readBarrier<T>(Future<T> Function() read) {
+    _drain();
+    final result = _chain.then((_) => read());
+    _chain = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {
+        _issue('日志读取或清理失败，请稍后重试。');
+      },
+    );
+    return result;
+  }
+
+  Future<List<DiagnosticSession>> readSessions({Set<String>? ids}) {
+    final active = _active.keys.toSet();
+    final selectedIds = ids == null ? null : Set<String>.of(ids);
+    return _readBarrier(() async {
+      final sessions = <DiagnosticSession>[];
+      for (final entry in await _store.entries()) {
+        if (selectedIds != null && !selectedIds.contains(entry.id)) continue;
+        sessions.add(
+          DiagnosticSession.parse(
+            entry.id,
+            await _store.read(entry.id),
+            running: active.contains(entry.id),
+            storageIncomplete: _incomplete.contains(entry.id),
+          ),
+        );
+      }
+      // A failed first write may leave no file at all. Keep that loss visible
+      // during this process instead of presenting it as an empty log history.
+      for (final id in _incomplete) {
+        if ((selectedIds == null || selectedIds.contains(id)) &&
+            !sessions.any((session) => session.id == id)) {
+          sessions.add(
+            DiagnosticSession.parse(
+              id,
+              '',
+              running: active.contains(id),
+              storageIncomplete: true,
+            ),
+          );
+        }
+      }
+      if (selectedIds == null || selectedIds.contains('legacy')) {
+        final legacy = await _store.readLegacy();
+        if (legacy != null && legacy.isNotEmpty) {
+          sessions.add(
+            DiagnosticSession(
+              id: 'legacy',
+              raw: legacy,
+              events: const [],
+              bytes: utf8.encode(legacy).length,
+              legacy: true,
+            ),
+          );
+        }
+      }
+      sessions.sort(
+        (a, b) => (b.startedAt ?? DateTime(1970)).compareTo(
+          a.startedAt ?? DateTime(1970),
+        ),
+      );
+      return List.unmodifiable(sessions);
+    });
+  }
+
+  Future<void> prune() => _readBarrier(() async {
+    final entries = await _store.entries();
+    entries.sort((a, b) => a.modifiedAt.compareTo(b.modifiedAt));
+    var bytes = entries.fold<int>(0, (sum, e) => sum + e.bytes);
+    var count = entries.length;
+    for (final entry in entries) {
+      if (_active.containsKey(entry.id) ||
+          _writesBySession.containsKey(entry.id)) {
+        continue;
+      }
+      if (bytes <= maxBytes &&
+          count <= maxSessions &&
+          _now().difference(entry.modifiedAt) <= maxAge) {
+        continue;
+      }
+      await _store.delete(entry.id);
+      _incomplete.remove(entry.id);
+      bytes -= entry.bytes;
+      count--;
+    }
+  });
+
+  Future<void> deleteSessions(Set<String> ids) {
+    final selected = Set<String>.of(ids);
+    return _readBarrier(() async {
+      if (selected.any(
+        (id) => _active.containsKey(id) || _writesBySession.containsKey(id),
+      )) {
+        throw StateError('Session is still recording');
+      }
+      for (final id in selected) {
+        if (id == 'legacy') {
+          await _store.deleteLegacy();
+        } else {
+          await _store.delete(id);
+        }
+        _incomplete.remove(id);
+      }
+    });
+  }
+
+  Future<String> readAll() async =>
+      (await readSessions()).map((session) => session.raw).join();
+  Future<void> close() async {
+    enabled = false;
+    _accepting = false;
+    await flush();
+    super.dispose();
+  }
 
   /// 时间戳格式：yyyy-MM-dd HH:mm:ss.SSS。
   static String formatTimestamp(DateTime t) {
@@ -107,4 +280,72 @@ class AppLogger {
         '${pad2(t.hour)}:${pad2(t.minute)}:${pad2(t.second)}'
         '.${t.millisecond.toString().padLeft(3, '0')}';
   }
+}
+
+class _SessionSink implements DiagnosticSessionSink {
+  _SessionSink(this.owner, this.id);
+  final AppLogger owner;
+  final String id;
+  final _clock = Stopwatch()..start();
+  int sequence = 0;
+  int bytes = 0;
+  int dropped = 0;
+  bool ended = false;
+  @override
+  bool get recording => !ended && owner.enabled;
+  @override
+  void event(
+    String type, {
+    DiagnosticSeverity level = DiagnosticSeverity.info,
+    DiagnosticPhase? phase,
+    Map<String, Object?> data = const {},
+  }) {
+    if (ended || !owner.enabled) return;
+    owner._append(
+      this,
+      DiagnosticEvent(
+        sessionId: id,
+        sequence: sequence++,
+        at: owner._now(),
+        elapsedMicros: _clock.elapsedMicroseconds,
+        type: type,
+        level: level,
+        phase: phase,
+        data: data,
+      ),
+      control: type == 'session_end' || type == 'capture_gap',
+    );
+  }
+
+  @override
+  void end(DiagnosticOutcome outcome) {
+    if (ended) return;
+    if (dropped > 0 || owner._incomplete.contains(id)) {
+      event(
+        'capture_gap',
+        level: DiagnosticSeverity.warning,
+        data: {'droppedEvents': dropped},
+      );
+    }
+    event('session_end', data: {'outcome': outcome.name});
+    ended = true;
+    _clock.stop();
+    owner._active.remove(id);
+    unawaited(owner.prune().catchError((Object _) {}));
+  }
+}
+
+class _SilentSink implements DiagnosticSessionSink {
+  const _SilentSink();
+  @override
+  bool get recording => false;
+  @override
+  void event(
+    String type, {
+    DiagnosticSeverity level = DiagnosticSeverity.info,
+    DiagnosticPhase? phase,
+    Map<String, Object?> data = const {},
+  }) {}
+  @override
+  void end(DiagnosticOutcome outcome) {}
 }

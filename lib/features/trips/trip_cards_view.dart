@@ -35,11 +35,15 @@ class TripCardsView<S extends Enum> extends StatefulWidget {
     required this.sourceLabels,
     required this.summaryText,
     this.projectedJourneys,
+    this.initialFilters,
+    this.onFiltersChanged,
   });
 
   final List<TripCardPresentation<S>> entries;
   final Map<S, String> sourceLabels;
   final String summaryText;
+  final List<String>? initialFilters;
+  final ValueChanged<List<String>>? onFiltersChanged;
 
   /// Saved history has already validated each capture independently. Do not
   /// pair it again after repeated observations have been joined for display.
@@ -52,6 +56,27 @@ class TripCardsView<S extends Enum> extends StatefulWidget {
 class _TripCardsViewState<S extends Enum> extends State<TripCardsView<S>> {
   final _sources = <S>{};
   final _modes = <TripModeFilter>{};
+
+  @override
+  void initState() {
+    super.initState();
+    final values = widget.initialFilters ?? const <String>[];
+    _sources.addAll(
+      widget.sourceLabels.keys
+          .where((s) => values.contains('source:${s.name}'))
+          .take(1),
+    );
+    _modes.addAll(
+      TripModeFilter.values
+          .where((m) => values.contains('mode:${m.name}'))
+          .take(1),
+    );
+  }
+
+  void _filtersChanged() => widget.onFiltersChanged?.call([
+    for (final source in _sources) 'source:${source.name}',
+    for (final mode in _modes) 'mode:${mode.name}',
+  ]);
 
   @override
   Widget build(BuildContext context) {
@@ -127,6 +152,7 @@ class _TripCardsViewState<S extends Enum> extends State<TripCardsView<S>> {
                   _sources
                     ..clear()
                     ..addAll(next == null ? <S>{} : {next});
+                  _filtersChanged();
                 }),
               ),
             ),
@@ -150,6 +176,7 @@ class _TripCardsViewState<S extends Enum> extends State<TripCardsView<S>> {
                   _modes
                     ..clear()
                     ..addAll(next == null ? <TripModeFilter>{} : {next});
+                  _filtersChanged();
                 }),
               ),
             ),

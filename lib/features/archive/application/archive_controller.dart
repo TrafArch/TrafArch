@@ -339,13 +339,13 @@ class ArchiveController extends OwnedNotifier {
     }
   }
 
-  Future<bool> accept(String id) async {
+  Future<bool> accept(String id, {int? capturedParseVersion}) async {
     final item = pending;
     if (disposed || item == null || item.pendingSaveId != id) return false;
     final generation = _generation;
     pending = null;
     notifyListeners();
-    final operation = _save(item);
+    final operation = _save(item, parseVersion: capturedParseVersion);
     _writes.add(operation);
     final ok = await operation;
     _writes.remove(operation);
@@ -356,7 +356,7 @@ class ArchiveController extends OwnedNotifier {
     return ok;
   }
 
-  Future<bool> _save(PendingCardSave item) async {
+  Future<bool> _save(PendingCardSave item, {int? parseVersion}) async {
     try {
       await repository.db.transaction(() async {
         final existing =
@@ -381,7 +381,7 @@ class ArchiveController extends OwnedNotifier {
           currencyCode: item.currencyCode,
           transactionCount: item.transactionCount,
           sessionDataJson: payload,
-          parseVersion: kTripParseVersion,
+          parseVersion: parseVersion ?? kTripParseVersion,
           readAt: item.readAt,
         );
         // A late full observation may update the retained balance while the

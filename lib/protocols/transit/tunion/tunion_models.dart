@@ -266,10 +266,30 @@ class TUnionTripRecord {
     this.rawHex,
   });
 
-  /// 交易类型名称（标准类型表 0x01~0x0A；其余显式标注未知）。
-  String get typeName =>
-      _typeNames[typeCode] ??
-      '未知(0x${typeCode.toRadixString(16).padLeft(2, '0').toUpperCase()})';
+  /// Direction semantics for the observed Shenyang rail 0x15/0x16 layout.
+  /// Keep [typeCode] and raw bytes unchanged. The receiving city, metro
+  /// application, terminal namespace and acquirer must all agree; the same
+  /// numeric types elsewhere remain unknown. These records still use BE money.
+  /// Evidence: transit_card_log_20261103_202948 and the existing 20261030
+  /// Shenyang capture contain both terminal prefixes and EC/EP mixed journeys.
+  int get journeyTypeCode {
+    if ((typeCode == 0x15 || typeCode == 0x16) &&
+        isCityRail &&
+        cityCode == '2210' &&
+        acquirerId == '1217221000000000' &&
+        RegExp(r'^[0-9]{16}$').hasMatch(terminalId) &&
+        (terminalId.startsWith('00004131') ||
+            terminalId.startsWith('22104131'))) {
+      return typeCode == 0x15 ? 0x01 : 0x02;
+    }
+    return typeCode;
+  }
+
+  /// 标准类型及受理方证据确认的地方类型；其余显式标注未知。
+  String get typeName => journeyTypeCode != typeCode
+      ? '沈阳轨道${journeyTypeCode == 0x01 ? '进站' : '出站'}'
+      : _typeNames[typeCode] ??
+            '未知(0x${typeCode.toRadixString(16).padLeft(2, '0').toUpperCase()})';
 
   /// 应用分类码名称（标准表未收录时显式标注未知）。
   String get appTypeName =>
@@ -291,17 +311,16 @@ class TUnionTripRecord {
 
   /// 仅适用于 0x1E 的消费与充值类型，不复用 0x18 的类型码。
   bool get isConsume =>
-      const {0x02, 0x04, 0x05, 0x06, 0x07, 0x08}.contains(typeCode);
+      const {0x02, 0x04, 0x05, 0x06, 0x07, 0x08}.contains(journeyTypeCode);
   bool get isRecharge => typeCode == 0x09 || typeCode == 0x0A;
 
-  /// 是否入站/上车/进场类记录（EC 0x01 / EP 0x03）：不承载扣费金额，
-  /// 不参与与交易明细（0x18）的行程配对。
-  bool get isEntry => typeCode == 0x01 || typeCode == 0x03;
+  /// 标准进站类型及受理方证据确认的沈阳地方进站类型。
+  bool get isEntry => journeyTypeCode == 0x01 || journeyTypeCode == 0x03;
 
   /// 行程状态短名（行程卡标题展示用）：进/出站类按应用分类码区分
   /// 轨道交通"进站/出站"与公共汽电车"上车/下车"；单次消费 / 补票 /
   /// 充值取短名；类型未收录时返回 null（展示层不替换，不猜测）。
-  String? get statusShortName => switch (typeCode) {
+  String? get statusShortName => switch (journeyTypeCode) {
     0x01 || 0x03 => isBus ? '上车' : '进站',
     0x02 || 0x04 => isBus ? '下车' : '出站',
     0x05 || 0x06 => '单次消费',

@@ -14,8 +14,9 @@ const int kWalletAnchoredBalanceParseVersion = 8;
 
 /// 行程解析口径版本：解析 / 关联规则变更时递增，随读取批次持久化，
 /// 历史数据据此识别产出批次所用的解析口径。
-/// v12 按受理方证据识别沈阳 EP 轨道金额的小端布局；历史捕获不重写。
-const int kTripParseVersion = 12;
+/// v13 接入沈阳受理方限定的 0x15/0x16 进出站语义；历史捕获不重写。
+/// v12 已按受理方证据识别沈阳 EP 轨道金额的小端布局。
+const int kTripParseVersion = 13;
 
 /// 识别证据：来源、说明与权重（0 表示"出场但未命中"）。
 class Evidence {
@@ -480,7 +481,7 @@ List<TripEntry> buildTripStream({
 /// 类型、时间、城市及金额 / 终端互证；仅凭时间或金额相似不成立。
 bool railRecordMatchesProcess(TransitRecord rail, TUnionTripRecord process) {
   if (!process.isCityRail) return false;
-  final entry = _processEntrySide(process.typeCode);
+  final entry = _processEntrySide(process.journeyTypeCode);
   if (entry == null) return false;
   return _matchesProcessEvidence(
     source: process,
@@ -536,7 +537,7 @@ bool _matchesProcessEvidence({
   required String? terminal,
   required int? amount,
 }) {
-  final sourceEntry = _processEntrySide(source.typeCode);
+  final sourceEntry = _processEntrySide(source.journeyTypeCode);
   if (sourceEntry == null || entry != sourceEntry) return false;
   String? validHex(String? value, int length) {
     final text = value?.trim().toUpperCase();

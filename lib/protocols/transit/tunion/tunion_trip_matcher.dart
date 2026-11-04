@@ -28,8 +28,8 @@ bool matchesTunionJourneySide({
       !RegExp(r'^0+$|^F+$').hasMatch(terminal) &&
       (isRail ? cycle.isCityRail : cycle.isBus) &&
       (isEntry
-          ? const {0x01, 0x03}.contains(cycle.typeCode)
-          : const {0x02, 0x04}.contains(cycle.typeCode)) &&
+          ? const {0x01, 0x03}.contains(cycle.journeyTypeCode)
+          : const {0x02, 0x04}.contains(cycle.journeyTypeCode)) &&
       (amountFen == null || amountFen == cycle.amountFen);
   if (!sameSide) return false;
   if (terminal == normalize(cycle.terminalId)) return true;

@@ -12,9 +12,12 @@ class SettingsActionButton extends StatelessWidget {
     return IconButton(
       tooltip: '设置',
       icon: const Icon(Icons.settings_outlined),
-      onPressed: () =>
-          Navigator.of(context)
-              .push(MaterialPageRoute(builder: (_) => SettingsPage(app: app))),
+      onPressed: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          settings: const RouteSettings(name: '/settings'),
+          builder: (_) => SettingsPage(app: app),
+        ),
+      ),
     );
   }
 }

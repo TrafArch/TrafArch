@@ -263,7 +263,7 @@ TripModeFilter _processMode(TUnionTripRecord record) => isTunionBusCycle(record)
     : TripModeFilter.other;
 
 JourneyEventRole _processRole(TUnionTripRecord record, TripModeFilter mode) =>
-    switch (record.typeCode) {
+    switch (record.journeyTypeCode) {
       0x01 || 0x03 => JourneyEventRole.entry,
       0x02 || 0x04 => JourneyEventRole.exit,
       0x07 ||

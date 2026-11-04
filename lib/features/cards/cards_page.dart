@@ -157,10 +157,14 @@ class _SavedCardTile extends StatelessWidget {
       child: InkWell(
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute<void>(
+            settings: RouteSettings(
+              name: '/card/${Uri.encodeComponent(card.id)}',
+            ),
             builder: (_) => CardDetailPage(
               repository: app.cardRepository,
               cardId: card.id,
               settings: app.settings,
+              recoveryFilters: app.recoveryFilters,
             ),
           ),
         ),

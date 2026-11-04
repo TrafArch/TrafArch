@@ -6,6 +6,7 @@ import '../../../protocols/transit/tunion/tunion_trip_matcher.dart';
 import '../data/app_database.dart';
 import '../domain/archive_context.dart';
 import '../domain/archive_export_options.dart';
+import '../domain/captured_cycle_money.dart';
 import '../domain/card_name_extension.dart';
 import '../presentation/archive_record_presenter.dart';
 import 'archive_history.dart';
@@ -285,6 +286,14 @@ Map<String, dynamic> _tuRow(SavedCard card, ArchiveHistoryRecord record) {
       fields['amountFen'] ??
       fields['transactionAmountFen'] ??
       fields['exitAmountFen'];
+  // Normalized workflow values may use verified raw-byte decoding. The raw
+  // integer and the complete archive remain the original capture evidence.
+  final cycleMoney = record.kind == ArchiveRecordKind.process
+      ? verifiedArchivedCycleMoney(fields, record.context)
+      : null;
+  final displayedAmount = cycleMoney?.amountFen ?? rawAmount;
+  final displayedBalance =
+      cycleMoney?.balanceFen ?? archiveRecordBalanceFen(record);
   // TU18 snapshots retain the type label rather than rawType. Only its exact
   // captured recharge label confirms credit; consume:false alone does not.
   final bool? debit = switch (record.kind) {
@@ -302,8 +311,8 @@ Map<String, dynamic> _tuRow(SavedCard card, ArchiveHistoryRecord record) {
           : null,
     ArchiveRecordKind.rail || ArchiveRecordKind.bus => true,
   };
-  final amount = rawAmount is int && debit != null
-      ? (debit && rawAmount > 0 ? -rawAmount : rawAmount)
+  final amount = displayedAmount is int && debit != null
+      ? (debit && displayedAmount > 0 ? -displayedAmount : displayedAmount)
       : null;
   final knownSide = _knownSide(record, process);
   final time = _time(fields, 'time', record.context);
@@ -354,8 +363,8 @@ Map<String, dynamic> _tuRow(SavedCard card, ArchiveHistoryRecord record) {
     'amount_raw': rawAmount is int ? rawAmount.toString() : null,
     'amount_unit': knownMoney ? '10^-${scale.toString()} $currency' : 'unknown',
     'currency': currency,
-    'balance': knownMoney && archiveRecordBalanceFen(record) != null
-        ? _decimal(archiveRecordBalanceFen(record)!, scale)
+    'balance': knownMoney && displayedBalance != null
+        ? _decimal(displayedBalance, scale)
         : null,
     'city': _text(fields['cityName']) ?? _text(fields['cityCode']),
     'terminal': _text(fields['terminalId']),
@@ -371,7 +380,7 @@ Map<String, dynamic> _tuRow(SavedCard card, ArchiveHistoryRecord record) {
 }
 
 String? _knownSide(ArchiveHistoryRecord record, TUnionTripRecord? process) {
-  final code = process?.typeCode;
+  final code = process?.journeyTypeCode;
   if (code == 1 || code == 3) return 'entry';
   if (code == 2 || code == 4) return 'exit';
   if (record.kind != ArchiveRecordKind.transaction) return null;
@@ -460,6 +469,8 @@ TUnionTripRecord? _process(Object? raw) {
     amountFen: raw['amountFen'],
     balanceFen: raw['balanceFen'],
     time: DateTime.fromMillisecondsSinceEpoch(epoch, isUtc: true),
+    cityCode: _text(raw['cityCode']),
+    acquirerId: _text(raw['acquirerId']),
     rawHex: _text(raw['rawHex']),
   );
 }

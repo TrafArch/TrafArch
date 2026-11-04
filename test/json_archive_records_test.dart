@@ -7,6 +7,7 @@ import 'package:transit_card_analyzer/features/archive/application/cu_archive_pr
 import 'package:transit_card_analyzer/features/archive/data/app_database.dart';
 import 'package:transit_card_analyzer/features/archive/domain/archive_export_options.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_session_snapshot.dart';
+import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
 import 'package:transit_card_analyzer/features/reference_data/domain/reference_match.dart';
 import 'package:transit_card_analyzer/features/reference_data/domain/station_codes.dart';
 import 'package:transit_card_analyzer/features/transit_analysis/cu_transaction_analysis.dart';
@@ -570,7 +571,163 @@ void main() {
     ]);
     expect(rows.every((row) => row['amount_raw'] == '300'), isTrue);
   });
+
+  test('沈阳地方15和16原码保留且规范化JSON分别输出进站和出站字段', () {
+    // Exact 1E bodies from the supplied logs; these archive maps are synthetic.
+    final records = [
+      _shenyangRecord(
+        type: 0x15,
+        terminal: '0000413101760747',
+        lineStation: '0001009F000300',
+        amount: 0,
+        balance: 1550,
+        time: DateTime.utc(2026, 9, 30, 17, 19, 30),
+        raw: '150000413101760747010001009F000300000000000000060E2026093017193022101217221000000000000002BC0000',
+      ),
+      _shenyangRecord(
+        type: 0x16,
+        terminal: '0000413101760738',
+        lineStation: '0001009F000300',
+        amount: 450,
+        balance: 1550,
+        time: DateTime.utc(2026, 9, 30, 12, 52, 42),
+        raw: '160000413101760738010001009F000300000001C20000060E2026093012524222101217221000000000000002BC0000',
+      ),
+    ];
+    final originals = [for (final record in records) jsonEncode(record.fields)];
+    final rows = projectArchiveRecords([_history(records)]);
+
+    expect(rows[0]['record_type'], '进站');
+    expect(rows[0]['amount'], isNull);
+    expect(rows[0]['entry_time'], '2026-09-30T17:19:30.000');
+    expect(rows[0]['entry_line_code'], '0001');
+    expect(rows[0]['entry_station_code'], '009F');
+    expect(rows[0]['exit_time'], isNull);
+    expect(rows[1]['record_type'], '出站');
+    expect(rows[1]['amount'], '-4.50');
+    expect(rows[1]['exit_time'], '2026-09-30T12:52:42.000');
+    expect(rows[1]['exit_line_code'], '0001');
+    expect(rows[1]['exit_station_code'], '009F');
+    expect(rows[1]['entry_time'], isNull);
+    expect(records.map((record) => record.fields['typeCode']), [0x15, 0x16]);
+    expect(records.map((record) => jsonEncode(record.fields)), originals);
+  });
+
+  for (final conflicting in <String, dynamic>{
+    'cityCode': '1000',
+    'acquirerId': '1217221000000001',
+    'terminalId': '0000300000000001',
+    'appTypeCode': 2,
+  }.entries) {
+    test('沈阳地方类型导出缺少${conflicting.key}证据时不猜进出站', () {
+      final record = _shenyangRecord(
+        type: 0x16,
+        terminal: '0000413101760738',
+        lineStation: '0001009F000300',
+        amount: 450,
+        balance: 1550,
+        time: DateTime.utc(2026, 9, 30, 12, 52, 42),
+        raw: '160000413101760738010001009F000300000001C20000060E2026093012524222101217221000000000000002BC0000',
+        overrides: {conflicting.key: conflicting.value},
+      );
+      final original = jsonEncode(record.fields);
+      final row = projectArchiveRecords([
+        _history([record]),
+      ]).single;
+
+      expect(row['record_type'], '过程记录');
+      expect(row['amount'], isNull);
+      expect(row['entry_time'], isNull);
+      expect(row['exit_time'], isNull);
+      expect(jsonEncode(record.fields), original);
+    });
+  }
+
+  test('旧沈阳EP异常金额仅修正规范化JSON且amount_raw保留捕获整数', () {
+    final record = _shenyangRecord(
+      type: 4,
+      terminal: '2210413106036382',
+      lineStation: '000200D7000300',
+      amount: 234946560,
+      balance: 235274240,
+      time: DateTime.utc(2026, 9, 30, 17, 56, 17),
+      raw: '04221041310603638201000200D70003000E0100000E0600002026093017561722101217221000000000000002BC0000',
+    );
+    final original = jsonEncode(record.fields);
+    final row = projectArchiveRecords([
+      _history([record]),
+    ]).single;
+
+    expect(row['amount'], '-2.70');
+    expect(row['balance'], '15.50');
+    expect(row['amount_raw'], '234946560');
+    expect(row['amount_unit'], '10^-2 CNY');
+    expect(row['currency'], 'CNY');
+    expect(jsonEncode(record.fields), original);
+  });
+
+  test('沈阳EP导出原文与捕获金额冲突时保留独立修改的金额和余额', () {
+    final record = _shenyangRecord(
+      type: 4,
+      terminal: '2210413106036382',
+      lineStation: '000200D7000300',
+      amount: 12345,
+      balance: 235274240,
+      time: DateTime.utc(2026, 9, 30, 17, 56, 17),
+      raw: '04221041310603638201000200D70003000E0100000E0600002026093017561722101217221000000000000002BC0000',
+    );
+    final original = jsonEncode(record.fields);
+    final row = projectArchiveRecords([
+      _history([record]),
+    ]).single;
+
+    expect(row['amount'], '-123.45');
+    expect(row['balance'], '2352742.40');
+    expect(row['amount_raw'], '12345');
+    expect(jsonEncode(record.fields), original);
+  });
 }
+
+ArchiveHistoryRecord _shenyangRecord({
+  required int type,
+  required String terminal,
+  required String lineStation,
+  required int amount,
+  required int balance,
+  required DateTime time,
+  required String raw,
+  Map<String, dynamic> overrides = const {},
+}) => _record(
+  ArchiveRecordKind.process,
+  {
+    'typeCode': type,
+    'terminalId': terminal,
+    'appTypeCode': 1,
+    'lineStationCode': lineStation,
+    'amountFen': amount,
+    'balanceFen': balance,
+    'time': time.millisecondsSinceEpoch,
+    'capturedTimes': {
+      'time': {
+        // Use a portable clock-face coordinate for this synthetic archive.
+        'civil': time.toIso8601String().replaceFirst(RegExp(r'Z$'), ''),
+        'basis': 'parser-local-unverified',
+        'conversionOffsetMinutes': 0,
+      },
+    },
+    'cityCode': '2210',
+    'acquirerId': '1217221000000000',
+    'rawHex': raw,
+    ...overrides,
+  },
+  context: const ArchiveContext(
+    systemId: CardParserIds.tunion,
+    applicationId: 'A000000632010105',
+    currencyCode: 'CNY',
+    minorUnitDigits: 2,
+    clockBasis: 'device-local-card-time-unverified',
+  ),
+);
 
 Map<String, dynamic> _cycleFields({
   int typeCode = 2,

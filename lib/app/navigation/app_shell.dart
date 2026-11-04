@@ -9,6 +9,9 @@ import '../../features/trips/trips_page.dart';
 import '../../features/expert/expert_page.dart';
 import 'floating_nav_bar.dart';
 import 'navigation_scroll_policy.dart';
+import '../../features/settings/presentation/settings_page.dart';
+import '../../features/qr/presentation/qr_page.dart';
+import '../../features/archive/presentation/card_detail_page.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({
@@ -36,6 +39,49 @@ class _AppShellState extends State<AppShell> with RouteAware {
       widget.bottomBarController ?? BottomBarController();
   PageRoute<dynamic>? _subscribedRoute;
   AppDependencies get app => widget.app;
+  bool _restored = false;
+
+  @override
+  void initState() {
+    super.initState();
+    app.addListener(_restorePage);
+    _restorePage();
+  }
+
+  void _restorePage() {
+    if (_restored || !app.recoveryReady) return;
+    _restored = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() => index = app.recoveryTab);
+      final name = app.pendingRecoveryRoute;
+      app.pendingRecoveryRoute = null;
+      final Widget? page = switch (name) {
+        '/settings' => SettingsPage(app: app),
+        '/qr' => QrPage(app: app),
+        final String path when path.startsWith('/card/') => CardDetailPage(
+          repository: app.cardRepository,
+          cardId: Uri.decodeComponent(path.substring(6)),
+          settings: app.settings,
+          recoveryFilters: app.recoveryFilters,
+        ),
+        _ => null,
+      };
+      if (page != null) {
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            settings: RouteSettings(name: name),
+            builder: (_) => page,
+          ),
+        );
+      }
+    });
+  }
+
+  void _select(int value) {
+    app.recoveryTab = value;
+    setState(() => index = value);
+  }
 
   @override
   void didChangeDependencies() {
@@ -63,6 +109,7 @@ class _AppShellState extends State<AppShell> with RouteAware {
 
   @override
   void dispose() {
+    app.removeListener(_restorePage);
     widget.routeObserver?.unsubscribe(this);
     if (widget.bottomBarController == null) _barController.dispose();
     super.dispose();
@@ -85,7 +132,7 @@ class _AppShellState extends State<AppShell> with RouteAware {
       canPop: index == 0,
       onPopInvokedWithResult: (bool didPop, Object? result) {
         if (didPop) return;
-        if (index != 0) setState(() => index = 0);
+        if (index != 0) _select(0);
       },
       child: Scaffold(
         body: BottomBar(
@@ -122,7 +169,7 @@ class _AppShellState extends State<AppShell> with RouteAware {
           child: FloatingNavBar(
             index: index,
             onSelect: (i) {
-              if (i != index) setState(() => index = i);
+              if (i != index) _select(i);
             },
           ),
         ),

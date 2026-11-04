@@ -18,6 +18,8 @@ class SettingsController extends OwnedNotifier {
   final Map<String, bool> _values = {};
   final Map<String, int> _revisions = {};
   Future<void>? _initialization;
+  bool _initialized = false;
+  bool get initialized => _initialized;
   Future<void> _writes = Future.value();
   String? persistenceError;
   bool openingFeedbackSurvey = false;
@@ -122,16 +124,13 @@ class SettingsController extends OwnedNotifier {
     }
     if (disposed) return;
     logger.enabled = loggingEnabled;
+    _initialized = true;
     notifyListeners();
   }();
 
   Future<void> setLoggingEnabled(bool value) async {
     if (disposed || value == loggingEnabled) return;
-    // Record the closing marker while logging is still enabled. Queue the
-    // opening marker after the setting takes effect, then flush both changes.
-    if (!value) logger.log('== 日志记录已关闭 ==');
     final write = _set(SettingsKeys.loggingEnabled, value);
-    if (value) logger.log('== 日志记录已开启 ==');
     await write;
     await logger.flush();
   }

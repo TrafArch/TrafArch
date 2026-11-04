@@ -203,7 +203,7 @@ bool _transactionMatchesCycle(TransitTrip trip, TUnionTripRecord cycle) {
       : TripModeFilter.other;
   final role = cycle.isEntry
       ? JourneyEventRole.entry
-      : const {0x02, 0x04}.contains(cycle.typeCode)
+      : const {0x02, 0x04}.contains(cycle.journeyTypeCode)
       ? JourneyEventRole.exit
       : mode == TripModeFilter.rail &&
             const {0x07, 0x08}.contains(cycle.typeCode)
@@ -241,7 +241,10 @@ JourneyEventRole _transactionRole(TransitTrip trip) =>
             ? JourneyEventRole.entry
             : trip.matchedProcessTrip?.isEntry == true
             ? JourneyEventRole.entry
-            : const {0x02, 0x04}.contains(trip.matchedProcessTrip?.typeCode)
+            : const {
+                0x02,
+                0x04,
+              }.contains(trip.matchedProcessTrip?.journeyTypeCode)
             ? JourneyEventRole.exit
             : _transactionMode(trip) == TripModeFilter.rail &&
                   const {0x07, 0x08}.contains(trip.matchedProcessTrip?.typeCode)
