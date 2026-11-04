@@ -57,3 +57,5 @@ app.*.map.json
 key.properties
 *.jks
 *.keystore
+
+*_TODO.md

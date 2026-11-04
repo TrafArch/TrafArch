@@ -101,3 +101,7 @@ TU／CU 数据库与 reference_manifest.json 的 SHA256 前后完全一致，核
 - 日志与截图位于 `build/ui_wallet_nav_refinement/`，包括 `flutter-test.log`、`flutter-analyze.log`、`screenshots.log` 和 `screenshots/`。
 
 TU／CU 数据库与 reference_manifest.json 的 SHA256 前后完全一致，与本文先前记录相同；核对文件为 `build/ui_wallet_nav_refinement/database-before.json` 和 `database-after.json`。数据库、结构、记录、历史快照、manifest 与冻结 Gallery fixtures 未修改。未生成 APK／AAB，pubspec 保持 1.0.3-beta.1+2135，未消耗构建号。
+
+### 底栏与卡包版追加构建
+
+随后按用户要求构建原签名 arm64-v8a Release，入口为 lib/main_gallery.dart。版本名 1.0.3-beta.1，本次构建号 2135，APK 实际 versionCode 4135；显示名称 TrafArch，包名 com.kajolno.TrafArch。开发者原签名、非 debuggable、仅 arm64、ZIP CRC 与 ZIP／全部 7 个原生库 ELF LOAD 16KiB 对齐通过。TU／CU／manifest 的源码 SHA256 与构建前一致，包内字节完全匹配。AppInfo 保留本次 2135，pubspec 自动预留下一号 2136。产物及报告位于 build/gallery/release-2135/；未安装设备，36 张截图仍为源码测试渲染结果。
