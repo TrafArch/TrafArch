@@ -7,6 +7,7 @@ import 'app_dependencies.dart';
 import 'theme/app_theme.dart';
 import 'navigation/app_shell.dart';
 import '../features/updates/update_prompt.dart';
+import 'navigation/recovery_route_observer.dart';
 
 export 'navigation/app_shell.dart' show AppShell;
 
@@ -34,13 +35,13 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp>
 
   /// AppShell 需要感知“被其他页面覆盖后再回显”：扫码解析、设置等页面
   /// pop 回来时靠它恢复悬浮底栏的显隐动画。
-  final RouteObserver<PageRoute<dynamic>> _routeObserver =
-      RouteObserver<PageRoute<dynamic>>();
+  late final RouteObserver<PageRoute<dynamic>> _routeObserver;
 
   @override
   void initState() {
     super.initState();
     _app = widget.createDependencies?.call() ?? AppDependencies();
+    _routeObserver = RecoveryRouteObserver(_app);
     WidgetsBinding.instance.addObserver(this);
     _monetEnabled.value = _app.monetEnabled;
     _app.addListener(_syncMonetFromDependencies);
@@ -64,6 +65,11 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp>
         state == AppLifecycleState.detached) {
       _app.flushDiagnostics();
     }
+  }
+
+  @override
+  void didHaveMemoryPressure() {
+    _app.handleMemoryPressure(false);
   }
 
   void _syncMonetFromDependencies() {

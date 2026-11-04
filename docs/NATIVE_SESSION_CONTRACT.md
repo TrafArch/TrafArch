@@ -2,10 +2,20 @@
 
 Task 5, approved refactor dated 2026-10-20; integration keys confirmed with the parent on 2026-10-21.
 The install package identity is applicationId `com.kajolno.TrafArch`, which is also the Kotlin
-namespace. No manifest, permission, Dart protocol, APDU construction or response interpretation
-is changed here.
+namespace. The NFC wire interface, permissions, Dart protocol, APDU construction,
+and response interpretation remain unchanged. The Application class additionally
+owns the separate memory adaptation described below.
 
 ## NFC wire interface
+
+Memory adaptation uses a separate `transit_card_analyzer/memory` channel. It does
+not change the NFC methods, payload keys, session IDs, or physical-close contract.
+On HONOR KILL, Dart invalidates its acquisition generation and requests stop,
+but the memory reply has its own 2.4-second native deadline and does not wait for
+the NFC close barrier. A successful memory reply means the continuation file and
+accepted persistence completed; it does not acknowledge physical NFC closure.
+Restored data never reconnects an old session. See `ARCHITECTURE.md` for the
+memory channel and private recovery-file lifecycle.
 
 Channel: **`transit_card_analyzer/nfc`**. All existing method names remain unchanged.
 

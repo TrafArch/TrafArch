@@ -22,12 +22,14 @@ class CardDetailPage extends StatefulWidget {
   final CardRepository repository;
   final String cardId;
   final SettingsController? settings;
+  final Map<String, List<String>>? recoveryFilters;
 
   const CardDetailPage({
     super.key,
     required this.repository,
     required this.cardId,
     this.settings,
+    this.recoveryFilters,
   });
 
   @override
@@ -105,6 +107,7 @@ class _CardDetailPageState extends State<CardDetailPage> {
           repository: widget.repository,
           includeShanghaiOverdraft:
               widget.settings?.includeShanghaiOverdraft ?? false,
+          recoveryFilters: widget.recoveryFilters,
         );
       },
     ),
@@ -115,10 +118,12 @@ class _CardDetailBody extends StatelessWidget {
   final ArchiveHistoryResult history;
   final CardRepository repository;
   final bool includeShanghaiOverdraft;
+  final Map<String, List<String>>? recoveryFilters;
   const _CardDetailBody({
     required this.history,
     required this.repository,
     required this.includeShanghaiOverdraft,
+    this.recoveryFilters,
   });
 
   @override
@@ -197,6 +202,10 @@ class _CardDetailBody extends StatelessWidget {
             projectedJourneys: trips.journeys,
             sourceLabels: archiveTripSourceLabels,
             summaryText: trips.summaryText,
+            initialFilters: recoveryFilters?['card:${history.card!.id}'],
+            onFiltersChanged: (values) {
+              recoveryFilters?['card:${history.card!.id}'] = values;
+            },
           ),
         if (cityUnion.transactions.isNotEmpty)
           CuApplicationRecords(

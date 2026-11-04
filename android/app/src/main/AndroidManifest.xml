@@ -27,7 +27,7 @@
 
     <application
         android:label="${appLabel}"
-        android:name="${applicationName}"
+        android:name=".TrafArchApplication"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:enableOnBackInvokedCallback="true">
