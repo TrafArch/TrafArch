@@ -7,8 +7,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:dynamic_color/dynamic_color.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../app/app_info.dart';
+import '../platform/browser/feedback_browser.dart';
 import '../shared/app_support.dart';
 import 'gallery_controller.dart';
 import 'gallery_balance_presentation.dart';
@@ -230,10 +232,26 @@ class _GalleryViewState extends State<_GalleryView> {
       if (email) {
         final opened = await widget.openEmail?.call(value) ?? false;
         if (!opened) throw StateError('email unavailable');
+      } else if (value == AppSupport.qqJoin) {
+        // 与 1.x 一致：优先唤起 QQ 加群卡片，失败再打开邀请页。
+        if (!await _openQqGroup()) {
+          throw const FeedbackBrowserException(
+            '无法打开 QQ 或加群页，请复制群号后在 QQ 中搜索。',
+          );
+        }
       } else {
         final open = widget.openWebLink;
         if (open == null) throw StateError('browser unavailable');
         await open(Uri.parse(value));
+      }
+    } on FeedbackBrowserException catch (error) {
+      if (mounted && c.page == page && c.generation == generation) {
+        if (error.copiedToClipboard) {
+          // 无可用浏览器时链接已复制到剪贴板，与 1.x 一样以气泡提示。
+          _toast(error.message);
+        } else {
+          setState(() => _linkError = error.message);
+        }
       }
     } catch (_) {
       if (mounted && c.page == page && c.generation == generation) {
@@ -246,6 +264,31 @@ class _GalleryViewState extends State<_GalleryView> {
     } finally {
       if (mounted) setState(() => _openingLink = null);
     }
+  }
+
+  Future<bool> _openQqGroup() async {
+    final qqUrl = Uri(
+      scheme: 'mqqapi',
+      host: 'card',
+      path: '/show_pslcard',
+      queryParameters: {
+        'src_type': 'internal',
+        'version': '1',
+        'uin': AppSupport.qqGroup,
+        'card_type': 'group',
+        'source': 'qrcode',
+      },
+    );
+    for (final url in [qqUrl, Uri.parse(AppSupport.qqJoin)]) {
+      try {
+        if (await launchUrl(url, mode: LaunchMode.externalApplication)) {
+          return true;
+        }
+      } catch (_) {
+        // 未安装 QQ 或无法唤起时继续尝试邀请页。
+      }
+    }
+    return false;
   }
 
   void _reloadLicenses() => setState(() => _licenses = null);

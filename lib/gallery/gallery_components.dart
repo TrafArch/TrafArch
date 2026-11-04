@@ -381,7 +381,12 @@ extension _GalleryComponents on _GalleryViewState {
     );
   }
 
-  Widget _amount(GalleryCard card, {double size = 36, Color? color}) =>
+  Widget _amount(
+    GalleryCard card, {
+    double size = 36,
+    Color? color,
+    Alignment alignment = Alignment.centerLeft,
+  }) =>
       LayoutBuilder(
         builder: (context, constraints) {
           final value = card.balance(c.includeOverdraft);
@@ -389,7 +394,7 @@ extension _GalleryComponents on _GalleryViewState {
             label: card.unknownBalance ? '余额暂不可用' : '余额 $value',
             child: FittedBox(
               fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
+              alignment: alignment,
               child: _text(
                 card.unknownBalance ? '余额暂不可用' : value,
                 size: card.unknownBalance
@@ -660,7 +665,19 @@ extension _GalleryComponents on _GalleryViewState {
         borderRadius: c.docked
             ? null
             : BorderRadius.circular(31 + _extraTextScale * 10),
-        border: c.docked ? null : Border.all(color: t.line),
+        boxShadow: c.docked
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(
+                    alpha: Theme.of(context).brightness == Brightness.dark
+                        ? .28
+                        : .10,
+                  ),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                ),
+              ],
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {

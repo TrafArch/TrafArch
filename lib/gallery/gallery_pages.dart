@@ -376,81 +376,137 @@ extension _GalleryPages on _GalleryViewState {
       grouped.putIfAbsent(trip['date'] as String, () => []).add(trip);
     }
     final count = c.trips.where((t) => t['kind'] != 'event').length;
-    return _list([
-      _header('行程', subtitle: c.hasRead ? c.current.name : '读取卡片后查看最近行程'),
-      if (c.hasRead)
-        _panel(
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _text(
-                      '交易 $count 笔',
-                      role: GalleryTypography.label,
-                      weight: FontWeight.w600,
-                    ),
-                    _gap(12),
-                    _text(
-                      '行程 $count 次',
-                      role: GalleryTypography.caption,
-                      color: t.onTone,
-                    ),
-                  ],
-                ),
-              ),
-              Flexible(child: _amount(c.current, size: 28)),
-            ],
-          ),
-          color: t.tone,
-          border: false,
+    return _TripsBody(
+      reduceMotion: _reduceMotion,
+      capsule: c.hasRead
+          ? _tripsSummaryCapsule(count)
+          : const SizedBox.shrink(),
+      list: _list([
+        _header(
+          '行程',
+          subtitle: c.hasRead ? c.current.name : '读取卡片后查看最近行程',
         ),
-      _gap(14),
-      Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          _filterButton(c.source, GalleryOverlay.source),
-          _filterButton(c.mode, GalleryOverlay.mode),
-        ],
-      ),
-      if (!c.hasRead)
-        _empty(
-          '尚未读取卡片',
-          '请先在首页读取一张交通卡',
-          icon: Icons.route_outlined,
-          action: _button(
-            '前往首页',
-            () => c.navigate(GalleryPage.home),
-            primary: true,
-          ),
-        )
-      else if (trips.isEmpty)
-        _empty(
-          c.trips.isEmpty ? '暂无行程记录' : '当前筛选下没有记录',
-          c.trips.isEmpty ? '卡内记录可能不完整' : '试试其他来源或交通方式',
-          icon: Icons.route_outlined,
-        )
-      else
-        ...grouped.entries.expand(
-          (entry) => [
-            _sectionTitle(entry.key, trailing: '${entry.value.length} 条'),
-            _panel(
-              Column(
-                children: [
-                  for (int i = 0; i < entry.value.length; i++) ...[
-                    if (i > 0) const Divider(),
-                    _trip(entry.value[i]),
-                  ],
-                ],
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-            ),
+        if (c.hasRead) _tripsSummary(count),
+        _gap(14),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _filterButton(c.source, GalleryOverlay.source),
+            _filterButton(c.mode, GalleryOverlay.mode),
           ],
         ),
-    ]);
+        if (!c.hasRead)
+          _empty(
+            '尚未读取卡片',
+            '请先在首页读取一张交通卡',
+            icon: Icons.route_outlined,
+            action: _button(
+              '前往首页',
+              () => c.navigate(GalleryPage.home),
+              primary: true,
+            ),
+          )
+        else if (trips.isEmpty)
+          _empty(
+            c.trips.isEmpty ? '暂无行程记录' : '当前筛选下没有记录',
+            c.trips.isEmpty ? '卡内记录可能不完整' : '试试其他来源或交通方式',
+            icon: Icons.route_outlined,
+          )
+        else
+          ...grouped.entries.expand(
+            (entry) => [
+              _sectionTitle(entry.key, trailing: '${entry.value.length} 条'),
+              _panel(
+                Column(
+                  children: [
+                    for (int i = 0; i < entry.value.length; i++) ...[
+                      if (i > 0) const Divider(),
+                      _trip(entry.value[i]),
+                    ],
+                  ],
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+              ),
+            ],
+          ),
+      ]),
+    );
   }
+
+  /// 行程页汇总：金额右对齐；页面下滚后由 [_TripsBody] 在其位置悬浮胶囊。
+  Widget _tripsSummary(int count) => _panel(
+    Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _text(
+                '交易 $count 笔',
+                role: GalleryTypography.label,
+                weight: FontWeight.w600,
+              ),
+              _gap(12),
+              _text(
+                '行程 $count 次',
+                role: GalleryTypography.caption,
+                color: t.onTone,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              _text(
+                '本次开销',
+                role: GalleryTypography.caption,
+                color: t.onTone,
+                align: TextAlign.right,
+              ),
+              const SizedBox(height: 2),
+              Align(
+                alignment: Alignment.centerRight,
+                child: _amount(
+                  c.current,
+                  size: 28,
+                  alignment: Alignment.centerRight,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+    color: t.tone,
+    border: false,
+  );
+
+  Widget _tripsSummaryCapsule(int count) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: t.tone,
+      borderRadius: BorderRadius.circular(24),
+      boxShadow: t.shadows(GalleryElevation.card),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
+      child: Row(
+        children: [
+          Expanded(
+            child: _text(
+              '交易 $count 笔',
+              role: GalleryTypography.caption,
+              color: t.onTone,
+            ),
+          ),
+          _amount(c.current, size: 18, alignment: Alignment.centerRight),
+        ],
+      ),
+    ),
+  );
 
   Widget _filterButton(String label, GalleryOverlay overlay) => _menuAnchor(
     'filter-${overlay.name}',
@@ -786,7 +842,7 @@ extension _GalleryPages on _GalleryViewState {
               _text(card.name, role: GalleryTypography.card, lines: 2),
               _gap(3),
               _text(
-                '${card.city} ${card.type}',
+                '${card.city} ${card.type == '交通联合卡' ? '交联' : card.type}',
                 role: GalleryTypography.caption,
                 color: t.muted,
                 lines: stacked ? null : 1,
@@ -1629,4 +1685,74 @@ extension _GalleryPages on _GalleryViewState {
       ),
     ]);
   }
+}
+
+/// 行程页滚动容器：汇总卡滚出视野后，在其位置悬浮一个收缩胶囊。
+class _TripsBody extends StatefulWidget {
+  const _TripsBody({
+    required this.list,
+    required this.capsule,
+    required this.reduceMotion,
+  });
+
+  final Widget list;
+  final Widget capsule;
+  final bool reduceMotion;
+
+  @override
+  State<_TripsBody> createState() => _TripsBodyState();
+}
+
+class _TripsBodyState extends State<_TripsBody> {
+  final ValueNotifier<double> _offset = ValueNotifier<double>(0);
+
+  @override
+  void dispose() {
+    _offset.dispose();
+    super.dispose();
+  }
+
+  bool _onScroll(ScrollNotification notification) {
+    if (notification.depth == 0) {
+      _offset.value = notification.metrics.pixels;
+    }
+    return false;
+  }
+
+  double _progress(double offset) {
+    if (widget.reduceMotion) return offset > 40 ? 1 : 0;
+    return ((offset - 24) / 48).clamp(0.0, 1.0).toDouble();
+  }
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    children: [
+      NotificationListener<ScrollNotification>(
+        onNotification: _onScroll,
+        child: widget.list,
+      ),
+      Positioned(
+        top: 0,
+        left: 16,
+        right: 16,
+        child: IgnorePointer(
+          child: ValueListenableBuilder<double>(
+            valueListenable: _offset,
+            child: widget.capsule,
+            builder: (context, offset, child) {
+              final progress = _progress(offset);
+              if (progress <= 0) return const SizedBox.shrink();
+              return Opacity(
+                opacity: progress,
+                child: Transform.translate(
+                  offset: Offset(0, -8 * (1 - progress)),
+                  child: child,
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    ],
+  );
 }

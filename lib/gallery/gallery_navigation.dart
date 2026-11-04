@@ -326,10 +326,13 @@ class _GalleryPageRoute extends PageRoute<void> with _GalleryPredictiveRoute {
   ) {
     if (configuration.reduceMotion) return interactive(child);
     final primary = motionProgress(animation);
-    final secondary = motionProgress(secondaryAnimation);
-    return FractionalTranslation(
-      translation: Offset((isFirst ? 0 : 1 - primary) - .08 * secondary, 0),
-      child: interactive(child),
+    // 只让当前页跟随手势位移：下层页保持静止，避免两层同时移动产生的
+    // 抖动；RepaintBoundary 隔离重页面（如知识库长列表）的逐帧重绘。
+    return RepaintBoundary(
+      child: FractionalTranslation(
+        translation: Offset(isFirst ? 0 : 1 - primary, 0),
+        child: interactive(child),
+      ),
     );
   }
 }
