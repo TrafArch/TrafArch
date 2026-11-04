@@ -100,6 +100,33 @@ class _DiagnosticExportDialogState extends State<_DiagnosticExportDialog> {
     }
   }
 
+  Widget _sessionTile(DiagnosticSession session) {
+    final time = session.startedAt;
+    final card = session.cardInfo;
+    return CheckboxListTile(
+      contentPadding: EdgeInsets.zero,
+      value: selected.contains(session.id),
+      title: Text(
+        session.legacy
+            ? '旧版日志'
+            : '${session.isScan ? '读卡' : '应用'} · ${time == null ? '时间未知' : AppLogger.formatTimestamp(time.toLocal())}',
+      ),
+      subtitle: Text(
+        '${session.statusText} · ${(session.bytes / 1024).toStringAsFixed(1)} KiB'
+        '${card == null ? '' : '\n${card['cardName'] ?? '卡片名称未知'} · ${card['cardTypeLabel'] ?? card['cardType'] ?? '卡种未知'}\n卡号：${card['cardNumber'] ?? '未读取'}'}',
+      ),
+      onChanged: busy
+          ? null
+          : (value) => setState(() {
+              if (value == true) {
+                selected.add(session.id);
+              } else {
+                selected.remove(session.id);
+              }
+            }),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final canDelete =
@@ -109,10 +136,12 @@ class _DiagnosticExportDialogState extends State<_DiagnosticExportDialog> {
       canPop: !busy,
       child: AlertDialog(
         title: const Text('日志管理器'),
+        scrollable: true,
+        insetPadding: const EdgeInsets.all(16),
         content: SizedBox(
           width: 440,
-          height: 420,
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Text(
@@ -121,40 +150,10 @@ class _DiagnosticExportDialogState extends State<_DiagnosticExportDialog> {
               const SizedBox(height: 12),
               const Text('仅导出完整读卡诊断 JSON，包含当次解析字段和原始响应，保存在本机下载目录。'),
               const Divider(),
-              Expanded(
-                child: sessions.isEmpty
-                    ? const Center(child: Text('暂无日志记录'))
-                    : ListView.builder(
-                        itemCount: sessions.length,
-                        itemBuilder: (_, index) {
-                          final session = sessions[index];
-                          final time = session.startedAt;
-                          final card = session.cardInfo;
-                          return CheckboxListTile(
-                            contentPadding: EdgeInsets.zero,
-                            value: selected.contains(session.id),
-                            title: Text(
-                              session.legacy
-                                  ? '旧版日志'
-                                  : '${session.isScan ? '读卡' : '应用'} · ${time == null ? '时间未知' : AppLogger.formatTimestamp(time.toLocal())}',
-                            ),
-                            subtitle: Text(
-                              '${session.statusText} · ${(session.bytes / 1024).toStringAsFixed(1)} KiB'
-                              '${card == null ? '' : '\n${card['cardName'] ?? '卡片名称未知'} · ${card['cardTypeLabel'] ?? card['cardType'] ?? '卡种未知'}\n卡号：${card['cardNumber'] ?? '未读取'}'}',
-                            ),
-                            onChanged: busy
-                                ? null
-                                : (value) => setState(() {
-                                    if (value == true) {
-                                      selected.add(session.id);
-                                    } else {
-                                      selected.remove(session.id);
-                                    }
-                                  }),
-                          );
-                        },
-                      ),
-              ),
+              if (sessions.isEmpty)
+                const Center(child: Text('暂无日志记录'))
+              else
+                for (final session in sessions) _sessionTile(session),
               if (error != null)
                 Text(
                   error!,
@@ -164,17 +163,23 @@ class _DiagnosticExportDialogState extends State<_DiagnosticExportDialog> {
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: busy || !canDelete ? null : _delete,
-            child: const Text('清理所选'),
-          ),
-          TextButton(
-            onPressed: busy ? null : () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: busy || selected.isEmpty ? null : _export,
-            child: Text(busy ? '正在处理…' : '导出'),
+          Wrap(
+            alignment: WrapAlignment.end,
+            spacing: 8,
+            children: [
+              TextButton(
+                onPressed: busy || !canDelete ? null : _delete,
+                child: const Text('清理所选'),
+              ),
+              TextButton(
+                onPressed: busy ? null : () => Navigator.pop(context),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: busy || selected.isEmpty ? null : _export,
+                child: Text(busy ? '正在处理…' : '导出'),
+              ),
+            ],
           ),
         ],
       ),

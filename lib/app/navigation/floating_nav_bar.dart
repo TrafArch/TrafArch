@@ -49,21 +49,39 @@ class FloatingNavBar extends StatelessWidget {
                 ? Duration.zero
                 : const Duration(milliseconds: 220),
             curve: Curves.easeOutCubic,
-            builder: (context, progress, child) => Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                for (var i = 0; i < _tabs.length; i++)
-                  _NavItem(
-                    icon: _tabs[i].icon,
-                    label: _tabs[i].label,
-                    selected: i == index,
-                    progress: progress[i],
-                    onTap: () {
-                      if (i != index) HapticFeedback.selectionClick();
-                      onSelect(i);
-                    },
+            builder: (context, progress, child) => LayoutBuilder(
+              builder: (context, constraints) {
+                final labelPainter = TextPainter(
+                  text: const TextSpan(
+                    text: '首页',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                   ),
-              ],
+                  textDirection: Directionality.of(context),
+                  textScaler: MediaQuery.textScalerOf(context),
+                )..layout();
+                // Four 48dp items, plus the selected item's padding and label.
+                final compact =
+                    constraints.maxWidth < 4 * 48 + 16 + labelPainter.width;
+                labelPainter.dispose();
+                Widget item(int i) => _NavItem(
+                  icon: _tabs[i].icon,
+                  label: _tabs[i].label,
+                  selected: i == index,
+                  progress: progress[i],
+                  compact: compact,
+                  onTap: () {
+                    if (i != index) HapticFeedback.selectionClick();
+                    onSelect(i);
+                  },
+                );
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    for (var i = 0; i < _tabs.length; i++)
+                      if (compact) Expanded(child: item(i)) else item(i),
+                  ],
+                );
+              },
             ),
           ),
         ),
@@ -89,6 +107,7 @@ class _NavItem extends StatefulWidget {
     required this.label,
     required this.selected,
     required this.progress,
+    required this.compact,
     required this.onTap,
   });
 
@@ -96,6 +115,7 @@ class _NavItem extends StatefulWidget {
   final String label;
   final bool selected;
   final double progress;
+  final bool compact;
   final VoidCallback onTap;
 
   @override
@@ -135,13 +155,16 @@ class _NavItemState extends State<_NavItem> {
           curve: Curves.easeOutCubic,
           child: Container(
             height: 44,
-            padding: EdgeInsets.symmetric(horizontal: 12 + 4 * progress),
+            padding: EdgeInsets.symmetric(
+              horizontal: widget.compact ? 0 : 12 + 4 * progress,
+            ),
             decoration: BoxDecoration(
               color: scheme.primary.withValues(alpha: 0.16 * progress),
               borderRadius: BorderRadius.circular(100),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
                   widget.icon,
@@ -155,7 +178,7 @@ class _NavItemState extends State<_NavItem> {
                 ClipRect(
                   child: Align(
                     alignment: AlignmentDirectional.centerStart,
-                    widthFactor: progress,
+                    widthFactor: widget.compact ? 0 : progress,
                     child: Opacity(
                       opacity: progress,
                       child: Padding(
