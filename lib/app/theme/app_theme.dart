@@ -44,11 +44,17 @@ abstract final class AppTheme {
   );
 
   static ThemeData light(ColorScheme? dynamic) => ThemeData(
+    dialogTheme: const DialogThemeData(
+      constraints: BoxConstraints(minWidth: 280, maxWidth: 560),
+    ),
     colorScheme: dynamic ?? fallbackLight,
     pageTransitionsTheme: pageTransitionsTheme,
     snackBarTheme: snackBarTheme,
   );
   static ThemeData dark(ColorScheme? dynamic) => ThemeData(
+    dialogTheme: const DialogThemeData(
+      constraints: BoxConstraints(minWidth: 280, maxWidth: 560),
+    ),
     colorScheme: dynamic ?? fallbackDark,
     pageTransitionsTheme: pageTransitionsTheme,
     snackBarTheme: snackBarTheme,

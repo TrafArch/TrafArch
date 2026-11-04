@@ -11,6 +11,10 @@ void showTripEntryDetails(
   showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
+    useSafeArea: true,
+    anchorPoint: (context.findRenderObject() as RenderBox?)?.localToGlobal(
+      Offset.zero,
+    ),
     showDragHandle: true,
     builder: (sheetContext) => DraggableScrollableSheet(
       expand: false,
@@ -85,22 +89,42 @@ class TripDetailRow extends StatelessWidget {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              label,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.outline,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 360 ||
+              MediaQuery.textScalerOf(context).scale(14) > 22) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                SelectableText(value, style: theme.textTheme.bodyMedium),
+              ],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 120,
+                child: Text(
+                  label,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
+                ),
               ),
-            ),
-          ),
-          Expanded(
-            child: SelectableText(value, style: theme.textTheme.bodyMedium),
-          ),
-        ],
+              Expanded(
+                child: SelectableText(value, style: theme.textTheme.bodyMedium),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

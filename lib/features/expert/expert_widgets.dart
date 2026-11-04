@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/services.dart';
 
-import '../../shared/presentation/ui_constants.dart';
+import '../../shared/presentation/adaptive_layout.dart';
 
 class ExpertField extends StatelessWidget {
   const ExpertField(this.label, this.value, {super.key});
@@ -11,12 +11,25 @@ class ExpertField extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(width: 150, child: Text(label)),
-          Expanded(child: Text(value)),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final labelWidget = Text(label);
+          final valueWidget = Text(value);
+          if (constraints.maxWidth < 360 ||
+              MediaQuery.textScalerOf(context).scale(14) > 22) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [labelWidget, const SizedBox(height: 4), valueWidget],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(width: 150, child: labelWidget),
+              Expanded(child: valueWidget),
+            ],
+          );
+        },
       ),
     );
   }
@@ -102,45 +115,50 @@ class ExpertTabBody extends StatelessWidget {
   final bool hasResult, showReadHint;
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      key: PageStorageKey<String>(storageKey),
-      scrollCacheExtent: const ScrollCacheExtent.pixels(200),
-      padding: const EdgeInsets.fromLTRB(
-        12,
-        12,
-        12,
-        UiConstants.floatingNavBarClearance,
-      ),
-      children: [
-        if (showReadHint && !hasResult)
-          Card(
-            margin: const EdgeInsets.only(bottom: 12),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.touch_app,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Text(
-                      '尚未读取，请先在首页放置票卡完成读取',
-                      style: Theme.of(context).textTheme.bodyLarge,
+    return AdaptiveContent(
+      child: ListView(
+        key: PageStorageKey<String>(storageKey),
+        scrollCacheExtent: const ScrollCacheExtent.pixels(200),
+        padding: EdgeInsets.fromLTRB(
+          12,
+          12,
+          12,
+          AdaptiveWindowScope.bottomClearanceOf(context),
+        ),
+        children: [
+          if (showReadHint && !hasResult)
+            Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 20,
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.touch_app,
+                      color: Theme.of(context).colorScheme.primary,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Text(
+                        '尚未读取，请先在首页放置票卡完成读取',
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Column(children: children),
+            ),
           ),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-            child: Column(children: children),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

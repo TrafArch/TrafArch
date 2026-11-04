@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../shared/presentation/adaptive_layout.dart';
+
 import '../../../app/app_info.dart';
 import '../../../app/app_dependencies.dart';
 import 'about_page.dart';
@@ -68,154 +70,169 @@ class _SettingsPageState extends State<SettingsPage> {
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('设置')),
-      body: ListView(
-        padding: const EdgeInsets.all(8),
-        children: [
-          if (app.settings.persistenceError case final String message)
-            Card(
-              child: ListTile(
-                leading: Icon(Icons.error_outline, color: scheme.error),
-                title: const Text('设置未能保存或读取'),
-                subtitle: Text('当前选择可能仅在本次运行生效。$message'),
-              ),
-            ),
-          section('读卡与数据', [
-            Card(
-              child: SwitchListTile(
-                secondary: const Icon(Icons.save_outlined),
-                title: const Text('读取后自动保存'),
-                subtitle: Text(
-                  app.autoSaveEnabled
-                      ? '已开启：每次读卡解析成功后自动保存到卡片列表（无需手动确认）'
-                      : '默认停用：读卡后弹出确认框，由你选择是否保存',
-                ),
-                value: app.autoSaveEnabled,
-                onChanged: (value) => app.setAutoSaveEnabled(value),
-              ),
-            ),
-            Card(
-              child: SwitchListTile(
-                secondary: const Icon(Icons.account_balance_wallet_outlined),
-                title: const Text('上海交通卡可透支余额'),
-                subtitle: Text(
-                  app.includeShanghaiOverdraft
-                      ? '已开启：总余额包含固定的 8 元可透支额度，城市一卡通余额保持原值'
-                      : '默认关闭：总余额和相关记录余额扣除 8 元，城市一卡通余额不重复扣除',
-                ),
-                value: app.includeShanghaiOverdraft,
-                onChanged: (value) => app.setIncludeShanghaiOverdraft(value),
-              ),
-            ),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.menu_book_outlined),
-                title: const Text('知识库'),
-                subtitle: Text(app.knowledgeSummary),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => KnowledgeBasePage(app: app),
-                  ),
-                ),
-              ),
-            ),
-          ]),
-          section('外观', [
-            Card(
-              child: SwitchListTile(
-                secondary: const Icon(Icons.palette_outlined),
-                title: const Text('莫奈取色'),
-                subtitle: Text(
-                  app.monetEnabled
-                      ? '已开启（默认）：主题色跟随系统壁纸动态取色（需 Android 12 及以上，'
-                            '低版本系统自动回落到内置主题色）'
-                      : '已关闭：使用应用内置固定主题色（蓝色）',
-                ),
-                value: app.monetEnabled,
-                onChanged: (value) => app.setMonetEnabled(value),
-              ),
-            ),
-          ]),
-          section('日志', [
-            Card(
-              child: Column(
-                children: [
-                  SwitchListTile(
-                    secondary: const Icon(Icons.article_outlined),
-                    title: const Text('启用运行日志'),
-                    subtitle: Text(
-                      app.loggingEnabled
-                          ? '已开启：等待贴卡时立即生效，读卡日志保存在本机，可能含卡片标识与行程信息'
-                          : '默认停用：不写入新的运行日志，已有日志可在日志管理器中查看和导出',
+    return FoldSafePage(
+      child: Scaffold(
+        appBar: AppBar(title: const Text('设置')),
+        body: SafeArea(
+          top: false,
+          child: AdaptiveContent(
+            child: ListView(
+              padding: const EdgeInsets.all(8),
+              children: [
+                if (app.settings.persistenceError case final String message)
+                  Card(
+                    child: ListTile(
+                      leading: Icon(Icons.error_outline, color: scheme.error),
+                      title: const Text('设置未能保存或读取'),
+                      subtitle: Text('当前选择可能仅在本次运行生效。$message'),
                     ),
-                    value: app.loggingEnabled,
-                    onChanged: (value) => app.setLoggingEnabled(value),
                   ),
-                  if (app.diagnostics.storageIssue case final String issue)
-                    ListTile(
-                      leading: Icon(
-                        Icons.warning_amber_outlined,
-                        color: scheme.error,
+                section('读卡与数据', [
+                  Card(
+                    child: SwitchListTile(
+                      secondary: const Icon(Icons.save_outlined),
+                      title: const Text('读取后自动保存'),
+                      subtitle: Text(
+                        app.autoSaveEnabled
+                            ? '已开启：每次读卡解析成功后自动保存到卡片列表（无需手动确认）'
+                            : '默认停用：读卡后弹出确认框，由你选择是否保存',
                       ),
-                      title: const Text('日志保存状态异常'),
-                      subtitle: Text(issue),
-                    ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.download_outlined),
-                    title: const Text('日志管理器'),
-                    subtitle: Text(
-                      logStatus,
-                      style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(color: logStatusColor),
-                    ),
-                    trailing: app.exportingLog
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.chevron_right),
-                    onTap: app.exportingLog
-                        ? null
-                        : () => showDiagnosticExportDialog(context, app),
-                  ),
-                ],
-              ),
-            ),
-          ]),
-          section('关于', [
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.feedback_outlined),
-                title: const Text('反馈'),
-                subtitle: const Text('QQ 群、邮箱与问卷反馈渠道'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => FeedbackPage(app: app)),
-                ),
-              ),
-            ),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.info_outline),
-                title: const Text('关于'),
-                subtitle: Text('版本 ${AppInfo.version}'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => AboutPage(
-                      updates: app.updates,
-                      openPrivacyPolicy: app.openPrivacyPolicy,
+                      value: app.autoSaveEnabled,
+                      onChanged: (value) => app.setAutoSaveEnabled(value),
                     ),
                   ),
-                ),
-              ),
+                  Card(
+                    child: SwitchListTile(
+                      secondary: const Icon(
+                        Icons.account_balance_wallet_outlined,
+                      ),
+                      title: const Text('上海交通卡可透支余额'),
+                      subtitle: Text(
+                        app.includeShanghaiOverdraft
+                            ? '已开启：总余额包含固定的 8 元可透支额度，城市一卡通余额保持原值'
+                            : '默认关闭：总余额和相关记录余额扣除 8 元，城市一卡通余额不重复扣除',
+                      ),
+                      value: app.includeShanghaiOverdraft,
+                      onChanged: (value) =>
+                          app.setIncludeShanghaiOverdraft(value),
+                    ),
+                  ),
+                  Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.menu_book_outlined),
+                      title: const Text('知识库'),
+                      subtitle: Text(app.knowledgeSummary),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => KnowledgeBasePage(app: app),
+                        ),
+                      ),
+                    ),
+                  ),
+                ]),
+                section('外观', [
+                  Card(
+                    child: SwitchListTile(
+                      secondary: const Icon(Icons.palette_outlined),
+                      title: const Text('莫奈取色'),
+                      subtitle: Text(
+                        app.monetEnabled
+                            ? '已开启（默认）：主题色跟随系统壁纸动态取色（需 Android 12 及以上，'
+                                  '低版本系统自动回落到内置主题色）'
+                            : '已关闭：使用应用内置固定主题色（蓝色）',
+                      ),
+                      value: app.monetEnabled,
+                      onChanged: (value) => app.setMonetEnabled(value),
+                    ),
+                  ),
+                ]),
+                section('日志', [
+                  Card(
+                    child: Column(
+                      children: [
+                        SwitchListTile(
+                          secondary: const Icon(Icons.article_outlined),
+                          title: const Text('启用运行日志'),
+                          subtitle: Text(
+                            app.loggingEnabled
+                                ? '已开启：等待贴卡时立即生效，读卡日志保存在本机，可能含卡片标识与行程信息'
+                                : '默认停用：不写入新的运行日志，已有日志可在日志管理器中查看和导出',
+                          ),
+                          value: app.loggingEnabled,
+                          onChanged: (value) => app.setLoggingEnabled(value),
+                        ),
+                        if (app.diagnostics.storageIssue
+                            case final String issue)
+                          ListTile(
+                            leading: Icon(
+                              Icons.warning_amber_outlined,
+                              color: scheme.error,
+                            ),
+                            title: const Text('日志保存状态异常'),
+                            subtitle: Text(issue),
+                          ),
+                        const Divider(height: 1),
+                        ListTile(
+                          leading: const Icon(Icons.download_outlined),
+                          title: const Text('日志管理器'),
+                          subtitle: Text(
+                            logStatus,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: logStatusColor),
+                          ),
+                          trailing: app.exportingLog
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.chevron_right),
+                          onTap: app.exportingLog
+                              ? null
+                              : () => showDiagnosticExportDialog(context, app),
+                        ),
+                      ],
+                    ),
+                  ),
+                ]),
+                section('关于', [
+                  Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.feedback_outlined),
+                      title: const Text('反馈'),
+                      subtitle: const Text('QQ 群、邮箱与问卷反馈渠道'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => FeedbackPage(app: app),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.info_outline),
+                      title: const Text('关于'),
+                      subtitle: Text('版本 ${AppInfo.version}'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => AboutPage(
+                            updates: app.updates,
+                            openPrivacyPolicy: app.openPrivacyPolicy,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ]),
+              ],
             ),
-          ]),
-        ],
+          ),
+        ),
       ),
     );
   }

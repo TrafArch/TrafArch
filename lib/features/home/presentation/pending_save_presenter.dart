@@ -170,6 +170,7 @@ class SaveCardDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) => AlertDialog(
     title: const Text('保存卡片'),
+    scrollable: true,
     content: Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,

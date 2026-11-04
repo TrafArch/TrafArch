@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 
-import '../../shared/presentation/ui_constants.dart';
+import '../../shared/presentation/adaptive_layout.dart';
 import '../../app/app_info.dart';
 import '../../app/app_dependencies.dart';
 import 'presentation/pending_save_presenter.dart';
@@ -114,16 +114,17 @@ class _HomePageState extends State<HomePage> {
               ],
             ),
             SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  16,
-                  16,
-                  16,
-                  UiConstants.floatingNavBarClearance,
-                ),
-                child: Column(
-                  children: [
-                    ScanControls(
+              child: AdaptiveContent(
+                maxWidth: 1200,
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    16,
+                    16,
+                    AdaptiveWindowScope.bottomClearanceOf(context),
+                  ),
+                  child: AdaptiveSupportingContent(
+                    primary: ScanControls(
                       scanning: scanning,
                       progress: app.readProgress,
                       statusText: _statusText,
@@ -132,14 +133,13 @@ class _HomePageState extends State<HomePage> {
                         if (widget.active && !scanning) app.scanOnce();
                       },
                     ),
-                    const SizedBox(height: 12),
                     // 最近扫描：NFC 卡片与银行卡只读分析。
-                    RepaintBoundary(
+                    secondary: RepaintBoundary(
                       child: app.recoveredCapture == null
                           ? RecentScanSection(app: app)
                           : RecoveryResultPanel(app: app),
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),

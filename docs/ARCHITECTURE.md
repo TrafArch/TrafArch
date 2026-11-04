@@ -91,6 +91,22 @@ android/app/src/main/kotlin/com/kajolno/TrafArch/
 
 ## 依赖与装配
 
+### 窗口与折叠屏布局
+
+展示层 `shared/presentation/adaptive_layout.dart` 对照 ITGSA 大屏白皮书 2.2／4.2／4.4 和 Android 自适应导航、列表详情布局实现当前窗口的逻辑像素断点：小于 600 为 compact，600～839 为 medium，840 起为 expanded。导航在宽度至少 600 且高度至少 480 时使用 NavigationRail，其他窗口保留悬浮底栏；主页面 IndexedStack 通过稳定 GlobalKey 跨导航容器迁移，控制器不因尺寸变化重建。宽窗不再预留底栏高度，首页在正文可用宽度至少 840 时左右排布，顺序列表及设置内容限宽。
+
+`AdaptiveCardDetailPage` 在同一路由保存当前卡片 ID，`AdaptiveListDetail` 在可用宽度至少 840 且高度至少 480 时并列列表和详情；窄窗仅显示已选择详情，系统返回退出详情路由。列表与详情窗格通过稳定 key、Offstage 保持挂载，详情的查询流、筛选和滚动不因窗口缩放重新创建；各窗格独立 ScaffoldMessenger，避免同一 SnackBar 同时注册多个 Hero。已存在的本地恢复继续保存选中卡片路径与筛选，不写入新的数据库字段。
+
+Flutter embedding 已接收 Android WindowManager 折痕信息。布局消费 `MediaQuery.displayFeatures`，不识别品牌或机型，不依赖 rotation 或私有系统属性。完整页面通过 DisplayFeatureSubScreen 避让半折／铰链并更新局部 MediaQuery 尺寸；列表详情优先沿满足两侧最小宽度的竖向分隔折痕分栏，其余姿态退回一个完整可用子屏。普通平整、零宽度折痕不强行分割。Dialog／BottomSheet 继续使用框架折痕能力，行程面板设置触发 anchorPoint 与 useSafeArea，对话框最大宽度 560。Android 17／targetSdk 37 不添加限制旋转／缩放的兼容退出项，不接入厂商平行视窗或 Activity Embedding 来拆分同一 Flutter 引擎。
+
+扫码页拥有外部 MobileScannerController，因此自行监听 WidgetsBinding 生命周期，将相机 stop/start 串行化，处理权限请求尚未结束时进入 inactive 的情况，失败后允许用户重试；窗口布局变化不重建相机控制器。预览比例和旋转交给现有 CameraX／mobile_scanner，NFC 通道与会话契约保持不变。模拟回归不能证明厂商内外屏、相机独占资源、物理 NFC 连接或系统强杀行为，仍需真机验收。
+
+规范来源：
+- https://www.itgsa.com/documents/5242001394058240
+- https://developer.android.com/develop/ui/compose/layouts/adaptive/list-detail
+- https://developer.android.com/develop/ui/compose/layouts/adaptive/foldables/make-your-app-fold-aware
+- https://developer.android.com/about/versions/17/changes/ff-restrictions-ignored
+
 `AppDependencies` 是根装配与展示门面，组合 Scan、ReferenceData、Archive、Settings、QR、Diagnostics 控制器。可变状态、异步工作和资源由各控制器负责。协议代码只依赖 Dart、协议领域模型和注入的传输函数，不反向引用 app、features、Flutter 平台通道或 SQLite。
 
 ```mermaid

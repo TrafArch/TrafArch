@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+
 import 'package:flutter/services.dart';
 
+import '../../../shared/presentation/adaptive_layout.dart';
 import '../../../app/app_dependencies.dart';
 
 class FeedbackPage extends StatelessWidget {
@@ -28,119 +30,126 @@ class FeedbackPage extends StatelessWidget {
 
   Widget _buildPage(BuildContext context) {
     final theme = Theme.of(context);
-    return Scaffold(
-      appBar: AppBar(title: const Text('反馈')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          const SizedBox(height: 8),
-          Center(
-            child: Container(
-              width: 96,
-              height: 96,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Icon(
-                Icons.forum_outlined,
-                size: 56,
-                color: theme.colorScheme.onPrimaryContainer,
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            '使用中遇到问题，或对应用有任何建议？'
-            '欢迎通过以下渠道反馈，你的意见对改进应用非常重要！',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 24),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.groups_outlined),
-              title: const Text('QQ 群'),
-              subtitle: const Text('$qqGroupNumber\n点按即可跳转 QQ 加群'),
-              trailing: IconButton(
-                icon: const Icon(Icons.copy_outlined),
-                tooltip: '复制群号',
-                onPressed: () => _copyQqGroup(context),
-              ),
-              onTap: () => _openQqGroup(context),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.email_outlined),
-              title: const Text('邮箱'),
-              subtitle: const Text('$emailAddress\n点按即可打开邮件应用'),
-              trailing: IconButton(
-                icon: const Icon(Icons.copy_outlined),
-                tooltip: '复制邮箱',
-                onPressed: () => _copyEmail(context),
-              ),
-              onTap: () => _openEmail(context),
-            ),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: app.openingFeedbackSurvey
-                  ? null
-                  : () => _openSurvey(context),
-              icon: app.openingFeedbackSurvey
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.edit_note_outlined),
-              label: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Text(
-                  app.openingFeedbackSurvey
-                      ? '正在打开问卷…'
-                      : app.feedbackBrowserError == null
-                      ? '填写反馈问卷'
-                      : '重新打开问卷',
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '问卷将在系统浏览器中打开',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.outline,
-            ),
-          ),
-          if (app.feedbackBrowserError case final String message) ...[
-            const SizedBox(height: 12),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('暂时无法打开问卷', style: theme.textTheme.titleSmall),
-                    const SizedBox(height: 8),
-                    Text(message),
-                    const SizedBox(height: 8),
-                    TextButton.icon(
-                      onPressed: () => _copySurveyLink(context),
-                      icon: const Icon(Icons.copy_outlined),
-                      label: const Text('复制问卷链接'),
+    return FoldSafePage(
+      child: Scaffold(
+        appBar: AppBar(title: const Text('反馈')),
+        body: SafeArea(
+          top: false,
+          child: AdaptiveContent(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                const SizedBox(height: 8),
+                Center(
+                  child: Container(
+                    width: 96,
+                    height: 96,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(24),
                     ),
-                  ],
+                    child: Icon(
+                      Icons.forum_outlined,
+                      size: 56,
+                      color: theme.colorScheme.onPrimaryContainer,
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(height: 16),
+                Text(
+                  '使用中遇到问题，或对应用有任何建议？'
+                  '欢迎通过以下渠道反馈，你的意见对改进应用非常重要！',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 24),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.groups_outlined),
+                    title: const Text('QQ 群'),
+                    subtitle: const Text('$qqGroupNumber\n点按即可跳转 QQ 加群'),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.copy_outlined),
+                      tooltip: '复制群号',
+                      onPressed: () => _copyQqGroup(context),
+                    ),
+                    onTap: () => _openQqGroup(context),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.email_outlined),
+                    title: const Text('邮箱'),
+                    subtitle: const Text('$emailAddress\n点按即可打开邮件应用'),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.copy_outlined),
+                      tooltip: '复制邮箱',
+                      onPressed: () => _copyEmail(context),
+                    ),
+                    onTap: () => _openEmail(context),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: app.openingFeedbackSurvey
+                        ? null
+                        : () => _openSurvey(context),
+                    icon: app.openingFeedbackSurvey
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.edit_note_outlined),
+                    label: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Text(
+                        app.openingFeedbackSurvey
+                            ? '正在打开问卷…'
+                            : app.feedbackBrowserError == null
+                            ? '填写反馈问卷'
+                            : '重新打开问卷',
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '问卷将在系统浏览器中打开',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
+                ),
+                if (app.feedbackBrowserError case final String message) ...[
+                  const SizedBox(height: 12),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('暂时无法打开问卷', style: theme.textTheme.titleSmall),
+                          const SizedBox(height: 8),
+                          Text(message),
+                          const SizedBox(height: 8),
+                          TextButton.icon(
+                            onPressed: () => _copySurveyLink(context),
+                            icon: const Icon(Icons.copy_outlined),
+                            label: const Text('复制问卷链接'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
-          ],
-        ],
+          ),
+        ),
       ),
     );
   }

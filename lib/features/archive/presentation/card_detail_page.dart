@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import '../../../shared/presentation/adaptive_layout.dart';
+
 import '../data/app_database.dart';
 import '../domain/card_name_extension.dart';
 import '../data/card_repository.dart';
@@ -74,42 +76,49 @@ class _CardDetailPageState extends State<CardDetailPage> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('卡片信息')),
-    body: StreamBuilder<ArchiveHistoryResult>(
-      key: ValueKey((widget.repository, widget.cardId)),
-      stream: _history,
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('读取卡片历史失败，请重试。'),
-                TextButton(
-                  onPressed: () => setState(_subscribe),
-                  child: const Text('重试'),
-                ),
-              ],
-            ),
-          );
-        }
-        if (snapshot.connectionState == ConnectionState.waiting ||
-            snapshot.connectionState == ConnectionState.none) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        final history = snapshot.data;
-        if (history == null || history.missing) {
-          return const Center(child: Text('卡片不存在或已删除'));
-        }
-        return _CardDetailBody(
-          history: history,
-          repository: widget.repository,
-          includeShanghaiOverdraft:
-              widget.settings?.includeShanghaiOverdraft ?? false,
-          recoveryFilters: widget.recoveryFilters,
-        );
-      },
+  Widget build(BuildContext context) => FoldSafePage(
+    child: Scaffold(
+      appBar: AppBar(title: const Text('卡片信息')),
+      body: SafeArea(
+        top: false,
+        child: AdaptiveContent(
+          child: StreamBuilder<ArchiveHistoryResult>(
+            key: ValueKey((widget.repository, widget.cardId)),
+            stream: _history,
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('读取卡片历史失败，请重试。'),
+                      TextButton(
+                        onPressed: () => setState(_subscribe),
+                        child: const Text('重试'),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              if (snapshot.connectionState == ConnectionState.waiting ||
+                  snapshot.connectionState == ConnectionState.none) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              final history = snapshot.data;
+              if (history == null || history.missing) {
+                return const Center(child: Text('卡片不存在或已删除'));
+              }
+              return _CardDetailBody(
+                history: history,
+                repository: widget.repository,
+                includeShanghaiOverdraft:
+                    widget.settings?.includeShanghaiOverdraft ?? false,
+                recoveryFilters: widget.recoveryFilters,
+              );
+            },
+          ),
+        ),
+      ),
     ),
   );
 }
@@ -286,6 +295,9 @@ String _archiveDiagnosticsTitle(ArchiveHistoryResult history) =>
 void _showEvidence(BuildContext context, String title, String raw) {
   showDialog<void>(
     context: context,
+    anchorPoint: (context.findRenderObject() as RenderBox?)?.localToGlobal(
+      Offset.zero,
+    ),
     builder: (context) => AlertDialog(
       title: Text(title),
       content: SizedBox(
@@ -417,6 +429,9 @@ class _ArchiveHeader extends StatelessWidget {
     final messenger = ScaffoldMessenger.of(context);
     final name = await showDialog<String>(
       context: context,
+      anchorPoint: (context.findRenderObject() as RenderBox?)?.localToGlobal(
+        Offset.zero,
+      ),
       builder: (dialogContext) => AlertDialog(
         title: const Text('自定义卡片名称'),
         // The form field owns its controller for the complete route lifetime,
