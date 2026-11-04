@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/app/app_dependencies.dart';
 import 'package:transit_card_analyzer/features/settings/presentation/settings_page.dart';
+import 'package:transit_card_analyzer/features/settings/presentation/diagnostic_export_dialog.dart';
 import 'package:transit_card_analyzer/platform/storage/app_logger.dart';
 import 'package:transit_card_analyzer/platform/storage/log_exporter.dart';
 import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
@@ -12,6 +13,73 @@ import 'package:transit_card_analyzer/shared/diagnostics/diagnostic_event.dart';
 import 'support/test_database.dart';
 
 void main() {
+  for (final size in const [
+    Size(360, 400),
+    Size(320, 480),
+    Size(280, 400),
+    Size(240, 320),
+    Size(600, 320),
+  ]) {
+    testWidgets('日志管理器在 $size 可滚动选择并导出，缩窗保留选择', (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = size;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final logger = AppLogger(store: MemoryLogStore())..enabled = true;
+      logger.startSession('finished').end(DiagnosticOutcome.success);
+      final exporter = _Exporter();
+      final app = AppDependencies(
+        database: testDatabase(),
+        bundle: MissingTestAssets(),
+        settingsStore: MemorySettingsStore(),
+        logger: logger,
+        logExporter: exporter,
+      );
+      addTearDown(app.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: TextButton(
+                onPressed: () => showDiagnosticExportDialog(context, app),
+                child: const Text('打开日志'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('打开日志'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      final row = find.byType(CheckboxListTile);
+      await tester.ensureVisible(row);
+      await tester.pumpAndSettle();
+      await tester.tap(row);
+      await tester.pumpAndSettle();
+      expect(tester.widget<CheckboxListTile>(row).value, isFalse);
+      final export = find.widgetWithText(FilledButton, '导出');
+      expect(tester.widget<FilledButton>(export).onPressed, isNull);
+      tester.view.physicalSize = const Size(390, 844);
+      await tester.pumpAndSettle();
+      expect(tester.widget<CheckboxListTile>(row).value, isFalse);
+      tester.view.physicalSize = size;
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(row);
+      await tester.pumpAndSettle();
+      await tester.tap(row);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(export.hitTestable(), findsOneWidget);
+      await tester.tap(export);
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(
+        (jsonDecode(exporter.content!)['sessions'] as List).single['sessionId'],
+        'finished',
+      );
+    });
+  }
+
   testWidgets('原导出按钮改名日志管理器且开关关闭也可管理导出已有记录', (tester) async {
     await tester.binding.setSurfaceSize(const Size(800, 1100));
     addTearDown(() => tester.binding.setSurfaceSize(null));

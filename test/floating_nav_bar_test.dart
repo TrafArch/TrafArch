@@ -16,18 +16,23 @@ const labels = ['首页', '行程', '卡片', '专家'];
 Future<void> mountBar(
   WidgetTester tester, {
   bool reduceMotion = false,
+  double width = UiConstants.floatingNavBarWidth,
+  double textScale = 1,
   ValueChanged<int>? onSelect,
 }) async {
   var index = 0;
   await tester.pumpWidget(
     MaterialApp(
       home: MediaQuery(
-        data: MediaQueryData(disableAnimations: reduceMotion),
+        data: MediaQueryData(
+          disableAnimations: reduceMotion,
+          textScaler: TextScaler.linear(textScale),
+        ),
         child: Scaffold(
           body: Center(
             child: StatefulBuilder(
               builder: (context, setState) => SizedBox(
-                width: UiConstants.floatingNavBarWidth,
+                width: width,
                 child: FloatingNavBar(
                   index: index,
                   onSelect: (i) {
@@ -63,6 +68,33 @@ double scale(WidgetTester tester, int index) => tester
     .value;
 
 void main() {
+  for (final width in [240.0, 200.0]) {
+    for (final textScale in [1.0, 2.0]) {
+      testWidgets('底栏宽 $width 字体 $textScale 时所有页签可点且无溢出', (tester) async {
+        final semantics = tester.ensureSemantics();
+        await mountBar(tester, width: width, textScale: textScale);
+        for (var i = 0; i < 4; i++) {
+          expect(find.bySemanticsLabel(labels[i]), findsOneWidget);
+          expect(find.byIcon(icons[i]).hitTestable(), findsOneWidget);
+          await tester.tap(find.byIcon(icons[i]));
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 110));
+          expect(tester.takeException(), isNull);
+          await tester.pumpAndSettle();
+          expect(
+            tester
+                .getSemantics(find.bySemanticsLabel(labels[i]))
+                .flagsCollection
+                .isSelected
+                .toBoolOrNull(),
+            isTrue,
+          );
+        }
+        semantics.dispose();
+      });
+    }
+  }
+
   testWidgets('底栏高度 56、宽度 280、圆角 28', (tester) async {
     await mountBar(tester);
     expect(tester.getSize(find.byType(FloatingNavBar)), const Size(280, 56));

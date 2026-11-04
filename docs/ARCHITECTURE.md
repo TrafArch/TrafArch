@@ -1,5 +1,9 @@
 # TrafArch 架构与代码所有权
 
+## 小窗与分屏布局
+
+Android 主 Activity 显式声明 `resizeableActivity=true`，沿用 Flutter embedding 处理窗口尺寸、方向与密度配置变化。界面按当前 Flutter 窗口约束布局，不锁定设备方向。卡片 JSON 导出和日志管理器使用可滚动的 AlertDialog，将标题、说明及选项放在同一滚动区域，操作按钮留在底部；导出模式根据窗口可用宽度和字体缩放改为纵向排列。悬浮导航在可用宽度不足以容纳四项及选中文字时改用等宽图标，保留选中态和语义标签，宽度恢复后显示文字。窗口调整不重建应用依赖，也不清空当前页签和弹窗选择。自动化窗口回归不替代厂商真机的标题栏、相机资源争用与 NFC 焦点切换验收。
+
 ## 内存预警与现场恢复
 
 `TrafArchApplication` 持有 `HonorMemoryCoordinator`，通过 Application context 动态注册荣耀 `itgsa.intent.action.TRIM`／`KILL`；Android 13+ 使用 `RECEIVER_EXPORTED`，不绑定 Activity 生命周期。每条通知以类型、ID 和 Binder 隔离，接收器工作线程在 2.4 秒内完成一次回报；Flutter 未就绪、超时或写入失败回报失败。Binder 使用 `FIRST_CALL_TRANSACTION`、oneway，参数依次为 notifyType／notifyId／result／Bundle，不读取 one-way 回复。此公开广播协议未提供可验证的发送方权限；严格校验载荷，收到 KILL 只本地保存和中止读卡，不主动退出、不上传数据。
