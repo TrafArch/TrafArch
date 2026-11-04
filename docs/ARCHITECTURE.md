@@ -139,3 +139,19 @@ manifest v1 必须含 `format_version: 1` 和 `app: {build: 整数, version: 字
 ## 所有权与失败
 
 参考控制器负责关闭 TU、CU 和用户库；初始化结束时若已销毁则立即释放返回资源。AppDependencies 关闭自建档案库前等待已接受的保存，外部注入库由调用者拥有。Notifier 销毁后丢弃通知。设置写入串行排队，读取旧文件失败会传播，完整临时文件写好后才替换正式文件。
+
+## 本地诊断日志
+
+响应字段在扫描产物可用时以 `response_fields` 事件按帧号、命令和响应原文冻结，日志导出不重新调用解析器。TU 基本文件复用 `CommonUnitTu.decodeCardInfo` 纯方法，其余 TU 交易／过程、CU 文件、地方卡记录、EMV/PBOC 标签和 FeliCa 产品记录直接消费当前解析结果；同时检查已选应用、来源坐标与原始字节，双应用切换不借用最终卡型。无响应、空响应、状态拒绝、未解析及旧日志未捕获分别标注；分段／批量／模板数据缺少单帧唯一对应时只保留原文。完整导出 v3 中物理帧的 `response` 为 `{parserId,state,statusWord?,fields}`，`raw` 为原始字节；有序 events 中物理帧使用相同投影，`rawJsonl` 仍保留存储原文。字段时间保持解析器的本地时钟口径，不把交易时间转换为 UTC。
+
+设置页原“导出日志”入口改名为常驻的“日志管理器”，开关只控制新增持久化记录；关闭后仍可选择、清理及导出已有记录，管理界面只提供完整读卡诊断。
+
+日志首次启用可接管已经处于 waiting、尚未发现卡片且从未开始记录的 NFC 会话，沿用原 sessionId，不重启物理扫描；开关操作时立即接入，发现卡片前再次核对。已经开始读取或已有 recordingStopped 结束标记的会话不重新接入，不追记关闭期间的数据。日志 sink 的 recording 状态用于判断实际是否接管成功。
+
+扫描产物在解析完成时记录 `card_info` 与逐条 `process_record`，完整性不依赖用户是否保存卡片。卡号保留展示值及原始应用序列号，完成展示准备后复用当次识别结果补充正式名称、卡种与依据状态；未知字段留空，UID／IDm 不冒充逻辑卡号。`shared/diagnostics/raw_data_category.dart` 为专家原始页与日志提供统一分类：应用／文件选择、余额、0x15／0x16／0x17／0x18、0x1A／0x1E、FeliCa 及其他。命令只按文件坐标分类，协议阶段、已选应用及物理序号独立保留，不把 CU 0x1A 等同于 TU 轨道过程。TU 过程记录另分 0x1A 轨道、公交、整体／其他及 0x1E，保留全部原字节、槽位与可靠性，空白或解析失败记录也不丢弃。完整 JSON 通过 `cardInfo`、`apduGroups`、`processRecords` 提供索引，并继续保留有序 `events` 和原始 `rawJsonl`。旧日志仅在导出时派生命令分类，不回写文件。
+
+`shared/diagnostics/diagnostic_event.dart` 定义平台无关的会话记录接口、事件和读取快照。`AppDependencies` 注入 `AppLogger` 到 `ScanController`；每次读取使用既有 NFC sessionId，物理通信只在扫描边界记录，协议代码不引用文件、平台或日志实现。事件包含递增序号、UTC 时间和原时区偏移、单调耗时、采集版本、阶段、命令与响应、错误分类；失败、空响应与状态拒绝保持区分，迟到响应只属于其原会话。读取失败与释放失败分别记录，当前原始帧及文本展示仍独立于持久化日志开关。
+
+`AppLogger` → `LogStore` 串行保存到应用文档目录 `trafarch_diagnostics_v1/<sessionId>.<segment>.jsonl`，无需数据库或索引迁移。默认 200 ms／32 KiB 分批刷新，错误、结束、导出和后台切换时刷新；内存写入队列上限 1 MiB，单会话上限 8 MiB，超限保留缺失标记。文件以批次边界在约 1 MiB 分段，按完整会话执行总量 20 MiB、30 次、7 天保留；正在记录或仍有排队写入的会话受保护。异常末行可损坏但完整前缀保留，缺开始、缺结束、序号间隙和持久化故障均不得报告为完整。批量写入无法保证进程被强杀时最后一批不丢失。
+
+记录默认关闭，设置初始化先于用户扫描；中途关闭以 recordingStopped 结束持久化记录，再开启不补写缺失开头。仅新增 scan 读卡会话，不再写入二维码、设置开关或归档等应用操作日志；旧 application 文件保留但不列入管理和导出；应用退出等待已接受的扫描及档案操作后刷新日志。`DiagnosticsController` 在串行队列内冻结所选会话边界，通过现有 `saveToDownloads(fileName, content)` 通道导出标准 `.json` 文件，Android MediaStore 标注为 `application/json`。导出封装为 `format: trafarch.diagnostic_export`、`version: 3`、`kind: full`、`exportedAt` 与 `sessions` 数组；完整诊断每会话包含截止序号、完整性、`events` 数组及 `rawJsonl` 原始字符串。command／raw 字节数组与 response 字段对象在单行内编码，其他 JSON 结构保持缩进；完整事件保留原时区和未知字段，损坏尾行只进入原始字符串，不破坏外层 JSON。异常原文与原始通信只进入完整诊断；旧 `app_log.txt` 以 `legacyText` 保存原文，只有用户显式清理才删除。全部诊断留在本机，不自动上传。

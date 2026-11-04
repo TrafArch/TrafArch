@@ -1,39 +1,52 @@
 // test/app_logger_test.dart
+import 'dart:convert';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
 import 'package:transit_card_analyzer/platform/storage/app_logger.dart';
 import 'package:transit_card_analyzer/platform/storage/log_exporter.dart';
 import 'package:transit_card_analyzer/app/app_dependencies.dart';
+import 'package:transit_card_analyzer/shared/diagnostics/diagnostic_event.dart';
 
 import 'support/test_database.dart';
 
 void main() {
   group('AppLogger 运行日志', () {
-    test('默认关闭不写入；开启后按时间戳前缀写入，关闭后停止写入', () async {
+    test('默认关闭不写入；开启后结构化写入，关闭后停止写入', () async {
       final store = MemoryLogStore();
       final logger = AppLogger(store: store);
+      addTearDown(logger.close);
 
-      logger.log('默认关闭时不写入');
+      logger
+          .startSession('disabled')
+          .event('message', data: {'message': '默认关闭时不写入'});
       logger.enabled = true;
-      logger.log('第一条');
+      final sink = logger.startSession('scan');
+      sink.event('message', data: {'message': '第一条'});
+      sink.end(DiagnosticOutcome.success);
       logger.enabled = false;
-      logger.log('不应写入');
+      logger
+          .startSession('disabled-after')
+          .event('message', data: {'message': '不应写入'});
       await logger.flush();
 
-      final line = (await logger.readAll()).trim();
-      expect(
-        RegExp(r'^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}\] 第一条$')
-            .hasMatch(line),
-        isTrue,
-      );
+      final session = (await logger.readSessions()).single;
+      expect(session.events.map((e) => e.type), [
+        'session_start',
+        'message',
+        'session_end',
+      ]);
+      expect(session.events[1].data['message'], '第一条');
+      expect(session.events[1].at, isA<DateTime>());
+      expect(session.incomplete, isFalse);
       expect(await logger.readAll(), isNot(contains('不应写入')));
       expect(await logger.readAll(), isNot(contains('默认关闭时不写入')));
     });
   });
 
   group('AppDependencies 日志导出', () {
-    test('exportLog 拼接头部并调用导出通道，文件名带时间戳', () async {
+    test('exportLog 导出标准 JSON 并调用导出通道，文件名带时间戳', () async {
       final exporter = _RecordingExporter();
       final app = AppDependencies(
         database: testDatabase(),
@@ -48,9 +61,13 @@ void main() {
       expect(app.logExportMessage, contains('已导出到下载目录'));
       expect(
         exporter.fileName,
-        matches(RegExp(r'^transit_card_log_\d{8}_\d{6}\.txt$')),
+        matches(RegExp(r'^transit_card_log_\d{8}_\d{6}\.json$')),
       );
-      expect(exporter.content, contains('TrafArch 运行日志'));
+      final document = jsonDecode(exporter.content!) as Map;
+      expect(document['format'], 'trafarch.diagnostic_export');
+      expect(document['version'], 3);
+      expect(document['kind'], 'full');
+      expect(document['sessions'], isEmpty);
       expect(app.exportingLog, isFalse);
     });
 
@@ -84,13 +101,13 @@ void main() {
       await app.setLoggingEnabled(true);
       expect(app.loggingEnabled, isTrue);
       expect(settings.values[SettingsKeys.loggingEnabled], 'true');
-      expect(await store.readAll(), contains('== 日志记录已开启 =='));
+      expect(await store.readAll(), isEmpty);
 
       await app.setLoggingEnabled(false);
 
       expect(app.loggingEnabled, isFalse);
       expect(settings.values[SettingsKeys.loggingEnabled], 'false');
-      expect(await store.readAll(), contains('== 日志记录已关闭 =='));
+      expect(await store.readAll(), isEmpty);
     });
   });
 }

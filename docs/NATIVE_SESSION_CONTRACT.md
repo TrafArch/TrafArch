@@ -184,6 +184,8 @@ belong to the parent Dart integration.
 Permission request codes remain storage **1001**, image picker **1002**. API 29+
 uses MediaStore Downloads; older supported Android requests the existing
 `WRITE_EXTERNAL_STORAGE` permission. Photo picker/GET_CONTENT fallback is retained.
+Exports whose file name ends in `.json` use the `application/json` MIME type;
+other text exports retain `text/plain`. The method name and argument keys are unchanged.
 Camera scanning uses the in-app scanner; the Google Code Scanner channel and module
 warm-up have been removed.
 Cancellation/failure codes/messages at these boundaries are:

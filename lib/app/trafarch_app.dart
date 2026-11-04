@@ -20,7 +20,8 @@ class TransitCardAnalyzerApp extends StatefulWidget {
   State<TransitCardAnalyzerApp> createState() => _TransitCardAnalyzerAppState();
 }
 
-class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp> {
+class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp>
+    with WidgetsBindingObserver {
   /// 应用级状态在根部创建，向下传递给 [AppShell] 与各功能页；
   /// 由本 Widget 负责 init/dispose。
   late final AppDependencies _app;
@@ -40,6 +41,7 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp> {
   void initState() {
     super.initState();
     _app = widget.createDependencies?.call() ?? AppDependencies();
+    WidgetsBinding.instance.addObserver(this);
     _monetEnabled.value = _app.monetEnabled;
     _app.addListener(_syncMonetFromDependencies);
     // 根组件拥有设置和本地参考数据的初始化与释放；加载问题由各功能页展示。
@@ -48,10 +50,20 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _app.removeListener(_syncMonetFromDependencies);
     _app.dispose();
     _monetEnabled.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _app.flushDiagnostics();
+    }
   }
 
   void _syncMonetFromDependencies() {

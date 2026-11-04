@@ -4,6 +4,7 @@ import '../../../app/app_info.dart';
 import '../../../app/app_dependencies.dart';
 import 'about_page.dart';
 import 'feedback_page.dart';
+import 'diagnostic_export_dialog.dart';
 import '../../reference_data/presentation/knowledge_base_page.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -45,7 +46,7 @@ class _SettingsPageState extends State<SettingsPage> {
       logStatus = app.logExportMessage!;
       logStatusColor = app.logExportFailed ? scheme.error : scheme.primary;
     } else {
-      logStatus = '保存到手机「下载」目录（Download/transit_card_log_*.txt）';
+      logStatus = '选择读取记录，导出 JSON 到手机「下载」目录';
       logStatusColor = scheme.outline;
     }
     Widget section(String title, List<Widget> children) {
@@ -146,45 +147,40 @@ class _SettingsPageState extends State<SettingsPage> {
                     title: const Text('启用运行日志'),
                     subtitle: Text(
                       app.loggingEnabled
-                          ? '已开启：记录读卡与解析过程，便于排查问题'
-                          : '默认停用：不写入新的运行日志（开启后可导出）',
+                          ? '已开启：等待贴卡时立即生效，读卡日志保存在本机，可能含卡片标识与行程信息'
+                          : '默认停用：不写入新的运行日志，已有日志可在日志管理器中查看和导出',
                     ),
                     value: app.loggingEnabled,
                     onChanged: (value) => app.setLoggingEnabled(value),
                   ),
-                  AnimatedSize(
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeInOut,
-                    alignment: Alignment.topCenter,
-                    child: app.loggingEnabled
-                        ? Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Divider(height: 1),
-                              ListTile(
-                                leading: const Icon(Icons.download_outlined),
-                                title: const Text('导出日志'),
-                                subtitle: Text(
-                                  logStatus,
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(color: logStatusColor),
-                                ),
-                                trailing: app.exportingLog
-                                    ? const SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : const Icon(Icons.chevron_right),
-                                onTap: app.exportingLog
-                                    ? null
-                                    : () => app.exportLog(),
-                              ),
-                            ],
+                  if (app.diagnostics.storageIssue case final String issue)
+                    ListTile(
+                      leading: Icon(
+                        Icons.warning_amber_outlined,
+                        color: scheme.error,
+                      ),
+                      title: const Text('日志保存状态异常'),
+                      subtitle: Text(issue),
+                    ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.download_outlined),
+                    title: const Text('日志管理器'),
+                    subtitle: Text(
+                      logStatus,
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: logStatusColor),
+                    ),
+                    trailing: app.exportingLog
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const SizedBox(width: double.infinity),
+                        : const Icon(Icons.chevron_right),
+                    onTap: app.exportingLog
+                        ? null
+                        : () => showDiagnosticExportDialog(context, app),
                   ),
                 ],
               ),

@@ -44,6 +44,7 @@ import '../features/qr/application/qr_controller.dart';
 import '../features/archive/application/archive_controller.dart';
 import '../features/archive/application/archive_transfer_controller.dart';
 import '../platform/storage/archive_document_store.dart';
+import '../features/archive/domain/card_types.dart';
 
 /// Composition root and presentation facade. Controllers own mutable state and
 /// resources; this object wires their lifetimes and propagates UI notifications.
@@ -64,7 +65,12 @@ class AppDependencies extends OwnedNotifier {
         updateService ??
         UpdateService(currentBuild: int.parse(AppInfo.buildNumber));
     final assets = bundle ?? rootBundle;
-    _logger = logger ?? AppLogger();
+    _logger =
+        logger ??
+        AppLogger(
+          appVersion: AppInfo.version,
+          buildNumber: AppInfo.buildNumber,
+        );
     final exporter = logExporter ?? const MethodChannelLogExporter();
     _database = database ?? AppDatabase();
     _ownsDatabase = database == null;
@@ -74,13 +80,9 @@ class AppDependencies extends OwnedNotifier {
       browser: feedbackBrowser ?? const MethodChannelFeedbackBrowser(),
     );
     references = ReferenceDataController(assets);
-    qr = QrController(log: _logger.log);
+    qr = QrController(log: (_) {});
     diagnostics = DiagnosticsController(_logger, exporter);
-    archive = ArchiveController(
-      CardRepository(_database),
-      exporter,
-      _logger.log,
-    );
+    archive = ArchiveController(CardRepository(_database), exporter, (_) {});
     archiveTransfer = ArchiveTransferController(
       archive.repository,
       archiveDocumentStore ?? const MethodChannelArchiveDocumentStore(),
@@ -89,7 +91,8 @@ class AppDependencies extends OwnedNotifier {
       channel: channel ?? const MethodChannelNfcChannel(),
       felicaChannel: felicaChannel ?? const MethodChannelFelicaChannel(),
       coordinator: CardReadCoordinator(assets),
-      logEvent: _logger.log,
+      logEvent: (_) {},
+      diagnostics: _logger,
     );
     scan.onStarted = () {
       _view = null;
@@ -123,10 +126,12 @@ class AppDependencies extends OwnedNotifier {
   late final List<OwnedNotifier> _children;
   ScanPresentation? _view;
   Future<void>? _initializing;
+  int _scanRequest = 0;
 
   Future<void> init() => _initializing ??= Future.wait([
     references.initialize(),
     settings.initialize(),
+    _logger.prune().catchError((Object _) {}),
   ]);
 
   Future<void> _complete(
@@ -151,6 +156,37 @@ class AppDependencies extends OwnedNotifier {
       scan.frames,
       metadataIssues: scan.tag?.metadataIssues ?? const [],
     );
+    final capturedCard = view.parsedCard;
+    if (capturedCard != null) {
+      final identified = archive.identified;
+      scan.addStructuredDiagnostic(id, 'card_info', {
+        'cardNumber':
+            identified?.cardNumber ??
+            capturedCard.localCard?.info.cardNumber ??
+            view.cityUnionPublicInfo?.cityCardNumber ??
+            capturedCard.info.displayCardNumber,
+        'applicationSerialRaw': capturedCard.info.applicationSerial,
+        'cardName':
+            identified?.displayName ??
+            view.knowledge.cardPrefixes
+                .lookupByIssuerId(capturedCard.info.issuerId)
+                ?.cardName ??
+            view.cityUnionCard?.cardName ??
+            capturedCard.localCard?.info.cardKindLabel ??
+            capturedCard.parserName,
+        'cardType': identified?.identity.cardType ?? capturedCard.parserId,
+        'cardTypeLabel': identified == null
+            ? capturedCard.parserName
+            : cardTypeLabel(identified.identity.cardType),
+        'cardFamily': view.analysis?.identity.cardFamily,
+        'cardKindRaw': capturedCard.info.cardKind,
+        'cardTypeRaw': capturedCard.info.cardTypeId,
+        'parserId': capturedCard.parserId,
+        'parserName': capturedCard.parserName,
+        'selectedAid': capturedCard.selectedAidHex,
+        'identificationState': 'resolved',
+      });
+    }
     final parsed = view.parsedCard;
     if (parsed != null) {
       final balance = view.balanceInterpretation;
@@ -295,8 +331,12 @@ class AppDependencies extends OwnedNotifier {
   static List<int>? decodeQrText(String input) =>
       QrController.decodeQrText(input);
   void clearQr() => qr.clearQr();
-  Future<void> setLoggingEnabled(bool enabled) =>
-      settings.setLoggingEnabled(enabled);
+  Future<void> setLoggingEnabled(bool enabled) {
+    final write = settings.setLoggingEnabled(enabled);
+    if (enabled) scan.refreshWaitingDiagnostics();
+    return write;
+  }
+
   Future<void> setAutoSaveEnabled(bool enabled) =>
       settings.setAutoSaveEnabled(enabled);
   Future<void> setMonetEnabled(bool enabled) =>
@@ -309,19 +349,34 @@ class AppDependencies extends OwnedNotifier {
       settings.openFeedbackQqGroup(groupNumber, joinUrl);
   Future<void> openPrivacyPolicy() => settings.openPrivacyPolicy();
   Future<void> openFeedbackSurvey(Uri url) => settings.openFeedbackSurvey(url);
-  Future<void> exportLog() => diagnostics.exportLog();
+  Future<void> exportLog({Set<String>? sessionIds}) =>
+      diagnostics.exportLog(sessionIds: sessionIds);
   Future<String> exportCards() => archive.exportCards();
-  Future<void> scanOnce() => scan.scanOnce();
-  Future<void> stop() => scan.stop();
+  Future<void> scanOnce() {
+    final request = ++_scanRequest;
+    if (disposed) return Future.value();
+    if (settings.initialized) return scan.scanOnce();
+    return settings.initialize().then((_) async {
+      if (!disposed && request == _scanRequest) await scan.scanOnce();
+    });
+  }
+
+  Future<void> flushDiagnostics() => _logger.flush();
+  Future<void> stop() {
+    _scanRequest++;
+    return scan.stop();
+  }
+
   Future<bool> acceptPendingSave(String id) => archive.accept(id);
   void declinePendingSave(String id) => archive.decline(id);
   void clearAutoSaveNotice() => archive.clearNotice();
 
   Future<void> _closeStorage() async {
+    await scan.finishPending();
     await archive.finishWrites();
     await archiveTransfer.finishWrites();
     if (_ownsDatabase) await _database.close();
-    await _logger.flush();
+    await _logger.close();
   }
 
   @override
