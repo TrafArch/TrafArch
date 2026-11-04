@@ -2,6 +2,8 @@
 
 ## 2026-10-21 — 覆盖安装交付修正
 
+- 继续解决 PR #20 新增小窗／分屏布局提交的合并冲突，保留 2.x 预览及已验证依赖，合入底栏、日志管理与档案导入导出弹窗的窄窗适配。按用户要求本轮不再构建安装包，pubspec 保留下一构建号 2137、AppInfo 保留已交付号 2136；数据库与 manifest 的 SHA256 不变。
+
 - 解决 PR #20（main → 2.x-preview）合并冲突，保留最新 2.x 界面，合入日志管理、荣耀内存恢复及沈阳行程金额展示修复；版本沿用 1.0.3-beta.1，数据库及 manifest 保持当前分支原字节。同步底栏 52dp 胶囊与 QQ 直接唤起／邀请页回退的回归预期。全量 2432 项 Flutter 测试通过、1 项原有跳过，静态检查及 Android 单元测试通过。交付原签名 arm64-v8a Release，本次构建号 2136、实际 versionCode 4136，自动预留 2137；名称 TrafArch、包名 com.kajolno.TrafArch，证书、ZIP／ELF 16KiB 对齐与包内参考资产核验通过。产物及验证报告见 build/gallery/release-pr20-2136/，未安装设备。
 
 - 底栏与卡包调整版追加交付原签名 arm64-v8a Release：版本名 `1.0.3-beta.1`，本次构建号 2135，实拆 Android versionCode 4135，名称 TrafArch、包名 com.kajolno.TrafArch。包含最新四项底栏、灰黑残影修复、卡面与余额排版及足迹入口隐藏；此前全量 2342 项测试、静态检查及 36 张源码截图验收通过。原签名、ZIP／ELF 16KiB 对齐及包内数据库／manifest 核验通过，源码资产 SHA256 前后不变；自动预留下一号 2136，未安装设备。产物与报告见 build/gallery/release-2135/。
