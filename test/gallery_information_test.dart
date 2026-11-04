@@ -90,54 +90,78 @@ void main() {
     },
   );
 
-  testWidgets(
-    'feedback opens only the selected public contact and copies exact values',
-    (tester) async {
-      final opened = <String>[];
-      final copied = <String>[];
-      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-        SystemChannels.platform,
-        (call) async {
-          if (call.method == 'Clipboard.setData') {
-            copied.add((call.arguments as Map)['text'] as String);
-          }
-          return null;
-        },
-      );
-      addTearDown(
-        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-          SystemChannels.platform,
-          null,
-        ),
-      );
-      c.navigate(GalleryPage.feedback);
-      await tester.pumpWidget(
-        GalleryApp(
-          controller: c,
-          openWebLink: (url) async => opened.add(url.toString()),
-          openEmail: (email) async {
-            opened.add(email);
-            return true;
+  for (final qqInstalled in [true, false]) {
+    testWidgets(
+      'feedback opens selected contact and copies exact values, QQ installed=$qqInstalled',
+      (tester) async {
+        final opened = <String>[];
+        final copied = <String>[];
+        final launched = <Uri>[];
+        const launcherChannel = MethodChannel(
+          'plugins.flutter.io/url_launcher',
+        );
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          launcherChannel,
+          (call) async {
+            final url = Uri.parse((call.arguments as Map)['url'] as String);
+            launched.add(url);
+            return url.scheme == 'https' || qqInstalled;
           },
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(opened, isEmpty);
-      await tester.tap(find.text('QQ 群'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('复制群号'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('邮箱'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('复制邮箱'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('填写反馈问卷'));
-      await tester.pumpAndSettle();
-      expect(opened, [AppSupport.qqJoin, AppSupport.email, AppSupport.survey]);
-      expect(copied, [AppSupport.qqGroup, AppSupport.email]);
-      await tester.pumpWidget(const SizedBox.shrink());
-    },
-  );
+        );
+        addTearDown(
+          () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+            launcherChannel,
+            null,
+          ),
+        );
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          (call) async {
+            if (call.method == 'Clipboard.setData') {
+              copied.add((call.arguments as Map)['text'] as String);
+            }
+            return null;
+          },
+        );
+        addTearDown(
+          () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+            SystemChannels.platform,
+            null,
+          ),
+        );
+        c.navigate(GalleryPage.feedback);
+        await tester.pumpWidget(
+          GalleryApp(
+            controller: c,
+            openWebLink: (url) async => opened.add(url.toString()),
+            openEmail: (email) async {
+              opened.add(email);
+              return true;
+            },
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(opened, isEmpty);
+        await tester.tap(find.text('QQ 群'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('复制群号'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('邮箱'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('复制邮箱'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('填写反馈问卷'));
+        await tester.pumpAndSettle();
+        expect(launched, hasLength(qqInstalled ? 1 : 2));
+        if (!qqInstalled) expect(launched.last.toString(), AppSupport.qqJoin);
+        expect(launched.first.scheme, 'mqqapi');
+        expect(launched.first.queryParameters['uin'], AppSupport.qqGroup);
+        expect(opened, [AppSupport.email, AppSupport.survey]);
+        expect(copied, [AppSupport.qqGroup, AppSupport.email]);
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
 
   testWidgets('failed support links show a recoverable error and allow retry', (
     tester,

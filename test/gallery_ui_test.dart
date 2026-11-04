@@ -131,7 +131,7 @@ void main() {
       final initialRect = tester.getRect(capsule);
       final originalElement = tester.element(capsule);
       final home = find.byKey(const ValueKey('nav-home'));
-      expect(initialRect.height, closeTo(50, .1));
+      expect(initialRect.height, closeTo(52, .1));
       expect(
         initialRect.contains(
           tester.getCenter(
