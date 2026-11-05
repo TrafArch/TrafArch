@@ -39,7 +39,7 @@ void main() {
     await tester.tap(find.text('交易记录 1'));
     await tester.pumpAndSettle();
     expect(find.text('CNY -1.00'), findsOneWidget);
-    expect(find.text('终端解码'), findsOneWidget);
+    expect(find.text('终端解码：'), findsOneWidget);
     expect(find.text('00010203'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

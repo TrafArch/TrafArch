@@ -173,10 +173,12 @@ class _ArchiveExportDialogState extends State<_ArchiveExportDialog> {
     final fullBackup = _mode == ArchiveExportMode.fullBackup;
     return AlertDialog(
       title: const Text('导出卡片 JSON'),
+      scrollable: true,
+      insetPadding: const EdgeInsets.all(16),
       content: SizedBox(
         width: 440,
-        height: fullBackup ? 220 : MediaQuery.sizeOf(context).height * 0.55,
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
@@ -184,6 +186,11 @@ class _ArchiveExportDialogState extends State<_ArchiveExportDialog> {
             ),
             const SizedBox(height: 12),
             SegmentedButton<ArchiveExportMode>(
+              direction:
+                  (MediaQuery.sizeOf(context).width - 80).clamp(0, 440) <
+                      220 * MediaQuery.textScalerOf(context).scale(14) / 14
+                  ? Axis.vertical
+                  : Axis.horizontal,
               segments: const [
                 ButtonSegment(
                   value: ArchiveExportMode.selectedRecords,
@@ -200,11 +207,7 @@ class _ArchiveExportDialogState extends State<_ArchiveExportDialog> {
             ),
             const SizedBox(height: 12),
             if (fullBackup)
-              const Expanded(
-                child: SingleChildScrollView(
-                  child: Text('保存卡片名称、全部历史记录和原始读取数据，可用于恢复卡片档案。'),
-                ),
-              )
+              const Text('保存卡片名称、全部历史记录和原始读取数据，可用于恢复卡片档案。')
             else ...[
               const Text('仅导出所选字段，每条记录一行，方便整理成表格。'),
               Wrap(
@@ -224,26 +227,20 @@ class _ArchiveExportDialogState extends State<_ArchiveExportDialog> {
                   Text('已选 ${_fields.length} 项'),
                 ],
               ),
-              Expanded(
-                child: ListView(
-                  children: [
-                    for (final field in ArchiveExportField.values)
-                      CheckboxListTile(
-                        contentPadding: EdgeInsets.zero,
-                        dense: true,
-                        title: Text(field.label),
-                        value: _fields.contains(field),
-                        onChanged: (selected) => setState(() {
-                          if (selected == true) {
-                            _fields.add(field);
-                          } else {
-                            _fields.remove(field);
-                          }
-                        }),
-                      ),
-                  ],
+              for (final field in ArchiveExportField.values)
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: Text(field.label),
+                  value: _fields.contains(field),
+                  onChanged: (selected) => setState(() {
+                    if (selected == true) {
+                      _fields.add(field);
+                    } else {
+                      _fields.remove(field);
+                    }
+                  }),
                 ),
-              ),
             ],
           ],
         ),

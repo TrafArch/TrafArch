@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../shared/presentation/adaptive_layout.dart';
+
 import '../../../app/app_info.dart';
 import '../../../platform/browser/feedback_browser.dart';
 import '../../updates/update_prompt.dart';
@@ -35,14 +37,12 @@ class _AboutPageState extends State<AboutPage> {
     } on FeedbackBrowserException catch (error) {
       // 浏览器层已按情况给出可展示文案（含复制链接气泡）。
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error.message)));
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('无法打开隐私政策，请稍后重试。')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('无法打开隐私政策，请稍后重试。')));
     } finally {
       if (mounted) setState(() => _openingPrivacy = false);
     }
@@ -73,100 +73,109 @@ class _AboutPageState extends State<AboutPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Scaffold(
-      appBar: AppBar(title: const Text('关于')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          const SizedBox(height: 24),
-          Center(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: Image.asset(
-                'assets/icon/app_icon.png',
-                width: 96,
-                height: 96,
-                filterQuality: FilterQuality.high,
-              ),
+    return FoldSafePage(
+      child: Scaffold(
+        appBar: AppBar(title: const Text('关于')),
+        body: SafeArea(
+          top: false,
+          child: AdaptiveContent(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                const SizedBox(height: 24),
+                Center(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(24),
+                    child: Image.asset(
+                      'assets/icon/app_icon.png',
+                      width: 96,
+                      height: 96,
+                      filterQuality: FilterQuality.high,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  AppInfo.appName,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '版本 ${AppInfo.version}',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
+                ),
+                if (widget.updates.isConfigured) ...[
+                  const SizedBox(height: 16),
+                  Center(
+                    child: OutlinedButton.icon(
+                      onPressed: _checking ? null : _checkUpdates,
+                      icon: _checking
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.system_update_outlined),
+                      label: Text(_checking ? '正在检查…' : '检查更新'),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 24),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.person_outline),
+                    title: const Text('作者'),
+                    subtitle: const Text(AppInfo.author),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.volunteer_activism_outlined),
+                    title: const Text('致谢'),
+                    subtitle: const Text('感谢读卡识途提供的公开数据源'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const AcknowledgementsPage(),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.code),
+                    title: const Text('开放源代码许可'),
+                    subtitle: const Text('查看本应用使用的开源软件与许可'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => _openLicenses(context),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.privacy_tip_outlined),
+                    title: const Text('隐私政策'),
+                    enabled: !_openingPrivacy,
+                    onTap: _openingPrivacy ? null : _openPrivacyPolicy,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  AppInfo.copyright,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 16),
-          Text(
-            AppInfo.appName,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.headlineSmall,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '版本 ${AppInfo.version}',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.outline,
-            ),
-          ),
-          if (widget.updates.isConfigured) ...[
-            const SizedBox(height: 16),
-            Center(
-              child: OutlinedButton.icon(
-                onPressed: _checking ? null : _checkUpdates,
-                icon: _checking
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.system_update_outlined),
-                label: Text(_checking ? '正在检查…' : '检查更新'),
-              ),
-            ),
-          ],
-          const SizedBox(height: 24),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.person_outline),
-              title: const Text('作者'),
-              subtitle: const Text(AppInfo.author),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.volunteer_activism_outlined),
-              title: const Text('致谢'),
-              subtitle: const Text('感谢读卡识途提供的公开数据源'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const AcknowledgementsPage()),
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.code),
-              title: const Text('开放源代码许可'),
-              subtitle: const Text('查看本应用使用的开源软件与许可'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => _openLicenses(context),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.privacy_tip_outlined),
-              title: const Text('隐私政策'),
-              enabled: !_openingPrivacy,
-              onTap: _openingPrivacy ? null : _openPrivacyPolicy,
-            ),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            AppInfo.copyright,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.outline,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

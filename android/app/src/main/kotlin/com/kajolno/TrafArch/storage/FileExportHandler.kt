@@ -123,7 +123,8 @@ internal class FileExportHandler(private val activity: Activity, messenger: Bina
     private fun writeViaMediaStore(fileName: String, content: String): String {
         val values = ContentValues().apply {
             put(MediaStore.Downloads.DISPLAY_NAME, fileName)
-            put(MediaStore.Downloads.MIME_TYPE, "text/plain")
+            put(MediaStore.Downloads.MIME_TYPE,
+                if (fileName.endsWith(".json", ignoreCase = true)) "application/json" else "text/plain")
             put(MediaStore.Downloads.IS_PENDING, 1)
         }
         val resolver = activity.contentResolver

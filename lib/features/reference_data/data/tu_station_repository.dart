@@ -818,6 +818,14 @@ CREATE TABLE IF NOT EXISTS tu_unknown_station_reports(
     _columns.clear();
   }
 
+  /// Evict only rebuildable objects. Preserve query diagnostics and raw data.
+  void releaseMemory() {
+    final issue = queryIssue;
+    invalidate();
+    _lookupValues = null;
+    queryIssue = issue;
+  }
+
   // ---------------------------------------------------------------- 内部
 
   List<TuStationRecord> _memo(

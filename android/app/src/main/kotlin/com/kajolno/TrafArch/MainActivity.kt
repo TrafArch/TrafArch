@@ -20,6 +20,7 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        (application as TrafArchApplication).memory.attach(flutterEngine)
         disposeHandlers()
         val messenger = flutterEngine.dartExecutor.binaryMessenger
         nfc = NfcChannelHandler(this, messenger)
@@ -57,6 +58,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        (application as TrafArchApplication).memory.detach(flutterEngine)
         disposeHandlers()
         super.cleanUpFlutterEngine(flutterEngine)
     }

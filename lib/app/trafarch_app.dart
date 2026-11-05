@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 
@@ -7,6 +8,7 @@ import 'app_dependencies.dart';
 import 'theme/app_theme.dart';
 import 'navigation/app_shell.dart';
 import '../features/updates/update_prompt.dart';
+import 'navigation/recovery_route_observer.dart';
 
 export 'navigation/app_shell.dart' show AppShell;
 
@@ -20,7 +22,8 @@ class TransitCardAnalyzerApp extends StatefulWidget {
   State<TransitCardAnalyzerApp> createState() => _TransitCardAnalyzerAppState();
 }
 
-class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp> {
+class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp>
+    with WidgetsBindingObserver {
   /// 应用级状态在根部创建，向下传递给 [AppShell] 与各功能页；
   /// 由本 Widget 负责 init/dispose。
   late final AppDependencies _app;
@@ -33,13 +36,14 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp> {
 
   /// AppShell 需要感知“被其他页面覆盖后再回显”：扫码解析、设置等页面
   /// pop 回来时靠它恢复悬浮底栏的显隐动画。
-  final RouteObserver<PageRoute<dynamic>> _routeObserver =
-      RouteObserver<PageRoute<dynamic>>();
+  late final RouteObserver<PageRoute<dynamic>> _routeObserver;
 
   @override
   void initState() {
     super.initState();
     _app = widget.createDependencies?.call() ?? AppDependencies();
+    _routeObserver = RecoveryRouteObserver(_app);
+    WidgetsBinding.instance.addObserver(this);
     _monetEnabled.value = _app.monetEnabled;
     _app.addListener(_syncMonetFromDependencies);
     // 根组件拥有设置和本地参考数据的初始化与释放；加载问题由各功能页展示。
@@ -48,10 +52,25 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _app.removeListener(_syncMonetFromDependencies);
     _app.dispose();
     _monetEnabled.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _app.flushDiagnostics();
+    }
+  }
+
+  @override
+  void didHaveMemoryPressure() {
+    _app.handleMemoryPressure(false);
   }
 
   void _syncMonetFromDependencies() {
@@ -89,6 +108,13 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp> {
               theme: AppTheme.light(monet ? lightDynamic : null),
               darkTheme: AppTheme.dark(monet ? darkDynamic : null),
               themeMode: ThemeMode.system,
+              builder: (context, child) =>
+                  AnnotatedRegion<SystemUiOverlayStyle>(
+                    value: AppTheme.systemUiOverlayStyle(
+                      Theme.of(context).scaffoldBackgroundColor,
+                    ),
+                    child: child!,
+                  ),
               home: child,
             );
           },
