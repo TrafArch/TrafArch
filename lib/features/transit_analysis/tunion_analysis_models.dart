@@ -14,9 +14,11 @@ const int kWalletAnchoredBalanceParseVersion = 8;
 
 /// 行程解析口径版本：解析 / 关联规则变更时递增，随读取批次持久化，
 /// 历史数据据此识别产出批次所用的解析口径。
+/// v15 保留跨城站点映射城市，展示与原始受理城市分离。
+/// v14 纳入城际铁路分类与绍兴限定的1A/1E同侧展示关联。
 /// v13 接入沈阳受理方限定的 0x15/0x16 进出站语义；历史捕获不重写。
 /// v12 已按受理方证据识别沈阳 EP 轨道金额的小端布局。
-const int kTripParseVersion = 13;
+const int kTripParseVersion = 15;
 
 /// 识别证据：来源、说明与权重（0 表示"出场但未命中"）。
 class Evidence {
@@ -150,6 +152,11 @@ class TransitTrip {
   /// 未写入）；无法确定时为 null，展示层据此判定异地用卡（未知不判定）。
   final String? cityCode;
 
+  /// Exact native station-map owner for display. Acquirer city and matching
+  /// evidence remain in [cityCode] and the original process record.
+  final String? locationCityCode;
+  final String? locationCityName;
+
   final String? lineLabel;
 
   /// Bus route established by the city decoder/reference lookup, excluding
@@ -171,6 +178,7 @@ class TransitTrip {
       switch (appTypeName) {
         '城市轨道交通' => 0x01,
         '公共汽电车' => 0x02,
+        '城际铁路' => 0x0A,
         '市郊铁路' => 0x0E,
         _ => null,
       };
@@ -230,6 +238,8 @@ class TransitTrip {
     this.location,
     this.cityName,
     this.cityCode,
+    this.locationCityCode,
+    this.locationCityName,
     this.lineLabel,
     this.resolvedBusLineLabel,
     this.stationLabel,
@@ -412,18 +422,59 @@ final class ProcessTripEntry extends TripEntry {
 /// 0x1E 过程记录为按时间倒序的行程流：
 /// - 已与交易配对的 0x1E 由交易条目代表；无法配对的 0x1E 保留为
 ///   [ProcessTripEntry]（独立过程事件，不丢弃）；
-/// - 1A 仅隐藏已保存展示关联的具体侧；不隐藏基础交易或未匹配侧。
+/// - 1A 仅隐藏已保存展示关联或与1E严格互证的具体侧；原始应用记录保留。
 List<TripEntry> buildTripStream({
   required List<TransitTrip> trips,
   List<TransitRecord> rails = const [],
   List<BusTransitRecord> buses = const [],
   List<TUnionTripRecord> processTrips = const [],
 }) {
-  // 仅消费分析阶段保存的关联；不按存在某类文件全局压制事件。
+  // 消费保存的关联或逐侧严格核实的城际证据；不按文件类型全局压制事件。
   final halves = <TripEntry>[
     for (final rail in rails) ..._railHalves(rail),
     for (final bus in buses) ..._busHalves(bus),
   ];
+  final intercityAliases = <TripEntry>{};
+  final intercityMatches = <TripEntry, TUnionTripRecord>{};
+  final intercityUses = <TUnionTripRecord, int>{};
+  for (final side in halves.whereType<RailRecordEntry>()) {
+    if (!side.isEntry && side.record.statusCode == 1) continue;
+    final rail = side.record;
+    final matches = processTrips
+        .where(
+          (cycle) =>
+              cycle.appTypeCode == 0x0A &&
+              matchesTunionJourneySide(
+                isEntry: side.isEntry,
+                isRail: true,
+                time: side.isEntry ? rail.entryTime : rail.exitTime,
+                cityCode: side.isEntry ? rail.entryCityCode : rail.exitCityCode,
+                terminalId: side.isEntry
+                    ? rail.entryTerminalId
+                    : rail.exitTerminalId,
+                amountFen: side.isEntry
+                    ? rail.entryAmountFen
+                    : rail.exitAmountFen,
+                stationId: side.isEntry
+                    ? rail.entryStationId
+                    : rail.exitStationId,
+                lineCode: side.isEntry ? rail.entryLineCode : rail.exitLineCode,
+                agencyId: side.isEntry ? rail.entryAgencyId : rail.exitAgencyId,
+                cycle: cycle,
+              ),
+        )
+        .toList();
+    if (matches.length != 1) continue;
+    intercityMatches[side] = matches.single;
+    intercityUses.update(matches.single, (n) => n + 1, ifAbsent: () => 1);
+  }
+  // The retained 1E operation represents only its uniquely verified 1A side.
+  // Never let a conflicting city/terminal layout create a second rail ride.
+  intercityAliases.addAll(
+    intercityMatches.entries
+        .where((match) => intercityUses[match.value] == 1)
+        .map((match) => match.key),
+  );
   final applicationKeys = [
     for (final t in trips)
       if (t.displayApplicationKey != null)
@@ -465,16 +516,54 @@ List<TripEntry> buildTripStream({
   return <TripEntry>[
     for (final t in trips) TransactionTripEntry(t),
     ...halves.where(
-      (side) => !consume(
-        applicationKeys,
-        sideKey(side),
-        side is RailRecordEntry ? 0x01 : 0x02,
-      ),
+      (side) =>
+          !intercityAliases.contains(side) &&
+          !consume(
+            applicationKeys,
+            sideKey(side),
+            side is RailRecordEntry ? 0x01 : 0x02,
+          ),
     ),
     for (final p in processTrips)
-      if (!consume(processKeys, cycleDisplayKey(p), p.appTypeCode))
+      if ((p.appTypeCode == 0x0A &&
+              !_intercityTransactionRepresents(p, trips, processTrips)) ||
+          !consume(processKeys, cycleDisplayKey(p), p.appTypeCode))
         ProcessTripEntry(p),
   ]..sort((a, b) => b.time.compareTo(a.time));
+}
+
+/// A POS-only display link cannot replace the actual intercity endpoint after
+/// its verified 1A alias is folded. Require one exact operation on both sides.
+bool _intercityTransactionRepresents(
+  TUnionTripRecord cycle,
+  List<TransitTrip> trips,
+  List<TUnionTripRecord> cycles,
+) {
+  final key = cycleDisplayKey(cycle);
+  if (cycles.where((record) => cycleDisplayKey(record) == key).length != 1) {
+    return false;
+  }
+  return trips.where((trip) {
+        final linked =
+            trip.displayProcessKey ??
+            (trip.matchedProcessTrip == null
+                ? null
+                : cycleDisplayKey(trip.matchedProcessTrip!));
+        final status =
+            trip.rideStatusName ??
+            (trip.isEntry ? '进站' : trip.matchedProcessTrip?.statusShortName);
+        return linked == key &&
+            trip.appTypeCode == cycle.appTypeCode &&
+            trip.time == cycle.time &&
+            trip.amountFen == cycle.amountFen &&
+            cycle.cityCode != null &&
+            RegExp(r'^[0-9A-F]{4}$').hasMatch(cycle.cityCode!) &&
+            !RegExp(r'^[0F]+$').hasMatch(cycle.cityCode!) &&
+            trip.cityCode == cycle.cityCode &&
+            const {0x03, 0x04}.contains(cycle.typeCode) &&
+            status == cycle.statusShortName;
+      }).length ==
+      1;
 }
 
 /// 0x1A 城市轨道记录是否与 0x1E 过程记录描述同一进 / 出站侧：

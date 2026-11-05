@@ -32,7 +32,7 @@ TripModeFilter tripModeOf(TripEntry entry) => switch (entry) {
     trip.matchedProcessTrip?.isBus == true || trip.appTypeName == '公共汽电车'
         ? TripModeFilter.bus
         : (trip.matchedProcessTrip?.isRailTransit == true ||
-                  const {'城市轨道交通', '市郊铁路'}.contains(trip.appTypeName)
+                  const {'城市轨道交通', '城际铁路', '市郊铁路'}.contains(trip.appTypeName)
               ? TripModeFilter.rail
               : TripModeFilter.other),
 };

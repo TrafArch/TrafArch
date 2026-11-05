@@ -26,6 +26,8 @@ JourneyEvent<TripEntryInfo> describeJourneyEvent(
   final String? cityCode;
   final String? station;
   String? cityLabel;
+  String? locationCityCode;
+  String? locationCityLabel;
   String? decodedBusLine;
   String? balanceAfterText;
   int? confirmedBalanceFen;
@@ -51,6 +53,8 @@ JourneyEvent<TripEntryInfo> describeJourneyEvent(
       time = trip.time;
       cityCode = _cityCode(trip.cityCode);
       cityLabel = _text(trip.cityName);
+      locationCityCode = _mappedCityCode(trip.locationCityCode);
+      locationCityLabel = _text(trip.locationCityName);
       sequence = trip.sequence;
       decodedBusLine = trip.resolvedBusLineLabel;
       fareFen = trip.amountFen;
@@ -89,24 +93,27 @@ JourneyEvent<TripEntryInfo> describeJourneyEvent(
           context: busContextForCycle(record),
         );
         decodedBusLine = location.lineLabel;
+        locationCityCode = location.match.resolvedCityCode;
         station =
             _busStation(location.stationLabel ?? location.match.stationName) ??
             _busStation(record.stationCode, rawCode: true);
       } else {
-        station = _stationText(
-          display
-              .resolveCycleStationMatch(
-                normalizeTunionAcquirerCity(
-                  record.cityCode,
-                  rawCity36: cycleCityPair(record, 36),
-                ),
-                record.lineStationCode,
-                terminalId: record.terminalId,
-                time: record.time,
-                appType: record.appTypeCode,
-              )
-              .stationName,
+        final match = display.resolveCycleStationMatch(
+          normalizeTunionAcquirerCity(
+            record.cityCode,
+            rawCity36: cycleCityPair(record, 36),
+          ),
+          record.lineStationCode,
+          terminalId: record.terminalId,
+          time: record.time,
+          appType: record.appTypeCode,
         );
+        locationCityCode = match.resolvedCityCode;
+        station =
+            _stationText(match.stationName) ??
+            (record.appTypeCode == 0x0A
+                ? _stationText(record.lineStationCode)
+                : null);
       }
 
     case RailRecordEntry(:final record, :final isEntry):
@@ -123,6 +130,7 @@ JourneyEvent<TripEntryInfo> describeJourneyEvent(
         rawStation,
         lineValue: isEntry ? record.entryLineCode : record.exitLineCode,
       );
+      locationCityCode = match.resolvedCityCode;
       station =
           _stationText(match.stationName) ??
           _stationText(
@@ -166,6 +174,7 @@ JourneyEvent<TripEntryInfo> describeJourneyEvent(
         ),
       );
       decodedBusLine = location.lineLabel;
+      locationCityCode = location.match.resolvedCityCode;
       station =
           _busStation(location.stationLabel ?? location.match.stationName) ??
           _busStation(rawStation, rawHex: true);
@@ -179,9 +188,11 @@ JourneyEvent<TripEntryInfo> describeJourneyEvent(
   }
 
   cityLabel ??= cityCode == null ? null : _text(display.cityNameOf(cityCode));
-  if (cityLabel != null && cityLabel.length > 1 && cityLabel.endsWith('市')) {
-    cityLabel = cityLabel.substring(0, cityLabel.length - 1);
-  }
+  locationCityLabel ??= locationCityCode == null
+      ? null
+      : _text(display.cityNameOf(locationCityCode));
+  cityLabel = _cityLabel(cityLabel);
+  locationCityLabel = _cityLabel(locationCityLabel);
   return JourneyEvent(
     payload: info,
     mode: mode,
@@ -193,6 +204,8 @@ JourneyEvent<TripEntryInfo> describeJourneyEvent(
       station: station,
       time: time,
       timeText: time == null ? null : _clockText(time),
+      locationCityCode: locationCityCode,
+      locationCityLabel: locationCityLabel,
     ),
     scopeKey: 'live:TU:${display.currency.code}',
     sourceIds: const {'live'},
@@ -298,6 +311,21 @@ String journeyApplicationIdentity(Object record, String kind) =>
 String? _text(String? value) {
   final text = value?.trim();
   return text == null || text.isEmpty ? null : text;
+}
+
+String? _cityLabel(String? value) =>
+    value != null && value.length > 1 && value.endsWith('市')
+    ? value.substring(0, value.length - 1)
+    : value;
+
+String? _mappedCityCode(String? value) {
+  final code = _text(value);
+  return code != null &&
+          RegExp(r'^[0-9]{4}$').hasMatch(code) &&
+          code != '0000' &&
+          code != '9999'
+      ? code
+      : null;
 }
 
 String? _cityCode(String? value) {

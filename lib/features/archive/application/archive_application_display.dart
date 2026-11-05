@@ -56,6 +56,8 @@ Map<String, dynamic> captureBusApplicationDisplay(
         knowledge,
         entry ? record.entryCityCode : record.exitCityCode,
       ),
+      locationCityCode: location.match.resolvedCityCode,
+      locationCityName: _cityName(knowledge, location.match.resolvedCityCode),
     );
   }
 
@@ -81,6 +83,8 @@ Map<String, String> captureProcessDisplay(
       location.lineLabel,
       location.stationLabel,
       cityName: cityName,
+      locationCityCode: location.match.resolvedCityCode,
+      locationCityName: _cityName(knowledge, location.match.resolvedCityCode),
     );
   }
   final city = _city(
@@ -101,7 +105,13 @@ Map<String, String> captureProcessDisplay(
       appType: record.appTypeCode,
     );
   }
-  return _labels(match.lineName, match.stationName, cityName: cityName);
+  return _labels(
+    match.lineName,
+    match.stationName,
+    cityName: cityName,
+    locationCityCode: match.resolvedCityCode,
+    locationCityName: _cityName(knowledge, match.resolvedCityCode),
+  );
 }
 
 Map<String, dynamic> _endpoints(
@@ -143,6 +153,8 @@ Map<String, String> _railEndpoint(
     lineName,
     match.stationName,
     cityName: _cityName(knowledge, cityCode),
+    locationCityCode: match.resolvedCityCode,
+    locationCityName: _cityName(knowledge, match.resolvedCityCode),
   );
 }
 
@@ -160,10 +172,14 @@ Map<String, String> _labels(
   String? line,
   String? station, {
   String? cityName,
+  String? locationCityCode,
+  String? locationCityName,
 }) => {
   'cityName': ?_label(cityName),
   'line': ?_label(line),
   'station': ?_label(station),
+  'locationCityCode': ?locationCityCode,
+  if (locationCityCode != null) 'locationCityName': ?_label(locationCityName),
 };
 
 String? _cityName(KnowledgeBase knowledge, String? code) {

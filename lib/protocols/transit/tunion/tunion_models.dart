@@ -302,9 +302,10 @@ class TUnionTripRecord {
   /// 是否城市轨道交通行业记录（[0x09] 应用分类码标准值 0x01）。
   bool get isCityRail => appTypeCode == 0x01;
 
-  /// Rail journey presentation includes the separately identified suburban
-  /// railway application. Keep its original classification distinct.
-  bool get isRailTransit => isCityRail || appTypeCode == 0x0E;
+  /// Intercity and suburban rail share journey presentation while retaining
+  /// their original application classes and independent pairing boundaries.
+  bool get isRailTransit =>
+      isCityRail || appTypeCode == 0x0A || appTypeCode == 0x0E;
 
   /// 是否公共汽电车行业记录（[0x09] 应用分类码标准值 0x02）。
   bool get isBus => appTypeCode == 0x02;
