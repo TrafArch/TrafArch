@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 
@@ -107,6 +108,13 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp>
               theme: AppTheme.light(monet ? lightDynamic : null),
               darkTheme: AppTheme.dark(monet ? darkDynamic : null),
               themeMode: ThemeMode.system,
+              builder: (context, child) =>
+                  AnnotatedRegion<SystemUiOverlayStyle>(
+                    value: AppTheme.systemUiOverlayStyle(
+                      Theme.of(context).scaffoldBackgroundColor,
+                    ),
+                    child: child!,
+                  ),
               home: child,
             );
           },

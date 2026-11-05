@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../../app/app_dependencies.dart';
+import '../../shared/presentation/adaptive_layout.dart';
 import '../archive/application/archive_history.dart';
 import '../archive/application/cu_archive_projection.dart';
 import '../archive/domain/card_session_snapshot.dart';
@@ -147,12 +148,17 @@ class RecoveryResultPanel extends StatelessWidget {
   void _evidence(BuildContext context, Object value) =>
       Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) => Scaffold(
-            appBar: AppBar(title: const Text('上次读取的原始数据')),
-            body: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: SelectableText(
-                const JsonEncoder.withIndent('  ').convert(value),
+          builder: (_) => FoldSafePage(
+            child: Scaffold(
+              appBar: AppBar(title: const Text('上次读取的原始数据')),
+              body: SafeArea(
+                top: false,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: SelectableText(
+                    const JsonEncoder.withIndent('  ').convert(value),
+                  ),
+                ),
               ),
             ),
           ),

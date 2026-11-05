@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../../../app/theme/app_theme.dart';
 import '../domain/qr_barcode_payload.dart';
 import '../../../shared/presentation/adaptive_layout.dart';
 
@@ -91,49 +93,53 @@ class _QrScanPageState extends State<QrScanPage> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return FoldSafePage(
-      child: Scaffold(
-        backgroundColor: Colors.black,
-        appBar: AppBar(
-          title: const Text('扫描乘车码（JT/T 1179）'),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: AppTheme.systemUiOverlayStyle(Colors.black),
+      child: FoldSafePage(
+        child: Scaffold(
           backgroundColor: Colors.black,
-          foregroundColor: Colors.white,
-          actions: [
-            IconButton(
-              tooltip: '闪光灯',
-              onPressed: () => _controller.toggleTorch(),
-              icon: const Icon(Icons.flashlight_on_outlined),
-            ),
-          ],
-        ),
-        body: SafeArea(
-          top: false,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              MobileScanner(
-                controller: _controller,
-                onDetect: _onDetect,
-                errorBuilder: (context, error) =>
-                    _ScanErrorView(error: error, onRetry: _syncCamera),
-                overlayBuilder: (context, constraints) => const _ScanOverlay(),
-              ),
-              if (_cameraError case final error?)
-                ColoredBox(
-                  color: Colors.black,
-                  child: _ScanErrorView(error: error, onRetry: _syncCamera),
-                ),
-              const Positioned(
-                left: 24,
-                right: 24,
-                bottom: 48,
-                child: Text(
-                  '将乘车码二维码对准取景框',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white70, fontSize: 12),
-                ),
+          appBar: AppBar(
+            title: const Text('扫描乘车码（JT/T 1179）'),
+            backgroundColor: Colors.black,
+            foregroundColor: Colors.white,
+            actions: [
+              IconButton(
+                tooltip: '闪光灯',
+                onPressed: () => _controller.toggleTorch(),
+                icon: const Icon(Icons.flashlight_on_outlined),
               ),
             ],
+          ),
+          body: SafeArea(
+            top: false,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                MobileScanner(
+                  controller: _controller,
+                  onDetect: _onDetect,
+                  errorBuilder: (context, error) =>
+                      _ScanErrorView(error: error, onRetry: _syncCamera),
+                  overlayBuilder: (context, constraints) =>
+                      const _ScanOverlay(),
+                ),
+                if (_cameraError case final error?)
+                  ColoredBox(
+                    color: Colors.black,
+                    child: _ScanErrorView(error: error, onRetry: _syncCamera),
+                  ),
+                const Positioned(
+                  left: 24,
+                  right: 24,
+                  bottom: 48,
+                  child: Text(
+                    '将乘车码二维码对准取景框',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

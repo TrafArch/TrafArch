@@ -11,25 +11,15 @@ class ExpertField extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final labelWidget = Text(label);
-          final valueWidget = Text(value);
-          if (constraints.maxWidth < 360 ||
-              MediaQuery.textScalerOf(context).scale(14) > 22) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [labelWidget, const SizedBox(height: 4), valueWidget],
-            );
-          }
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(width: 150, child: labelWidget),
-              Expanded(child: valueWidget),
-            ],
-          );
-        },
+      child: SizedBox(
+        width: double.infinity,
+        // Keep fitting pairs together at every window/font size. Long values
+        // move to a full-width run instead of wrapping inside a narrow column.
+        child: Wrap(
+          spacing: 4,
+          runSpacing: 4,
+          children: [Text('$label：'), Text(value)],
+        ),
       ),
     );
   }

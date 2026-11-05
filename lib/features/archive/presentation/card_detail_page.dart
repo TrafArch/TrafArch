@@ -252,37 +252,44 @@ class _ArchiveDiagnosticsPage extends StatelessWidget {
   final ArchiveHistoryResult history;
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text(_archiveDiagnosticsTitle(history))),
-    body: ListView(
-      children: [
-        for (final batch in history.batches)
-          ExpansionTile(
-            title: Text(
-              '${batch.origin == 'imported_summary' ? '导入时保留的摘要' : '批次'}'
-              ' · ${batch.decoded.status.name}',
-            ),
-            subtitle: Text(
-              '${batch.id}\n${batch.origin} · ${batch.timeSource}',
-            ),
-            children: [
-              for (final issue in batch.issues)
-                ListTile(title: Text(issue.toString())),
-              TextButton(
-                onPressed: () => _showEvidence(
-                  context,
-                  batch.origin == 'imported_summary' ? '保留摘要中的原始快照' : '批次原文',
-                  batch.decoded.rawJson,
+  Widget build(BuildContext context) => FoldSafePage(
+    child: Scaffold(
+      appBar: AppBar(title: Text(_archiveDiagnosticsTitle(history))),
+      body: SafeArea(
+        top: false,
+        child: ListView(
+          children: [
+            for (final batch in history.batches)
+              ExpansionTile(
+                title: Text(
+                  '${batch.origin == 'imported_summary' ? '导入时保留的摘要' : '批次'}'
+                  ' · ${batch.decoded.status.name}',
                 ),
-                child: Text(
-                  batch.origin == 'imported_summary'
-                      ? '查看摘要中的原始快照'
-                      : '查看完整原始快照',
+                subtitle: Text(
+                  '${batch.id}\n${batch.origin} · ${batch.timeSource}',
                 ),
+                children: [
+                  for (final issue in batch.issues)
+                    ListTile(title: Text(issue.toString())),
+                  TextButton(
+                    onPressed: () => _showEvidence(
+                      context,
+                      batch.origin == 'imported_summary'
+                          ? '保留摘要中的原始快照'
+                          : '批次原文',
+                      batch.decoded.rawJson,
+                    ),
+                    child: Text(
+                      batch.origin == 'imported_summary'
+                          ? '查看摘要中的原始快照'
+                          : '查看完整原始快照',
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-      ],
+          ],
+        ),
+      ),
     ),
   );
 }
