@@ -92,7 +92,7 @@ class BankCardResultView extends StatelessWidget {
         'AID ${app.application.aidHex}'
         '${app.summary.panTail == null ? '' : '  ·  卡号尾号 ****${app.summary.panTail}'}\n'
         '${app.parserId.toUpperCase()} · FCI ${app.fciTags.length} 标签'
-        ' · GPO ${app.gpoTags.length} 标签'
+        ' · 数据对象 ${app.dataTags.length} 标签'
         ' · 记录 ${app.records.length} 条\n'
         '${expiry == null ? '' : '有效期 $expiry'}'
         '${expiry != null && app.issues.isNotEmpty ? ' · ' : ''}'

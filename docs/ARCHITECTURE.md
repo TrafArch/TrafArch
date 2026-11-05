@@ -91,6 +91,12 @@ android/app/src/main/kotlin/com/kajolno/TrafArch/
 
 ## 依赖与装配
 
+### 银行卡严格只读边界
+
+EMV／PBOC 共享 `ContactlessReadParser`，银行卡解析版本为 0.3.0。读取仅选择应用、以 `80 CA 9F 36 Le` 直接取得 ATC，再用绝对记录号 READ RECORD 枚举 SFI 1..30 的公开记录。每文件从记录 1 开始，拒绝后停止该文件；成功与失败读取共用单应用 254 次预算，通信失败即停止。没有 GPO 提供的 AFL，因此无法保证记录完整性；受访问条件保护的字段保持缺失，结果为部分读取。
+
+GPO 在部分非接触卡上会生成应用密文或递增 ATC，零金额与空 PDOL 均不能保证无副作用。当前流程移除 GPO 及 PDOL 组包，不提供交易模式或回退。`BankReadOnlyPolicy` 对 CLA、INS、参数和 APDU 结构实行封闭白名单，既用于 `exchangeReadOnly` 的初始及续传指令，也用于最接近实际通道的 `RecordingCardTransport`，禁止 GPO、GENERATE AC、PIN、认证、写入及未知指令。只允许 SELECT by name、绝对 READ RECORD、读取 9F36 的 GET DATA 和 GET RESPONSE，保留有界 61XX／6CXX 处理。`ParsedApplication.dataTags` 保留直接读取结果并进入界面、恢复捕获及诊断；旧 `gpoTags/gpoHex` 仅兼容已有捕获，不重读或改写历史数据。原生通道冻结契约不变。
+
 ### 边到边显示与系统安全区域
 
 Android targetSdk 保持 37，遵守 Android 15 起强制边到边显示的要求，不设置退出项。`main.dart` 显式启用 `SystemUiMode.edgeToEdge`，Android 30+ 明暗两套 LaunchTheme／NormalTheme 均声明 `windowLayoutInDisplayCutoutMode=always`，启动窗口与 Flutter 内容一致允许延伸至刘海区域。
@@ -109,7 +115,7 @@ Android targetSdk 保持 37，遵守 Android 15 起强制边到边显示的要�
 
 `AdaptiveCardDetailPage` 在同一路由保存当前卡片 ID，`AdaptiveListDetail` 在可用宽度至少 840 且高度至少 480 时并列列表和详情；窄窗仅显示已选择详情，系统返回退出详情路由。列表与详情窗格通过稳定 key、Offstage 保持挂载，详情的查询流、筛选和滚动不因窗口缩放重新创建；各窗格独立 ScaffoldMessenger，避免同一 SnackBar 同时注册多个 Hero。已存在的本地恢复继续保存选中卡片路径与筛选，不写入新的数据库字段。
 
-Flutter embedding 已接收 Android WindowManager 折痕信息。布局消费 `MediaQuery.displayFeatures`，不识别品牌或机型，不依赖 rotation 或私有系统属性。完整页面通过 DisplayFeatureSubScreen 避让半折／铰链并更新局部 MediaQuery 尺寸；列表详情优先沿满足两侧最小宽度的竖向分隔折痕分栏，其余姿态退回一个完整可用子屏。普通平整、零宽度折痕不强行分割。Dialog／BottomSheet 继续使用框架折痕能力，行程面板设置触发 anchorPoint 与 useSafeArea，对话框最大宽度 560。Android 17／targetSdk 37 不添加限制旋转／缩放的兼容退出项，不接入厂商平行视窗或 Activity Embedding 来拆分同一 Flutter 引擎。
+折叠屏只按折叠与展开后的当前窗口尺寸适配外屏／内屏，不识别半折、书本或桌面姿态，不根据折叠角度切换布局。`MaterialApp.builder` 在 Navigator 与 Overlay 外统一注入 `FoldableDisplayScope`，从布局使用的 `MediaQuery.displayFeatures` 中过滤 fold 折痕及零面积特征，完整页面与列表详情组件也应用同一规则；主页面、路由、Dialog 与 BottomSheet 均不因半折信号缩至半屏或重新分栏。实体铰链及刘海仍按真实遮挡区域避让，完整页面通过 DisplayFeatureSubScreen 更新可用子屏和局部 MediaQuery，列表详情仅可沿满足两侧最小宽度的实体竖向铰链分栏，其余按当前可用宽高布局。行程面板保留触发 anchorPoint 与 useSafeArea，对话框最大宽度 560。Android 17／targetSdk 37 不添加限制旋转／缩放的兼容退出项，不接入厂商平行视窗或 Activity Embedding 来拆分同一 Flutter 引擎。
 
 扫码页拥有外部 MobileScannerController，因此自行监听 WidgetsBinding 生命周期，将相机 stop/start 串行化，处理权限请求尚未结束时进入 inactive 的情况，失败后允许用户重试；窗口布局变化不重建相机控制器。预览比例和旋转交给现有 CameraX／mobile_scanner，NFC 通道与会话契约保持不变。模拟回归不能证明厂商内外屏、相机独占资源、物理 NFC 连接或系统强杀行为，仍需真机验收。
 

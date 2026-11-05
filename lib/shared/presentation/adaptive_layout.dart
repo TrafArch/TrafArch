@@ -1,5 +1,5 @@
 import 'dart:math' as math;
-import 'dart:ui' show DisplayFeatureState, DisplayFeatureType;
+import 'dart:ui' show DisplayFeatureType;
 
 import 'package:flutter/material.dart';
 
@@ -47,6 +47,32 @@ class AdaptiveContent extends StatelessWidget {
   );
 }
 
+/// Folded/unfolded layouts follow the active window's size. A crease or its
+/// posture never creates a separate book/tabletop layout, including in routes
+/// and modal overlays. Keep only display features that physically cover pixels.
+class FoldableDisplayScope extends StatelessWidget {
+  const FoldableDisplayScope({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    return MediaQuery(
+      data: mediaQuery.copyWith(
+        displayFeatures: mediaQuery.displayFeatures
+            .where(
+              (feature) =>
+                  feature.type != DisplayFeatureType.fold &&
+                  feature.bounds.shortestSide > 0,
+            )
+            .toList(),
+      ),
+      child: child,
+    );
+  }
+}
+
 /// One reading surface stays in a usable sub-screen when a hinge separates
 /// the window. Place around a whole page, before AppBar/SafeArea add insets.
 class FoldSafePage extends StatelessWidget {
@@ -54,11 +80,13 @@ class FoldSafePage extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) => DisplayFeatureSubScreen(
-    child: LayoutBuilder(
-      builder: (context, constraints) => MediaQuery(
-        data: MediaQuery.of(context).copyWith(size: constraints.biggest),
-        child: child,
+  Widget build(BuildContext context) => FoldableDisplayScope(
+    child: DisplayFeatureSubScreen(
+      child: LayoutBuilder(
+        builder: (context, constraints) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(size: constraints.biggest),
+          child: child,
+        ),
       ),
     ),
   );
@@ -97,7 +125,7 @@ class AdaptiveSupportingContent extends StatelessWidget {
 
 /// List/detail equivalent of Android's adaptive pane scaffold. Both panes stay
 /// mounted; narrowing a selected detail never resets its stream/filters/scroll.
-/// A separating vertical fold defines the pane bounds, even below 840dp.
+/// A physical vertical hinge defines the pane bounds, even below 840dp.
 class AdaptiveListDetail extends StatelessWidget {
   const AdaptiveListDetail({
     super.key,
@@ -113,84 +141,85 @@ class AdaptiveListDetail extends StatelessWidget {
   final VoidCallback? onBackToList;
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      final size = constraints.biggest;
-      final window = Offset.zero & size;
-      Rect? hinge;
-      for (final feature in MediaQuery.displayFeaturesOf(context)) {
-        if ((feature.type == DisplayFeatureType.hinge ||
-                feature.state == DisplayFeatureState.postureHalfOpened) &&
-            feature.bounds.height >= size.height &&
-            feature.bounds.left >= 280 &&
-            size.width - feature.bounds.right >= 320) {
-          hinge = feature.bounds;
-          break;
+  Widget build(BuildContext context) => FoldableDisplayScope(
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final size = constraints.biggest;
+        final window = Offset.zero & size;
+        Rect? hinge;
+        for (final feature in MediaQuery.displayFeaturesOf(context)) {
+          if (feature.type == DisplayFeatureType.hinge &&
+              feature.bounds.height >= size.height &&
+              feature.bounds.left >= 280 &&
+              size.width - feature.bounds.right >= 320) {
+            hinge = feature.bounds;
+            break;
+          }
         }
-      }
-      // Horizontal tabletop folds, or narrow book panes, use a complete page
-      // on one sub-screen rather than placing controls across the fold.
-      final whole = DisplayFeatureSubScreen.subScreensInBounds(
-        window,
-        DisplayFeatureSubScreen.avoidBounds(MediaQuery.of(context))
-            .where((bounds) => bounds != hinge),
-      ).first;
-      final split =
-          hinge != null || (whole.width >= 840 && whole.height >= 480);
-      final listWidth = math.min(360.0, whole.width * 0.4);
-      final listRect = !split
-          ? whole
-          : Rect.fromLTRB(
-              whole.left,
-              whole.top,
-              hinge?.left ?? whole.left + listWidth,
-              whole.bottom,
-            );
-      final detailRect = !split
-          ? whole
-          : Rect.fromLTRB(
-              hinge?.right ?? whole.left + listWidth + 1,
-              whole.top,
-              whole.right,
-              whole.bottom,
-            );
-      Widget pane(String name, Rect rect, bool hidden, Widget child) =>
-          Positioned.fromRect(
-            key: ValueKey(name),
-            rect: rect,
-            child: Offstage(
-              offstage: hidden,
-              child: TickerMode(
-                enabled: !hidden,
-                child: MediaQuery(
-                  data: MediaQuery.of(context)
-                      .removeDisplayFeatures(rect)
-                      .copyWith(size: rect.size, displayFeatures: const []),
-                  child: child,
+        // A physical horizontal hinge or narrow hinge-separated panes use one
+        // complete sub-screen. Creases and folding angles do not affect layout.
+        final whole = DisplayFeatureSubScreen.subScreensInBounds(
+          window,
+          DisplayFeatureSubScreen.avoidBounds(MediaQuery.of(context))
+              .where((bounds) => bounds != hinge),
+        ).first;
+        final split =
+            hinge != null || (whole.width >= 840 && whole.height >= 480);
+        final listWidth = math.min(360.0, whole.width * 0.4);
+        final listRect = !split
+            ? whole
+            : Rect.fromLTRB(
+                whole.left,
+                whole.top,
+                hinge?.left ?? whole.left + listWidth,
+                whole.bottom,
+              );
+        final detailRect = !split
+            ? whole
+            : Rect.fromLTRB(
+                hinge?.right ?? whole.left + listWidth + 1,
+                whole.top,
+                whole.right,
+                whole.bottom,
+              );
+        Widget pane(String name, Rect rect, bool hidden, Widget child) =>
+            Positioned.fromRect(
+              key: ValueKey(name),
+              rect: rect,
+              child: Offstage(
+                offstage: hidden,
+                child: TickerMode(
+                  enabled: !hidden,
+                  child: MediaQuery(
+                    data: MediaQuery.of(context)
+                        .removeDisplayFeatures(rect)
+                        .copyWith(size: rect.size, displayFeatures: const []),
+                    child: child,
+                  ),
                 ),
               ),
-            ),
-          );
-      return PopScope(
-        canPop: split || !hasSelection,
-        onPopInvokedWithResult: (didPop, result) {
-          if (!didPop && !split && hasSelection) onBackToList?.call();
-        },
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            pane('list', listRect, !split && hasSelection, list),
-            if (split && hinge == null)
-              Positioned(
-                left: whole.left + listWidth,
-                top: whole.top,
-                height: whole.height,
-                child: const VerticalDivider(width: 1),
-              ),
-            pane('detail', detailRect, !split && !hasSelection, detail),
-          ],
-        ),
-      );
-    },
+            );
+        return PopScope(
+          canPop: split || !hasSelection,
+          onPopInvokedWithResult: (didPop, result) {
+            if (!didPop && !split && hasSelection) onBackToList?.call();
+          },
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              pane('list', listRect, !split && hasSelection, list),
+              if (split && hinge == null)
+                Positioned(
+                  left: whole.left + listWidth,
+                  top: whole.top,
+                  height: whole.height,
+                  child: const VerticalDivider(width: 1),
+                ),
+              pane('detail', detailRect, !split && !hasSelection, detail),
+            ],
+          ),
+        );
+      },
+    ),
   );
 }
