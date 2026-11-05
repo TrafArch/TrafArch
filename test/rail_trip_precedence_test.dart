@@ -300,7 +300,7 @@ void main() {
       expect(projection.transactionCount, 1);
       expect(projection.processRecordCount, 3);
       expect(projection.mergedRecordCount, 1);
-      expect(projection.summaryText, '交易 1 条 · 过程及应用记录 3 条（1 条已并入 0x18 交易）');
+      expect(projection.summaryText, '交易 1 条 · 过程及应用记录 3 条（1 条已合并展示）');
     });
 
     test('1A与关联1E时间不匹配时保留1A', () {

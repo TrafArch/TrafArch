@@ -395,8 +395,13 @@ class CardSessionSnapshot {
     'cityName': t.cityName,
     'cityCode': t.cityCode,
     'lineLabel': t.lineLabel,
-    if (t.resolvedBusLineLabel != null)
-      'capturedDisplay': {'line': t.resolvedBusLineLabel},
+    if (t.resolvedBusLineLabel != null || t.locationCityCode != null)
+      'capturedDisplay': {
+        if (t.resolvedBusLineLabel != null) 'line': t.resolvedBusLineLabel,
+        if (t.locationCityCode != null) 'locationCityCode': t.locationCityCode,
+        if (t.locationCityCode != null && t.locationCityName != null)
+          'locationCityName': t.locationCityName,
+      },
     'stationLabel': t.stationLabel,
     'stationType': t.stationType,
     'appTypeName': t.appTypeName,
@@ -455,6 +460,12 @@ class CardSessionSnapshot {
           : null,
       cityName: _str(m['cityName']),
       cityCode: _str(m['cityCode']),
+      locationCityCode: capturedDisplay is Map
+          ? _str(capturedDisplay['locationCityCode'])
+          : null,
+      locationCityName: capturedDisplay is Map
+          ? _str(capturedDisplay['locationCityName'])
+          : null,
       lineLabel: _str(m['lineLabel']),
       resolvedBusLineLabel: capturedDisplay is Map
           ? _str(capturedDisplay['line'])

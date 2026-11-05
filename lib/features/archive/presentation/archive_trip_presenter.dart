@@ -47,7 +47,7 @@ class ArchiveTripProjection {
 
   String get summaryText =>
       '交易 $transactionCount 条 · 过程及应用记录 $processRecordCount 条'
-      '${mergedRecordCount == 0 ? '' : '（$mergedRecordCount 条已并入 0x18 交易）'}';
+      '${mergedRecordCount == 0 ? '' : '（$mergedRecordCount 条已合并展示）'}';
 }
 
 /// Keep aggregate records/counts intact, but match journeys inside each original
@@ -130,6 +130,7 @@ ArchiveTripProjection _presentArchiveRecords(
     return _ArchiveEvent(record, side: side, balanceDisplay: display);
   }
 
+  final transactionProcesses = _archiveTransactionProcessLinks(records);
   // 保存时生成的关联按来源批次消费；不跨批次重新按 POS 配对。
   final links = <String, List<(String, int?)>>{};
   for (final record in records) {
@@ -152,6 +153,19 @@ ArchiveTripProjection _presentArchiveRecords(
   }
   bool consume(ArchiveHistoryRecord record, String key) {
     final batches = record.sources.map((s) => s.batchId).toSet();
+    // An intercity 1A alias may already be folded into this 1E operation.
+    // Only an exact, unique transaction witness can also hide the 1E side.
+    if (record.kind == ArchiveRecordKind.process &&
+        record.fields['appTypeCode'] == 0x0A &&
+        !batches.every(
+          (batch) =>
+              transactionProcesses.values
+                  .where((links) => links[batch] == record)
+                  .length ==
+              1,
+        )) {
+      return false;
+    }
     final appType = eventFor(record).railAppTypeCode;
     bool matches((String, int?) link) =>
         link.$1 == key &&
@@ -169,6 +183,7 @@ ArchiveTripProjection _presentArchiveRecords(
   var transactionCount = 0;
   var processRecordCount = 0;
   var mergedRecordCount = 0;
+  final intercityAliases = _archiveIntercityAliases(records);
   final events = <_ArchiveEvent>[];
   for (final record in records) {
     if (record.kind == ArchiveRecordKind.process) {
@@ -195,7 +210,9 @@ ArchiveTripProjection _presentArchiveRecords(
       } else {
         final visible = sides
             .where(
-              (side) => !consume(record, _archiveApplicationKey(record, side)),
+              (side) =>
+                  !intercityAliases.contains((record, side)) &&
+                  !consume(record, _archiveApplicationKey(record, side)),
             )
             .toList();
         if (visible.isEmpty) {
@@ -216,7 +233,6 @@ ArchiveTripProjection _presentArchiveRecords(
       );
       return time != 0 ? time : a.$1.compareTo(b.$1);
     });
-  final transactionProcesses = _archiveTransactionProcessLinks(records);
   final applicationLinks = _archiveApplicationLinks(
     records,
     transactionProcesses,
@@ -275,6 +291,86 @@ ArchiveTripProjection _presentArchiveRecords(
     processRecordCount: processRecordCount,
     mergedRecordCount: mergedRecordCount,
   );
+}
+
+/// Fold only one-to-one, receiver/layout-verified intercity sides inside every
+/// original capture. Raw city codes, application records and saved JSON remain
+/// unchanged; the 1E source supplies the visible transport and location.
+Set<(ArchiveHistoryRecord, String)> _archiveIntercityAliases(
+  List<ArchiveHistoryRecord> records,
+) {
+  final proofBatches = <(ArchiveHistoryRecord, String), Set<String>>{};
+  final batches = {
+    for (final record in records)
+      for (final source in record.sources) source.batchId,
+  };
+  for (final batch in batches) {
+    if (batch.trim().isEmpty) continue;
+    final captured = records
+        .where(
+          (record) => record.sources.any((source) => source.batchId == batch),
+        )
+        .toList();
+    final cycles = <ArchiveHistoryRecord, TUnionTripRecord>{
+      for (final record in captured)
+        if (record.kind == ArchiveRecordKind.process)
+          if (_processFromFields(record.fields) case final cycle?)
+            if (cycle.appTypeCode == 0x0A) record: cycle,
+    };
+    final matches = <(ArchiveHistoryRecord, String), ArchiveHistoryRecord>{};
+    final uses = <ArchiveHistoryRecord, int>{};
+    for (final rail in captured.where(
+      (record) => record.kind == ArchiveRecordKind.rail,
+    )) {
+      for (final side in ['entry', 'exit']) {
+        if (side == 'exit' && rail.fields['status'] == 1) continue;
+        final application = _ArchiveEvent(rail, side: side);
+        final event = application.journeyEvent(application.info);
+        final amount = rail.fields['${side}AmountFen'];
+        final line = rail.fields['${side}LineCode'];
+        final candidates = cycles.entries.where((entry) {
+          final source = _ArchiveEvent(entry.key);
+          final cycleEvent = source.journeyEvent(source.info);
+          return event.scopeKey != null &&
+              event.scopeKey == cycleEvent.scopeKey &&
+              matchesTunionJourneySide(
+                isEntry: side == 'entry',
+                isRail: true,
+                time: application.epoch == null
+                    ? null
+                    : DateTime.fromMillisecondsSinceEpoch(
+                        application.epoch!,
+                        isUtc: true,
+                      ),
+                cityCode: application.city,
+                terminalId: application.text('${side}TerminalId'),
+                amountFen: amount is int ? amount : null,
+                stationId: application.text('${side}StationId'),
+                lineCode: line is int ? line : null,
+                agencyId: application.text('${side}AgencyId'),
+                cycle: entry.value,
+              );
+        }).toList();
+        if (candidates.length != 1) continue;
+        final cycle = candidates.single.key;
+        matches[(rail, side)] = cycle;
+        uses.update(cycle, (n) => n + 1, ifAbsent: () => 1);
+      }
+    }
+    for (final match in matches.entries) {
+      if (uses[match.value] == 1) {
+        proofBatches.putIfAbsent(match.key, () => {}).add(batch);
+      }
+    }
+  }
+  return {
+    for (final proof in proofBatches.entries)
+      if (proof.key.$1.sources.isNotEmpty &&
+          proof.key.$1.sources.every(
+            (source) => proof.value.contains(source.batchId),
+          ))
+        proof.key,
+  };
 }
 
 TUnionTripRecord? _processFromFields(
@@ -644,6 +740,7 @@ class _ArchiveEvent {
       ? 0x01
       : (process ?? matchedProcess)?.appTypeCode ??
             switch (fields['appTypeName'] ?? fields['appTypeCode']) {
+              '城际铁路' || 0x0A => 0x0A,
               '市郊铁路' || 0x0E => 0x0E,
               '城市轨道交通' || 0x01 => 0x01,
               _ => null,
@@ -659,7 +756,7 @@ class _ArchiveEvent {
         fields['appTypeCode'] ??
         (matched is Map ? matched['appTypeCode'] : null);
     return switch (fields['appTypeName'] ?? appType) {
-      '城市轨道交通' || '市郊铁路' || 1 || 0x0E => TripModeFilter.rail,
+      '城市轨道交通' || '城际铁路' || '市郊铁路' || 1 || 0x0A || 0x0E => TripModeFilter.rail,
       '公共汽电车' || 2 => TripModeFilter.bus,
       _ => switch (fields['stationType']) {
         '公交' || 'BRT' || '公共汽电车' || 'bus' || 'brt' => TripModeFilter.bus,
@@ -718,10 +815,12 @@ class _ArchiveEvent {
       role = _archiveProcessRole(process, mode) ?? JourneyEventRole.unknown;
     }
     final capturedStation = capturedDisplay('station');
+    final intercity = (process ?? matchedProcess)?.appTypeCode == 0x0A;
     final rawStation =
         capturedStation ??
         (side == null
-            ? text('stationLabel') ?? process?.stationCode
+            ? text('stationLabel') ??
+                  (intercity ? process?.lineStationCode : process?.stationCode)
             : text('${side}StationName') ??
                   text('${side}Station${rail ? 'Id' : 'Code'}'));
     final station = mode == TripModeFilter.bus
@@ -743,7 +842,9 @@ class _ArchiveEvent {
             ? formatJourneyBusLine(capturedLine)
             : capturedLine) ??
         (side == null
-            ? text('lineLabel') ?? text('lineName') ?? process?.lineCode
+            ? text('lineLabel') ??
+                  text('lineName') ??
+                  (intercity ? null : process?.lineCode)
             : text('${side}LineName') ??
                   text('${side}LineLabel') ??
                   text('${side}LineCode'));
@@ -769,6 +870,11 @@ class _ArchiveEvent {
         station: station,
         time: clock.time,
         timeText: clock.text,
+        locationCityCode: _mappedCityCode(capturedDisplay('locationCityCode')),
+        locationCityLabel:
+            _mappedCityCode(capturedDisplay('locationCityCode')) == null
+            ? null
+            : _cityLabel(capturedDisplay('locationCityName')),
       ),
       scopeKey: _archiveScope(record.context, clock.scope),
       sourceIds: {
@@ -1275,3 +1381,20 @@ String _archiveClockText(DateTime value) =>
     '${value.hour.toString().padLeft(2, '0')}:'
     '${value.minute.toString().padLeft(2, '0')}:'
     '${value.second.toString().padLeft(2, '0')}';
+
+// Display metadata identifies the native station-map owner. It never changes
+// the raw acquirer city used for matching or the remote-card-use indicator.
+String? _mappedCityCode(String? value) {
+  final code = value?.trim();
+  return code != null &&
+          RegExp(r'^[0-9]{4}$').hasMatch(code) &&
+          code != '0000' &&
+          code != '9999'
+      ? code
+      : null;
+}
+
+String? _cityLabel(String? value) =>
+    value != null && value.length > 1 && value.endsWith('市')
+    ? value.substring(0, value.length - 1)
+    : value;

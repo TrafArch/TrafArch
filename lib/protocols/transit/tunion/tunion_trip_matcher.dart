@@ -18,6 +18,33 @@ bool matchesTunionJourneySide({
       (value ?? '').replaceAll(RegExp(r'\s+'), '').toUpperCase();
   final city = normalize(cityCode);
   final terminal = normalize(terminalId);
+  if (cycle.appTypeCode == 0x0A) {
+    // Observed Shaoxing intercity EP layout (2026-11-04): 1A uses a
+    // provincial entry city and a different terminal namespace. Both sources
+    // must independently agree on receiver, side, time, money and compact
+    // station/gate bytes. This is not a city alias or a time-only display link.
+    final station = normalize(stationId);
+    final field = normalize(cycle.lineStationCode);
+    return isRail &&
+        time != null &&
+        time == cycle.time &&
+        cycle.typeCode == (isEntry ? 0x03 : 0x04) &&
+        normalize(cycle.cityCode) == '3370' &&
+        (city == '3370' || (isEntry && city == '3300')) &&
+        normalize(agencyId) == '03493370FFFFFFFF' &&
+        normalize(cycle.acquirerId) == '03493370FFFFFFFF' &&
+        amountFen != null &&
+        amountFen == cycle.amountFen &&
+        RegExp(r'^413101\d{6}0000$').hasMatch(normalize(cycle.terminalId)) &&
+        RegExp(r'^411230500000[0-9A-F]{4}$').hasMatch(station) &&
+        RegExp(r'^30500000[0-9A-F]{8}$').hasMatch(terminal) &&
+        RegExp(r'^[0-9A-F]{8}000000$').hasMatch(field) &&
+        station.substring(12) == field.substring(0, 4) &&
+        terminal.substring(8) == field.substring(0, 8) &&
+        lineCode != null &&
+        lineCode > 0 &&
+        lineCode == int.parse(field.substring(0, 2), radix: 16);
+  }
   final sameSide =
       time != null &&
       time == cycle.time &&

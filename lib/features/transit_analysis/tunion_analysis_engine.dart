@@ -121,6 +121,7 @@ class AnalysisEngine {
       // 终端解码切出的线路/站点编码 → 站点代码表（读卡识途数据）查名称；
       // 终端查表未命中时尝试 0x1E 注解；仍未收录则回退原始编码（不猜测）。
       final annotation = rideAnnotations[index];
+      final isIntercity = annotation?.record.appTypeCode == 0x0A;
       // 两来源独立关联，1E 优先，1A 补缺。
       final fallback = entryFallbacks[index];
       // 上海本地设备把 CU 终端编码写入两应用的同一笔 0x18 交易。
@@ -207,6 +208,8 @@ class AnalysisEngine {
           : null;
       final processMatch = isBus
           ? busLocation?.match
+          : isIntercity
+          ? annotation?.match
           : annotation?.match == null || annotation!.match.isUnmatched
           ? fallback?.stationMatch ?? annotation?.match
           : annotation.match;
@@ -220,7 +223,7 @@ class AnalysisEngine {
           (localTerminalMatch != null && !localTerminalMatch.isUnmatched
               ? localTerminalMatch
               : processMatch);
-      final terminalEntry = isBus
+      final terminalEntry = isBus || isIntercity
           ? null
           : _lookupStationEntry(loc, identity, card);
       final stationEntry = terminalEntry ?? stationMatch?.entry;
@@ -243,6 +246,8 @@ class AnalysisEngine {
                 annotation?.record.lineCode ??
                 fallback?.lineCode ??
                 loc?.lineCode
+          : isIntercity
+          ? stationMatch?.lineName
           : (stationMatch?.lineName ??
                 (suppressed
                     ? null
@@ -279,9 +284,16 @@ class AnalysisEngine {
                 ? annotation?.cityName ?? fallback?.cityName
                 : null),
         cityCode: cityCode,
+        locationCityCode: stationMatch?.resolvedCityCode,
+        locationCityName: stationMatch?.resolvedCityCode == null
+            ? null
+            : knowledge.cities.lookup(stationMatch!.resolvedCityCode!)?.name,
         lineLabel: lineLabel,
         resolvedBusLineLabel: busLocation?.lineLabel,
         stationLabel:
+            (isIntercity
+                ? resolvedStation ?? annotation?.record.lineStationCode
+                : null) ??
             busLocation?.stationLabel ??
             resolvedStation ??
             loc?.stationCode ??

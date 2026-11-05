@@ -23,6 +23,25 @@ abstract interface class TuCityRailFieldSource {
   Iterable<StationCodeEntry> cityRailFieldCandidates(String city);
 }
 
+/// Intercity locations stay in their native city tables. This optional source
+/// admits only complete station rows below a source-classified intercity line;
+/// it never exposes a nationwide station-suffix search.
+abstract interface class TuIntercityRailSource {
+  Iterable<TuIntercityRailCandidate> intercityRailCandidates(String city);
+}
+
+class TuIntercityRailCandidate {
+  const TuIntercityRailCandidate({
+    required this.city,
+    required this.prefix,
+    required this.station,
+  });
+
+  final String city;
+  final TuLookupValue prefix;
+  final StationCodeEntry station;
+}
+
 class TuLookupValue {
   final String sourceField;
   final String sourceKey;
@@ -297,6 +316,7 @@ class TuLookupService {
     if (!RegExp(r'^(?:[0-9A-F]{12}|[0-9A-F]{14})$').hasMatch(raw)) {
       return StationMatch.unmatched;
     }
+    if (appType == 0x0A) return _resolveIntercityCycle(city!, raw, time);
     final pos = raw.substring(0, 12);
     final q = terminalId?.toUpperCase();
     // The Beijing suburban railway capture uses the same full native
@@ -352,6 +372,82 @@ class TuLookupService {
       );
     }
     return _miss;
+  }
+
+  StationMatch _resolveIntercityCycle(String city, String raw, DateTime? time) {
+    final intercitySource = source;
+    if (intercitySource is! TuIntercityRailSource ||
+        raw.length != 14 ||
+        !raw.endsWith('000000')) {
+      return StationMatch.unmatched;
+    }
+    final nativeField = StationCodeTable.tuRailSourceField(city);
+    final byCity = <String, List<TuIntercityRailCandidate>>{};
+    for (final candidate
+        in (intercitySource as TuIntercityRailSource).intercityRailCandidates(
+          city,
+        )) {
+      final row = candidate.station;
+      final prefix = candidate.prefix;
+      final value = prefix.rawValue;
+      final key = row.sourceKey ?? row.code;
+      final owner = candidate.city;
+      // The native source dictionary, application 0A and full field layout
+      // establish the namespace. Names classify a source line, never a city
+      // alias. Two-byte and four-byte source keys are kept distinct.
+      if (!_validCity(owner) ||
+          prefix.sourceField != nativeField ||
+          row.sourceField != prefix.sourceField ||
+          row.system != 'tu' ||
+          !const {'metro', 'intercity_rail'}.contains(row.kind) ||
+          value is! List ||
+          value.length != 3 ||
+          value[1] is! String ||
+          !(value[1] as String).contains('城际') ||
+          value[2] != '' ||
+          !RegExp(r'^[0-9A-F]{6}(?:[0-9A-F]{2})?$')
+              .hasMatch(prefix.sourceKey) ||
+          !prefix.sourceKey.startsWith(owner) ||
+          key.length != (prefix.sourceKey.length == 6 ? 8 : 12) ||
+          !key.startsWith(prefix.sourceKey) ||
+          key != '$owner${raw.substring(0, key.length - 4)}' ||
+          (row.station ?? '').trim().isEmpty) {
+        continue;
+      }
+      byCity.putIfAbsent(owner, () => []).add(candidate);
+    }
+    if (source.queryIssue != null) return StationMatch.unavailable;
+    if (byCity.isEmpty) return _miss;
+    final rows = <StationCodeEntry>[];
+    final evidence = <StationMatchEvidence>[];
+    for (final group in byCity.entries) {
+      final match = _datedRailMatch(
+        [for (final item in group.value) item.station],
+        '${group.key}${raw.substring(0, 12)}',
+        time,
+      );
+      if (match.confidence == StationMatchConfidence.unavailable) return match;
+      rows.addAll(match.candidates);
+      evidence.addAll([
+        ...match.evidence,
+        for (final item in group.value) item.prefix.evidence,
+      ]);
+    }
+    final match = StationMatch.fromCandidates(rows);
+    // Identical labels in two different city mappings still lack a unique
+    // endpoint. Never let display-name equality hide a namespace collision.
+    final confidence = byCity.length > 1
+        ? StationMatchConfidence.ambiguous
+        : match.confidence;
+    return StationMatch(
+      match.entry,
+      confidence,
+      candidates: match.candidates,
+      evidence: evidence,
+      resolvedCityCode: confidence == StationMatchConfidence.exact
+          ? byCity.keys.single
+          : null,
+    );
   }
 
   StationMatch resolveBasic({

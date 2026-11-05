@@ -33,10 +33,22 @@ String? journeySeatLabel({
 
 /// A separately resolved end of a journey. Missing values remain missing.
 class JourneyEndpoint {
-  const JourneyEndpoint({this.line, this.station, this.time, this.timeText});
+  const JourneyEndpoint({
+    this.line,
+    this.station,
+    this.time,
+    this.timeText,
+    this.locationCityCode,
+    this.locationCityLabel,
+  });
 
   final String? line;
   final String? station;
+
+  /// Verified native station-map owner, not a rewrite of the acquirer city or
+  /// a claim about a station's physical administrative boundary.
+  final String? locationCityCode;
+  final String? locationCityLabel;
 
   /// A coordinate in the event's captured display clock. Archive adapters may
   /// use a UTC DateTime container for unverified civil-time arithmetic; this
@@ -130,6 +142,17 @@ class JourneyEvent<T> {
   final JourneyProcessBalanceEvidence? processBalance;
   final String? seatLabel;
 
+  String? get displayCityCode =>
+      _mappedCityCode(endpoint.locationCityCode) ?? _journeyCityCode(cityCode);
+
+  String? get displayCityLabel =>
+      _mappedCityCode(endpoint.locationCityCode) == null
+      ? _presentText(cityLabel)
+      : _presentText(endpoint.locationCityLabel) ??
+            (displayCityCode == _journeyCityCode(cityCode)
+                ? _presentText(cityLabel)
+                : null);
+
   JourneyEvent<R> withPayload<R>(R payload) => JourneyEvent<R>(
     payload: payload,
     mode: mode,
@@ -189,13 +212,32 @@ class JourneyPresentation<T> {
 
   /// Endpoint cities describe acceptance, independently of the issuing city.
   /// Unknown city placeholders do not establish a cross-city journey.
-  bool get isCrossCity =>
-      events
-          .map((event) => _journeyCityCode(event.cityCode))
-          .whereType<String>()
-          .toSet()
-          .length >
-      1;
+  bool get isCrossCity {
+    // Several retained source records can describe one operation. Without
+    // both ends, their different city fields do not prove a cross-city ride.
+    if (state != JourneyState.completed) return false;
+    String? endpointCity(JourneyEndpoint? endpoint) {
+      if (endpoint == null) return null;
+      final mapped = _mappedCityCode(endpoint.locationCityCode);
+      if (mapped != null) return mapped;
+      for (final event in events) {
+        if (identical(event.endpoint, endpoint)) return event.displayCityCode;
+      }
+      return null;
+    }
+
+    final startCity = endpointCity(start);
+    final endCity = endpointCity(end);
+    // A folded alias can lack newer display metadata. Only the two selected
+    // endpoints describe the journey; its retained evidence is not extra stops.
+    if (startCity != null && endCity != null) return startCity != endCity;
+    return events
+            .map((event) => event.displayCityCode)
+            .whereType<String>()
+            .toSet()
+            .length >
+        1;
+  }
 }
 
 /// Pairs only explicit application-record halves or adjacent, consecutive
@@ -242,9 +284,8 @@ List<JourneyPresentation<T>> projectJourneys<T>(
         ]),
         mode: entry.mode,
         state: JourneyState.completed,
-        cityLabel:
-            _journeyCityCode(entry.cityCode) == _journeyCityCode(exit.cityCode)
-            ? _presentText(entry.cityLabel) ?? _presentText(exit.cityLabel)
+        cityLabel: entry.displayCityCode == exit.displayCityCode
+            ? entry.displayCityLabel ?? exit.displayCityLabel
             : null,
         start: entry.endpoint,
         end: exit.endpoint,
@@ -383,7 +424,7 @@ List<JourneyPresentation<T>> projectJourneys<T>(
           JourneyEventRole.single => JourneyState.single,
           _ => JourneyState.incomplete,
         },
-        cityLabel: _presentText(event.cityLabel),
+        cityLabel: event.displayCityLabel,
         start: entry ? event.endpoint : null,
         end: exit ? event.endpoint : null,
         amountText: entry ? null : event.amountText,
@@ -965,6 +1006,16 @@ bool _unambiguousAdjustment<T>(
     if (_isJourneyStart(other.role)) return false;
   }
   return true;
+}
+
+String? _mappedCityCode(String? value) {
+  final city = _presentText(value);
+  return city != null &&
+          RegExp(r'^[0-9]{4}$').hasMatch(city) &&
+          city != '0000' &&
+          city != '9999'
+      ? city
+      : null;
 }
 
 String? _journeyCityCode(String? value) {

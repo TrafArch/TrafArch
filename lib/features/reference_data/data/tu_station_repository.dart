@@ -18,7 +18,11 @@ export '../domain/tu_station_models.dart';
 /// - 用户覆盖与未知站点上报写入两张 App 自有表，不改原始数据；
 /// - 单地区表规模在数百到数千行量级，片段查询走原表扫描并做进程内缓存，
 ///   不物化整表。
-class TuStationRepository implements TuLookupDataSource, TuCityRailFieldSource {
+class TuStationRepository
+    implements
+        TuLookupDataSource,
+        TuCityRailFieldSource,
+        TuIntercityRailSource {
   TuStationRepository(this.db, {Database? userDatabase})
     : _userDb = userDatabase;
 
@@ -113,6 +117,81 @@ class TuStationRepository implements TuLookupDataSource, TuCityRailFieldSource {
         datasetFile: 'tu:lookup',
         rawValueJson: jsonEncode(raw),
       );
+    }
+  }
+
+  @override
+  Iterable<TuIntercityRailCandidate> intercityRailCandidates(
+    String city,
+  ) sync* {
+    final field = StationCodeTable.tuRailSourceField(city);
+    if (field == null) return;
+    try {
+      // Without original provenance an older package cannot establish this
+      // cross-city relationship. Missing optional metadata stays unmatched.
+      if (db
+          .select(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='record_provenance'",
+          )
+          .isEmpty) {
+        return;
+      }
+      for (final section in _lookup.entries) {
+        if (!section.key.startsWith('rail_prefixes|')) continue;
+        for (final prefix in section.value) {
+          final value = prefix.rawValue;
+          if (prefix.sourceField != field ||
+              !RegExp(r'^\d{4}[0-9A-F]{2}(?:[0-9A-F]{2})?$')
+                  .hasMatch(prefix.sourceKey) ||
+              value is! List ||
+              value.length != 3 ||
+              value[1] is! String ||
+              !(value[1] as String).contains('城际') ||
+              value[2] != '') {
+            continue;
+          }
+          final owner = prefix.sourceKey.substring(0, 4);
+          final region = regionOf(owner);
+          if (region == null ||
+              StationCodeTable.tuRailSourceField(owner) != field) {
+            continue;
+          }
+          for (final row in entriesOfRegion(owner)) {
+            if (row.sourceField != field ||
+                row.sourceRegionCode != owner ||
+                !const {
+                  'metro',
+                  'intercity_rail',
+                }.contains(row.rawTransportType) ||
+                row.lineName != value[1] ||
+                row.sourceKey.length !=
+                    (prefix.sourceKey.length == 6 ? 8 : 12) ||
+                !row.sourceKey.startsWith(prefix.sourceKey) ||
+                (row.stationName ?? '').trim().isEmpty) {
+              continue;
+            }
+            final provenance = db.select(
+              'SELECT native_namespace,copy_role,record_kind,lookup_key_namespace '
+              'FROM record_provenance WHERE table_name=? AND station_id=?',
+              [region.tableName, row.stationId],
+            );
+            if (provenance.length != 1 ||
+                provenance.single['native_namespace'] != 'TU' ||
+                provenance.single['copy_role'] != 'native' ||
+                provenance.single['record_kind'] != 'station_mapping' ||
+                provenance.single['lookup_key_namespace'] != 'TU') {
+              continue;
+            }
+            yield TuIntercityRailCandidate(
+              city: owner,
+              prefix: prefix,
+              station: entryForRecord(row),
+            );
+          }
+        }
+      }
+    } catch (error) {
+      queryIssue = 'TU 城际原始来源读取失败：$error';
     }
   }
 

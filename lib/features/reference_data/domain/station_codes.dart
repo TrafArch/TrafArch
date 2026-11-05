@@ -985,11 +985,24 @@ class StationMatch {
   final List<StationCodeEntry> candidates;
   final List<StationMatchEvidence> evidence;
 
+  /// Native station-map owner established by the resolver, separate from the
+  /// record's acquirer city. It is not proof of a physical municipal boundary.
+  final String? _resolvedCityCode;
+  String? get resolvedCityCode =>
+      confidence == StationMatchConfidence.exact &&
+          _resolvedCityCode != null &&
+          RegExp(r'^[0-9]{4}$').hasMatch(_resolvedCityCode) &&
+          _resolvedCityCode != '0000' &&
+          _resolvedCityCode != '9999'
+      ? _resolvedCityCode
+      : null;
+
   const StationMatch(
     this.entry,
     this.confidence, {
     this.candidates = const [],
     this.evidence = const [],
+    this._resolvedCityCode,
   });
 
   factory StationMatch.fromCandidates(

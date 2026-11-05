@@ -280,7 +280,11 @@ TripEntryInfo _describeEntry(TripEntry entry, TripPresentationContext display) {
           ((match.stationName ?? '').trim().isEmpty
               ? null
               : match.stationName) ??
-          (isBus ? record.stationCode : null);
+          (isBus
+              ? record.stationCode
+              : record.appTypeCode == 0x0A
+              ? record.lineStationCode
+              : null);
       final symbol = display.currency.symbol;
       return TripEntryInfo(
         sourceLabel: '0x1E 过程记录',
@@ -293,7 +297,7 @@ TripEntryInfo _describeEntry(TripEntry entry, TripPresentationContext display) {
             match.lineName ??
             (isBus ? record.lineCode : null),
         timeText: _fmtTime(record.time),
-        amountText: record.amountFen <= 0
+        amountText: record.amountFen <= 0 && record.appTypeCode != 0x0A
             ? null
             : '${record.isRecharge
                   ? '+'
