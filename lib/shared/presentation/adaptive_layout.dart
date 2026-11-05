@@ -5,36 +5,28 @@ import 'package:flutter/material.dart';
 
 import 'ui_constants.dart';
 
-/// ITGSA 2.2.3 / Android window size classes. Values are logical pixels,
-/// measured from the current window, never from the device model or rotation.
-enum AppWindowSize { compact, medium, expanded }
-
-AppWindowSize windowSizeFor(double width) => width < 600
-    ? AppWindowSize.compact
-    : width < 840
-    ? AppWindowSize.medium
-    : AppWindowSize.expanded;
-
+/// Main tabs reserve space for the floating navigation at every window size;
+/// standalone list/detail routes only need ordinary content padding.
 class AdaptiveWindowScope extends InheritedWidget {
   const AdaptiveWindowScope({
     super.key,
-    required this.usesRail,
+    required this.hasFloatingNavigation,
     required super.child,
   });
 
-  final bool usesRail;
+  final bool hasFloatingNavigation;
 
   static double bottomClearanceOf(BuildContext context) =>
       context
               .dependOnInheritedWidgetOfExactType<AdaptiveWindowScope>()
-              ?.usesRail ==
-          true
+              ?.hasFloatingNavigation ==
+          false
       ? 24
       : UiConstants.floatingNavBarClearance;
 
   @override
   bool updateShouldNotify(AdaptiveWindowScope oldWidget) =>
-      usesRail != oldWidget.usesRail;
+      hasFloatingNavigation != oldWidget.hasFloatingNavigation;
 }
 
 /// Bounds the reading surface without changing the identity of its child.

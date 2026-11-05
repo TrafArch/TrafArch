@@ -376,7 +376,7 @@ class _AdaptiveCardDetailPageState extends State<AdaptiveCardDetailPage> {
 
   @override
   Widget build(BuildContext context) => AdaptiveWindowScope(
-    usesRail: true,
+    hasFloatingNavigation: false,
     child: AdaptiveListDetail(
       hasSelection: true,
       onBackToList: () => Navigator.of(context).pop(),
