@@ -146,7 +146,7 @@ void main() {
     expect(value('卡号'), '6132766247');
     expect(value('余额'), 'MOP \$165');
     expect(value('有效期至'), '未读取');
-    expect(find.text('记录 1'), findsOneWidget);
+    expect(find.text('记录 1：'), findsOneWidget);
     expect(find.textContaining('2026-07-18 13:16:28'), findsOneWidget);
   });
 }

@@ -22,7 +22,10 @@ class _QrActionButtonState extends State<QrActionButton> {
       await widget.app.stop();
       if (!mounted) return;
       await Navigator.of(context).push<void>(
-        MaterialPageRoute<void>(builder: (_) => QrPage(app: widget.app)),
+        MaterialPageRoute<void>(
+          settings: const RouteSettings(name: '/qr'),
+          builder: (_) => QrPage(app: widget.app),
+        ),
       );
     } finally {
       if (mounted) setState(() => _opening = false);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_floating_bottom_bar/flutter_floating_bottom_bar.dart';
 
 import '../../shared/presentation/ui_constants.dart';
+import '../../shared/presentation/adaptive_layout.dart';
 import '../app_dependencies.dart';
 import '../../features/home/home_page.dart';
 import '../../features/cards/cards_page.dart';
@@ -9,6 +10,8 @@ import '../../features/trips/trips_page.dart';
 import '../../features/expert/expert_page.dart';
 import 'floating_nav_bar.dart';
 import 'navigation_scroll_policy.dart';
+import '../../features/settings/presentation/settings_page.dart';
+import '../../features/qr/presentation/qr_page.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({
@@ -31,11 +34,55 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> with RouteAware {
+  final _pagesKey = GlobalKey();
   int index = 0;
   late final BottomBarController _barController =
       widget.bottomBarController ?? BottomBarController();
   PageRoute<dynamic>? _subscribedRoute;
   AppDependencies get app => widget.app;
+  bool _restored = false;
+
+  @override
+  void initState() {
+    super.initState();
+    app.addListener(_restorePage);
+    _restorePage();
+  }
+
+  void _restorePage() {
+    if (_restored || !app.recoveryReady) return;
+    _restored = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() => index = app.recoveryTab);
+      final name = app.pendingRecoveryRoute;
+      app.pendingRecoveryRoute = null;
+      if (name != null && name.startsWith('/card/')) {
+        Navigator.of(context).push(
+          adaptiveCardDetailRoute(app, Uri.decodeComponent(name.substring(6))),
+        );
+        return;
+      }
+      final Widget? page = switch (name) {
+        '/settings' => SettingsPage(app: app),
+        '/qr' => QrPage(app: app),
+        _ => null,
+      };
+      if (page != null) {
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            settings: RouteSettings(name: name),
+            builder: (_) => page,
+          ),
+        );
+      }
+    });
+  }
+
+  void _select(int value) {
+    app.recoveryTab = value;
+    setState(() => index = value);
+  }
 
   @override
   void didChangeDependencies() {
@@ -63,6 +110,7 @@ class _AppShellState extends State<AppShell> with RouteAware {
 
   @override
   void dispose() {
+    app.removeListener(_restorePage);
     widget.routeObserver?.unsubscribe(this);
     if (widget.bottomBarController == null) _barController.dispose();
     super.dispose();
@@ -81,50 +129,102 @@ class _AppShellState extends State<AppShell> with RouteAware {
     //   “返回主屏幕”的系统动画，松手后退出应用；
     // - 行程/专家：canPop = false，手势被框架拦截（此时系统不播放预览动画），
     //   松手后在 onPopInvokedWithResult 中切回首页 Tab，避免直接退出应用。
-    return PopScope(
-      canPop: index == 0,
-      onPopInvokedWithResult: (bool didPop, Object? result) {
-        if (didPop) return;
-        if (index != 0) setState(() => index = 0);
-      },
-      child: Scaffold(
-        body: BottomBar(
-          controller: _barController,
-          layout: BottomBarLayout(
-            width: UiConstants.floatingNavBarWidth,
-            offset: UiConstants.floatingNavBarInset,
-            borderRadius: BorderRadius.circular(
-              UiConstants.floatingNavBarRadius,
-            ),
-          ),
-          scrollBehavior: BottomBarScrollBehavior(
-            hideOnScroll: true,
-            deltaThreshold: 12.0,
-            showAtStart: true,
-            showOnScrollEnd: true,
-            // 专家页为 NestedScrollView：外层（depth 0）负责收起标题栏，正文
-            // 长列表（depth ≥ 1）才是主要滑动来源，两者都要驱动底栏隐藏，
-            // 拦截规则见 bottomBarScrollPredicate。
-            predicate: bottomBarScrollPredicate,
-          ),
-          iconTooltip: '回到顶部',
-          iconSemanticLabel: '回到顶部',
-          body: IndexedStack(
-            index: index,
-            children: [
-              HomePage(app: app, active: index == 0),
-              TripsPage(app: app),
-              CardsPage(app: app),
-              ExpertPage(app: app),
-            ],
-          ),
-          // 3.0.0 起 child（悬浮栏本体）与 body 同为必填参数
-          child: FloatingNavBar(
-            index: index,
-            onSelect: (i) {
-              if (i != index) setState(() => index = i);
-            },
-          ),
+    return FoldSafePage(
+      child: PopScope(
+        canPop: index == 0,
+        onPopInvokedWithResult: (bool didPop, Object? result) {
+          if (didPop) return;
+          if (index != 0) _select(0);
+        },
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final rail =
+                windowSizeFor(constraints.maxWidth) != AppWindowSize.compact &&
+                constraints.maxHeight >= 480;
+            final pages = IndexedStack(
+              key: _pagesKey,
+              index: index,
+              children: [
+                HomePage(app: app, active: index == 0),
+                TripsPage(app: app),
+                CardsPage(app: app),
+                ExpertPage(app: app),
+              ],
+            );
+            return AdaptiveWindowScope(
+              usesRail: rail,
+              child: Scaffold(
+                body: rail
+                    ? Row(
+                        children: [
+                          SafeArea(
+                            child: SingleChildScrollView(
+                              child: IntrinsicHeight(
+                                child: NavigationRail(
+                                  selectedIndex: index,
+                                  labelType: NavigationRailLabelType.all,
+                                  onDestinationSelected: _select,
+                                  destinations: const [
+                                    NavigationRailDestination(
+                                      icon: Icon(Icons.home_outlined),
+                                      label: Text('首页'),
+                                    ),
+                                    NavigationRailDestination(
+                                      icon: Icon(
+                                        Icons.directions_transit_outlined,
+                                      ),
+                                      label: Text('行程'),
+                                    ),
+                                    NavigationRailDestination(
+                                      icon: Icon(Icons.credit_card_outlined),
+                                      label: Text('卡片'),
+                                    ),
+                                    NavigationRailDestination(
+                                      icon: Icon(Icons.science_outlined),
+                                      label: Text('专家'),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const VerticalDivider(width: 1),
+                          Expanded(child: pages),
+                        ],
+                      )
+                    : BottomBar(
+                        controller: _barController,
+                        layout: BottomBarLayout(
+                          width: UiConstants.floatingNavBarWidth,
+                          offset: UiConstants.floatingNavBarInset,
+                          borderRadius: BorderRadius.circular(
+                            UiConstants.floatingNavBarRadius,
+                          ),
+                        ),
+                        scrollBehavior: BottomBarScrollBehavior(
+                          hideOnScroll: true,
+                          deltaThreshold: 12.0,
+                          showAtStart: true,
+                          showOnScrollEnd: true,
+                          // 专家页为 NestedScrollView：外层（depth 0）负责收起标题栏，正文
+                          // 长列表（depth ≥ 1）才是主要滑动来源，两者都要驱动底栏隐藏，
+                          // 拦截规则见 bottomBarScrollPredicate。
+                          predicate: bottomBarScrollPredicate,
+                        ),
+                        iconTooltip: '回到顶部',
+                        iconSemanticLabel: '回到顶部',
+                        body: pages,
+                        // 3.0.0 起 child（悬浮栏本体）与 body 同为必填参数
+                        child: FloatingNavBar(
+                          index: index,
+                          onSelect: (i) {
+                            if (i != index) _select(i);
+                          },
+                        ),
+                      ),
+              ),
+            );
+          },
         ),
       ),
     );

@@ -15,6 +15,8 @@ class CardReadCoordinator {
   final AssetBundle bundle;
   Future<BankCardAnalyzer>? _bank;
 
+  void releaseMemory() => _bank = null;
+
   Future<BankCardAnalyzer> _bankAnalyzer() => _bank ??= () async {
     final pboc = await PbocParser.load(bundle.loadString);
     final emv = await EmvParser.load(bundle.loadString);

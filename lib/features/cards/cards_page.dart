@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../shared/presentation/ui_constants.dart';
+import '../../shared/presentation/adaptive_layout.dart';
 import '../archive/data/app_database.dart';
 import '../../app/app_dependencies.dart';
 import '../archive/application/archive_record_count.dart';
@@ -15,7 +15,14 @@ import '../archive/presentation/archive_transfer_dialogs.dart';
 /// 数据流监听数据库（重复读取与改名后自动刷新），最近读取的在前。
 class CardsPage extends StatefulWidget {
   final AppDependencies app;
-  const CardsPage({super.key, required this.app});
+  final ValueChanged<String>? onSelectCard;
+  final String? selectedCardId;
+  const CardsPage({
+    super.key,
+    required this.app,
+    this.onSelectCard,
+    this.selectedCardId,
+  });
 
   @override
   State<CardsPage> createState() => _CardsPageState();
@@ -70,60 +77,64 @@ class _CardsPageState extends State<CardsPage> {
             ],
           ),
           SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                12,
-                12,
-                12,
-                UiConstants.floatingNavBarClearance,
-              ),
-              child: StreamBuilder<List<ArchiveCardSummary>>(
-                stream: _summaries,
-                builder: (context, snapshot) {
-                  if (snapshot.hasError) {
-                    return Card(
-                      child: ListTile(
-                        leading: const Icon(Icons.error_outline),
-                        title: const Text('读取卡片档案失败'),
-                        subtitle: Text('${snapshot.error}'),
-                      ),
-                    );
-                  }
-                  if (!snapshot.hasData) {
-                    return const Card(
-                      child: Padding(
-                        padding: EdgeInsets.all(18),
-                        child: Center(
-                          child: SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+            child: AdaptiveContent(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  12,
+                  12,
+                  12,
+                  AdaptiveWindowScope.bottomClearanceOf(context),
+                ),
+                child: StreamBuilder<List<ArchiveCardSummary>>(
+                  stream: _summaries,
+                  builder: (context, snapshot) {
+                    if (snapshot.hasError) {
+                      return Card(
+                        child: ListTile(
+                          leading: const Icon(Icons.error_outline),
+                          title: const Text('读取卡片档案失败'),
+                          subtitle: Text('${snapshot.error}'),
+                        ),
+                      );
+                    }
+                    if (!snapshot.hasData) {
+                      return const Card(
+                        child: Padding(
+                          padding: EdgeInsets.all(18),
+                          child: Center(
+                            child: SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
                           ),
                         ),
-                      ),
-                    );
-                  }
-                  final cards = snapshot.data!;
-                  if (cards.isEmpty) {
-                    return const Card(
-                      child: ListTile(
-                        leading: Icon(Icons.add_card_outlined),
-                        title: Text('还没有保存的卡片'),
-                        subtitle: Text('读取卡片并确认保存后在这里展示'),
-                      ),
-                    );
-                  }
-                  return Column(
-                    children: [
-                      for (final summary in cards)
-                        _SavedCardTile(
-                          card: summary.card,
-                          recordCount: summary.recordCount,
-                          app: app,
+                      );
+                    }
+                    final cards = snapshot.data!;
+                    if (cards.isEmpty) {
+                      return const Card(
+                        child: ListTile(
+                          leading: Icon(Icons.add_card_outlined),
+                          title: Text('还没有保存的卡片'),
+                          subtitle: Text('读取卡片并确认保存后在这里展示'),
                         ),
-                    ],
-                  );
-                },
+                      );
+                    }
+                    return Column(
+                      children: [
+                        for (final summary in cards)
+                          _SavedCardTile(
+                            card: summary.card,
+                            recordCount: summary.recordCount,
+                            app: app,
+                            selected: widget.selectedCardId == summary.card.id,
+                            onSelect: widget.onSelectCard,
+                          ),
+                      ],
+                    );
+                  },
+                ),
               ),
             ),
           ),
@@ -140,11 +151,15 @@ class _SavedCardTile extends StatelessWidget {
   final SavedCard card;
   final ArchiveRecordCount recordCount;
   final AppDependencies app;
+  final ValueChanged<String>? onSelect;
+  final bool selected;
 
   const _SavedCardTile({
     required this.card,
     required this.recordCount,
     required this.app,
+    this.onSelect,
+    this.selected = false,
   });
 
   @override
@@ -152,18 +167,17 @@ class _SavedCardTile extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     return Card(
+      color: selected ? scheme.secondaryContainer : null,
       margin: const EdgeInsets.only(bottom: 10),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => CardDetailPage(
-              repository: app.cardRepository,
-              cardId: card.id,
-              settings: app.settings,
-            ),
-          ),
-        ),
+        onTap: () {
+          if (onSelect != null) {
+            onSelect!(card.id);
+            return;
+          }
+          Navigator.of(context).push(adaptiveCardDetailRoute(app, card.id));
+        },
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
@@ -318,3 +332,76 @@ class _SavedCardTile extends StatelessWidget {
 
 /// 卡片列表项的操作菜单项。
 enum _SavedCardAction { export, delete }
+
+/// The route observer reads the current card even after a dialog or child page
+/// returns. The selected ID changes within this one route on expanded windows.
+Route<void> adaptiveCardDetailRoute(AppDependencies app, String cardId) {
+  var selectedId = cardId;
+  return MaterialPageRoute<void>(
+    settings: _CardDetailRouteSettings(() => selectedId),
+    builder: (_) => AdaptiveCardDetailPage(
+      app: app,
+      cardId: cardId,
+      onSelected: (id) => selectedId = id,
+    ),
+  );
+}
+
+class _CardDetailRouteSettings extends RouteSettings {
+  const _CardDetailRouteSettings(this.selectedCard);
+  final String Function() selectedCard;
+  @override
+  String get name => '/card/${Uri.encodeComponent(selectedCard())}';
+}
+
+/// A single route owns the selected card, as in Android's list/detail navigator.
+/// At compact widths the list remains offstage and Back returns to the caller.
+class AdaptiveCardDetailPage extends StatefulWidget {
+  const AdaptiveCardDetailPage({
+    super.key,
+    required this.app,
+    required this.cardId,
+    this.onSelected,
+  });
+  final AppDependencies app;
+  final String cardId;
+  final ValueChanged<String>? onSelected;
+
+  @override
+  State<AdaptiveCardDetailPage> createState() => _AdaptiveCardDetailPageState();
+}
+
+class _AdaptiveCardDetailPageState extends State<AdaptiveCardDetailPage> {
+  late String _selected = widget.cardId;
+
+  @override
+  Widget build(BuildContext context) => AdaptiveWindowScope(
+    usesRail: true,
+    child: AdaptiveListDetail(
+      hasSelection: true,
+      onBackToList: () => Navigator.of(context).pop(),
+      list: ScaffoldMessenger(
+        child: Scaffold(
+          body: CardsPage(
+            app: widget.app,
+            selectedCardId: _selected,
+            onSelectCard: (id) {
+              widget.onSelected?.call(id);
+              widget.app.recoveryRoute = '/card/${Uri.encodeComponent(id)}';
+              setState(() => _selected = id);
+            },
+          ),
+        ),
+      ),
+      detail: ScaffoldMessenger(
+        child: CardDetailPage(
+          key: ValueKey(_selected),
+          repository: widget.app.cardRepository,
+          cardId: _selected,
+          settings: widget.app.settings,
+          recoveryFilters: widget.app.recoveryFilters,
+        ),
+      ),
+    ),
+  );
+}

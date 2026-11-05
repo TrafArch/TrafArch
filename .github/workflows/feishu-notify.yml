@@ -1,0 +1,110 @@
+name: 飞书通知
+
+on:
+  push:
+    branches:
+      - "**"
+  issues:
+    types: [opened]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - name: 发送飞书通知
+        env:
+          FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
+          FEISHU_SIGN_SECRET: ${{ secrets.FEISHU_SIGN_SECRET }}
+        run: |
+          python3 - <<'PY'
+          import base64
+          import hashlib
+          import hmac
+          import json
+          import os
+          import time
+          import urllib.error
+          import urllib.request
+
+          webhook = os.environ["FEISHU_WEBHOOK"]
+          secret = os.environ["FEISHU_SIGN_SECRET"]
+          if not webhook or not secret:
+              raise SystemExit("请先配置 FEISHU_WEBHOOK 和 FEISHU_SIGN_SECRET")
+
+          with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as f:
+              event = json.load(f)
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          event_name = os.environ["GITHUB_EVENT_NAME"]
+          actor = os.environ["GITHUB_ACTOR"]
+          server = os.environ["GITHUB_SERVER_URL"]
+          repo_url = f"{server}/{repo}"
+
+          # 避免提交信息或 Issue 标题中的标签被解析为飞书 @ 提醒。
+          def plain(value):
+              return str(value).replace("<", "＜").replace(">", "＞")
+
+          if event_name == "push":
+              branch = os.environ["GITHUB_REF"].removeprefix("refs/heads/")
+              commit = event.get("head_commit") or {}
+              lines = (commit.get("message") or "").splitlines()
+              summary = plain(lines[0][:300]) if lines else "无提交信息"
+              action = "删除分支" if event.get("deleted") else "代码推送"
+              link = event.get("compare") or commit.get("url") or repo_url
+              text = (
+                  f"[GitHub] {action}\n"
+                  f"仓库：{repo}\n"
+                  f"分支：{plain(branch)}\n"
+                  f"操作人：{actor}\n"
+                  f"最新提交：{summary}\n"
+                  f"{link}"
+              )
+          elif event_name == "issues":
+              issue = event["issue"]
+              text = (
+                  f"[GitHub] 新 Issue #{issue['number']}\n"
+                  f"仓库：{repo}\n"
+                  f"标题：{plain(issue['title'])}\n"
+                  f"创建人：{issue['user']['login']}\n"
+                  f"{issue['html_url']}"
+              )
+          else:
+              text = f"[GitHub] 飞书通知测试\n仓库：{repo}\n触发人：{actor}"
+
+          timestamp = str(int(time.time()))
+          signing_key = f"{timestamp}\n{secret}".encode("utf-8")
+          sign = base64.b64encode(
+              hmac.new(signing_key, b"", hashlib.sha256).digest()
+          ).decode("ascii")
+
+          payload = {
+              "timestamp": timestamp,
+              "sign": sign,
+              "msg_type": "text",
+              "content": {"text": text},
+          }
+          request = urllib.request.Request(
+              webhook,
+              data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+
+          try:
+              with urllib.request.urlopen(request, timeout=20) as response:
+                  result = json.load(response)
+          except urllib.error.URLError:
+              raise SystemExit("飞书请求失败，请检查 Webhook 地址和网络")
+
+          if result.get("code") != 0:
+              raise SystemExit(
+                  f"飞书发送失败，错误码：{result.get('code')}，"
+                  f"原因：{result.get('msg', '未知')}"
+              )
+          print("飞书通知发送成功")
+          PY

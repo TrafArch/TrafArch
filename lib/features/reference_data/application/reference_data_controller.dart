@@ -97,6 +97,16 @@ class ReferenceDataController extends OwnedNotifier {
 
   String? cuCityNameOf(String? code) =>
       code == null ? null : _kb?.cuCities?.lookup(code)?.name;
+
+  void releaseMemory() {
+    _kb?.tuStations?.releaseMemory();
+    // Old presentations may still borrow these packages; evict caches without
+    // closing their SQLite handles or changing any package/manifest bytes.
+    for (final old in _retired) {
+      old.tuStations?.releaseMemory();
+    }
+  }
+
   @override
   void dispose() {
     _kb?.close();

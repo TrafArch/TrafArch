@@ -94,6 +94,8 @@ class TripStreamView extends StatelessWidget {
       summaryText:
           '交易 ${stats.transactionCount} 笔（消费 ${stats.consumeCount}） · '
           '过程事件 ${stats.processEventCount} 条',
+      initialFilters: app.recoveryFilters['live'],
+      onFiltersChanged: (values) => app.recoveryFilters['live'] = values,
     );
   }
 }

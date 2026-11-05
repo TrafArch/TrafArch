@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../transit_analysis/tunion_analysis_models.dart';
-import '../../shared/presentation/ui_constants.dart';
+import '../../shared/presentation/adaptive_layout.dart';
 import '../../app/app_dependencies.dart';
 import '../qr/presentation/qr_action_button.dart';
 import '../settings/presentation/settings_action_button.dart';
 import 'trip_stream_view.dart';
 import 'cu_transaction_list.dart';
 import 'shanghai_mirrored_records.dart';
+import '../recovery/recovery_result_panel.dart';
 
 /// 行程页：展示最近一次读卡解析出的行程流（0x18 交易明细为主干，
 /// 0x1A / 0x1E 过程记录逐条关联、确认重复合并、无法关联独立保留），
@@ -33,14 +34,16 @@ class TripsPage extends StatelessWidget {
               ],
             ),
             SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  12,
-                  12,
-                  12,
-                  UiConstants.floatingNavBarClearance,
+              child: AdaptiveContent(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    12,
+                    12,
+                    12,
+                    AdaptiveWindowScope.bottomClearanceOf(context),
+                  ),
+                  child: _TripsBody(app: app),
                 ),
-                child: _TripsBody(app: app),
               ),
             ),
           ],
@@ -56,6 +59,7 @@ class _TripsBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (app.recoveredCapture != null) return RecoveryResultPanel(app: app);
     if (app.parsing) {
       return const Card(
         child: Padding(

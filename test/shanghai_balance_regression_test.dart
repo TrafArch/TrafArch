@@ -70,17 +70,47 @@ void main() {
 
   test('zero wallet balance is valid and must not be replaced by another balance field', () async {
     final channel = _ShanghaiChannel()..balanceFen = 0;
+    final logger = AppLogger(store: MemoryLogStore());
     final app = AppDependencies(
       database: testDatabase(),
       channel: channel,
       bundle: MissingTestAssets(),
-      logger: AppLogger(store: MemoryLogStore()),
-      settingsStore: MemorySettingsStore(),
+      logger: logger,
+      settingsStore: MemorySettingsStore({SettingsKeys.loggingEnabled: 'true'}),
     );
     addTearDown(app.dispose);
     await app.init();
     await app.scanOnce();
     expect(app.cardInfo!.balanceFen, 0);
+    final session = (await logger.readSessions()).singleWhere((s) => s.isScan);
+    expect(session.cardInfo?['cardNumber'], app.lastIdentified!.cardNumber);
+    expect(session.cardInfo?['cardName'], app.lastIdentified!.displayName);
+    expect(
+      session.cardInfo?['cardType'],
+      app.lastIdentified!.identity.cardType,
+    );
+    expect(session.cardInfo?['identificationState'], 'resolved');
+    final decoded = session.events
+        .where(
+          (e) => e.type == 'response_fields' && e.data['parserId'] == 'tunion',
+        )
+        .toList();
+    expect(
+      decoded.any(
+        (e) =>
+            (e.data['fields'] as Map?)?.containsKey('applicationSerial') ==
+            true,
+      ),
+      isTrue,
+    );
+    expect(
+      decoded.any((e) => (e.data['fields'] as Map?)?['balanceFen'] == 0),
+      isTrue,
+    );
+    expect(
+      session.cardInfo?['applicationSerialRaw'],
+      app.cardInfo!.applicationSerial,
+    );
     expect(channel.balanceCommands, [
       [0x80, 0x5C, 0, 2, 4],
     ]);

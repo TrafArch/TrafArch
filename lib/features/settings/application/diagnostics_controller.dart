@@ -1,12 +1,15 @@
 import 'package:flutter/services.dart';
 
-import '../../../app/app_info.dart';
 import '../../../platform/storage/app_logger.dart';
 import '../../../platform/storage/log_exporter.dart';
 import '../../../shared/application/owned_notifier.dart';
+import '../../../shared/diagnostics/diagnostic_event.dart';
+import 'diagnostic_export.dart';
 
 class DiagnosticsController extends OwnedNotifier {
-  DiagnosticsController(this._logger, this._logExporter);
+  DiagnosticsController(this._logger, this._logExporter) {
+    _logger.addListener(notifyListeners);
+  }
   final AppLogger _logger;
   final LogExporter _logExporter;
   bool _exportingLog = false;
@@ -15,44 +18,59 @@ class DiagnosticsController extends OwnedNotifier {
   bool get exportingLog => _exportingLog;
   String? get logExportMessage => _logExportMessage;
   bool get logExportFailed => _logExportFailed;
-  Future<void> exportLog() async {
-    if (_exportingLog) return;
+  String? get storageIssue => _logger.storageIssue;
+  Future<List<DiagnosticSession>> sessions() async =>
+      (await _logger.readSessions())
+          .where((s) => s.isScan || s.legacy || s.incomplete && s.first == null)
+          .toList();
+  Future<void> deleteSessions(Set<String> ids) => _logger.deleteSessions(ids);
+
+  Future<void> exportLog({Set<String>? sessionIds}) async {
+    if (_exportingLog || disposed) return;
+    final requestedIds = sessionIds == null ? null : Set<String>.of(sessionIds);
     _exportingLog = true;
     _logExportMessage = null;
     _logExportFailed = false;
-    _logger.log('== 导出运行日志 ==');
     notifyListeners();
 
     try {
       final now = DateTime.now();
-      // 等待排队中的日志写入完成，保证导出内容完整
-      await _logger.flush();
-      final body = await _logger.readAll();
-      final content = StringBuffer()
-        ..writeln('=== ${AppInfo.appName} 运行日志 ===')
-        ..writeln('应用版本：${AppInfo.version}（Build ${AppInfo.buildNumber}）')
-        ..writeln('导出时间：${AppLogger.formatTimestamp(now)}')
-        ..writeln('------------------------------------------------')
-        ..writeln(body.trim().isEmpty ? '（暂无日志记录）' : body.trim());
+      // Snapshot inside the serial file queue; new events cannot move its end.
+      var selected = await _logger.readSessions(ids: requestedIds);
+      selected = selected
+          .where((s) => s.isScan || s.legacy || s.incomplete && s.first == null)
+          .toList();
+      if (disposed) return;
+      if (requestedIds == null && selected.isNotEmpty) {
+        final scans = selected.where((s) => s.isScan);
+        selected = [scans.isNotEmpty ? scans.first : selected.first];
+      }
+      if (requestedIds != null && selected.length != requestedIds.length) {
+        throw StateError('所选日志已被清理，请重新选择');
+      }
+      final content = buildFullDiagnostics(selected, now);
       final path = await _logExporter.saveToDownloads(
-        'transit_card_log_${_fileStamp(now)}.txt',
-        content.toString(),
+        'transit_card_log_${_fileStamp(now)}.json',
+        content,
       );
       _logExportFailed = false;
       _logExportMessage = '已导出到下载目录：$path';
-      _logger.log('== 日志导出完成：$path ==');
     } on PlatformException catch (e) {
       _logExportFailed = true;
       _logExportMessage = '导出失败：${e.message ?? e.code}';
-      _logger.log('== 日志导出失败：${e.message ?? e.code} ==');
     } catch (e) {
       _logExportFailed = true;
       _logExportMessage = '导出失败：$e';
-      _logger.log('== 日志导出失败：$e ==');
     } finally {
       _exportingLog = false;
       notifyListeners();
     }
+  }
+
+  @override
+  void dispose() {
+    _logger.removeListener(notifyListeners);
+    super.dispose();
   }
 
   /// 导出文件名时间戳：yyyyMMdd_HHmmss。

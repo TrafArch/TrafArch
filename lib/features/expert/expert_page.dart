@@ -15,6 +15,7 @@ import 'identity_panel.dart';
 import 'macau_pass_panel.dart';
 import 'raw_data_panel.dart';
 import 'tunion_panel.dart';
+import '../recovery/recovery_result_panel.dart';
 
 /// Tab composition and result selection; protocol fields belong to leaf panels.
 class ExpertPage extends StatefulWidget {
@@ -67,6 +68,17 @@ class _ExpertPageState extends State<ExpertPage> {
   @override
   Widget build(BuildContext context) {
     final app = widget.app;
+    if (app.recoveredCapture != null) {
+      return SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
+          children: [
+            const Text('专家分析 · 上次读取'),
+            RecoveryResultPanel(app: app),
+          ],
+        ),
+      );
+    }
     final isTUnion = CardParserIds.isTUnionFamily(app.parsedCard?.parserId);
     final tabs = <Tab>[
       const Tab(text: '信息获取'),

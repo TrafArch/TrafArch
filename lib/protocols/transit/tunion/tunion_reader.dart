@@ -246,7 +246,7 @@ class CommonUnitTu {
       // Decoding this prefix never performs another NFC exchange.
       _lastCardInfo = public == null && holder == null && management == null
           ? null
-          : _decodeCardInfo(public, holder, management);
+          : decodeCardInfo(public, holder, management);
     }
     return _lastCardInfo;
   }
@@ -720,7 +720,8 @@ class CommonUnitTu {
     return null;
   }
 
-  TUnionCardInfo _decodeCardInfo(
+  /// Pure decoder shared with local diagnostics; never performs card I/O.
+  static TUnionCardInfo decodeCardInfo(
     List<int>? public,
     List<int>? holder,
     List<int>? management,

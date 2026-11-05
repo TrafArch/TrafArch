@@ -12,6 +12,8 @@ import 'support/test_database.dart';
 
 void main() {
   testWidgets('从扫码解析等子页面返回后底栏回到可见态', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     final app = AppDependencies(
       database: testDatabase(),
       settingsStore: MemorySettingsStore(),
