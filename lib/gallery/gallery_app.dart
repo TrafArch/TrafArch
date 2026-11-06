@@ -1,5 +1,7 @@
+import 'dart:async';
+import 'dart:io' show File;
 import 'dart:math' as math;
-import 'dart:ui' show ImageFilter;
+import 'dart:ui' show ImageFilter, ImageByteFormat, instantiateImageCodec;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -11,6 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../app/app_info.dart';
 import '../platform/browser/feedback_browser.dart';
+import '../platform/qr/qr_image_picker.dart';
 import '../shared/app_support.dart';
 import 'gallery_controller.dart';
 import 'gallery_balance_presentation.dart';
@@ -27,6 +30,7 @@ part 'gallery_overlays.dart';
 part 'gallery_information.dart';
 part 'gallery_navigation.dart';
 part 'gallery_navigation_item.dart';
+part 'gallery_read_prompt.dart';
 
 class GalleryApp extends StatefulWidget {
   const GalleryApp({
@@ -219,6 +223,68 @@ class _GalleryViewState extends State<_GalleryView> {
   bool _menuMeasureScheduled = false;
   String? _openingLink;
   String? _linkError;
+  bool _pickingFaceImage = false;
+  String? _faceImageError;
+
+  Future<void> _pickFaceImage() async {
+    if (_pickingFaceImage) return;
+    final card = _selectedCard;
+    final generation = c.generation;
+    bool active() =>
+        mounted &&
+        c.generation == generation &&
+        c.navigationStack.last.id == _entry.id;
+    setState(() {
+      _pickingFaceImage = true;
+      _faceImageError = null;
+    });
+    try {
+      final path = await pickQrImageFromGallery();
+      if (path == null || !active()) return;
+      final file = File(path);
+      if (await file.length() > 20 * 1024 * 1024) {
+        if (active()) setState(() => _faceImageError = '图片过大，请选择小于 20 MB 的图片');
+        return;
+      }
+      final codec = await instantiateImageCodec(
+        await file.readAsBytes(),
+        targetWidth: 1200,
+        allowUpscaling: false,
+      );
+      try {
+        final frame = await codec.getNextFrame();
+        try {
+          final data = await frame.image.toByteData(
+            format: ImageByteFormat.png,
+          );
+          if (data != null && active()) {
+            // The native picker clears its previous cache on each selection.
+            c.update(
+              () => card.image = data.buffer.asUint8List(
+                data.offsetInBytes,
+                data.lengthInBytes,
+              ),
+            );
+          }
+        } finally {
+          frame.image.dispose();
+        }
+      } finally {
+        codec.dispose();
+      }
+    } on MissingPluginException {
+      if (active()) {
+        setState(() => _faceImageError = '当前平台不支持系统相册，请在 Android 上选择图片');
+      }
+    } on TimeoutException {
+      if (active()) setState(() => _faceImageError = '相册选择超时，请重试');
+    } catch (_) {
+      if (active()) setState(() => _faceImageError = '无法读取所选图片，请选择其他图片重试');
+    } finally {
+      if (mounted) setState(() => _pickingFaceImage = false);
+    }
+  }
+
   Future<List<LicenseEntry>>? _licenses;
   Future<void> _openContact(String value, {bool email = false}) async {
     if (_openingLink != null) return;
@@ -235,9 +301,7 @@ class _GalleryViewState extends State<_GalleryView> {
       } else if (value == AppSupport.qqJoin) {
         // 与 1.x 一致：优先唤起 QQ 加群卡片，失败再打开邀请页。
         if (!await _openQqGroup()) {
-          throw const FeedbackBrowserException(
-            '无法打开 QQ 或加群页，请复制群号后在 QQ 中搜索。',
-          );
+          throw const FeedbackBrowserException('无法打开 QQ 或加群页，请复制群号后在 QQ 中搜索。');
         }
       } else {
         final open = widget.openWebLink;
@@ -384,10 +448,17 @@ class _GalleryViewState extends State<_GalleryView> {
                     PageStorage(
                       bucket: _bucket,
                       child: _isMain
-                          ? _GalleryMainTransition(
-                              page: _viewPage,
-                              reduceMotion: _reduceMotion,
-                              builder: _mainPage,
+                          ? Column(
+                              children: [
+                                _mainHeader(),
+                                Expanded(
+                                  child: _GalleryMainTransition(
+                                    page: _viewPage,
+                                    reduceMotion: _reduceMotion,
+                                    builder: _mainPage,
+                                  ),
+                                ),
+                              ],
                             )
                           : KeyedSubtree(
                               key: ValueKey(_viewPage),

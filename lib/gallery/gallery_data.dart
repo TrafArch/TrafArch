@@ -97,7 +97,7 @@ class GalleryCard {
   final String when;
   final String count;
   String face;
-  String? image;
+  Uint8List? image;
 
   // These currencies belong to the frozen samples, not inferred real cards.
   GalleryCurrency? get currency => switch (id) {

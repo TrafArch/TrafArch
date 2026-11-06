@@ -146,7 +146,7 @@ void main() {
   for (final reduceMotion in [false, true]) {
     for (final autoSave in [false, true]) {
       testWidgets(
-        'read expands the identified card, reduce=$reduceMotion autoSave=$autoSave',
+        'read smoothly reveals a compact identified card, reduce=$reduceMotion autoSave=$autoSave',
         (tester) async {
           c.autoSave = autoSave;
           await mount(tester, reduceMotion: reduceMotion);
@@ -156,15 +156,31 @@ void main() {
           await tester.pump();
           await tester.pump(const Duration(milliseconds: 1600));
           expect(c.hasRead, isTrue);
-          await tester.pump(const Duration(milliseconds: 45));
+          await tester.pump(const Duration(milliseconds: 280));
           final partial = tester.getSize(card).height;
+          if (!reduceMotion) {
+            final fade = tester.widget<FadeTransition>(
+              find
+                  .ancestor(
+                    of: find.byKey(const ValueKey('card-face-shanghai')),
+                    matching: find.byType(FadeTransition),
+                  )
+                  .first,
+            );
+            expect(fade.opacity.value, inExclusiveRange(.1, .9));
+          }
           await tester.pumpAndSettle();
           final after = tester.getSize(card).height;
-          expect(after, greaterThan(before));
+          expect(after, lessThan(before));
+          final face = tester.getSize(
+            find.byKey(const ValueKey('card-face-shanghai')),
+          );
+          expect(face.width, 328);
+          expect(face.height, lessThan(240));
           if (reduceMotion) {
             expect(partial, after);
           } else {
-            expect(partial, inExclusiveRange(before, after));
+            expect(partial, inExclusiveRange(after, before));
           }
           expect(tester.takeException(), isNull);
         },

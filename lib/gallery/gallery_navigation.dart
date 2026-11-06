@@ -11,6 +11,7 @@ abstract final class _GalleryMotion {
   static const menu = Duration(milliseconds: 180);
   static const menuBack = Duration(milliseconds: 120);
   static const expand = Duration(milliseconds: 180);
+  static const readResult = Duration(milliseconds: 560);
   static const content = Duration(milliseconds: 160);
   static const capsule = Duration(milliseconds: 180);
   static const curve = Curves.easeOutCubic;

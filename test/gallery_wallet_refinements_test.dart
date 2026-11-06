@@ -1,12 +1,16 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/gallery/gallery_app.dart';
 import 'package:transit_card_analyzer/gallery/gallery_balance_presentation.dart';
 import 'package:transit_card_analyzer/gallery/gallery_controller.dart';
 import 'package:transit_card_analyzer/gallery/gallery_data.dart';
+import 'package:transit_card_analyzer/gallery/gallery_design.dart';
+import 'package:transit_card_analyzer/gallery/gallery_theme.dart';
 
 void main() {
   late GalleryController c;
@@ -30,6 +34,291 @@ void main() {
     await tester.pumpWidget(GalleryApp(controller: c));
     await tester.pumpAndSettle();
   }
+
+  group('system gallery card faces', () {
+    const channel = MethodChannel('transit_card_analyzer/qr_image');
+    final imagePath = File('assets/icon/app_icon.png').absolute.path;
+    final corruptPath = File('assets/gallery/fixtures.json').absolute.path;
+    late List<MethodCall> calls;
+
+    void mockPicker(Future<String?> Function() pick) {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            calls.add(call);
+            expect(call.method, 'pickImage');
+            expect(call.arguments, isNull);
+            return pick();
+          });
+    }
+
+    setUp(() => calls = []);
+    tearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+    });
+
+    Future<void> openFace(WidgetTester tester, GalleryCard card) async {
+      c.showOverlay(GalleryOverlay.face, card: card);
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> mountFace(WidgetTester tester) async {
+      c.navigate(GalleryPage.cards);
+      await mount(tester);
+      await openFace(tester, c.current);
+    }
+
+    // File reads and the engine codec must complete outside fake async time.
+    Future<void> pickAndFinish(WidgetTester tester) async {
+      await tester.runAsync(() async {
+        await tester.tap(find.text('从相册选择图片'));
+        final deadline = DateTime.now().add(const Duration(seconds: 15));
+        do {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+          await tester.pump();
+          if (find.text('正在打开相册…').evaluate().isEmpty) return;
+        } while (DateTime.now().isBefore(deadline));
+        fail('The gallery image operation did not finish');
+      });
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    }
+
+    Uint8List seedImage(GalleryCard card) =>
+        card.image = File(imagePath).readAsBytesSync();
+
+    BoxDecoration faceDecoration(WidgetTester tester, GalleryCard card) =>
+        tester
+                .widget<Container>(find.byKey(ValueKey('card-face-${card.id}')))
+                .decoration!
+            as BoxDecoration;
+
+    testWidgets(
+      'selection stores PNG bytes and renders white text from memory',
+      (tester) async {
+        mockPicker(() async => imagePath);
+        c.current.saved = true;
+        await mountFace(tester);
+        final card = c.current;
+        expect(card.image, isNull);
+        expect(
+          tester
+              .widget<Text>(find.byKey(ValueKey('face-title-${card.id}')))
+              .style!
+              .color,
+          GalleryCardFace.byId(card.face).foreground,
+        );
+        await pickAndFinish(tester);
+        expect(calls, hasLength(1));
+        expect(card.image, isA<Uint8List>());
+        expect(card.image!.take(8), [137, 80, 78, 71, 13, 10, 26, 10]);
+        final image = faceDecoration(tester, card).image!.image;
+        expect(image, isA<MemoryImage>());
+        expect((image as MemoryImage).bytes, same(card.image));
+        expect(
+          tester
+              .widget<Text>(find.byKey(ValueKey('face-title-${card.id}')))
+              .style!
+              .color,
+          Colors.white,
+        );
+        await tester.tap(find.text('完成'));
+        await tester.pumpAndSettle();
+        final wallet = tester.widget<Container>(
+          find.byKey(ValueKey('wallet-card-${card.id}')),
+        );
+        expect(
+          ((wallet.decoration as BoxDecoration).image!.image as MemoryImage)
+              .bytes,
+          same(card.image),
+        );
+      },
+    );
+
+    testWidgets('another card selection leaves the first owned image intact', (
+      tester,
+    ) async {
+      mockPicker(() async => imagePath);
+      await mountFace(tester);
+      final first = c.current;
+      await pickAndFinish(tester);
+      final firstImage = first.image!;
+      final snapshot = Uint8List.fromList(firstImage);
+      await tester.tap(find.text('完成'));
+      await tester.pumpAndSettle();
+      final second = c.cards.firstWhere((card) => card.id != first.id);
+      await openFace(tester, second);
+      // Even if the native picker reuses the same cache path, each card owns bytes.
+      await pickAndFinish(tester);
+      expect(calls, hasLength(2));
+      expect(second.image, isNotNull);
+      expect(identical(second.image, firstImage), isFalse);
+      expect(first.image, same(firstImage));
+      expect(first.image, orderedEquals(snapshot));
+      second.image![0] ^= 0xff;
+      expect(first.image, orderedEquals(snapshot));
+      second.image![0] ^= 0xff;
+      await tester.tap(find.text('完成'));
+      await tester.pumpAndSettle();
+      await openFace(tester, first);
+      expect(
+        (faceDecoration(tester, first).image!.image as MemoryImage).bytes,
+        same(firstImage),
+      );
+    });
+
+    testWidgets(
+      'cancel keeps the existing image and allows another selection',
+      (tester) async {
+        final previous = seedImage(c.current);
+        mockPicker(() async => null);
+        await mountFace(tester);
+        await pickAndFinish(tester);
+        expect(c.current.image, same(previous));
+        expect(find.text('从相册选择图片'), findsOneWidget);
+        mockPicker(() async => imagePath);
+        await pickAndFinish(tester);
+        expect(calls, hasLength(2));
+        expect(identical(c.current.image, previous), isFalse);
+      },
+    );
+
+    for (final failure in ['corrupt', 'platform', 'missing']) {
+      testWidgets('$failure preserves the existing image and can be retried', (
+        tester,
+      ) async {
+        final previous = seedImage(c.current);
+        mockPicker(() async {
+          if (failure == 'platform') {
+            throw PlatformException(code: 'picker_failed');
+          }
+          if (failure == 'missing') throw MissingPluginException();
+          return corruptPath;
+        });
+        await mountFace(tester);
+        await pickAndFinish(tester);
+        expect(c.current.image, same(previous));
+        expect(
+          find.text(
+            failure == 'missing'
+                ? '当前平台不支持系统相册，请在 Android 上选择图片'
+                : '无法读取所选图片，请选择其他图片重试',
+          ),
+          findsOneWidget,
+        );
+        mockPicker(() async => imagePath);
+        await pickAndFinish(tester);
+        expect(calls, hasLength(2));
+        expect(identical(c.current.image, previous), isFalse);
+        expect(find.textContaining('请在 Android'), findsNothing);
+        expect(find.textContaining('无法读取所选图片'), findsNothing);
+      });
+    }
+
+    testWidgets('oversized image keeps the existing card face', (tester) async {
+      final directory = Directory.systemTemp.createTempSync('trafarch-face-');
+      addTearDown(() => directory.deleteSync(recursive: true));
+      final oversized = File('${directory.path}/oversized.png');
+      final handle = oversized.openSync(mode: FileMode.write);
+      handle.truncateSync(20 * 1024 * 1024 + 1);
+      handle.closeSync();
+      final previous = seedImage(c.current);
+      mockPicker(() async => oversized.path);
+      await mountFace(tester);
+      await pickAndFinish(tester);
+      expect(c.current.image, same(previous));
+      expect(find.text('图片过大，请选择小于 20 MB 的图片'), findsOneWidget);
+      expect(find.text('从相册选择图片'), findsOneWidget);
+    });
+
+    testWidgets('pending selection disables repeats and timeout allows retry', (
+      tester,
+    ) async {
+      final previous = seedImage(c.current);
+      final pending = Completer<String?>();
+      mockPicker(() => pending.future);
+      await mountFace(tester);
+      await tester.tap(find.text('从相册选择图片'));
+      await tester.pump();
+      final button = tester.widget<TextButton>(
+        find.ancestor(
+          of: find.text('正在打开相册…'),
+          matching: find.byType(TextButton),
+        ),
+      );
+      expect(button.onPressed, isNull);
+      await tester.tap(find.text('正在打开相册…'));
+      await tester.pump();
+      expect(calls, hasLength(1));
+      await tester.pump(const Duration(minutes: 5, seconds: 1));
+      await tester.pumpAndSettle();
+      expect(c.current.image, same(previous));
+      expect(find.text('相册选择超时，请重试'), findsOneWidget);
+      pending.complete(null);
+      await tester.pump();
+      mockPicker(() async => imagePath);
+      await pickAndFinish(tester);
+      expect(calls, hasLength(2));
+      expect(identical(c.current.image, previous), isFalse);
+      expect(find.text('相册选择超时，请重试'), findsNothing);
+    });
+
+    for (final leave in ['close sheet', 'reset generation']) {
+      testWidgets('$leave ignores a delayed picker result', (tester) async {
+        final card = c.current;
+        final previous = seedImage(card);
+        final pending = Completer<String?>();
+        mockPicker(() => pending.future);
+        await mountFace(tester);
+        final generation = c.generation;
+        await tester.tap(find.text('从相册选择图片'));
+        await tester.pump();
+        if (leave == 'close sheet') {
+          await tester.tap(find.text('完成'));
+        } else {
+          c.reset();
+          expect(c.generation, greaterThan(generation));
+        }
+        await tester.pumpAndSettle();
+        // Open a new face sheet before the old request returns.
+        await openFace(tester, c.current);
+        final currentImage = c.current.image;
+        await tester.runAsync(() async {
+          pending.complete(imagePath);
+          // Drain real file IO so fake async cannot mask a stale update.
+          await Future<void>.delayed(const Duration(milliseconds: 500));
+        });
+        await tester.pumpAndSettle();
+        expect(card.image, same(previous));
+        expect(c.current.image, same(currentImage));
+        expect(find.text('从相册选择图片'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    testWidgets('restore default removes custom bytes and restores dark text', (
+      tester,
+    ) async {
+      mockPicker(() async => imagePath);
+      await mountFace(tester);
+      await pickAndFinish(tester);
+      c.update(() => c.current.face = 'amber');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('恢复默认卡面'));
+      await tester.pumpAndSettle();
+      expect(c.current.image, isNull);
+      expect(c.current.face, 'blue');
+      expect(faceDecoration(tester, c.current).image, isNull);
+      expect(
+        tester
+            .widget<Text>(find.byKey(const ValueKey('face-title-shanghai')))
+            .style!
+            .color,
+        GalleryCardFace.byId('blue').foreground,
+      );
+      expect(tester.takeException(), isNull);
+    });
+  });
 
   testWidgets('wallet currency, numbers and counts share aligned columns', (
     tester,
@@ -80,20 +369,72 @@ void main() {
             currencyCode: card.currency?.name.toUpperCase(),
           );
           expect(label.data, value.currencyLabel);
-          final thumbnail = tester.getSize(
-            find.byKey(ValueKey('card-thumbnail-${card.id}')),
-          );
           expect(
-            thumbnail.width / thumbnail.height,
-            closeTo(85.60 / 53.98, .001),
+            find.byKey(ValueKey('card-thumbnail-${card.id}')),
+            findsNothing,
           );
-          expect(thumbnail.width, 60);
+          final item = tester.getRect(
+            find.byKey(ValueKey('wallet-card-${card.id}')),
+          );
+          expect(item.contains(number.center), isTrue);
+          expect(item.contains(count.center), isTrue);
         }
         expect(tester.takeException(), isNull, reason: '$width / $scale');
       }
     }
     expect([for (final card in c.cards) card.rawBalance], originalBalances);
   });
+
+  testWidgets(
+    'wallet uses full card faces and ghost menus with grouped actions',
+    (tester) async {
+      c.navigate(GalleryPage.cards);
+      await mount(tester);
+      final group = find.byKey(const ValueKey('main-action-group'));
+      final tokens = Theme.of(tester.element(group))
+          .extension<GalleryTokens>()!;
+      expect(
+        (tester.widget<DecoratedBox>(group).decoration as BoxDecoration).color,
+        tokens.surface2,
+      );
+      expect(
+        find.descendant(of: group, matching: find.byType(VerticalDivider)),
+        findsOneWidget,
+      );
+      for (final card in c.savedCards) {
+        final item = tester.widget<Container>(
+          find.byKey(ValueKey('wallet-card-${card.id}')),
+        );
+        final gradient =
+            (item.decoration as BoxDecoration).gradient as LinearGradient;
+        final face = GalleryCardFace.byId(card.face);
+        expect(gradient.colors, [face.start, face.end]);
+        final icon = tester.widget<Icon>(
+          find.byKey(ValueKey('wallet-contactless-${card.id}')),
+        );
+        expect(icon.size, greaterThanOrEqualTo(32));
+        final menu = tester.widget<IconButton>(
+          find.ancestor(
+            of: find.byTooltip('${card.name} 管理'),
+            matching: find.byType(IconButton),
+          ),
+        );
+        expect(menu.style!.side!.resolve({}), BorderSide.none);
+        expect(menu.style!.backgroundColor?.resolve({}), isNull);
+      }
+      await tester.tap(find.byTooltip('深圳通 管理'));
+      await tester.pumpAndSettle();
+      expect(c.page, GalleryPage.cards);
+      expect(c.selectedCard.id, 'shenzhen');
+      expect(c.overlay, GalleryOverlay.cardMenu);
+      expect(find.text('重命名'), findsOneWidget);
+      c.back();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('导出卡片记录'));
+      await tester.pumpAndSettle();
+      expect(c.overlay, GalleryOverlay.export);
+    },
+  );
 
   testWidgets(
     'card face keeps its fields separate for long and unknown money',

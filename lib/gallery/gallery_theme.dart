@@ -72,9 +72,14 @@ class GalleryTokens extends ThemeExtension<GalleryTokens> {
       ? const []
       : [
           BoxShadow(
-            color: _shadow.withValues(alpha: .07 * (1 - _depth)),
+            color: _shadow.withValues(alpha: .16 * (1 - _depth)),
             offset: const Offset(0, 2),
-            blurRadius: 8,
+            blurRadius: 10,
+          ),
+          BoxShadow(
+            color: _shadow.withValues(alpha: .14 * (1 - _depth)),
+            offset: const Offset(0, 8),
+            blurRadius: 24,
           ),
         ];
   List<BoxShadow> shadows(GalleryElevation level) => switch (level) {

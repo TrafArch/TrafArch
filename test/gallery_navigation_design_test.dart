@@ -9,10 +9,58 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/gallery/gallery_app.dart';
 import 'package:transit_card_analyzer/gallery/gallery_controller.dart';
 import 'package:transit_card_analyzer/gallery/gallery_data.dart';
+import 'package:transit_card_analyzer/gallery/gallery_design.dart';
 import 'package:transit_card_analyzer/gallery/gallery_layout.dart';
 import 'package:transit_card_analyzer/gallery/gallery_theme.dart';
 
 void main() {
+  test('floating navigation blends dual light shadows into a dark border', () {
+    for (final palette in GalleryPalette.values) {
+      final light = GalleryTokens(scheme: palette.scheme(false));
+      final dark = GalleryTokens(scheme: palette.scheme(true));
+      expect(light.floatingNavigationBorder, isNull);
+      expect(dark.floatingNavigationShadows, isEmpty);
+      expect(dark.floatingNavigationBorder!.top.width, 1);
+      expect(dark.floatingNavigationBorder!.top.color, dark.line);
+      for (final progress in [0.0, .25, .49, .5, .51, .75, .99]) {
+        final tokens = light.lerp(dark, progress);
+        final shadows = tokens.floatingNavigationShadows;
+        expect(shadows, hasLength(2));
+        final tint = Color.alphaBlend(
+          tokens.action.withValues(alpha: .12),
+          Color.lerp(
+            const Color(0xff152d4a),
+            const Color(0xff00030a),
+            progress,
+          )!,
+        );
+        for (var index = 0; index < shadows.length; index++) {
+          final shadow = shadows[index];
+          expect(shadow.blurRadius, index == 0 ? 10 : 24);
+          expect(shadow.offset, Offset(0, index == 0 ? 2 : 8));
+          expect(shadow.spreadRadius, 0);
+          expect(
+            shadow.color,
+            tint.withValues(alpha: (index == 0 ? .16 : .14) * (1 - progress)),
+          );
+          expect(
+            dark
+                .lerp(light, 1 - progress)
+                .floatingNavigationShadows[index]
+                .color
+                .a,
+            closeTo(shadow.color.a, 1e-9),
+          );
+        }
+        if (progress > 0) {
+          expect(
+            tokens.floatingNavigationBorder!.top.color.a,
+            closeTo(tokens.line.a * progress, 1e-9),
+          );
+        }
+      }
+    }
+  });
   late GalleryController c;
   setUp(() {
     c = GalleryController(

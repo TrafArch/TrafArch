@@ -482,19 +482,25 @@ extension _GalleryOverlays on _GalleryViewState {
       ),
       _gap(16),
       _button(
-        '从内置相册选择',
-        () => c.update(() => c.expanded.add('face:samples')),
+        _pickingFaceImage ? '正在打开相册…' : '从相册选择图片',
+        _pickingFaceImage ? null : _pickFaceImage,
         icon: Icons.photo_library_outlined,
       ),
-      if (c.expanded.contains('face:samples')) ...[
-        _gap(12),
-        _text('内置样例图片', role: GalleryTypography.caption, color: t.muted),
+      _gap(8),
+      _text(
+        '仅在本次界面会话中使用，不上传图片',
+        role: GalleryTypography.caption,
+        color: t.muted,
+      ),
+      if (_faceImageError != null) ...[
         _gap(8),
-        _button(
-          '选择 TrafArch 路线图案',
-          () =>
-              c.update(() => _selectedCard.image = 'assets/icon/app_icon.png'),
-          icon: Icons.image_outlined,
+        Semantics(
+          liveRegion: true,
+          child: _text(
+            _faceImageError!,
+            role: GalleryTypography.caption,
+            color: t.danger,
+          ),
         ),
       ],
       _gap(10),

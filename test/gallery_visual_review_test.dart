@@ -65,8 +65,12 @@ void main() {
           child: GalleryApp(controller: c),
         ),
       );
-      Future<void> capture(String name) async {
-        await tester.pumpAndSettle();
+      Future<void> capture(String name, {bool settle = true}) async {
+        if (settle) {
+          await tester.pumpAndSettle();
+        } else {
+          await tester.pump();
+        }
         expect(tester.takeException(), isNull, reason: name);
         final render =
             boundary.currentContext!.findRenderObject()!
@@ -88,6 +92,20 @@ void main() {
           c.themeMode = dark ? ThemeMode.dark : ThemeMode.light;
         });
         await capture('$mode-home');
+        final mouse = await tester.createGesture(
+          kind: ui.PointerDeviceKind.mouse,
+        );
+        await mouse.addPointer();
+        await mouse.moveTo(tester.getCenter(find.byTooltip('设置')));
+        await capture('$mode-header-hover');
+        await mouse.removePointer();
+        c.read();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+        await capture('$mode-home-transition', settle: false);
+        await tester.pump(const Duration(milliseconds: 850));
+        await capture('$mode-home-reading', settle: false);
+        await tester.pump(const Duration(milliseconds: 550));
         c.update(() {
           c.hasRead = true;
           c.current.saved = true;
@@ -146,6 +164,18 @@ void main() {
           c.cards[1].rawBalance = '-1,234,567.89';
         });
         await capture('$mode-detail-long-320-2x');
+        c.back();
+        c.navigate(GalleryPage.home);
+        c.update(() {
+          c.hasRead = false;
+          c.readState = GalleryReadState.unread;
+        });
+        await capture('$mode-home-320-2x');
+        c.read();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 1050));
+        await capture('$mode-home-reading-320-2x', settle: false);
+        c.cancelRead();
         tester.platformDispatcher.clearTextScaleFactorTestValue();
         tester.view.physicalSize = normalSize;
       }

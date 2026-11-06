@@ -54,9 +54,29 @@ void main() {
     final after = a.lerp(b, .51).shadows(GalleryElevation.floating).first.color;
     expect((after.a - before.a).abs(), lessThan(.03));
   });
-  test('new card faces keep text readable across each gradient', () {
-    for (final face in GalleryCardFace.values) {
-      for (final background in [face.start, face.end]) {
+  test('soft bright card faces keep text readable across each gradient', () {
+    const expected = [
+      ('blue', Color(0xffc4dff7), Color(0xff8fb8e1)),
+      ('teal', Color(0xffb9e5d9), Color(0xff82c7bd)),
+      ('graphite', Color(0xffdccff0), Color(0xffb7a2d6)),
+      ('amber', Color(0xfff2d7b5), Color(0xffd9ad83)),
+    ];
+    expect(GalleryCardFace.values, hasLength(expected.length));
+    for (var index = 0; index < expected.length; index++) {
+      final face = GalleryCardFace.values[index];
+      expect((face.id, face.start, face.end), expected[index]);
+      expect(face.foreground, const Color(0xff18263a));
+      expect(face.secondaryForeground, const Color(0xff304057));
+      // Every channel decreases, so the end is the darkest point throughout.
+      expect(face.start.r, greaterThanOrEqualTo(face.end.r));
+      expect(face.start.g, greaterThanOrEqualTo(face.end.g));
+      expect(face.start.b, greaterThanOrEqualTo(face.end.b));
+      expect(
+        face.end.computeLuminance(),
+        greaterThan(face.secondaryForeground.computeLuminance()),
+      );
+      for (var step = 0; step <= 100; step++) {
+        final background = Color.lerp(face.start, face.end, step / 100)!;
         expect(
           contrast(face.foreground, background),
           greaterThanOrEqualTo(4.5),

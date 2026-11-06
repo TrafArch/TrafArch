@@ -163,13 +163,15 @@ class GalleryCardFace {
   const GalleryCardFace(this.id, this.name, this.start, this.end);
   final String id, name;
   final Color start, end;
-  Color get foreground => Colors.white;
-  Color get secondaryForeground => const Color(0xfff7f9fc);
+  static const imageForeground = Colors.white;
+  static const imageSecondaryForeground = Color(0xfff7f9fc);
+  Color get foreground => const Color(0xff18263a);
+  Color get secondaryForeground => const Color(0xff304057);
   static const values = [
-    GalleryCardFace('blue', '海蓝', Color(0xff2463ad), Color(0xff153b67)),
-    GalleryCardFace('teal', '青玉', Color(0xff187e80), Color(0xff17444a)),
-    GalleryCardFace('graphite', '鸢紫', Color(0xff7564a5), Color(0xff3e355d)),
-    GalleryCardFace('amber', '暖铜', Color(0xff9a6532), Color(0xff563a2a)),
+    GalleryCardFace('blue', '海蓝', Color(0xffc4dff7), Color(0xff8fb8e1)),
+    GalleryCardFace('teal', '青玉', Color(0xffb9e5d9), Color(0xff82c7bd)),
+    GalleryCardFace('graphite', '鸢紫', Color(0xffdccff0), Color(0xffb7a2d6)),
+    GalleryCardFace('amber', '暖铜', Color(0xfff2d7b5), Color(0xffd9ad83)),
   ];
   static GalleryCardFace byId(String id) =>
       values.firstWhere((p) => p.id == id, orElse: () => values.first);

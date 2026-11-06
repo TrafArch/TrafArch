@@ -2,7 +2,6 @@ part of 'gallery_app.dart';
 
 extension _GalleryInspection on _GalleryViewState {
   Widget _expert() => _list([
-    _header('专家分析'),
     _tabs(
       (c.data.json['expertTabs'] as List).cast<String>(),
       c.expertTab,
