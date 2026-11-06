@@ -429,6 +429,19 @@ Map<String, Object?>? _bank(
       );
     }
     if (aid != _compact(app.application.aidHex)) continue;
+    if (command.length == 5 &&
+        command[0] == 0x80 &&
+        command[1] == 0xCA &&
+        command[2] == 0x9F &&
+        command[3] == 0x36 &&
+        app.dataTags.length == 1 &&
+        _hex(body) == '9F3602${app.dataTags.single.rawValueHex}') {
+      matches.add(
+        _decoded(app.parserId, {
+          'tags': [for (final tag in app.dataTags) _tag(tag)],
+        }),
+      );
+    }
     if (command.length >= 2 &&
         command[1] == 0xA8 &&
         _sameHex(body, app.gpoHex)) {

@@ -102,6 +102,7 @@ Map<String, Object?> captureReadResult(CardReadOutcome result) =>
                   },
               ],
               'fci': [for (final tag in app.fciTags) _tag(tag)],
+              'data': [for (final tag in app.dataTags) _tag(tag)],
               'gpo': [for (final tag in app.gpoTags) _tag(tag)],
               'gpoHex': app.gpoHex,
               'records': [

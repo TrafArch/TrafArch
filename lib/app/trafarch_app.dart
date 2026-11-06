@@ -8,6 +8,7 @@ import 'app_dependencies.dart';
 import 'theme/app_theme.dart';
 import 'navigation/app_shell.dart';
 import '../features/updates/update_prompt.dart';
+import '../shared/presentation/adaptive_layout.dart';
 import 'navigation/recovery_route_observer.dart';
 
 export 'navigation/app_shell.dart' show AppShell;
@@ -108,13 +109,14 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp>
               theme: AppTheme.light(monet ? lightDynamic : null),
               darkTheme: AppTheme.dark(monet ? darkDynamic : null),
               themeMode: ThemeMode.system,
-              builder: (context, child) =>
-                  AnnotatedRegion<SystemUiOverlayStyle>(
-                    value: AppTheme.systemUiOverlayStyle(
-                      Theme.of(context).scaffoldBackgroundColor,
-                    ),
-                    child: child!,
+              builder: (context, child) => FoldableDisplayScope(
+                child: AnnotatedRegion<SystemUiOverlayStyle>(
+                  value: AppTheme.systemUiOverlayStyle(
+                    Theme.of(context).scaffoldBackgroundColor,
                   ),
+                  child: child!,
+                ),
+              ),
               home: child,
             );
           },

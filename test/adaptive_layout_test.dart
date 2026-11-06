@@ -164,7 +164,7 @@ void main() {
     }
   });
 
-  testWidgets('导航跨600dp与矮横窗切换保留页面和等待中的NFC', (tester) async {
+  testWidgets('悬浮导航跨手机、平板与矮横窗保持一致并保留页面和等待中的NFC', (tester) async {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await resize(tester, const Size(390, 800));
@@ -191,9 +191,8 @@ void main() {
     ]) {
       await resize(tester, size);
       await tester.pump(const Duration(milliseconds: 250));
-      final rail = size.width >= 600 && size.height >= 480;
-      expect(find.byType(NavigationRail), rail ? findsOneWidget : findsNothing);
-      expect(find.byType(FloatingNavBar), rail ? findsNothing : findsOneWidget);
+      expect(find.byType(NavigationRail), findsNothing);
+      expect(find.byType(FloatingNavBar), findsOneWidget);
       expect(identical(homeState, tester.state(find.byType(HomePage))), isTrue);
       expect(nfc.scans, 1);
       expect(nfc.stops, 0);
@@ -254,7 +253,7 @@ void main() {
   });
 
   for (final horizontal in [false, true]) {
-    testWidgets('半折${horizontal ? '桌面' : '书本'}窗格避开折痕', (tester) async {
+    testWidgets('窗格避开${horizontal ? '横向' : '竖向'}实体铰链', (tester) async {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       await resize(tester, const Size(1000, 800));
@@ -269,8 +268,8 @@ void main() {
               displayFeatures: [
                 ui.DisplayFeature(
                   bounds: hinge,
-                  type: ui.DisplayFeatureType.fold,
-                  state: ui.DisplayFeatureState.postureHalfOpened,
+                  type: ui.DisplayFeatureType.hinge,
+                  state: ui.DisplayFeatureState.unknown,
                 ),
               ],
             ),

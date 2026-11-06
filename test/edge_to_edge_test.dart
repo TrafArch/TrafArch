@@ -12,6 +12,7 @@ import 'package:transit_card_analyzer/platform/nfc/nfc_models.dart';
 import 'package:transit_card_analyzer/platform/nfc/nfc_service.dart';
 import 'package:transit_card_analyzer/platform/storage/app_logger.dart';
 import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
+import 'package:transit_card_analyzer/shared/presentation/ui_constants.dart';
 
 import 'support/test_database.dart';
 
@@ -93,7 +94,7 @@ void main() {
     await tester.pump();
   });
 
-  testWidgets('底栏、侧栏与标题避开手势条、三按钮栏和横屏刘海，安全区不叠加', (tester) async {
+  testWidgets('手机与平板统一悬浮底栏，标题及底栏避开系统安全区且不叠加', (tester) async {
     addTearDown(tester.view.reset);
     final app = _app();
     await tester.runAsync(app.init);
@@ -105,6 +106,10 @@ void main() {
         const FakeViewPadding(left: 44, right: 24, bottom: 24),
       ),
       (const Size(1000, 800), const FakeViewPadding(top: 32, right: 48)),
+      (
+        const Size(1000, 800),
+        const FakeViewPadding(top: 48, bottom: 24, left: 44, right: 24),
+      ),
     ]) {
       _window(tester, size, insets);
       await tester.pumpWidget(MaterialApp(home: AppShell(app: app)));
@@ -112,16 +117,27 @@ void main() {
       final title = tester.getRect(find.text('TrafArch'));
       expect(title.top, greaterThanOrEqualTo(insets.top));
       expect(title.left, greaterThanOrEqualTo(insets.left));
-      if (size.height < 480 || size.width < 600) {
-        final bar = tester.getRect(find.byType(FloatingNavBar));
-        expect(bar.bottom, closeTo(size.height - insets.bottom - 20, 0.1));
-        expect(bar.left, greaterThanOrEqualTo(insets.left));
-        expect(bar.right, lessThanOrEqualTo(size.width - insets.right));
-      } else {
-        final rail = tester.getRect(find.byType(NavigationRail));
-        expect(rail.top, greaterThanOrEqualTo(insets.top));
-        expect(rail.bottom, lessThanOrEqualTo(size.height - insets.bottom));
-      }
+      expect(find.byType(NavigationRail), findsNothing);
+      expect(find.byType(VerticalDivider), findsNothing);
+      final bar = tester.getRect(find.byType(FloatingNavBar));
+      expect(
+        bar.size,
+        const Size(
+          UiConstants.floatingNavBarWidth,
+          UiConstants.floatingNavBarHeight,
+        ),
+      );
+      expect(bar.bottom, closeTo(size.height - insets.bottom - 20, 0.1));
+      expect(bar.left, greaterThanOrEqualTo(insets.left));
+      expect(bar.right, lessThanOrEqualTo(size.width - insets.right));
+      expect(
+        bar.center.dx,
+        closeTo((size.width + insets.left - insets.right) / 2, 0.1),
+      );
+      // 页面 AppBar 继续独立消费一次顶部安全区，标题不多加一层留白。
+      final appBar = tester.getRect(find.byType(AppBar));
+      expect(appBar.top, 0);
+      expect(appBar.bottom, insets.top + kToolbarHeight);
       expect(tester.takeException(), isNull);
     }
     await tester.pumpWidget(const SizedBox());

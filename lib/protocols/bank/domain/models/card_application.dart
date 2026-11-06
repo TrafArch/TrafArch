@@ -44,7 +44,7 @@ class CardApplication {
   );
 }
 
-/// 一个应用解析后的结果：选择证据 + GPO + 记录 + 异常。
+/// 一个应用解析后的结果：选择证据 + 直接读取的数据对象 + 记录 + 异常。
 class ParsedApplication {
   final CardApplication application;
   final String parserId;
@@ -52,7 +52,10 @@ class ParsedApplication {
   /// 应用选择响应（FCI）解析出的标签树。
   final List<TlvNode> fciTags;
 
-  /// GET PROCESSING OPTIONS 响应解析出的标签树（含 AIP / AFL）。
+  /// GET DATA 直接读取的数据对象，不启动交易。
+  final List<TlvNode> dataTags;
+
+  /// 兼容旧捕获结果；当前读取流程禁止 GPO，这些字段始终为空。
   final List<TlvNode> gpoTags;
 
   final String gpoHex;
@@ -66,6 +69,7 @@ class ParsedApplication {
     required this.application,
     required this.parserId,
     this.fciTags = const [],
+    this.dataTags = const [],
     this.gpoTags = const [],
     this.gpoHex = '',
     this.records = const [],
@@ -74,5 +78,8 @@ class ParsedApplication {
   });
 
   bool get hasData =>
-      fciTags.isNotEmpty || gpoTags.isNotEmpty || records.isNotEmpty;
+      fciTags.isNotEmpty ||
+      dataTags.isNotEmpty ||
+      gpoTags.isNotEmpty ||
+      records.isNotEmpty;
 }

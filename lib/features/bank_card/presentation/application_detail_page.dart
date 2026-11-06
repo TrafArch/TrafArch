@@ -8,7 +8,7 @@ import '../../../protocols/bank/domain/models/card_record.dart';
 import '../../../protocols/bank/domain/models/parse_issue.dart';
 import 'tag_tree_view.dart';
 
-/// 单个银行卡应用详情页：应用选择证据（FCI）、GPO（AIP / AFL）、
+/// 单个银行卡应用详情页：应用选择证据（FCI）、直接读取的数据对象、
 /// 记录标签树与解析异常；只读展示，不发起任何写卡 / 认证 / 交易操作。
 /// 未知标签同样保留原始 HEX 展示（字典未收录不影响结果呈现）。
 class ApplicationDetailPage extends StatelessWidget {
@@ -33,6 +33,7 @@ class ApplicationDetailPage extends StatelessWidget {
                 _kv('解析规则', app.parserId.toUpperCase()),
                 _kv('选择状态', app.application.selected ? '已选择' : '未选择'),
                 _kv('读取记录', '${app.records.length} 条'),
+                _hint(context, '只读模式：部分信息可能未开放直接读取，记录可能不完整。'),
                 if (app.summary.pan != null) ...[
                   _kv('卡号 (PAN)', app.summary.pan!),
                   _kv('卡号来源', '应用数据标签 ${app.summary.panSourceTag}'),
@@ -58,21 +59,21 @@ class ApplicationDetailPage extends StatelessWidget {
                 else
                   TagTreeView(nodes: app.fciTags),
                 const Divider(height: 28),
-                _sectionTitle(context, 'GPO 处理选项标签（${app.gpoTags.length}）'),
-                if (app.gpoHex.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  SelectableText(
-                    '响应原始值：${app.gpoHex}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.outline,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                ],
-                if (app.gpoTags.isEmpty)
-                  _hint(context, '无 GPO 标签数据（未读取或响应非 TLV 结构）')
+                _sectionTitle(context, '直接读取的数据对象（${app.dataTags.length}）'),
+                if (app.dataTags.isEmpty)
+                  _hint(context, '未取得直接可读的数据对象')
                 else
+                  TagTreeView(nodes: app.dataTags),
+                if (app.gpoTags.isNotEmpty || app.gpoHex.isNotEmpty) ...[
+                  const Divider(height: 28),
+                  _sectionTitle(
+                    context,
+                    '历史 GPO 处理选项标签（${app.gpoTags.length}）',
+                  ),
+                  if (app.gpoHex.isNotEmpty)
+                    SelectableText('响应原始值：${app.gpoHex}'),
                   TagTreeView(nodes: app.gpoTags),
+                ],
                 const Divider(height: 28),
                 _sectionTitle(context, '应用记录（${app.records.length}）'),
                 if (app.records.isEmpty)

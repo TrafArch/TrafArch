@@ -20,13 +20,13 @@ export '../domain/models/card_application.dart';
 /// 银行卡只读分析协调器：控制流程、枚举应用、按证据选择解析器、汇总异常。
 /// 页面不直接发送 APDU，统一经由本协调器。
 /// 应用发现（PPSE / 候选 AID / FCI）委托 `protocols/bank/emv`；
-/// EMV / PBOC 的读取适配（PDOL 组包、83 00 回退、77 / 80 模板、AFL 定位）
-/// 由解析器内部共享流程完成，本协调器只负责协议族选择。
+/// EMV / PBOC 共用 SELECT / GET DATA / READ RECORD 的严格只读流程；
+/// 记录通道与交换器均检查指令白名单，不允许 GPO 或交易处理。
 class BankCardAnalyzer {
   final List<CardParser> parsers;
   final String parserVersion;
 
-  BankCardAnalyzer(this.parsers, {this.parserVersion = '0.2.0'});
+  BankCardAnalyzer(this.parsers, {this.parserVersion = '0.3.0'});
 
   Future<BankCardResult> analyze(CardTransport transport) async {
     final recording = RecordingCardTransport(transport);
@@ -111,7 +111,7 @@ class BankCardAnalyzer {
 
     final parsed = <ParsedApplication>[];
     if (selected && !discoveryStopped) {
-      // 2/3/4. 逐应用按证据选择解析器并读取（GPO / 记录读取由解析器完成）
+      // 逐应用选择解析器，仅读取公开数据对象与直接可读记录。
       for (final app in applications) {
         if (recording.failure != null) break;
         final parser = _chooseParser(app);

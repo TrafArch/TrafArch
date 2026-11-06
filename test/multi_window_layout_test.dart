@@ -10,7 +10,7 @@ import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
 import 'support/test_database.dart';
 
 void main() {
-  testWidgets('主界面在小窗与分屏尺寸连续变化后保留页签及依赖，所有页签可切换', (tester) async {
+  testWidgets('主界面在手机、平板及分屏连续缩放后保留页签及依赖，悬浮底栏所有页签可切换', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(390, 844);
     addTearDown(tester.view.resetPhysicalSize);
@@ -50,6 +50,10 @@ void main() {
       Size(280, 400),
       Size(240, 320),
       Size(600, 320),
+      Size(600, 800),
+      Size(840, 800),
+      Size(1182, 836),
+      Size(1200, 900),
       Size(390, 844),
     ]) {
       tester.view.physicalSize = size;
