@@ -7,6 +7,8 @@ import 'package:transit_card_analyzer/gallery/gallery_app.dart';
 import 'package:transit_card_analyzer/gallery/gallery_controller.dart';
 import 'package:transit_card_analyzer/gallery/gallery_data.dart';
 
+import 'support/gallery_scroll.dart';
+
 void main() {
   late GalleryController c;
   setUp(() {
@@ -89,10 +91,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.text('内置场景'),
       350,
-      scrollable: find.descendant(
-        of: settingsList,
-        matching: find.byType(Scrollable),
-      ),
+      scrollable: galleryVerticalScroll(within: settingsList),
     );
     expect(find.textContaining('足迹'), findsNothing);
     expect(find.text('51 个预置场景 · 切换后载入固定样例'), findsOneWidget);

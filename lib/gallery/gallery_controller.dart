@@ -54,6 +54,7 @@ class GalleryRouteEntry {
     this.exportText = '',
     this.exportTitle = '',
     this.anchor,
+    this.anchorId,
   });
   final String id;
   final GalleryRouteKind kind;
@@ -64,6 +65,7 @@ class GalleryRouteEntry {
   final GalleryRecord? trip;
   final String exportText, exportTitle;
   final Rect? anchor;
+  final String? anchorId;
 }
 
 /// UI-only session. No repositories, platform channels, IO or real card models.
@@ -91,6 +93,7 @@ class GalleryController extends ChangeNotifier {
   List<GalleryRouteEntry> _routes = [];
   int _routeSerial = 0;
   Rect? _overlayAnchor;
+  String? _overlayAnchorId;
   GalleryOverlay? overlay;
   GalleryReadState readState = GalleryReadState.unread;
   bool hasRead = false;
@@ -205,6 +208,7 @@ class GalleryController extends ChangeNotifier {
             exportText: exportText,
             exportTitle: exportTitle,
             anchor: _overlayAnchor,
+            anchorId: d.overlay == null ? null : _overlayAnchorId,
           );
         })(),
     ];
@@ -306,11 +310,13 @@ class GalleryController extends ChangeNotifier {
     GalleryCard? card,
     GalleryRecord? trip,
     Rect? anchor,
+    String? anchorId,
   }) {
     if (card != null) selectedCardId = card.id;
     if (trip != null) selectedTrip = trip;
     overlay = value;
     _overlayAnchor = anchor;
+    _overlayAnchorId = anchorId;
     record('打开 ${value.name}');
     notifyListeners();
   }

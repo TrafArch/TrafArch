@@ -23,6 +23,17 @@ class _GalleryBrandColors extends ColorMapper {
 extension _GalleryComponents on _GalleryViewState {
   double get _extraTextScale =>
       math.max(0, MediaQuery.textScalerOf(context).scale(14) / 14 - 1);
+  double _measureTextWidth(String value, TextStyle style) {
+    final painter = TextPainter(
+      text: TextSpan(text: value, style: style),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout();
+    final width = painter.width.ceilToDouble();
+    painter.dispose();
+    return width;
+  }
+
   Widget _text(
     String value, {
     double? size,
@@ -114,31 +125,49 @@ extension _GalleryComponents on _GalleryViewState {
           );
     return Padding(
       key: const ValueKey('main-page-header'),
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 14),
-      child: SizedBox(
-        height: math.max(44, MediaQuery.textScalerOf(context).scale(32)),
-        child: Row(
-          children: [
-            Expanded(
-              child: Semantics(
-                header: true,
-                child: Row(
-                  children: [
-                    if (page == GalleryPage.home) ...[
-                      SvgPicture.asset(
-                        'assets/icon/app_mark.svg',
-                        key: const ValueKey('gallery-brand-mark'),
-                        width: 30,
-                        height: 30,
-                        colorMapper: _GalleryBrandColors(t.action, t.tone),
-                        excludeFromSemantics: true,
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                    Expanded(
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
+      padding: EdgeInsets.fromLTRB(
+        16,
+        _compactHeight ? 8 : 18,
+        16,
+        _compactHeight ? 8 : 14,
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final titleWidth = math.max(
+            _measureTextWidth('专家分析', GalleryTypography.page),
+            38 + _measureTextWidth('TrafArch', GalleryTypography.section),
+          );
+          final stacked = constraints.maxWidth < titleWidth + 101;
+          return Wrap(
+            alignment: WrapAlignment.end,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              SizedBox(
+                width: stacked
+                    ? constraints.maxWidth
+                    : constraints.maxWidth - 101,
+                height: math.max(
+                  44,
+                  MediaQuery.textScalerOf(context).scale(32),
+                ),
+                child: Semantics(
+                  header: true,
+                  child: Row(
+                    children: [
+                      if (page == GalleryPage.home) ...[
+                        SvgPicture.asset(
+                          'assets/icon/app_mark.svg',
+                          key: const ValueKey('gallery-brand-mark'),
+                          width: 30,
+                          height: 30,
+                          colorMapper: _GalleryBrandColors(t.action, t.tone),
+                          excludeFromSemantics: true,
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      Expanded(
                         child: _text(
                           title,
                           role: page == GalleryPage.home
@@ -147,71 +176,80 @@ extension _GalleryComponents on _GalleryViewState {
                           weight: FontWeight.w600,
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            _actionGroup('main', [
-              if (_reduceMotion)
-                extraAction
-              else
-                AnimatedSize(
-                  duration: _GalleryMotion.page,
-                  curve: _GalleryMotion.curve,
-                  alignment: Alignment.centerRight,
-                  child: AnimatedSwitcher(
-                    duration: _reduceMotion
-                        ? Duration.zero
-                        : _GalleryMotion.page,
-                    reverseDuration: _reduceMotion
-                        ? Duration.zero
-                        : _GalleryMotion.content,
-                    switchInCurve: Curves.easeOutCubic,
-                    switchOutCurve: Curves.easeInCubic,
-                    transitionBuilder: (child, animation) => FadeTransition(
-                      opacity: animation,
-                      child: ScaleTransition(
-                        scale: animation.drive(Tween(begin: .85, end: 1.0)),
-                        child: child,
-                      ),
-                    ),
-                    layoutBuilder: (current, previous) => Stack(
-                      alignment: Alignment.centerRight,
-                      children: [
-                        for (final child in previous)
-                          Positioned.fill(
-                            child: IgnorePointer(
-                              child: ExcludeFocus(
-                                child: ExcludeSemantics(
-                                  child: OverflowBox(
-                                    minWidth: 45,
-                                    maxWidth: 45,
-                                    alignment: Alignment.centerRight,
-                                    child: child,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ?current,
-                      ],
-                    ),
-                    child: extraAction,
+                    ],
                   ),
                 ),
-              _icon(
-                Icons.settings_outlined,
-                '设置',
-                () => c.navigate(GalleryPage.settings),
-                outlined: false,
-                grouped: true,
-                color: t.text,
               ),
-            ], dividers: false),
-          ],
-        ),
+              SizedBox(
+                width: 89,
+                height: 44,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: _actionGroup('main', [
+                    if (_reduceMotion)
+                      extraAction
+                    else
+                      AnimatedSize(
+                        duration: _GalleryMotion.page,
+                        curve: _GalleryMotion.curve,
+                        alignment: Alignment.centerRight,
+                        child: AnimatedSwitcher(
+                          duration: _reduceMotion
+                              ? Duration.zero
+                              : _GalleryMotion.page,
+                          reverseDuration: _reduceMotion
+                              ? Duration.zero
+                              : _GalleryMotion.content,
+                          switchInCurve: Curves.easeOutCubic,
+                          switchOutCurve: Curves.easeInCubic,
+                          transitionBuilder: (child, animation) =>
+                              FadeTransition(
+                                opacity: animation,
+                                child: ScaleTransition(
+                                  scale: animation.drive(
+                                    Tween(begin: .85, end: 1.0),
+                                  ),
+                                  child: child,
+                                ),
+                              ),
+                          layoutBuilder: (current, previous) => Stack(
+                            alignment: Alignment.centerRight,
+                            children: [
+                              for (final child in previous)
+                                Positioned.fill(
+                                  child: IgnorePointer(
+                                    child: ExcludeFocus(
+                                      child: ExcludeSemantics(
+                                        child: OverflowBox(
+                                          minWidth: 45,
+                                          maxWidth: 45,
+                                          alignment: Alignment.centerRight,
+                                          child: child,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ?current,
+                            ],
+                          ),
+                          child: extraAction,
+                        ),
+                      ),
+                    _icon(
+                      Icons.settings_outlined,
+                      '设置',
+                      () => c.navigate(GalleryPage.settings),
+                      outlined: false,
+                      grouped: true,
+                      color: t.text,
+                    ),
+                  ], dividers: false),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -458,7 +496,12 @@ extension _GalleryComponents on _GalleryViewState {
             ),
             textStyle: GalleryTypography.label,
           ),
-          child: Text(labels[i], textAlign: TextAlign.center),
+          child: Text(
+            labels[i],
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            softWrap: false,
+          ),
         ),
       ),
     );
@@ -491,18 +534,9 @@ extension _GalleryComponents on _GalleryViewState {
     );
     // Scrollable segments keep their natural text widths. The same indicator
     // moves across both equal-width and scrolling tracks without replacing it.
-    final naturalWidths = scroll
-        ? labels.map((label) {
-            final painter = TextPainter(
-              text: TextSpan(text: label, style: GalleryTypography.label),
-              textDirection: Directionality.of(context),
-              textScaler: MediaQuery.textScalerOf(context),
-            )..layout();
-            final width = painter.width.ceilToDouble() + 32;
-            painter.dispose();
-            return width;
-          }).toList()
-        : <double>[];
+    final naturalWidths = labels
+        .map((label) => _measureTextWidth(label, GalleryTypography.label) + 32)
+        .toList();
     return Focus(
       onKeyEvent: (_, event) {
         if (event is! KeyDownEvent) return KeyEventResult.ignored;
@@ -525,22 +559,26 @@ extension _GalleryComponents on _GalleryViewState {
           color: t.segmentTrack,
           borderRadius: BorderRadius.circular(16),
         ),
-        child: scroll
-            ? SingleChildScrollView(
-                key: id == null
-                    ? null
-                    : PageStorageKey('gallery-${c.generation}-$id'),
-                scrollDirection: Axis.horizontal,
-                child: track(naturalWidths),
-              )
-            : LayoutBuilder(
-                builder: (context, constraints) => track(
-                  List.filled(
-                    labels.length,
-                    constraints.maxWidth / labels.length,
-                  ),
-                ),
-              ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final equalWidth = constraints.maxWidth / labels.length;
+            final scrolling =
+                scroll || naturalWidths.any((width) => width > equalWidth);
+            final widths = scrolling
+                ? naturalWidths
+                : List.filled(labels.length, equalWidth);
+            return _GallerySegmentViewport(
+              storageKey: id == null
+                  ? null
+                  : PageStorageKey('gallery-${c.generation}-$id'),
+              widths: widths,
+              viewportWidth: constraints.maxWidth,
+              selected: selected,
+              reduceMotion: _reduceMotion,
+              child: track(widths),
+            );
+          },
+        ),
       ),
     );
   }
@@ -803,6 +841,11 @@ extension _GalleryComponents on _GalleryViewState {
     ];
     final selectedIndex = pages.indexOf(c.mainPage);
     final layout = _navLayout;
+    final windowWidth =
+        MediaQuery.sizeOf(context).width -
+        MediaQuery.paddingOf(context).horizontal;
+    // 4 * 48dp targets + 10dp track padding + three 5dp gaps.
+    final side = ((windowWidth - 217) / 2).clamp(0.0, 16.0);
     final floatingRadius = BorderRadius.circular(31 + _extraTextScale * 10);
     final bar = Container(
       height: layout.contentHeight,
@@ -829,6 +872,11 @@ extension _GalleryComponents on _GalleryViewState {
           final gap = c.docked ? 0.0 : 5.0;
           final itemWidth =
               (constraints.maxWidth - gap * (pages.length - 1)) / pages.length;
+          final showLabels = names.every(
+            (name) =>
+                _measureTextWidth(name, GalleryTypography.navigation) + 8 <=
+                itemWidth,
+          );
           return Stack(
             children: [
               if (!c.docked && selectedIndex >= 0)
@@ -866,6 +914,7 @@ extension _GalleryComponents on _GalleryViewState {
                         docked: c.docked,
                         tokens: t,
                         reduceMotion: _reduceMotion,
+                        showLabel: showLabels,
                         onTap: () => c.navigate(pages[i]),
                       ),
                     ),
@@ -883,12 +932,16 @@ extension _GalleryComponents on _GalleryViewState {
         color: t.dockedNavigationSurface,
         child: Padding(
           padding: EdgeInsets.only(bottom: layout.bottomSpace),
-          child: bar,
+          child: GalleryReadingSurface(child: bar),
         ),
       );
     }
     return Padding(
-      padding: EdgeInsets.only(left: 16, right: 16, bottom: layout.bottomSpace),
+      padding: EdgeInsets.only(
+        left: side,
+        right: side,
+        bottom: layout.bottomSpace,
+      ),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 320),
         child: DecoratedBox(
@@ -991,6 +1044,88 @@ extension _GalleryComponents on _GalleryViewState {
       child: surface ? _panel(body, padding: EdgeInsets.zero) : body,
     );
   }
+}
+
+/// Preserve manual horizontal scrolling; reveal a newly selected segment and
+/// recheck it when changing window width or system text size.
+class _GallerySegmentViewport extends StatefulWidget {
+  const _GallerySegmentViewport({
+    required this.storageKey,
+    required this.widths,
+    required this.viewportWidth,
+    required this.selected,
+    required this.reduceMotion,
+    required this.child,
+  });
+  final Key? storageKey;
+  final List<double> widths;
+  final double viewportWidth;
+  final int selected;
+  final bool reduceMotion;
+  final Widget child;
+  @override
+  State<_GallerySegmentViewport> createState() =>
+      _GallerySegmentViewportState();
+}
+
+class _GallerySegmentViewportState extends State<_GallerySegmentViewport> {
+  final _scroll = ScrollController();
+  @override
+  void initState() {
+    super.initState();
+    _reveal();
+  }
+
+  @override
+  void didUpdateWidget(_GallerySegmentViewport oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selected != oldWidget.selected ||
+        widget.viewportWidth != oldWidget.viewportWidth ||
+        !listEquals(widget.widths, oldWidget.widths)) {
+      _reveal();
+    }
+  }
+
+  void _reveal() => WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (!mounted || !_scroll.hasClients) return;
+    final segmentStart = widget.widths
+        .take(widget.selected)
+        .fold(0.0, (a, b) => a + b);
+    // The track's 3dp decoration padding need not move a manually scrolled tab.
+    final start = segmentStart + 3;
+    final end = segmentStart + widget.widths[widget.selected] - 3;
+    final visible = _scroll.position.viewportDimension;
+    final target =
+        (start < _scroll.offset
+                ? start
+                : end > _scroll.offset + visible
+                ? end - visible
+                : _scroll.offset)
+            .clamp(0.0, _scroll.position.maxScrollExtent);
+    if ((target - _scroll.offset).abs() < .1) return;
+    if (widget.reduceMotion) {
+      _scroll.jumpTo(target);
+    } else {
+      _scroll.animateTo(
+        target,
+        duration: _GalleryMotion.capsule,
+        curve: _GalleryMotion.curve,
+      );
+    }
+  });
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+    key: widget.storageKey,
+    controller: _scroll,
+    scrollDirection: Axis.horizontal,
+    child: widget.child,
+  );
 }
 
 /// Keep the segment strip mounted while restoring each pane's scroll offset.

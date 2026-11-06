@@ -11,6 +11,8 @@ import 'package:transit_card_analyzer/gallery/gallery_controller.dart';
 import 'package:transit_card_analyzer/gallery/gallery_data.dart';
 import 'package:transit_card_analyzer/shared/app_support.dart';
 
+import 'support/gallery_scroll.dart';
+
 void main() {
   late GalleryController c;
   setUp(() {
@@ -33,7 +35,11 @@ void main() {
       c.navigate(GalleryPage.settings);
       await tester.pumpWidget(GalleryApp(controller: c));
       await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.text('版本 ${AppInfo.version}'), 450);
+      await tester.scrollUntilVisible(
+        find.text('版本 ${AppInfo.version}'),
+        450,
+        scrollable: galleryVerticalScroll(),
+      );
       await Scrollable.ensureVisible(
         tester.element(find.text('版本 ${AppInfo.version}')),
         alignment: .5,
@@ -180,7 +186,11 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('填写反馈问卷'));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.textContaining('无法打开页面'), 150);
+    await tester.scrollUntilVisible(
+      find.textContaining('无法打开页面'),
+      150,
+      scrollable: galleryVerticalScroll(),
+    );
     expect(find.textContaining('无法打开页面'), findsOneWidget);
     expect(find.text('复制问卷链接'), findsOneWidget);
     await tester.tap(find.text('填写反馈问卷'));

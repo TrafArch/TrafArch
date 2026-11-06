@@ -12,6 +12,8 @@ import 'package:transit_card_analyzer/gallery/gallery_data.dart';
 import 'package:transit_card_analyzer/gallery/gallery_preferences.dart';
 import 'package:transit_card_analyzer/gallery/gallery_theme.dart';
 
+import 'support/gallery_scroll.dart';
+
 Future<void> gestureEvent(
   WidgetTester tester,
   String method, [
@@ -440,7 +442,7 @@ void main() {
       final tu = find.text('交通联合参考数据');
       final cu = find.text('城市一卡通参考数据');
       final scroll = tester.state<ScrollableState>(
-        find.descendant(of: list, matching: find.byType(Scrollable)),
+        galleryVerticalScroll(within: list),
       );
       final selector = tester.element(
         find.byKey(const ValueKey('segments-knowledge-tabs-indicator')),
@@ -448,9 +450,7 @@ void main() {
       await tester.drag(list, const Offset(0, -240));
       await tester.pumpAndSettle();
       double offset() => tester
-          .state<ScrollableState>(
-            find.descendant(of: list, matching: find.byType(Scrollable)),
-          )
+          .state<ScrollableState>(galleryVerticalScroll(within: list))
           .position
           .pixels;
       final savedOffset = offset();
@@ -471,9 +471,7 @@ void main() {
         same(selector),
       );
       expect(
-        tester.state<ScrollableState>(
-          find.descendant(of: list, matching: find.byType(Scrollable)),
-        ),
+        tester.state<ScrollableState>(galleryVerticalScroll(within: list)),
         same(scroll),
       );
       await tester.pumpAndSettle();
@@ -510,10 +508,7 @@ void main() {
       await tester.scrollUntilVisible(
         last,
         500,
-        scrollable: find.descendant(
-          of: list,
-          matching: find.byType(Scrollable),
-        ),
+        scrollable: galleryVerticalScroll(within: list),
       );
       expect(last, findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -699,7 +694,7 @@ void main() {
       PageStorageKey('gallery-${c.generation}-detail-${c.current.id}'),
     );
     final scroll = tester.state<ScrollableState>(
-      find.descendant(of: list, matching: find.byType(Scrollable)),
+      galleryVerticalScroll(within: list),
     );
     final tabs = find.byKey(const ValueKey('segments-detail-tabs-indicator'));
     await tester.ensureVisible(tabs);
@@ -717,9 +712,7 @@ void main() {
       inExclusiveRange(0, 1),
     );
     expect(
-      tester.state<ScrollableState>(
-        find.descendant(of: list, matching: find.byType(Scrollable)),
-      ),
+      tester.state<ScrollableState>(galleryVerticalScroll(within: list)),
       same(scroll),
     );
     await tester.pumpAndSettle();

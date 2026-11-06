@@ -13,11 +13,19 @@ extension _GalleryPages on _GalleryViewState {
         AnimatedContainer(
           duration: _reduceMotion ? Duration.zero : _GalleryMotion.readResult,
           curve: Curves.easeInOutCubic,
-          height: showResult ? 0 : 32,
+          height: showResult
+              ? 0
+              : _compactHeight
+              ? 8
+              : 32,
         ),
         _homeCard(
           !showResult
-              ? _GalleryReadPrompt(reading: reading, failed: failed)
+              ? _GalleryReadPrompt(
+                  reading: reading,
+                  failed: failed,
+                  compact: _compactHeight,
+                )
               : _face(card),
         ),
         if (showResult) ...[
@@ -53,7 +61,13 @@ extension _GalleryPages on _GalleryViewState {
             ],
           ),
         ],
-        _gap(showResult ? 16 : 28),
+        _gap(
+          showResult
+              ? 16
+              : _compactHeight
+              ? 12
+              : 28,
+        ),
         if (!reading)
           if (!c.hasRead || failed)
             Center(
@@ -149,7 +163,13 @@ extension _GalleryPages on _GalleryViewState {
             ),
           ),
         ],
-        _gap(showResult ? 8 : 32),
+        _gap(
+          showResult
+              ? 8
+              : _compactHeight
+              ? 12
+              : 32,
+        ),
         _text(
           '模拟数据',
           role: GalleryTypography.caption,
@@ -330,7 +350,14 @@ extension _GalleryPages on _GalleryViewState {
               color: t.onTone,
             ),
           ),
-          _amount(c.current, size: 18, alignment: Alignment.centerRight),
+          const SizedBox(width: 8),
+          Flexible(
+            child: _amount(
+              c.current,
+              size: 18,
+              alignment: Alignment.centerRight,
+            ),
+          ),
         ],
       ),
     ),
@@ -445,8 +472,10 @@ extension _GalleryPages on _GalleryViewState {
                   runSpacing: 6,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Container(
                           width: 28,
@@ -463,13 +492,11 @@ extension _GalleryPages on _GalleryViewState {
                             color: rail ? t.onTone : t.ok,
                           ),
                         ),
-                        const SizedBox(width: 8),
                         _text(
                           rail ? '轨道交通' : '公交',
                           role: GalleryTypography.label,
                           weight: FontWeight.w600,
                         ),
-                        const SizedBox(width: 8),
                         _text(
                           trip['city'] as String? ?? '',
                           role: GalleryTypography.caption,
@@ -585,9 +612,13 @@ extension _GalleryPages on _GalleryViewState {
     numberWidth = math.max(64, numberWidth);
     final unitSpace = unitWidth > 0 ? unitWidth + 8 : 0.0;
     final amountWidth = numberWidth + unitSpace;
-    final available = MediaQuery.sizeOf(context).width - 32 - 32;
+    final available = math.max(0.0, _readingWidth - 32 - 32);
     final balanceColumnWidth = math.min(amountWidth, available * .4);
-    final stacked = _extraTextScale >= .5;
+    final identityMinimum =
+        34 + 12 + _measureTextWidth('交通卡片', GalleryTypography.card);
+    final stacked =
+        _extraTextScale >= .5 ||
+        available - balanceColumnWidth - 8 - 4 - 44 < identityMinimum;
     Widget amount(GalleryCard card) {
       final numberStyle = GalleryTypography.amount.copyWith(
         inherit: false,
@@ -965,11 +996,15 @@ extension _GalleryPages on _GalleryViewState {
                 color: t.onAccentContainer,
               ),
               _gap(6),
-              _text(
-                weekly.format(total),
-                role: GalleryTypography.hero,
-                color: t.onAccentContainer,
-                weight: FontWeight.w600,
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: _text(
+                  weekly.format(total),
+                  role: GalleryTypography.hero,
+                  color: t.onAccentContainer,
+                  weight: FontWeight.w600,
+                ),
               ),
               _gap(12),
               Row(
@@ -997,50 +1032,84 @@ extension _GalleryPages on _GalleryViewState {
               (i) =>
                   '${['周一', '周二', '周三', '周四', '周五', '周六', '周日'][i]} ${weekly.format(values[i])}',
             ).join('，'),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: List.generate(
-                7,
-                (i) => Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Column(
-                      children: [
-                        _text(
-                          weekly.currency == null
-                              ? '—'
-                              : weekly.currency == GalleryCurrency.jpy
-                              ? '${values[i]}'
-                              : formatGalleryMoney(values[i]),
-                          role: GalleryTypography.caption,
-                        ),
-                        _gap(8),
-                        Container(
-                          height: 92,
-                          alignment: Alignment.bottomCenter,
-                          decoration: BoxDecoration(
-                            color: t.surface2,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Container(
-                            height: math.max(2, values[i] / max * 92),
-                            decoration: BoxDecoration(
-                              color: t.secondary,
-                              borderRadius: BorderRadius.circular(6),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final labels = values
+                    .map(
+                      (value) => weekly.currency == null
+                          ? '—'
+                          : weekly.currency == GalleryCurrency.jpy
+                          ? '$value'
+                          : formatGalleryMoney(value),
+                    )
+                    .toList();
+                final minimum = math.max(
+                  32.0,
+                  labels
+                      .map(
+                        (label) =>
+                            _measureTextWidth(
+                              label,
+                              GalleryTypography.caption,
+                            ) +
+                            12,
+                      )
+                      .reduce(math.max),
+                );
+                final width = math.max(constraints.maxWidth, minimum * 7);
+                return SingleChildScrollView(
+                  key: const PageStorageKey('gallery-weekly-chart'),
+                  scrollDirection: Axis.horizontal,
+                  child: SizedBox(
+                    width: width,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: List.generate(
+                        7,
+                        (i) => Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: Column(
+                              children: [
+                                _text(
+                                  weekly.currency == null
+                                      ? '—'
+                                      : weekly.currency == GalleryCurrency.jpy
+                                      ? '${values[i]}'
+                                      : formatGalleryMoney(values[i]),
+                                  role: GalleryTypography.caption,
+                                ),
+                                _gap(8),
+                                Container(
+                                  height: 92,
+                                  alignment: Alignment.bottomCenter,
+                                  decoration: BoxDecoration(
+                                    color: t.surface2,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Container(
+                                    height: math.max(2, values[i] / max * 92),
+                                    decoration: BoxDecoration(
+                                      color: t.secondary,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                  ),
+                                ),
+                                _gap(8),
+                                _text(
+                                  ['一', '二', '三', '四', '五', '六', '日'][i],
+                                  role: GalleryTypography.caption,
+                                  color: t.muted,
+                                ),
+                              ],
                             ),
                           ),
                         ),
-                        _gap(8),
-                        _text(
-                          ['一', '二', '三', '四', '五', '六', '日'][i],
-                          role: GalleryTypography.caption,
-                          color: t.muted,
-                        ),
-                      ],
+                      ),
                     ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
           ),
         ),

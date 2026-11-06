@@ -118,6 +118,26 @@ class _GalleryAppState extends State<GalleryApp> {
               c.monet ? 'blue' : c.palette,
               dynamicScheme: c.monet ? darkDynamic : null,
             ).theme(),
+            builder: (context, child) {
+              final tokens = Theme.of(context).extension<GalleryTokens>()!;
+              return AnnotatedRegion<SystemUiOverlayStyle>(
+                value:
+                    (tokens.dark
+                            ? SystemUiOverlayStyle.light
+                            : SystemUiOverlayStyle.dark)
+                        .copyWith(
+                          statusBarColor: Colors.transparent,
+                          systemNavigationBarColor: c.docked && c.isMainPage
+                              ? tokens.dockedNavigationSurface
+                              : tokens.bg,
+                          systemNavigationBarDividerColor: Colors.transparent,
+                        ),
+                child: ColoredBox(
+                  color: tokens.bg,
+                  child: GalleryWindow(child: child!),
+                ),
+              );
+            },
             home: _GalleryNavigator(
               key: ValueKey(c.generation),
               controller: c,
@@ -174,6 +194,7 @@ class _GalleryView extends StatefulWidget {
     required this.controller,
     required this.entry,
     required this.preferences,
+    required this.anchors,
     this.onDisableBeta,
     this.openWebLink,
     this.openEmail,
@@ -181,6 +202,7 @@ class _GalleryView extends StatefulWidget {
   final GalleryController controller;
   final GalleryRouteEntry entry;
   final GalleryPreferences preferences;
+  final _GalleryAnchorRegistry anchors;
   final VoidCallback? onDisableBeta;
   final Future<void> Function(Uri)? openWebLink;
   final Future<bool> Function(String)? openEmail;
@@ -217,10 +239,12 @@ class _GalleryViewState extends State<_GalleryView> {
   PageStorageBucket _bucket = PageStorageBucket();
   int _generation = -1;
   final _menuRoot = GlobalKey();
-  final Map<String, BuildContext> _menuAnchors = {};
-  final Map<String, Rect> _menuRects = {};
-  Size? _viewport;
-  bool _menuMeasureScheduled = false;
+  Size _bodySize = Size.zero;
+  bool get _compactHeight => _bodySize.height < 480;
+  double get _readingWidth => math.min(
+    GalleryWindowLayout.readingWidth,
+    MediaQuery.sizeOf(context).width - MediaQuery.paddingOf(context).horizontal,
+  );
   String? _openingLink;
   String? _linkError;
   bool _pickingFaceImage = false;
@@ -388,14 +412,8 @@ class _GalleryViewState extends State<_GalleryView> {
     if (_generation != c.generation) {
       _generation = c.generation;
       _bucket = PageStorageBucket();
-      _menuAnchors.clear();
-      _menuRects.clear();
     }
-    final viewport = MediaQuery.sizeOf(context);
-    if (_viewport != viewport) {
-      _viewport = viewport;
-      _scheduleMenuMeasure();
-    }
+    widget.anchors.scheduleMeasure();
     if (_entry.overlay != null) {
       return Padding(
         padding: EdgeInsets.only(
@@ -438,43 +456,72 @@ class _GalleryViewState extends State<_GalleryView> {
             resizeToAvoidBottomInset: true,
             body: SafeArea(
               bottom: false,
-              child: Stack(
-                key: _menuRoot,
-                fit: StackFit.expand,
-                children: [
-                  if (_entry.overlay != null)
-                    ..._overlay()
-                  else ...[
-                    PageStorage(
-                      bucket: _bucket,
-                      child: _isMain
-                          ? Column(
-                              children: [
-                                _mainHeader(),
-                                Expanded(
-                                  child: _GalleryMainTransition(
-                                    page: _viewPage,
-                                    reduceMotion: _reduceMotion,
-                                    builder: _mainPage,
-                                  ),
-                                ),
-                              ],
-                            )
-                          : KeyedSubtree(
-                              key: ValueKey(_viewPage),
-                              child: _page(_viewPage),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  _bodySize = constraints.biggest;
+                  return NotificationListener<ScrollNotification>(
+                    onNotification: (_) {
+                      widget.anchors.scheduleMeasure();
+                      return false;
+                    },
+                    child: Stack(
+                      key: _menuRoot,
+                      fit: StackFit.expand,
+                      children: [
+                        if (_entry.overlay != null)
+                          ..._overlay()
+                        else ...[
+                          GalleryReadingSurface(
+                            child: PageStorage(
+                              bucket: _bucket,
+                              child: _isMain
+                                  ? Column(
+                                      children: [
+                                        ConstrainedBox(
+                                          constraints: BoxConstraints(
+                                            maxHeight: math.max(
+                                              0.0,
+                                              _bodySize.height -
+                                                  _navLayout.occupiedHeight -
+                                                  72,
+                                            ),
+                                          ),
+                                          child: SingleChildScrollView(
+                                            key: const PageStorageKey(
+                                              'gallery-main-header-scroll',
+                                            ),
+                                            primary: false,
+                                            child: _mainHeader(),
+                                          ),
+                                        ),
+                                        Expanded(
+                                          child: _GalleryMainTransition(
+                                            page: _viewPage,
+                                            reduceMotion: _reduceMotion,
+                                            builder: _mainPage,
+                                          ),
+                                        ),
+                                      ],
+                                    )
+                                  : KeyedSubtree(
+                                      key: ValueKey(_viewPage),
+                                      child: _page(_viewPage),
+                                    ),
                             ),
+                          ),
+                          if (_isMain)
+                            Align(
+                              alignment: Alignment.bottomCenter,
+                              child: RepaintBoundary(
+                                key: const ValueKey('gallery-navigation'),
+                                child: _navigation(),
+                              ),
+                            ),
+                        ],
+                      ],
                     ),
-                    if (_isMain)
-                      Align(
-                        alignment: Alignment.bottomCenter,
-                        child: RepaintBoundary(
-                          key: const ValueKey('gallery-navigation'),
-                          child: _navigation(),
-                        ),
-                      ),
-                  ],
-                ],
+                  );
+                },
               ),
             ),
           ),
@@ -485,49 +532,26 @@ class _GalleryViewState extends State<_GalleryView> {
 
   Widget _menuAnchor(String id, Widget child) => Builder(
     builder: (anchorContext) {
-      _menuAnchors[id] = anchorContext;
-      _scheduleMenuMeasure();
+      widget.anchors.register(id, anchorContext);
       return child;
     },
   );
 
-  void _scheduleMenuMeasure() {
-    if (_menuMeasureScheduled) return;
-    _menuMeasureScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _menuMeasureScheduled = false;
-      if (!mounted) return;
-      var changed = false;
-      for (final id in _menuAnchors.keys) {
-        final rect = _measureMenuBounds(id);
-        if (rect != null && rect != _menuRects[id]) {
-          _menuRects[id] = rect;
-          changed = true;
-        }
-      }
-      if (changed && c.overlay != null) setState(() {});
-    });
-  }
-
   Rect? _measureMenuBounds(String id) {
-    final anchorContext = _menuAnchors[id];
-    final anchor = anchorContext?.mounted == true
-        ? anchorContext!.findRenderObject()
-        : null;
     final root = _menuRoot.currentContext?.findRenderObject();
-    if (anchor is RenderBox && anchor.hasSize && root is RenderBox) {
-      return anchor.localToGlobal(Offset.zero, ancestor: root) & anchor.size;
+    final rect = widget.anchors.boundsOf(id);
+    if (rect != null && root is RenderBox && root.attached) {
+      return root.globalToLocal(rect.topLeft) & rect.size;
     }
     return null;
   }
 
   Rect _menuBounds(String id) =>
-      _menuRects[id] ?? const Rect.fromLTWH(16, 64, 36, 36);
+      _measureMenuBounds(id) ?? const Rect.fromLTWH(16, 64, 36, 36);
 
   void _openDropdown(GalleryOverlay type, String anchor, {GalleryCard? card}) {
     final rect = _measureMenuBounds(anchor);
-    if (rect != null) _menuRects[anchor] = rect;
-    c.showOverlay(type, card: card, anchor: rect);
+    c.showOverlay(type, card: card, anchor: rect, anchorId: anchor);
   }
 
   Widget _page(GalleryPage page) => switch (page) {
@@ -579,15 +603,21 @@ class _GalleryViewState extends State<_GalleryView> {
 
   void _toast(String text) {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    final horizontal = math.max(
+      16.0,
+      (MediaQuery.sizeOf(context).width - GalleryWindowLayout.readingWidth) /
+              2 +
+          16,
+    );
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(text),
         duration: const Duration(seconds: 2),
         behavior: SnackBarBehavior.floating,
         margin: EdgeInsets.fromLTRB(
-          16,
+          horizontal,
           0,
-          16,
+          horizontal,
           c.isMainPage ? _navLayout.toastBottom : 16 + _navLayout.safeBottom,
         ),
       ),

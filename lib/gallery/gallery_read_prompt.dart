@@ -2,8 +2,13 @@ part of 'gallery_app.dart';
 
 /// The illustration stays mounted as the first step becomes the reading step.
 class _GalleryReadPrompt extends StatefulWidget {
-  const _GalleryReadPrompt({required this.reading, required this.failed});
+  const _GalleryReadPrompt({
+    required this.reading,
+    required this.failed,
+    required this.compact,
+  });
   final bool reading, failed;
+  final bool compact;
 
   @override
   State<_GalleryReadPrompt> createState() => _GalleryReadPromptState();
@@ -90,101 +95,110 @@ class _GalleryReadPromptState extends State<_GalleryReadPrompt>
                 return SizedBox(
                   key: const ValueKey('home-read-illustration'),
                   width: 240,
-                  height: 152,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Opacity(
-                        opacity: 1 - morph,
-                        child: Transform.scale(
-                          scale: 1 - .16 * morph,
-                          child: Container(
-                            width: 88,
-                            height: 88,
-                            decoration: BoxDecoration(
-                              color: t.tone,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              widget.failed
-                                  ? Icons.contactless_outlined
-                                  : Icons.nfc_rounded,
-                              size: 40,
-                              color: t.onTone,
+                  height: widget.compact ? 96 : 152,
+                  child: FittedBox(
+                    fit: BoxFit.contain,
+                    child: SizedBox(
+                      width: 240,
+                      height: 152,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Opacity(
+                            opacity: 1 - morph,
+                            child: Transform.scale(
+                              scale: 1 - .16 * morph,
+                              child: Container(
+                                width: 88,
+                                height: 88,
+                                decoration: BoxDecoration(
+                                  color: t.tone,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  widget.failed
+                                      ? Icons.contactless_outlined
+                                      : Icons.nfc_rounded,
+                                  size: 40,
+                                  color: t.onTone,
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                      Opacity(
-                        opacity: morph,
-                        child: Transform.translate(
-                          offset: Offset(-12 * morph, 12 * (1 - morph)),
-                          child: Container(
-                            key: const ValueKey('home-read-phone'),
-                            width: 64,
-                            height: 116,
-                            decoration: BoxDecoration(
-                              color: t.surface,
-                              borderRadius: BorderRadius.circular(17),
-                              border: Border.all(color: t.onTone, width: 2),
-                            ),
-                            child: Stack(
-                              children: [
-                                Positioned(
-                                  top: 9,
-                                  left: 9,
-                                  child: Container(
-                                    width: 9,
-                                    height: 18,
-                                    decoration: BoxDecoration(
-                                      color: t.onTone,
-                                      borderRadius: BorderRadius.circular(5),
+                          Opacity(
+                            opacity: morph,
+                            child: Transform.translate(
+                              offset: Offset(-12 * morph, 12 * (1 - morph)),
+                              child: Container(
+                                key: const ValueKey('home-read-phone'),
+                                width: 64,
+                                height: 116,
+                                decoration: BoxDecoration(
+                                  color: t.surface,
+                                  borderRadius: BorderRadius.circular(17),
+                                  border: Border.all(color: t.onTone, width: 2),
+                                ),
+                                child: Stack(
+                                  children: [
+                                    Positioned(
+                                      top: 9,
+                                      left: 9,
+                                      child: Container(
+                                        width: 9,
+                                        height: 18,
+                                        decoration: BoxDecoration(
+                                          color: t.onTone,
+                                          borderRadius: BorderRadius.circular(
+                                            5,
+                                          ),
+                                        ),
+                                      ),
                                     ),
-                                  ),
+                                    Center(
+                                      child: Icon(
+                                        Icons.nfc_rounded,
+                                        size: 24,
+                                        color: t.onTone,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                Center(
+                              ),
+                            ),
+                          ),
+                          Opacity(
+                            opacity: morph,
+                            child: Transform.translate(
+                              key: const ValueKey('home-read-card-position'),
+                              offset: Offset(
+                                64 - 44 * approach,
+                                27 - 13 * approach + 14 * (1 - morph),
+                              ),
+                              child: Transform.rotate(
+                                angle: -.32 + .2 * approach,
+                                child: Container(
+                                  width: 82,
+                                  height: 52,
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: t.action,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: t.onAction),
+                                    boxShadow: t.shadows(GalleryElevation.card),
+                                  ),
+                                  alignment: Alignment.centerLeft,
                                   child: Icon(
-                                    Icons.nfc_rounded,
-                                    size: 24,
-                                    color: t.onTone,
+                                    Icons.contactless_outlined,
+                                    color: t.onAction,
+                                    size: 25,
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      Opacity(
-                        opacity: morph,
-                        child: Transform.translate(
-                          key: const ValueKey('home-read-card-position'),
-                          offset: Offset(
-                            64 - 44 * approach,
-                            27 - 13 * approach + 14 * (1 - morph),
-                          ),
-                          child: Transform.rotate(
-                            angle: -.32 + .2 * approach,
-                            child: Container(
-                              width: 82,
-                              height: 52,
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: t.action,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: t.onAction),
-                                boxShadow: t.shadows(GalleryElevation.card),
-                              ),
-                              alignment: Alignment.centerLeft,
-                              child: Icon(
-                                Icons.contactless_outlined,
-                                color: t.onAction,
-                                size: 25,
                               ),
                             ),
                           ),
-                        ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 );
               },

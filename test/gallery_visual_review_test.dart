@@ -10,6 +10,8 @@ import 'package:transit_card_analyzer/gallery/gallery_app.dart';
 import 'package:transit_card_analyzer/gallery/gallery_controller.dart';
 import 'package:transit_card_analyzer/gallery/gallery_data.dart';
 
+import 'support/gallery_scroll.dart';
+
 /// Opt-in artifact capture; normal CI does not depend on installed desktop fonts.
 void main() {
   final output = Platform.environment['GALLERY_CAPTURE_DIR'];
@@ -147,7 +149,11 @@ void main() {
         c.navigate(GalleryPage.footprints);
         await capture('$mode-footprints');
         c.navigate(GalleryPage.settings);
-        await tester.scrollUntilVisible(find.text('莫奈取色'), 250);
+        await tester.scrollUntilVisible(
+          find.text('莫奈取色'),
+          250,
+          scrollable: galleryVerticalScroll(),
+        );
         await capture('$mode-settings');
         c.back();
         c.navigate(GalleryPage.cards);

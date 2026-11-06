@@ -59,7 +59,17 @@ void main() {
     await tester.pumpAndSettle();
     c.navigate(GalleryPage.settings);
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('启用新界面（beta）'), 400);
+    await tester.scrollUntilVisible(
+      find.text('启用新界面（beta）'),
+      400,
+      scrollable: find
+          .byWidgetPredicate(
+            (widget) =>
+                widget is Scrollable &&
+                widget.axisDirection == AxisDirection.down,
+          )
+          .last,
+    );
     await tester.tap(find.text('启用新界面（beta）'));
     await tester.pump();
     expect(disabled, isTrue);
@@ -482,7 +492,17 @@ void main() {
         ),
         findsOneWidget,
       );
-      await tester.scrollUntilVisible(find.text('分类开销'), 250);
+      await tester.scrollUntilVisible(
+        find.text('分类开销'),
+        250,
+        scrollable: find
+            .byWidgetPredicate(
+              (widget) =>
+                  widget is Scrollable &&
+                  widget.axisDirection == AxisDirection.down,
+            )
+            .last,
+      );
       await tester.pumpAndSettle();
       expect(find.text(sample.$2), findsWidgets);
       expect(tester.takeException(), isNull);

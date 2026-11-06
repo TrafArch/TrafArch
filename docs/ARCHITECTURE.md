@@ -144,6 +144,8 @@ Android targetSdk 保持 37，遵守 Android 15 起强制边到边显示的要�
 
 扫码页拥有外部 MobileScannerController，因此自行监听 WidgetsBinding 生命周期，将相机 stop/start 串行化，处理权限请求尚未结束时进入 inactive 的情况，失败后允许用户重试；窗口布局变化不重建相机控制器。预览比例和旋转交给现有 CameraX／mobile_scanner，NFC 通道与会话契约保持不变。模拟回归不能证明厂商内外屏、相机独占资源、物理 NFC 连接或系统强杀行为，仍需真机验收。
 
+2.x Gallery 使用独立 `GalleryWindow`，置于 MaterialApp.builder 的 Navigator／Overlay 外，复用 FoldableDisplayScope 过滤折痕。实体铰链分隔时选最大子屏，等面积优先左／上；通过 removeDisplayFeatures 调整 Insets 后显式更新 MediaQuery.size，背景保持全窗口主题色。标题和正文限宽 720dp，悬浮导航 320dp、下沉按钮区域 720dp，不引入双栏。布局缩放保持 GalleryController 和路由身份；展示层锚点注册表按布局、滚动和窗口指标变化重测，GalleryRouteEntry 的可选 anchorId 连接真实触发器，原 anchor 仅为无触发器样例提供回退。Flutter embedding 已合并 captionBar 到系统安全区，不新增原生桥接；Gallery 仍为隔离样例，不改变 NFC、相机或进程恢复政策。相关行为与尺寸回归见 gallery_window_layout_test。
+
 规范来源：
 - https://www.itgsa.com/documents/5242001394058240
 - https://developer.android.com/develop/ui/compose/layouts/adaptive/list-detail

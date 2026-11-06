@@ -10,6 +10,8 @@ import 'package:transit_card_analyzer/gallery/gallery_controller.dart';
 import 'package:transit_card_analyzer/gallery/gallery_data.dart';
 import 'package:transit_card_analyzer/gallery/gallery_theme.dart';
 
+import 'support/gallery_scroll.dart';
+
 void main() {
   late GalleryController c;
   setUp(() {
@@ -40,7 +42,7 @@ void main() {
   }
 
   testWidgets(
-    'wallet keeps normal balances beside card identities on phone widths',
+    'wallet keeps balances beside identities when four title characters fit, otherwise stacks uniformly',
     (tester) async {
       c.navigate(GalleryPage.cards);
       await mount(tester);
@@ -52,8 +54,19 @@ void main() {
           final number = tester.getRect(
             find.byKey(ValueKey('wallet-number-${card.id}')),
           );
-          expect(number.left, greaterThan(title.right));
-          expect(number.top, lessThan(title.bottom + 10));
+          if (width == 320) {
+            expect(number.top, greaterThan(title.bottom));
+            expect(
+              tester
+                  .renderObject<RenderBox>(find.text(card.name))
+                  .constraints
+                  .maxWidth,
+              greaterThanOrEqualTo(4 * 17),
+            );
+          } else {
+            expect(number.left, greaterThan(title.right));
+            expect(number.top, lessThan(title.bottom + 10));
+          }
         }
         expect(tester.takeException(), isNull);
       }
@@ -91,7 +104,11 @@ void main() {
   ) async {
     c.navigate(GalleryPage.settings);
     await mount(tester);
-    await tester.scrollUntilVisible(find.text('外观主题'), 250);
+    await tester.scrollUntilVisible(
+      find.text('外观主题'),
+      250,
+      scrollable: galleryVerticalScroll(),
+    );
     final indicator = find.byKey(const ValueKey('segments-跟随系统-indicator'));
     final tokens = Theme.of(tester.element(indicator))
         .extension<GalleryTokens>()!;

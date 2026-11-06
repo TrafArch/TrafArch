@@ -13,6 +13,7 @@ import 'package:transit_card_analyzer/platform/storage/app_logger.dart';
 import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
 
 import 'support/test_database.dart';
+import 'support/gallery_scroll.dart';
 
 AppDependencies createTestApp() => AppDependencies(
   database: testDatabase(),
@@ -108,7 +109,11 @@ void main() {
       Future<void> openSettings() async {
         await tester.tap(find.byTooltip('设置'));
         await tester.pumpAndSettle();
-        await tester.scrollUntilVisible(find.text('预测性返回手势'), 250);
+        await tester.scrollUntilVisible(
+          find.text('预测性返回手势'),
+          250,
+          scrollable: galleryVerticalScroll(),
+        );
         await tester.pumpAndSettle();
       }
 
@@ -126,7 +131,11 @@ void main() {
       await tester.tap(toggle());
       await tester.pumpAndSettle();
       expect(store.values[SettingsKeys.galleryPredictiveBackEnabled], 'false');
-      await tester.scrollUntilVisible(find.text('恢复初始样例'), 350);
+      await tester.scrollUntilVisible(
+        find.text('恢复初始样例'),
+        350,
+        scrollable: galleryVerticalScroll(),
+      );
       await tester.tap(find.text('恢复初始样例'));
       await tester.pumpAndSettle();
       await openSettings();

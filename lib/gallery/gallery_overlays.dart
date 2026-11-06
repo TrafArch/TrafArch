@@ -17,92 +17,108 @@ extension _GalleryOverlays on _GalleryViewState {
       GalleryOverlay.rawFeedback,
     ].contains(type);
     return [
-      Align(
-        alignment: sheet ? Alignment.bottomCenter : Alignment.center,
-        child: SafeArea(
-          top: true,
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              sheet ? 0 : 16,
-              16,
-              sheet ? 0 : 16,
-              sheet ? 0 : 16,
-            ),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: sheet ? 520 : 360,
-                maxHeight: MediaQuery.sizeOf(context).height * .86,
-              ),
-              child: FocusScope(
-                autofocus: true,
-                child: Focus(
-                  autofocus:
-                      type != GalleryOverlay.save &&
-                      type != GalleryOverlay.rename,
-                  skipTraversal: true,
-                  onKeyEvent: (_, event) {
-                    if (event is KeyDownEvent &&
-                        event.logicalKey == LogicalKeyboardKey.escape) {
-                      c.back();
-                      return KeyEventResult.handled;
-                    }
-                    return KeyEventResult.ignored;
-                  },
-                  child: FocusTraversalGroup(
-                    child: Semantics(
-                      scopesRoute: true,
-                      namesRoute: true,
-                      label: _overlayTitle(type),
-                      explicitChildNodes: true,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.vertical(
-                            top: Radius.circular(sheet ? 26 : 24),
-                            bottom: Radius.circular(sheet ? 0 : 24),
-                          ),
-                          boxShadow: t.shadows(GalleryElevation.modal),
-                        ),
-                        child: Material(
-                          color: t.raised,
-                          shape: RoundedRectangleBorder(
-                            side: BorderSide(color: t.line),
-                            borderRadius: BorderRadius.vertical(
-                              top: Radius.circular(sheet ? 26 : 24),
-                              bottom: Radius.circular(sheet ? 0 : 24),
+      LayoutBuilder(
+        builder: (context, constraints) {
+          final available = math.max(
+            0.0,
+            constraints.maxHeight - MediaQuery.paddingOf(context).bottom,
+          );
+          final gap = available < 240 ? 0.0 : 16.0;
+          return Align(
+            alignment: sheet ? Alignment.bottomCenter : Alignment.center,
+            child: SafeArea(
+              top: true,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  sheet ? 0 : 16,
+                  gap,
+                  sheet ? 0 : 16,
+                  sheet ? 0 : gap,
+                ),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: sheet ? 520 : 360,
+                    maxHeight: math.max(
+                      0.0,
+                      math.min(
+                        available * .86,
+                        available - gap * (sheet ? 1 : 2),
+                      ),
+                    ),
+                  ),
+                  child: FocusScope(
+                    autofocus: true,
+                    child: Focus(
+                      autofocus:
+                          type != GalleryOverlay.save &&
+                          type != GalleryOverlay.rename,
+                      skipTraversal: true,
+                      onKeyEvent: (_, event) {
+                        if (event is KeyDownEvent &&
+                            event.logicalKey == LogicalKeyboardKey.escape) {
+                          c.back();
+                          return KeyEventResult.handled;
+                        }
+                        return KeyEventResult.ignored;
+                      },
+                      child: FocusTraversalGroup(
+                        child: Semantics(
+                          scopesRoute: true,
+                          namesRoute: true,
+                          label: _overlayTitle(type),
+                          explicitChildNodes: true,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.vertical(
+                                top: Radius.circular(sheet ? 26 : 24),
+                                bottom: Radius.circular(sheet ? 0 : 24),
+                              ),
+                              boxShadow: t.shadows(GalleryElevation.modal),
                             ),
-                          ),
-                          clipBehavior: Clip.antiAlias,
-                          child: SingleChildScrollView(
-                            padding: EdgeInsets.all(nameForm ? 18 : 22),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Row(
+                            child: Material(
+                              color: t.raised,
+                              shape: RoundedRectangleBorder(
+                                side: BorderSide(color: t.line),
+                                borderRadius: BorderRadius.vertical(
+                                  top: Radius.circular(sheet ? 26 : 24),
+                                  bottom: Radius.circular(sheet ? 0 : 24),
+                                ),
+                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: SingleChildScrollView(
+                                padding: EdgeInsets.all(nameForm ? 18 : 22),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
                                   children: [
-                                    Expanded(
-                                      child: _text(
-                                        _overlayTitle(type),
-                                        role: GalleryTypography.section,
-                                        weight: FontWeight.w600,
-                                      ),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: _text(
+                                            _overlayTitle(type),
+                                            role: GalleryTypography.section,
+                                            weight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        IconButton(
+                                          autofocus:
+                                              type != GalleryOverlay.save &&
+                                              type != GalleryOverlay.rename,
+                                          tooltip: '关闭',
+                                          onPressed: c.back,
+                                          icon: const Icon(
+                                            Icons.close_rounded,
+                                            size: 21,
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    IconButton(
-                                      autofocus:
-                                          type != GalleryOverlay.save &&
-                                          type != GalleryOverlay.rename,
-                                      tooltip: '关闭',
-                                      onPressed: c.back,
-                                      icon: const Icon(
-                                        Icons.close_rounded,
-                                        size: 21,
-                                      ),
-                                    ),
+                                    _gap(nameForm ? 8 : 12),
+                                    _overlayBody(type),
                                   ],
                                 ),
-                                _gap(nameForm ? 8 : 12),
-                                _overlayBody(type),
-                              ],
+                              ),
                             ),
                           ),
                         ),
@@ -112,8 +128,8 @@ extension _GalleryOverlays on _GalleryViewState {
                 ),
               ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     ];
   }
@@ -215,7 +231,9 @@ extension _GalleryOverlays on _GalleryViewState {
       Positioned.fill(
         child: CustomSingleChildLayout(
           delegate: _GalleryMenuLayout(
-            anchor: _entry.anchor ?? _menuBounds(anchor),
+            anchor: _entry.anchorId != null
+                ? _menuBounds(_entry.anchorId!)
+                : _entry.anchor ?? _menuBounds(anchor),
             geometry: geometry,
             alignEnd: cardMenu,
             width: (cardMenu ? 158 : 170) * (1 + _extraTextScale),

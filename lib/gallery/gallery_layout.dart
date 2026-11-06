@@ -2,6 +2,80 @@ import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 
+import '../shared/presentation/adaptive_layout.dart';
+
+/// Geometry belongs to the current Flutter window, never the physical display.
+@immutable
+class GalleryWindowLayout {
+  GalleryWindowLayout(MediaQueryData media) : bounds = _largestPane(media);
+
+  static const readingWidth = 720.0;
+  final Rect bounds;
+
+  static Rect _largestPane(MediaQueryData media) {
+    final panes = DisplayFeatureSubScreen.subScreensInBounds(
+      Offset.zero & media.size,
+      DisplayFeatureSubScreen.avoidBounds(media),
+    ).where((rect) => !rect.isEmpty).toList();
+    panes.sort((a, b) {
+      final area = (b.width * b.height).compareTo(a.width * a.height);
+      if (area != 0) return area;
+      final left = a.left.compareTo(b.left);
+      return left != 0 ? left : a.top.compareTo(b.top);
+    });
+    return panes.isEmpty ? Offset.zero & media.size : panes.first;
+  }
+}
+
+/// Keep Navigator, its barriers, and all route overlays in the same sub-screen.
+/// The wrapper and child keep their identity when the window changes shape.
+class GalleryWindow extends StatelessWidget {
+  const GalleryWindow({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => FoldableDisplayScope(
+    child: Builder(
+      builder: (context) {
+        final media = MediaQuery.of(context);
+        final rect = GalleryWindowLayout(media).bounds;
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+            rect.left,
+            rect.top,
+            media.size.width - rect.right,
+            media.size.height - rect.bottom,
+          ),
+          child: MediaQuery(
+            data: media.removeDisplayFeatures(rect).copyWith(size: rect.size),
+            child: SizedBox.expand(
+              key: const ValueKey('gallery-safe-window'),
+              child: child,
+            ),
+          ),
+        );
+      },
+    ),
+  );
+}
+
+class GalleryReadingSurface extends StatelessWidget {
+  const GalleryReadingSurface({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: Alignment.topCenter,
+    heightFactor: 1,
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(
+        maxWidth: GalleryWindowLayout.readingWidth,
+      ),
+      child: child,
+    ),
+  );
+}
+
 /// Root coordinate space: Scaffold handles IME; only remaining safe area is added.
 @immutable
 class GalleryNavigationLayout {

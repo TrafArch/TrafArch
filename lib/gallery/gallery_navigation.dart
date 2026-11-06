@@ -1,5 +1,61 @@
 part of 'gallery_app.dart';
 
+/// Route-independent anchors, measured after layout and after scroll/metrics.
+/// Positions are global logical coordinates until the popup converts them to
+/// its own SafeArea; captured rectangles are only for fixture-only menus.
+class _GalleryAnchorRegistry extends ChangeNotifier {
+  final Map<String, BuildContext> _contexts = {};
+  final Map<String, Rect?> _measured = {};
+  bool _scheduled = false;
+  bool _disposed = false;
+
+  void register(String id, BuildContext context) {
+    _contexts[id] = context;
+    scheduleMeasure();
+  }
+
+  Rect? boundsOf(String id) {
+    final context = _contexts[id];
+    if (context == null || !context.mounted) return null;
+    final box = context.findRenderObject();
+    if (box is! RenderBox || !box.attached || !box.hasSize) return null;
+    final rect = box.localToGlobal(Offset.zero) & box.size;
+    final viewport = Scrollable.maybeOf(context)?.context.findRenderObject();
+    if (viewport is RenderBox && viewport.attached && viewport.hasSize) {
+      final visible = viewport.localToGlobal(Offset.zero) & viewport.size;
+      if (!visible.overlaps(rect)) return null;
+    }
+    return rect;
+  }
+
+  void scheduleMeasure() {
+    if (_scheduled || _disposed) return;
+    _scheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scheduled = false;
+      if (_disposed) return;
+      var changed = false;
+      for (final id in _contexts.keys.toList()) {
+        final rect = boundsOf(id);
+        if (_measured[id] != rect) {
+          _measured[id] = rect;
+          changed = true;
+        }
+        if (!_contexts[id]!.mounted) _contexts.remove(id);
+      }
+      if (changed) notifyListeners();
+    });
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _contexts.clear();
+    _measured.clear();
+    super.dispose();
+  }
+}
+
 abstract final class _GalleryMotion {
   static const main = Duration(milliseconds: 240);
   static const page = Duration(milliseconds: 280);
@@ -39,6 +95,7 @@ class _GalleryNavigator extends StatefulWidget {
 class _GalleryNavigatorState extends State<_GalleryNavigator>
     with WidgetsBindingObserver {
   final _navigator = GlobalKey<NavigatorState>();
+  final _anchors = _GalleryAnchorRegistry();
   final Map<String, ModalRoute<void>> _routes = {};
   ModalRoute<void>? _gesture;
   bool get _reduceMotion => MediaQuery.disableAnimationsOf(context);
@@ -49,7 +106,17 @@ class _GalleryNavigatorState extends State<_GalleryNavigator>
     WidgetsBinding.instance.addObserver(this);
     widget.controller.addListener(_navigationChanged);
     widget.preferences.addListener(_navigationChanged);
+    _anchors.addListener(_anchorChanged);
   }
+
+  void _anchorChanged() {
+    final entry = widget.controller.navigationStack.last;
+    final id = entry.anchorId;
+    if (id != null && _anchors.boundsOf(id) == null) widget.controller.back();
+  }
+
+  @override
+  void didChangeMetrics() => _anchors.scheduleMeasure();
 
   void _navigationChanged() {
     final active = _gesture;
@@ -112,6 +179,7 @@ class _GalleryNavigatorState extends State<_GalleryNavigator>
     widget.controller.removeListener(_navigationChanged);
     widget.preferences.removeListener(_navigationChanged);
     _gesture = null;
+    _anchors.dispose();
     super.dispose();
   }
 
@@ -142,12 +210,14 @@ class _GalleryNavigatorState extends State<_GalleryNavigator>
                   animation: Listenable.merge([
                     widget.controller,
                     widget.preferences,
+                    if (entry.overlay != null) _anchors,
                   ]),
                   builder: (context, _) => _GalleryView(
                     key: ValueKey('route-${entry.id}'),
                     entry: entry,
                     controller: widget.controller,
                     preferences: widget.preferences,
+                    anchors: _anchors,
                     onDisableBeta: widget.onDisableBeta,
                     openWebLink: widget.openWebLink,
                     openEmail: widget.openEmail,

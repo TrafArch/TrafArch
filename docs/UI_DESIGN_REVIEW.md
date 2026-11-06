@@ -105,3 +105,35 @@ TU／CU 数据库与 reference_manifest.json 的 SHA256 前后完全一致，与
 ### 底栏与卡包版追加构建
 
 随后按用户要求构建原签名 arm64-v8a Release，入口为 lib/main_gallery.dart。版本名 1.0.3-beta.1，本次构建号 2135，APK 实际 versionCode 4135；显示名称 TrafArch，包名 com.kajolno.TrafArch。开发者原签名、非 debuggable、仅 arm64、ZIP CRC 与 ZIP／全部 7 个原生库 ELF LOAD 16KiB 对齐通过。TU／CU／manifest 的源码 SHA256 与构建前一致，包内字节完全匹配。AppInfo 保留本次 2135，pubspec 自动预留下一号 2136。产物及报告位于 build/gallery/release-2135/；未安装设备，36 张截图仍为源码测试渲染结果。
+
+## 2026-11-07 小窗与折叠屏追加验收
+
+本节记录独立 2.x Gallery 的基础适配。保留单列、四项底栏与现有主题；标题和正文居中限宽 720dp，全部路由和弹层统一落在最大实体铰链子屏，等面积优先左侧再上侧。普通折痕和半折姿态不改变布局。顶部系统功能栏沿用 Flutter captionBar Insets，局部化安全区后再由 Scaffold／SafeArea 消费。
+
+窄窗标题按统一阈值换为两行，导航先收紧留白，再按需统一隐藏标签并保留读屏名称；240dp 及以上四项点击宽度均不小于 48dp。卡包按局部内容宽度统一重排，分段标签和七日图按文字测量横滚，金额完整缩放；矮窗插画缩至 96dp，极矮窗标题区域可独立滚动，保留正文和操作可达。菜单跟随真实触发器，触发器滚出视口后关闭；表单、滚动状态和模拟读取在缩放时继续保持。
+
+最终验证按用户后续指令“不要静态检查，只跑新增回归”执行：`test/gallery_window_layout_test.dart` 的 **8 项行为回归与 1 项截图测试全部通过**，日志为 `build/gallery/window-final-tests.log`。未继续执行静态检查或全量测试，本节不声明最终全量或静态检查通过。
+
+- 连续窗口序列为 390×844 → 240×320 → 280×400 → 600×320 → 600×800 → 840×800 → 1200×900 → 390×844，核验路由／页面身份、专家栏位、筛选、滚动位置和四项导航可访问。
+- 覆盖 240／280／320dp、1／1.5／2 倍字号及两种底栏；覆盖顶部 24／48dp、底部 0／24／48dp 与键盘 0／180dp 组合，核验草稿控制器身份和末尾确认操作位置。
+- 注入竖向、横向、不对称及等面积实体铰链，检查页面、导航、菜单、弹窗和抽屉不跨遮挡；普通折痕与半折信号不改变布局。另覆盖实时菜单、极矮大字窗操作及缩放中的模拟读取。
+- 生成 **18 张**亮暗截图，覆盖小窗首页及操作、卡包、两倍字号、宽窗、竖向／横向铰链、菜单和抽屉。已复核亮暗小窗、宽窗及两种铰链的布局与浮层；截图索引见 `build/gallery/window-review/README.md`。
+
+复现命令：
+
+```powershell
+$env:GALLERY_WINDOW_CAPTURE_DIR = 'build/gallery/window-review'
+./dev/gallery/test_windows.ps1 --no-pub test/gallery_window_layout_test.dart --concurrency=2 --reporter expanded
+```
+
+TU、CU 和 manifest 完工 SHA256 与开工记录完全相同，核对证据为 `build/gallery/window-review/database-verification.json`：
+
+| 资产 | SHA256 |
+| --- | --- |
+| TrafArch_Database_TU.sqlite | `FA585D815B8F29EC52183E71F783FFA3ACD7EACF1CA74907C44F5150E7529DEB` |
+| TrafArch_Database_CU.sqlite | `77BA3AD4310782F7625F7B1B1F87A7BC99FEE2420CF9060477B614F1580C6ED3` |
+| reference_manifest.json | `EE63A70E93C92812F889FF5DAD150582F3CD9DBEBFA0CBD59353ED62CE153379` |
+
+数据库、结构、记录、原始日志、保存快照和 manifest 均未修改。保留开工前 AppInfo／pubspec 的未提交版本改动，未生成 APK／AAB，未递增构建号。没有修改原生 NFC／相机契约、增加厂商通道或引入依赖。
+
+截图来自 Windows Flutter 测试渲染，使用本地中文字体和模拟系统 Insets；厂商小窗操作杆、连续拖拽性能、失焦恢复及内外屏切换未进行 Android 真机验收。按已确认的底栏偏好，本轮不声明通过 ITGSA 宽屏导航与全部增值布局认证。
