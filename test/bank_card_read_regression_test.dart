@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 import 'package:transit_card_analyzer/protocols/bank/data/apdu/apdu_command.dart';
-import 'package:transit_card_analyzer/protocols/bank/data/pdol/pdol_data_builder.dart';
 import 'package:transit_card_analyzer/protocols/bank/data/tlv/hex_codec.dart';
 import 'package:transit_card_analyzer/protocols/bank/domain/interfaces/card_transport.dart';
 import 'package:transit_card_analyzer/protocols/bank/emv/data/aid_registry.dart';
@@ -23,48 +22,17 @@ const _mastercardChina = 'A0000000108888';
 const _amex = 'A00000002501';
 const _amexChina = 'A00000079001';
 const _pboc = 'A000000333010101';
-const _emptyGpo = '80A8000002830000';
+const _getAtc = '80CA9F3600';
 const _ppseSelect = '00A404000E325041592E5359532E444446303100';
-const _oneRecordGpo = '80060000080101009000';
+const _atcResponse = '9F360200019000';
+final _recordEnd = List.filled(30, '6A83');
 
 // All account/track values below are synthetic fixtures, never card captures.
 void main() {
-  group('GPO command framing', () {
-    test('empty PDOL includes Lc and trailing Le', () {
-      expect(HexCodec.encode(ApduCommand.getProcessingOptions()), _emptyGpo);
-    });
-
-    test('long PDOL uses BER length inside a short APDU', () {
-      final command = ApduCommand.getProcessingOptions(
-        pdolData: List.filled(128, 0),
-      );
-      expect(command.take(8), [0x80, 0xA8, 0, 0, 131, 0x83, 0x81, 128]);
-      expect(command.length, 137);
-      expect(command.last, 0);
-    });
-
-    test('PDOL too long for short APDU is rejected, never truncated', () {
-      expect(
-        () => ApduCommand.getProcessingOptions(pdolData: List.filled(253, 0)),
-        throwsArgumentError,
-      );
-    });
-
-    test('truncated PDOL tag or missing length is rejected', () {
-      for (final hex in ['9F', '9F38']) {
-        expect(
-          () => PdolDataBuilder.build(HexCodec.decode(hex)),
-          throwsFormatException,
-        );
-      }
-    });
-
-    test(
-      'PDOL consumes continued tag bytes before reading the value length',
-      () {
-        final data = PdolDataBuilder.build(HexCodec.decode('DF8101019F0206'));
-        expect(data, List.filled(7, 0));
-      },
+  test('GET DATA reads ATC without transaction input', () {
+    expect(
+      HexCodec.encode(ApduCommand.getApplicationTransactionCounter()),
+      _getAtc,
     );
   });
 
@@ -129,7 +97,7 @@ void main() {
       test(c.name, () async {
         final replay = ReplayCardTransport([
           _fci(_visa),
-          _oneRecordGpo,
+          _atcResponse,
           '${_tlv('70', c.tags)}9000',
         ]);
         final app = await (await EmvParser.load((_) async => _emptyDictionary))
@@ -139,15 +107,17 @@ void main() {
       });
     }
 
-    test('PAN in GPO survives without AFL', () async {
+    test('PAN in FCI survives when direct reads are refused', () async {
       final replay = ReplayCardTransport([
-        _fci(_visa),
-        '${_tlv('77', '82020000${_tlv('57', '4111111111111111D291220100000F')}')}9000',
+        '${_tlv('6F', _tlv('84', _visa) + _tlv('57', '4111111111111111D291220100000F'))}9000',
+        '6985',
       ]);
       final app = await (await EmvParser.load((_) async => _emptyDictionary))
           .parse(const CardApplication(aidHex: _visa), replay);
       expect(app.summary.pan, '4111111111111111');
-      expect(replay.sent.where((c) => c[1] == 0xB2), isEmpty);
+      expect(app.gpoTags, isEmpty);
+      expect(app.gpoHex, isEmpty);
+      expect(replay.sent.any((c) => c[1] == 0xA8), isFalse);
     });
 
     test(
@@ -155,7 +125,7 @@ void main() {
       () async {
         final replay = ReplayCardTransport([
           _fci(_visa),
-          _oneRecordGpo,
+          _atcResponse,
           '700A5A084111A111111111119000',
         ]);
         final parser = await EmvParser.load(
@@ -171,11 +141,12 @@ void main() {
   });
 
   group('read-only APDU replay', () {
-    test('real command validation reaches the PAN record', () async {
+    test('exact physical commands reach the PAN without GPO', () async {
       final replay = _CheckedReplay([
         (_select(_visa), _fci(_visa)),
-        (_emptyGpo, _oneRecordGpo),
+        (_getAtc, _atcResponse),
         ('00B2010C00', _panRecord),
+        ..._checkedRecordEnd(),
       ]);
       final app = await (await EmvParser.load((_) async => _emptyDictionary))
           .parse(const CardApplication(aidHex: _visa), replay);
@@ -183,36 +154,37 @@ void main() {
       replay.verifyComplete();
     });
 
-    test('6100 is followed with GET RESPONSE Le 00', () async {
+    test('6100 continues GET DATA with GET RESPONSE Le 00', () async {
       final replay = ReplayCardTransport([
         _fci(_visa),
-        '800600006100',
-        '080101009000',
+        '9F36026100',
+        '00019000',
         _panRecord,
       ]);
       final app = await (await EmvParser.load((_) async => _emptyDictionary))
           .parse(const CardApplication(aidHex: _visa), replay);
       expect(app.summary.pan, '4111111111111111');
+      expect(app.dataTags.single.rawValueHex, '0001');
       expect(HexCodec.encode(replay.sent[2]), '00C0000000');
     });
 
-    test('6C00 retries with Le 00', () async {
+    test('6C00 retries READ RECORD with Le 00', () async {
       final replay = ReplayCardTransport([
         _fci(_visa),
-        _oneRecordGpo,
+        _atcResponse,
         '6C00',
         _panRecord,
       ]);
       final app = await (await EmvParser.load((_) async => _emptyDictionary))
           .parse(const CardApplication(aidHex: _visa), replay);
       expect(app.summary.pan, '4111111111111111');
-      expect(HexCodec.encode(replay.sent.last), '00B2010C00');
+      expect(HexCodec.encode(replay.sent[3]), '00B2010C00');
     });
 
     test('GET RESPONSE itself handles corrected Le', () async {
       final replay = ReplayCardTransport([
         _fci(_visa),
-        _oneRecordGpo,
+        _atcResponse,
         '6101',
         '6C0C',
         _panRecord,
@@ -220,94 +192,116 @@ void main() {
       final app = await (await EmvParser.load((_) async => _emptyDictionary))
           .parse(const CardApplication(aidHex: _visa), replay);
       expect(app.summary.pan, '4111111111111111');
-      expect(replay.sent.skip(3).map(HexCodec.encode), [
+      expect(replay.sent.skip(3).take(2).map(HexCodec.encode), [
         '00C0000001',
         '00C000000C',
       ]);
     });
 
-    test('AFL rejects invalid entries and reads later valid entries once', () async {
-      final replay = ReplayCardTransport([
-        _fci(_visa),
-        '${_tlv('77', '82020000${_tlv('94', 'F801010009010100080101020801010008010100')}')}9000',
-        _panRecord,
-      ]);
-      final app = await (await EmvParser.load((_) async => _emptyDictionary))
-          .parse(const CardApplication(aidHex: _visa), replay);
-      expect(app.summary.pan, '4111111111111111');
-      expect(replay.sent.where((c) => c[1] == 0xB2).map(HexCodec.encode), [
-        '00B2010C00',
-      ]);
-      expect(app.issues.any((i) => i.code == 'invalid_afl'), isTrue);
-    });
-
-    test('records after the former per-entry cap remain readable', () async {
-      final replay = ReplayCardTransport([
-        _fci(_visa),
-        '80060000080121009000',
-        ...List.filled(32, '6A83'),
-        _panRecord,
-      ]);
-      final app = await (await EmvParser.load((_) async => _emptyDictionary))
-          .parse(const CardApplication(aidHex: _visa), replay);
-      expect(app.summary.pan, '4111111111111111');
-      expect(app.records.single.recordNumber, 33);
-    });
-
     test(
-      'failed record attempts still count toward the overall read limit',
+      'refused file stops at its first record and later SFIs are read',
       () async {
         final replay = ReplayCardTransport([
           _fci(_visa),
-          '800A00000801FF001001FF009000',
+          _atcResponse,
+          '6985',
+          _panRecord,
         ]);
         final app = await (await EmvParser.load((_) async => _emptyDictionary))
             .parse(const CardApplication(aidHex: _visa), replay);
+        expect(app.summary.pan, '4111111111111111');
+        expect(app.records.single.sfi, 2);
         expect(
-          replay.sent.where((c) => c[1] == 0xB2).length,
-          lessThanOrEqualTo(254),
+          replay.sent.where((c) => c[1] == 0xB2).take(3).map(HexCodec.encode),
+          ['00B2010C00', '00B2011400', '00B2021400'],
         );
-        expect(app.issues.any((i) => i.code == 'record_limit'), isTrue);
       },
     );
 
-    test('a later record transport failure preserves an earlier PAN', () async {
-      final replay = _CheckedReplay([
-        (_select(_visa), _fci(_visa)),
-        (_emptyGpo, '80060000080102009000'),
-        ('00B2010C00', _panRecord),
-        ('00B2020C00', StateError('synthetic transport failure')),
+    test('record 33 is readable without starting a transaction', () async {
+      final replay = ReplayCardTransport([
+        _fci(_visa),
+        _atcResponse,
+        ...List.filled(32, _panRecord),
+        _expiryRecord,
       ]);
       final app = await (await EmvParser.load((_) async => _emptyDictionary))
           .parse(const CardApplication(aidHex: _visa), replay);
-      expect(app.summary.pan, '4111111111111111');
-      expect(app.issues.any((i) => i.code == 'nfc_io_error'), isTrue);
+      expect(app.records.last.recordNumber, 33);
+      expect(app.summary.expiry, '2027-12-31');
     });
 
-    test('GPO transport failure preserves selected FCI evidence', () async {
+    test('single application read attempts remain bounded', () async {
+      final replay = ReplayCardTransport([
+        _fci(_visa),
+        _atcResponse,
+        ...List.filled(254, _panRecord),
+      ]);
+      final app = await (await EmvParser.load((_) async => _emptyDictionary))
+          .parse(const CardApplication(aidHex: _visa), replay);
+      expect(replay.sent.where((c) => c[1] == 0xB2), hasLength(254));
+      expect(app.issues.any((i) => i.code == 'record_limit'), isTrue);
+    });
+
+    test('failed record attempts share the application budget', () async {
+      final replay = ReplayCardTransport([
+        _fci(_visa),
+        _atcResponse,
+        '6A83',
+        ...List.filled(253, _panRecord),
+      ]);
+      final app = await (await EmvParser.load((_) async => _emptyDictionary))
+          .parse(const CardApplication(aidHex: _visa), replay);
+      expect(replay.sent.where((c) => c[1] == 0xB2), hasLength(254));
+      expect(app.records, hasLength(253));
+      expect(app.issues.any((i) => i.code == 'record_limit'), isTrue);
+    });
+
+    test(
+      'later record transport failure preserves PAN and stops I/O',
+      () async {
+        final replay = _CheckedReplay([
+          (_select(_visa), _fci(_visa)),
+          (_getAtc, _atcResponse),
+          ('00B2010C00', _panRecord),
+          ('00B2020C00', StateError('synthetic transport failure')),
+        ]);
+        final app = await (await EmvParser.load((_) async => _emptyDictionary))
+            .parse(const CardApplication(aidHex: _visa), replay);
+        expect(app.summary.pan, '4111111111111111');
+        expect(app.issues.any((i) => i.code == 'nfc_io_error'), isTrue);
+        replay.verifyComplete();
+      },
+    );
+
+    test('GET DATA transport failure retains FCI and stops I/O', () async {
       final replay = _CheckedReplay([
         (_select(_visa), _fci(_visa)),
-        (_emptyGpo, StateError('synthetic transport failure')),
+        (_getAtc, StateError('synthetic transport failure')),
       ]);
       final app = await (await EmvParser.load((_) async => _emptyDictionary))
           .parse(const CardApplication(aidHex: _visa), replay);
       expect(app.application.selected, isTrue);
       expect(app.fciTags, isNotEmpty);
       expect(
-        app.issues.any((i) => i.stage == 'gpo' && i.code == 'nfc_io_error'),
+        app.issues.any(
+          (i) => i.stage == 'get_data' && i.code == 'nfc_io_error',
+        ),
         isTrue,
       );
+      replay.verifyComplete();
     });
 
-    test('malformed PDOL retains FCI without sending a guessed GPO', () async {
+    test('malformed PDOL is retained as evidence and never used', () async {
       final replay = ReplayCardTransport([
         '${_tlv('6F', _tlv('84', _visa) + _tlv('A5', _tlv('9F38', '9F')))}9000',
+        _atcResponse,
       ]);
       final app = await (await EmvParser.load((_) async => _emptyDictionary))
           .parse(const CardApplication(aidHex: _visa), replay);
       expect(app.fciTags, isNotEmpty);
-      expect(replay.sent, hasLength(1));
-      expect(app.issues.any((i) => i.code == 'invalid_pdol'), isTrue);
+      expect(app.dataTags.single.tagHex, '9F36');
+      expect(replay.sent.any((c) => c[1] == 0xA8), isFalse);
     });
 
     test('failed reselection is represented as not selected', () async {
@@ -328,11 +322,13 @@ void main() {
           _fci(international),
           _fci(_pboc),
           _fci(international),
-          _oneRecordGpo,
+          _atcResponse,
           _panRecord,
+          ..._recordEnd,
           _fci(_pboc),
-          _oneRecordGpo,
+          _atcResponse,
           _panRecord,
+          ..._recordEnd,
         ]);
         // Deliberately reverse registration order: EMV is a fallback parser.
         final result = await (await _analyzer(emvFirst: true)).analyze(replay);
@@ -340,7 +336,7 @@ void main() {
         expect(result.protocolFamily, 'mixed');
         expect(result.applications.every((a) => a.summary.pan != null), isTrue);
         expect(
-          replay.sent.every((c) => [0xA4, 0xA8, 0xB2, 0xC0].contains(c[1])),
+          replay.sent.every((c) => [0xA4, 0xCA, 0xB2, 0xC0].contains(c[1])),
           isTrue,
         );
       });
@@ -359,11 +355,13 @@ void main() {
             (aid) => aid == card.domestic ? _fci(card.domestic) : '6A82',
           ),
           _fci(card.international),
-          _oneRecordGpo,
+          _atcResponse,
           _expiryRecord,
+          ..._recordEnd,
           _fci(card.domestic),
-          _oneRecordGpo,
+          _atcResponse,
           _expiryRecord,
+          ..._recordEnd,
         ]);
         final result = await (await _analyzer()).analyze(replay);
         expect(result.applications.map((a) => a.application.aidHex), [
@@ -372,7 +370,7 @@ void main() {
         ]);
         expect(result.applications.map((a) => a.parserId), ['emv', 'pboc']);
         expect(result.protocolFamily, BankCardProtocolFamily.mixed);
-        expect(result.status, BankCardStatus.success);
+        expect(result.status, BankCardStatus.partial);
         expect(
           result.applications.every((a) => a.summary.expiry == '2027-12-31'),
           isTrue,
@@ -405,11 +403,13 @@ void main() {
           (aid) => aid == _pboc ? _fci(_pboc) : '6A82',
         ),
         _fci(_visa), // 解析 Visa
-        _oneRecordGpo,
+        _atcResponse,
         _panRecord,
+        ..._recordEnd,
         _fci(_pboc), // 解析 PBOC
-        _oneRecordGpo,
+        _atcResponse,
         _panRecord,
+        ..._recordEnd,
       ]);
       final result = await (await _analyzer()).analyze(replay);
       expect(result.applications.map((a) => a.application.aidHex), [
@@ -419,7 +419,7 @@ void main() {
       expect(result.applications.map((a) => a.parserId), ['emv', 'pboc']);
       expect(result.applications.every((a) => a.summary.pan != null), isTrue);
       expect(result.protocolFamily, BankCardProtocolFamily.mixed);
-      expect(result.status, BankCardStatus.success);
+      expect(result.status, BankCardStatus.partial);
     });
 
     test(
@@ -430,8 +430,9 @@ void main() {
           '6A82',
           _fci(_pboc),
           _fci(_pboc),
-          _oneRecordGpo,
+          _atcResponse,
           _panRecord,
+          ..._recordEnd,
         ]);
         final result = await (await _analyzer()).analyze(replay);
         expect(result.applications.single.summary.pan, '4111111111111111');
@@ -453,11 +454,13 @@ void main() {
           '6F028400019000',
           _fci(_pboc),
           _fci(_mastercard),
-          _oneRecordGpo,
+          _atcResponse,
           _panRecord,
+          ..._recordEnd,
           _fci(_pboc),
-          _oneRecordGpo,
+          _atcResponse,
           _panRecord,
+          ..._recordEnd,
         ]);
         final result = await (await _analyzer()).analyze(replay);
         expect(result.applications, hasLength(2));
@@ -472,8 +475,9 @@ void main() {
         (_select(_mastercard), _fci(_mastercard)),
         (_select(_pboc), _fci(_pboc)),
         (_select(_mastercard), _fci(_mastercard)),
-        (_emptyGpo, _oneRecordGpo),
+        (_getAtc, _atcResponse),
         ('00B2010C00', _panRecord),
+        ..._checkedRecordEnd(),
         (_select(_pboc), StateError('synthetic transport failure')),
       ]);
       final result = await (await _analyzer()).analyze(replay);
@@ -496,11 +500,13 @@ void main() {
       _fci(_mastercard),
       _fci(_pboc),
       _fci(_mastercard),
-      _oneRecordGpo,
+      _atcResponse,
       _panRecord,
+      ..._recordEnd,
       _fci(_pboc),
-      _oneRecordGpo,
+      _atcResponse,
       _panRecord,
+      ..._recordEnd,
     ]);
     final result = await (await _analyzer()).analyze(replay);
     await tester.pumpWidget(
@@ -528,7 +534,7 @@ void main() {
     (tester) async {
       final replay = ReplayCardTransport([
         _fci(_mastercard),
-        _oneRecordGpo,
+        _atcResponse,
         '${_tlv('70', _tlv('9F6B', '5555555555554444D291220100000F'))}9000',
       ]);
       final app = await (await EmvParser.load((_) async => _emptyDictionary))
@@ -589,3 +595,9 @@ class _CheckedReplay implements CardTransport {
   @override
   Future<void> close() async {}
 }
+
+List<(String, Object)> _checkedRecordEnd() => [
+  ('00B2020C00', '6A83'),
+  for (var sfi = 2; sfi <= 30; sfi++)
+    (HexCodec.encode(ApduCommand.readRecord(sfi, 1)), '6A83'),
+];

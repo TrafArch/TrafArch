@@ -258,6 +258,10 @@ class _TripCardsViewState<S extends Enum> extends State<TripCardsView<S>> {
     }
     showModalBottomSheet<void>(
       context: context,
+      useSafeArea: true,
+      anchorPoint: (context.findRenderObject() as RenderBox?)?.localToGlobal(
+        Offset.zero,
+      ),
       showDragHandle: true,
       isScrollControlled: true,
       builder: (sheetContext) => SafeArea(

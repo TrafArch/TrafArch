@@ -13,7 +13,7 @@ import 'support/replay_card_transport.dart';
 const _emptyDictionary =
     '{"schemaVersion":1,"dictionaryId":"test","entries":[]}';
 const _visa = 'A0000000031010';
-const _oneRecordGpo = '80060000080101009000';
+const _atcResponse = '9F360200019000';
 
 void main() {
   group('EMV 日期解码', () {
@@ -93,7 +93,7 @@ void main() {
     test('记录内 4 字节 BCD 5F24 被读到', () async {
       final replay = ReplayCardTransport([
         _fci(_visa),
-        _oneRecordGpo,
+        _atcResponse,
         '${_tlv('70', _tlv('5A', '4111111111111111') + _tlv('5F24', '20271231'))}9000',
       ]);
       final app = await (await EmvParser.load((_) async => _emptyDictionary))
@@ -105,7 +105,7 @@ void main() {
     test('无 5F24 时使用记录内二磁道', () async {
       final replay = ReplayCardTransport([
         _fci(_visa),
-        _oneRecordGpo,
+        _atcResponse,
         '${_tlv('70', _tlv('57', '4111111111111111D291220100000F'))}9000',
       ]);
       final app = await (await EmvParser.load((_) async => _emptyDictionary))
@@ -118,7 +118,7 @@ void main() {
   testWidgets('应用详情页醒目展示有效期与来源', (tester) async {
     final replay = ReplayCardTransport([
       _fci(_visa),
-      _oneRecordGpo,
+      _atcResponse,
       '${_tlv('70', _tlv('5A', '4111111111111111') + _tlv('5F24', '20271231'))}9000',
     ]);
     final app = await (await EmvParser.load((_) async => _emptyDictionary))

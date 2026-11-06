@@ -22,7 +22,7 @@ class CardField {
   });
 }
 
-/// 从一个应用的 FCI / GPO / 各记录标签树中提炼的卡号与交易信息汇总。
+/// 从一个应用的 FCI / GET DATA / 各记录标签树中提炼的卡号与交易信息汇总。
 class CardFieldSummary {
   final List<CardField> fields;
   const CardFieldSummary(this.fields);

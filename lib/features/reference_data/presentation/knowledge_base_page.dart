@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../shared/presentation/adaptive_layout.dart';
+
 import '../domain/station_codes.dart';
 import '../data/tunion_knowledge_base.dart';
 import '../../../app/app_dependencies.dart';
@@ -12,74 +14,81 @@ class KnowledgeBasePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('知识库')),
-      body: AnimatedBuilder(
-        animation: app,
-        builder: (context, _) {
-          final kb = app.knowledgeBase;
-          if (kb == null && app.references.error != null) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text('本地参考数据不可用：${app.references.error}'),
-              ),
-            );
-          }
-          if (kb == null) {
-            // 数据库启动即并行预热；预热未完成前进入本页展示加载态，
-            // 加载完成（notifyListeners）后自动刷新为数据内容。
-            return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  SizedBox(
-                    width: 28,
-                    height: 28,
-                    child: CircularProgressIndicator(strokeWidth: 2.5),
-                  ),
-                  SizedBox(height: 12),
-                  Text('数据库预热中，请稍候…'),
-                ],
-              ),
-            );
-          }
-          final coverage = kb.coverageDatasets;
-          final tu = coverage.where((d) => d.system == 'tu').toList()
-            ..sort(_byCityCode);
-          final cu = coverage.where((d) => d.system == 'cu').toList()
-            ..sort(_byCityCode);
-          final summary = _SummaryCard(kb: kb, tu: tu, cu: cu);
-          return DefaultTabController(
-            length: 2,
-            child: Column(
-              children: [
-                const TabBar(
-                  tabs: [
-                    Tab(text: '交通联合 TU'),
-                    Tab(text: '城市一卡通 CU'),
-                  ],
-                ),
-                Expanded(
-                  child: TabBarView(
+    return FoldSafePage(
+      child: Scaffold(
+        appBar: AppBar(title: const Text('知识库')),
+        body: SafeArea(
+          top: false,
+          child: AdaptiveContent(
+            child: AnimatedBuilder(
+              animation: app,
+              builder: (context, _) {
+                final kb = app.knowledgeBase;
+                if (kb == null && app.references.error != null) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text('本地参考数据不可用：${app.references.error}'),
+                    ),
+                  );
+                }
+                if (kb == null) {
+                  // 数据库启动即并行预热；预热未完成前进入本页展示加载态，
+                  // 加载完成（notifyListeners）后自动刷新为数据内容。
+                  return const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 28,
+                          height: 28,
+                          child: CircularProgressIndicator(strokeWidth: 2.5),
+                        ),
+                        SizedBox(height: 12),
+                        Text('数据库预热中，请稍候…'),
+                      ],
+                    ),
+                  );
+                }
+                final coverage = kb.coverageDatasets;
+                final tu = coverage.where((d) => d.system == 'tu').toList()
+                  ..sort(_byCityCode);
+                final cu = coverage.where((d) => d.system == 'cu').toList()
+                  ..sort(_byCityCode);
+                final summary = _SummaryCard(kb: kb, tu: tu, cu: cu);
+                return DefaultTabController(
+                  length: 2,
+                  child: Column(
                     children: [
-                      _CoverageList(
-                        header: summary,
-                        datasets: tu,
-                        emptyText: '交通联合暂无站点覆盖数据',
+                      const TabBar(
+                        tabs: [
+                          Tab(text: '交通联合 TU'),
+                          Tab(text: '城市一卡通 CU'),
+                        ],
                       ),
-                      _CoverageList(
-                        header: summary,
-                        datasets: cu,
-                        emptyText: '城市一卡通暂无站点覆盖数据',
+                      Expanded(
+                        child: TabBarView(
+                          children: [
+                            _CoverageList(
+                              header: summary,
+                              datasets: tu,
+                              emptyText: '交通联合暂无站点覆盖数据',
+                            ),
+                            _CoverageList(
+                              header: summary,
+                              datasets: cu,
+                              emptyText: '城市一卡通暂无站点覆盖数据',
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
-                ),
-              ],
+                );
+              },
             ),
-          );
-        },
+          ),
+        ),
       ),
     );
   }

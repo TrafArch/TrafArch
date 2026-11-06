@@ -1,8 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../shared/presentation/ui_constants.dart';
 
 abstract final class AppTheme {
+  /// System bars overlay the painted surface. AppBar still determines its own
+  /// status icons; the enclosing region supplies navigation icons on all routes.
+  /// Transparent colors also cover older Android releases, while Android 15+
+  /// lays out edge to edge regardless of these deprecated color settings.
+  static SystemUiOverlayStyle systemUiOverlayStyle(Color background) {
+    final dark =
+        ThemeData.estimateBrightnessForColor(background) == Brightness.dark;
+    return SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+      statusBarBrightness: dark ? Brightness.dark : Brightness.light,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarIconBrightness: dark
+          ? Brightness.light
+          : Brightness.dark,
+      // Keep Android's contrast scrim for three-button navigation. Gesture
+      // navigation stays transparent; Android ignores this flag in that mode.
+      systemNavigationBarContrastEnforced: true,
+    );
+  }
+
   /// Android 转场统一为 FadeForwards（Android 14+ 系统同款：水平滑入 +
   /// 交叉淡化，450ms）：显式覆盖新版 Flutter 的默认值
   /// （PredictiveBackPageTransitionsBuilder），避免"手势返回=缩小圆角、
@@ -44,11 +66,17 @@ abstract final class AppTheme {
   );
 
   static ThemeData light(ColorScheme? dynamic) => ThemeData(
+    dialogTheme: const DialogThemeData(
+      constraints: BoxConstraints(minWidth: 280, maxWidth: 560),
+    ),
     colorScheme: dynamic ?? fallbackLight,
     pageTransitionsTheme: pageTransitionsTheme,
     snackBarTheme: snackBarTheme,
   );
   static ThemeData dark(ColorScheme? dynamic) => ThemeData(
+    dialogTheme: const DialogThemeData(
+      constraints: BoxConstraints(minWidth: 280, maxWidth: 560),
+    ),
     colorScheme: dynamic ?? fallbackDark,
     pageTransitionsTheme: pageTransitionsTheme,
     snackBarTheme: snackBarTheme,

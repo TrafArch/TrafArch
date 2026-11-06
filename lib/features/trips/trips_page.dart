@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../transit_analysis/tunion_analysis_models.dart';
-import '../../shared/presentation/ui_constants.dart';
+import '../../shared/presentation/adaptive_layout.dart';
 import '../../app/app_dependencies.dart';
 import '../qr/presentation/qr_action_button.dart';
 import '../settings/presentation/settings_action_button.dart';
@@ -34,14 +34,16 @@ class TripsPage extends StatelessWidget {
               ],
             ),
             SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  12,
-                  12,
-                  12,
-                  UiConstants.floatingNavBarClearance,
+              child: AdaptiveContent(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    12,
+                    12,
+                    12,
+                    AdaptiveWindowScope.bottomClearanceOf(context),
+                  ),
+                  child: _TripsBody(app: app),
                 ),
-                child: _TripsBody(app: app),
               ),
             ),
           ],

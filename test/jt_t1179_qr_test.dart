@@ -20,6 +20,7 @@ import 'package:transit_card_analyzer/platform/nfc/nfc_service.dart';
 import 'package:transit_card_analyzer/features/qr/presentation/jt_t1179_qr_display.dart';
 import 'package:transit_card_analyzer/protocols/transit/qr/jt_t1179_qr_parser.dart';
 import 'package:transit_card_analyzer/features/expert/expert_page.dart';
+import 'package:transit_card_analyzer/features/expert/expert_widgets.dart';
 import 'package:transit_card_analyzer/features/home/home_page.dart';
 import 'package:transit_card_analyzer/platform/qr/qr_image_picker.dart';
 import 'package:transit_card_analyzer/app/app_dependencies.dart';
@@ -142,6 +143,56 @@ void main() {
   });
 
   group('独立扫码页', () {
+    testWidgets('二维码结果在手机宽度下短字段同行，长公钥使用完整正文宽度', (tester) async {
+      final app = _newApp();
+      await _pumpPage(tester, app, QrPage(app: app));
+      app.parseQrBytes(_sampleQr());
+      for (final width in [320.0, 360.0, 390.0]) {
+        tester.view.physicalSize = Size(width, 1000);
+        await tester.pumpAndSettle();
+        for (final (label, value) in [
+          ('发卡机构名称', '福路通·榕城通'),
+          ('支付账户号', '6225880123456789'),
+          ('单次消费金额上限', '20.00 元'),
+        ]) {
+          final field = find.byWidgetPredicate(
+            (widget) => widget is ExpertField && widget.label == label,
+          );
+          final labelText = find.descendant(
+            of: field,
+            matching: find.text('$label：'),
+          );
+          final valueText = find.descendant(
+            of: field,
+            matching: find.text(value),
+          );
+          // Flutter's test font gives digits the same width as Han characters.
+          // At 320dp the full account may occupy its own run, still one line.
+          if (width >= 360 || label != '支付账户号') {
+            expect(
+              tester.getTopLeft(labelText).dy,
+              tester.getTopLeft(valueText).dy,
+              reason: '$width / $label',
+            );
+          }
+          expect(
+            tester.getSize(valueText).height,
+            tester.getSize(labelText).height,
+          );
+        }
+        final publicKey = find.text(app.qrData!.userPublicKeyHex);
+        expect(tester.getSize(publicKey).width, closeTo(width - 32, 0.1));
+        expect(tester.takeException(), isNull);
+      }
+      await tester.ensureVisible(find.text('发卡机构公钥证书（117 字节）'));
+      await tester.tap(find.text('发卡机构公钥证书（117 字节）'));
+      await tester.pumpAndSettle();
+      expect(find.text('发卡机构公钥：'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    });
+
     testWidgets('首页仅保留 NFC，扫码按钮停止读卡并导航返回', (tester) async {
       final channel = _TrackingNfcChannel();
       final app = _newApp(channel: channel);
@@ -192,7 +243,7 @@ void main() {
           await tester.pumpAndSettle();
           expect(app.lastResult, same(card));
           expect(app.lastResult!.uid, '04A1B2C3D4');
-          expect(find.text(expert ? '解析器' : '卡号'), findsOneWidget);
+          expect(find.text(expert ? '解析器：' : '卡号'), findsOneWidget);
           expect(find.text('6225880123456789'), findsNothing);
           expect(find.text('二维码'), findsNothing);
           expect(find.text('乘车码二维码'), findsNothing);
@@ -230,10 +281,10 @@ void main() {
         'UNIO',
         '20.00 元',
         '300 秒',
-        '支付账户用户公钥',
-        '授权过期时间',
-        '二维码生成时间',
-        '发卡机构自定义域',
+        '支付账户用户公钥：',
+        '授权过期时间：',
+        '二维码生成时间：',
+        '发卡机构自定义域：',
       ]) {
         expect(find.text(value), findsOneWidget, reason: value);
       }
@@ -255,7 +306,11 @@ void main() {
         '发卡机构公钥',
         '证书原始数据（117 字节）',
       ]) {
-        expect(find.text(label), findsOneWidget, reason: label);
+        expect(
+          find.text(label == '证书原始数据（117 字节）' ? label : '$label：'),
+          findsOneWidget,
+          reason: label,
+        );
       }
       expect(find.text(hexBytes(_sampleCertificate())), findsOneWidget);
       await tester.ensureVisible(find.text('二维码原始数据'));

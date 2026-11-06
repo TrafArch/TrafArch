@@ -116,6 +116,40 @@ android/app/src/main/kotlin/com/kajolno/TrafArch/
 
 ## 依赖与装配
 
+### 银行卡严格只读边界
+
+EMV／PBOC 共享 `ContactlessReadParser`，银行卡解析版本为 0.3.0。读取仅选择应用、以 `80 CA 9F 36 Le` 直接取得 ATC，再用绝对记录号 READ RECORD 枚举 SFI 1..30 的公开记录。每文件从记录 1 开始，拒绝后停止该文件；成功与失败读取共用单应用 254 次预算，通信失败即停止。没有 GPO 提供的 AFL，因此无法保证记录完整性；受访问条件保护的字段保持缺失，结果为部分读取。
+
+GPO 在部分非接触卡上会生成应用密文或递增 ATC，零金额与空 PDOL 均不能保证无副作用。当前流程移除 GPO 及 PDOL 组包，不提供交易模式或回退。`BankReadOnlyPolicy` 对 CLA、INS、参数和 APDU 结构实行封闭白名单，既用于 `exchangeReadOnly` 的初始及续传指令，也用于最接近实际通道的 `RecordingCardTransport`，禁止 GPO、GENERATE AC、PIN、认证、写入及未知指令。只允许 SELECT by name、绝对 READ RECORD、读取 9F36 的 GET DATA 和 GET RESPONSE，保留有界 61XX／6CXX 处理。`ParsedApplication.dataTags` 保留直接读取结果并进入界面、恢复捕获及诊断；旧 `gpoTags/gpoHex` 仅兼容已有捕获，不重读或改写历史数据。原生通道冻结契约不变。
+
+### 边到边显示与系统安全区域
+
+Android targetSdk 保持 37，遵守 Android 15 起强制边到边显示的要求，不设置退出项。`main.dart` 显式启用 `SystemUiMode.edgeToEdge`，Android 30+ 明暗两套 LaunchTheme／NormalTheme 均声明 `windowLayoutInDisplayCutoutMode=always`，启动窗口与 Flutter 内容一致允许延伸至刘海区域。
+
+`MaterialApp.builder` 通过 `AnnotatedRegion<SystemUiOverlayStyle>` 根据实际主题背景设置导航栏图标亮度，AppBar／SliverAppBar 继续根据自身背景决定状态栏图标；黑色扫码页面单独声明浅色系统栏图标，退出后由当前页面恢复。透明系统栏颜色仅用于兼容较旧 Android，不依赖 Android 15 已停用的栏颜色 API 防遮挡；三按钮导航保留系统对比度保护，手势导航保持透明。
+
+交互内容根据 `MediaQuery` 的当前窗口安全区域避让系统栏及刘海：AppBar／SliverAppBar 处理顶部，正文 SafeArea 处理侧边与底部，悬浮导航使用底栏库已有的 SafeArea，避免重复叠加。记录详情弹层除 `useSafeArea: true` 外，还在内容外补充底部 SafeArea（框架的该参数只保护顶部和侧边）；档案批次诊断及恢复原始数据页同样使用 FoldSafePage 与正文 SafeArea。回归覆盖手势／三按钮的底部边距、横屏侧边刘海、明暗主题切换、扫码进退及弹层最后操作可点击；真实 Android 15+ 设备的系统栏与启动画面仍需设备验收。
+
+规范来源：https://developer.android.com/about/versions/15/behavior-changes-15#edge-to-edge
+
+### 窗口与折叠屏布局
+
+展示层 `shared/presentation/adaptive_layout.dart` 结合 ITGSA 大屏白皮书 2.2／4.2／4.4 和 Android 列表详情布局按当前窗口逻辑像素适配内容。手机、平板、横屏及分屏统一使用居中的悬浮胶囊底栏，沿用 280dp 宽度上限、56dp 高度、28dp 圆角与距系统安全区 20dp 的间距；窄窗及大字体沿用等宽图标收缩，滚动显隐与子页面返回回显保持一致。壳页不创建侧边导航及竖分隔线，状态栏背景保持连续；AppBar／SliverAppBar 独立处理顶部安全区，不额外增加一层顶部留白。主页面 IndexedStack 与底栏始终挂载在同一容器，窗口缩放不重建控制器或等待中的 NFC；主页面统一预留悬浮底栏留白，独立档案详情路由不预留主导航高度。首页在正文可用宽度至少 840 时左右排布，顺序列表及设置内容限宽。
+
+专家页与二维码结果页共用 `ExpertField`，字段名后统一显示中文冒号，字段标签和值通过 Wrap 按实际文字及当前字体缩放宽度排布，不按窗口断点强制上下排列，也不为短标签预留固定宽列。能容纳的字段保持同行；长值移到下一行并获得完整正文宽度，允许自然换行，不截断公钥、HEX、账户或诊断原文。
+
+`AdaptiveCardDetailPage` 在同一路由保存当前卡片 ID，`AdaptiveListDetail` 在可用宽度至少 840 且高度至少 480 时并列列表和详情；窄窗仅显示已选择详情，系统返回退出详情路由。列表与详情窗格通过稳定 key、Offstage 保持挂载，详情的查询流、筛选和滚动不因窗口缩放重新创建；各窗格独立 ScaffoldMessenger，避免同一 SnackBar 同时注册多个 Hero。已存在的本地恢复继续保存选中卡片路径与筛选，不写入新的数据库字段。
+
+折叠屏只按折叠与展开后的当前窗口尺寸适配外屏／内屏，不识别半折、书本或桌面姿态，不根据折叠角度切换布局。`MaterialApp.builder` 在 Navigator 与 Overlay 外统一注入 `FoldableDisplayScope`，从布局使用的 `MediaQuery.displayFeatures` 中过滤 fold 折痕及零面积特征，完整页面与列表详情组件也应用同一规则；主页面、路由、Dialog 与 BottomSheet 均不因半折信号缩至半屏或重新分栏。实体铰链及刘海仍按真实遮挡区域避让，完整页面通过 DisplayFeatureSubScreen 更新可用子屏和局部 MediaQuery，列表详情仅可沿满足两侧最小宽度的实体竖向铰链分栏，其余按当前可用宽高布局。行程面板保留触发 anchorPoint 与 useSafeArea，对话框最大宽度 560。Android 17／targetSdk 37 不添加限制旋转／缩放的兼容退出项，不接入厂商平行视窗或 Activity Embedding 来拆分同一 Flutter 引擎。
+
+扫码页拥有外部 MobileScannerController，因此自行监听 WidgetsBinding 生命周期，将相机 stop/start 串行化，处理权限请求尚未结束时进入 inactive 的情况，失败后允许用户重试；窗口布局变化不重建相机控制器。预览比例和旋转交给现有 CameraX／mobile_scanner，NFC 通道与会话契约保持不变。模拟回归不能证明厂商内外屏、相机独占资源、物理 NFC 连接或系统强杀行为，仍需真机验收。
+
+规范来源：
+- https://www.itgsa.com/documents/5242001394058240
+- https://developer.android.com/develop/ui/compose/layouts/adaptive/list-detail
+- https://developer.android.com/develop/ui/compose/layouts/adaptive/foldables/make-your-app-fold-aware
+- https://developer.android.com/about/versions/17/changes/ff-restrictions-ignored
+
 `AppDependencies` 是根装配与展示门面，组合 Scan、ReferenceData、Archive、Settings、QR、Diagnostics 控制器。可变状态、异步工作和资源由各控制器负责。协议代码只依赖 Dart、协议领域模型和注入的传输函数，不反向引用 app、features、Flutter 平台通道或 SQLite。
 
 ```mermaid

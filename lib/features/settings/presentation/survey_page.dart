@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+
+import '../../../shared/presentation/adaptive_layout.dart';
+
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -72,30 +75,35 @@ class _SurveyPageState extends State<SurveyPage> {
   Widget build(BuildContext context) {
     // PopScope：网页内可回退时先回退网页；canPop 需在手势开始前确定、
     // 无法按网页历史动态变化，故固定 false，统一在回调中处理。
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (bool didPop, Object? result) async {
-        if (didPop) return;
-        final navigator = Navigator.of(context);
-        if (await _controller.canGoBack()) {
-          await _controller.goBack();
-        } else if (mounted) {
-          navigator.pop();
-        }
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(widget.title),
-          bottom: !_failed && _progress < 100
-              ? PreferredSize(
-                  preferredSize: const Size.fromHeight(2),
-                  child: LinearProgressIndicator(value: _progress / 100),
-                )
-              : null,
+    return FoldSafePage(
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (bool didPop, Object? result) async {
+          if (didPop) return;
+          final navigator = Navigator.of(context);
+          if (await _controller.canGoBack()) {
+            await _controller.goBack();
+          } else if (mounted) {
+            navigator.pop();
+          }
+        },
+        child: Scaffold(
+          appBar: AppBar(
+            title: Text(widget.title),
+            bottom: !_failed && _progress < 100
+                ? PreferredSize(
+                    preferredSize: const Size.fromHeight(2),
+                    child: LinearProgressIndicator(value: _progress / 100),
+                  )
+                : null,
+          ),
+          body: SafeArea(
+            top: false,
+            child: _failed
+                ? _LoadErrorView(onRetry: _load)
+                : WebViewWidget(controller: _controller),
+          ),
         ),
-        body: _failed
-            ? _LoadErrorView(onRetry: _load)
-            : WebViewWidget(controller: _controller),
       ),
     );
   }

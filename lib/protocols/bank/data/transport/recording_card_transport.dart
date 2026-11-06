@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import '../../../transport/transport_failure.dart';
 
 import '../../domain/interfaces/card_transport.dart';
+import '../../emv/protocol/bank_read_only_policy.dart';
 import '../../domain/models/apdu_trace.dart';
 import '../apdu/apdu_response.dart';
 import '../tlv/hex_codec.dart';
@@ -20,6 +21,8 @@ class RecordingCardTransport implements CardTransport {
 
   @override
   Future<Uint8List> transceive(Uint8List command) async {
+    // 在最接近实际通道的边界再次检查，解析器不能绕过交换器直接发送交易命令。
+    BankReadOnlyPolicy.validate(command);
     final previousFailure = _failure;
     if (previousFailure != null) throw previousFailure;
     final sw = Stopwatch()..start();

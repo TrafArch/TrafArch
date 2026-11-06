@@ -421,7 +421,7 @@ void main() {
     );
     await _open(tester, repository, id);
     expect(find.byType(TripEntryCard), findsNWidgets(2));
-    expect(find.text('交易 1 条 · 过程及应用记录 1 条（1 条已并入 0x18 交易）'), findsOneWidget);
+    expect(find.text('交易 1 条 · 过程及应用记录 1 条（1 条已合并展示）'), findsOneWidget);
     await _filter(tester, '0x18 交易');
     await tester.tap(find.byType(TripEntryCard));
     await tester.pumpAndSettle();

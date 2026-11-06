@@ -4,7 +4,6 @@ import '../emv/protocol/read_only_exchange.dart';
 import '../data/apdu/apdu_command.dart';
 import '../data/apdu/apdu_response.dart';
 import '../data/dictionary/json_tag_dictionary.dart';
-import '../data/pdol/pdol_data_builder.dart';
 import '../data/tlv/ber_tlv_decoder.dart';
 import '../data/tlv/hex_codec.dart';
 import '../domain/interfaces/card_parser.dart';
@@ -16,14 +15,8 @@ import '../domain/models/card_record.dart';
 import '../domain/models/parse_issue.dart';
 import '../domain/models/tlv_node.dart';
 
-/// 非接触式只读流程基类：实现允许的安全读取步骤，
-/// 子类只提供协议族标识、适用判定与标签字典。
-///
-/// EMV / PBOC 自动切换点：
-/// 1. GPO 按卡片 PDOL（9F38）自动组包；未提供 PDOL 或组包形式未被接受时
-///    自动切换为 83 00 形式重试；
-/// 2. GPO 响应同时兼容 77（TLV 模板）与 80（AIP+AFL 裸拼接）两种格式；
-/// 3. AFL 按 EMV Book 3 语义（SFI / 首记录 / 末记录 / ODA 数）定位记录。
+/// EMV / PBOC 严格只读：SELECT → GET DATA（ATC）→ 有界 READ RECORD。
+/// 不发送 GPO 或构建 PDOL，不通过启动交易取得 AFL 或补齐受保护字段。
 abstract class ContactlessReadParser implements CardParser {
   TagDictionary get dictionary;
 
@@ -71,166 +64,117 @@ abstract class ContactlessReadParser implements CardParser {
       );
     }
 
-    // 2. GET PROCESSING OPTIONS：按卡片 PDOL（9F38）自动组包；
-    //    无 PDOL 时发送 83 00；组包形式未被接受时自动切换 83 00 重试一次。
-    final pdol = selectRoots == null
-        ? null
-        : BerTlvDecoder.findFirst(selectRoots, '9F38');
-    var gpoResp = ApduResponse(data: _empty, sw1: 0, sw2: 0);
-    var gpoSwitched = false;
-    try {
-      final pdolData = pdol == null
-          ? const <int>[]
-          : PdolDataBuilder.build(pdol.value);
-      gpoResp = await _exchange(
-        transport,
-        ApduCommand.getProcessingOptions(pdolData: pdolData),
-        issues,
-        'gpo',
-      );
-      if (!_isOk(gpoResp) && gpoResp.statusWord != 0 && pdolData.isNotEmpty) {
-        gpoSwitched = true;
-        issues.add(
-          ParseIssue(
-            stage: 'gpo',
-            code: 'switch_empty_pdol',
-            message:
-                'PDOL 组包 GPO 未成功（${_swText(gpoResp)}），'
-                '自动切换为 83 00 形式重试',
-          ),
-        );
-        gpoResp = await _exchange(
-          transport,
-          ApduCommand.getProcessingOptions(),
-          issues,
-          'gpo',
-        );
-      }
-    } on FormatException {
-      issues.add(
-        const ParseIssue(
-          stage: 'gpo',
-          code: 'invalid_pdol',
-          message: 'PDOL 结构或长度无效，保留选择结果并停止 GPO',
-        ),
-      );
-    }
-    List<TlvNode> gpoTags = const [];
-    List<int>? afl;
-    String gpoHex = '';
-    if (_isOk(gpoResp)) {
-      gpoHex = HexCodec.encode(gpoResp.data);
-      final roots = _safeDecode(gpoResp.data);
-      if (roots != null) {
-        gpoTags = _toNodes(roots);
-        afl = _extractAfl(roots);
+    // 2. GET DATA 直接读取 ATC。拒绝或不支持时保留缺失，绝不回退 GPO。
+    final dataTags = <TlvNode>[];
+    final atcResponse = await _exchange(
+      transport,
+      ApduCommand.getApplicationTransactionCounter(),
+      issues,
+      'get_data',
+    );
+    if (_isOk(atcResponse)) {
+      final roots = _safeDecode(atcResponse.data);
+      final atc = roots == null ? null : BerTlvDecoder.findFirst(roots, '9F36');
+      if (atc != null && atc.value.length == 2) {
+        dataTags.add(_toNode(atc));
       } else {
         issues.add(
           const ParseIssue(
-            stage: 'gpo',
-            code: 'bad_tlv',
-            message: 'GPO 响应非合法 TLV 结构，保留原始 HEX',
+            stage: 'get_data',
+            code: 'invalid_atc',
+            message: 'GET DATA 响应未包含有效的两字节 9F36，不推断计数器',
           ),
         );
       }
-    } else if (gpoResp.statusWord != 0) {
+    } else if (atcResponse.statusWord != 0) {
       issues.add(
         ParseIssue(
-          stage: 'gpo',
-          code: _swText(gpoResp),
-          message: gpoSwitched ? 'GPO 两种形式（PDOL 组包 / 83 00）均未成功' : 'GPO 未成功',
+          stage: 'get_data',
+          code: _swText(atcResponse),
+          message: '卡片未开放 ATC 的直接读取，保留未知',
         ),
       );
     }
 
-    // 3. 依据 AFL 读取记录（以记录数上限防御异常卡驱动的无界读取）
+    // 3. 无 AFL 时仅枚举公开可读记录：SFI 1..30，每文件从记录 1 开始。
+    // 遇拒绝即结束该文件；所有成功及失败尝试共用单应用 254 次预算。
+    // 没有交易上下文的卡片可能拒绝全部记录，这不触发任何交易或认证。
     final records = <CardRecord>[];
-    if (afl != null) {
-      final visited = <int>{};
-      recordsLoop:
-      for (final ref in _parseAfl(afl, issues)) {
-        for (var r = ref.firstRecord; r < ref.firstRecord + ref.count; r++) {
-          final key = (ref.sfi << 8) | r;
-          if (visited.contains(key)) continue;
-          if (visited.length >= _maxRecords) {
+    var attempts = 0;
+    recordsLoop:
+    for (var sfi = 1; sfi <= 30; sfi++) {
+      for (var record = 1; record <= 254; record++) {
+        if (_hasTransportFailure(issues)) break recordsLoop;
+        if (attempts >= _maxRecords) {
+          issues.add(
+            const ParseIssue(
+              stage: 'read_record',
+              code: 'record_limit',
+              message: '已达到单应用记录读取次数上限，保留已读数据',
+            ),
+          );
+          break recordsLoop;
+        }
+        attempts++;
+        final response = await _exchange(
+          transport,
+          ApduCommand.readRecord(sfi, record),
+          issues,
+          'read_record',
+        );
+        if (!_isOk(response)) {
+          if (response.statusWord != 0 &&
+              response.statusWord != 0x6A82 &&
+              response.statusWord != 0x6A83) {
             issues.add(
-              const ParseIssue(
+              ParseIssue(
                 stage: 'read_record',
-                code: 'record_limit',
-                message: '已达到单应用记录读取次数上限，保留已读数据',
+                code: _swText(response),
+                message: 'SFI $sfi 记录 $record 未开放读取，停止该文件',
               ),
             );
-            break recordsLoop;
           }
-          visited.add(key);
-          final rec = await _readRecord(transport, ref.sfi, r, issues);
-          if (rec != null) records.add(rec);
-          if (issues.any(
-            (issue) =>
-                issue.code == 'nfc_io_error' ||
-                issue.code == 'invalid_response',
-          )) {
-            break recordsLoop;
-          }
+          break;
         }
+        final roots = _safeDecode(response.data);
+        records.add(
+          CardRecord(
+            sfi: sfi,
+            recordNumber: record,
+            rawHex: HexCodec.encode(response.data),
+            tags: roots == null ? const [] : _toNodes(roots),
+            parseError: roots == null ? '记录内容非合法 TLV 结构，保留原始 HEX' : null,
+          ),
+        );
       }
-    } else {
-      issues.add(
-        const ParseIssue(
-          stage: 'afl',
-          code: 'no_afl',
-          message: '未取得 AFL，无法定位可读记录',
-        ),
-      );
     }
+    issues.add(
+      const ParseIssue(
+        stage: 'read_only',
+        code: 'transaction_processing_skipped',
+        message: '严格只读：未启动交易，仅保留直接可读数据；受保护字段及记录完整性未知',
+      ),
+    );
 
     return ParsedApplication(
       application: application.withSelected(true),
       parserId: parserId,
       fciTags: fciTags,
-      gpoTags: gpoTags,
-      gpoHex: gpoHex,
+      dataTags: dataTags,
       records: records,
       issues: issues,
       summary: _buildSummary([
+        // GET DATA 是本次直接观察值，优先于 FCI 或记录中同名标签。
+        ...dataTags,
         ...fciTags,
-        ...gpoTags,
         for (final r in records) ...r.tags,
       ]),
     );
   }
 
-  Future<CardRecord?> _readRecord(
-    CardTransport transport,
-    int sfi,
-    int record,
-    List<ParseIssue> issues,
-  ) async {
-    final resp = await _exchange(
-      transport,
-      ApduCommand.readRecord(sfi, record),
-      issues,
-      'read_record',
-    );
-    if (!_isOk(resp)) {
-      issues.add(
-        ParseIssue(
-          stage: 'read_record',
-          code: _swText(resp),
-          message: 'SFI 0x${sfi.toRadixString(16)} 记录 $record 读取被拒或未找到',
-        ),
-      );
-      return null;
-    }
-    final roots = _safeDecode(resp.data);
-    return CardRecord(
-      sfi: sfi,
-      recordNumber: record,
-      rawHex: HexCodec.encode(resp.data),
-      tags: roots == null ? const [] : _toNodes(roots),
-      parseError: roots == null ? '记录内容非合法 TLV 结构，保留原始 HEX' : null,
-    );
-  }
+  bool _hasTransportFailure(List<ParseIssue> issues) => issues.any(
+    (issue) => issue.code == 'nfc_io_error' || issue.code == 'invalid_response',
+  );
 
   /// 记录内可能存在多条同类标签（如 5A 与 9F 系列），逐个转成 TlvNode。
   List<TlvNode> _toNodes(List<RawTlv> roots) =>
@@ -252,51 +196,6 @@ abstract class ContactlessReadParser implements CardParser {
       masked: dictionary.shouldMask(r.tagHex),
       children: r.children.map(_toNode).toList(),
     );
-  }
-
-  /// 从 GPO 响应提取 AFL：
-  /// 优先 77 模板内 tag 94；否则兼容 80 模板（Format 1：AIP + AFL 裸拼接）。
-  List<int>? _extractAfl(List<RawTlv> roots) {
-    final afl = BerTlvDecoder.findFirst(roots, '94');
-    if (afl != null) return afl.value;
-    for (final root in roots) {
-      if (root.tagHex == '80') {
-        return root.value.length > 2 ? root.value.sublist(2).toList() : null;
-      }
-    }
-    return null;
-  }
-
-  /// EMV Book 3 AFL：每 4 字节一组
-  /// [SFI（高 5 位）/ 首记录号 / 末记录号 / 参与认证的记录数]。
-  List<_AflRef> _parseAfl(List<int> afl, List<ParseIssue> issues) {
-    final refs = <_AflRef>[];
-    var invalid = afl.length % 4 != 0 || afl.length > 252;
-    for (var i = 0; i + 3 < afl.length; i += 4) {
-      final sfi = afl[i] >> 3;
-      final first = afl[i + 1];
-      final last = afl[i + 2];
-      if (sfi == 0 ||
-          sfi > 30 ||
-          (afl[i] & 7) != 0 ||
-          first == 0 ||
-          last < first ||
-          afl[i + 3] > last - first + 1) {
-        invalid = true;
-        continue;
-      }
-      refs.add(_AflRef(sfi: sfi, firstRecord: first, count: last - first + 1));
-    }
-    if (invalid) {
-      issues.add(
-        const ParseIssue(
-          stage: 'afl',
-          code: 'invalid_afl',
-          message: 'AFL 包含无效长度或记录范围，仅尝试有效的完整条目',
-        ),
-      );
-    }
-    return refs;
   }
 
   List<RawTlv>? _safeDecode(Uint8List data) {
@@ -378,7 +277,7 @@ abstract class ContactlessReadParser implements CardParser {
     '9F4C',
   ];
 
-  /// 遍历 FCI/GPO/记录标签树，命中关键标签即解码出值（解码失败回退原始 HEX）。
+  /// 遍历 FCI/GET DATA/记录标签树，命中关键标签即解码出值（解码失败回退原始 HEX）。
   CardFieldSummary _buildSummary(List<TlvNode> trees) {
     final fields = <CardField>[];
     for (final tag in _summaryTags) {
@@ -407,15 +306,4 @@ abstract class ContactlessReadParser implements CardParser {
     }
     return CardFieldSummary(fields);
   }
-}
-
-class _AflRef {
-  final int sfi;
-  final int firstRecord;
-  final int count;
-  const _AflRef({
-    required this.sfi,
-    required this.firstRecord,
-    required this.count,
-  });
 }
