@@ -652,6 +652,7 @@ extension _GalleryComponents on _GalleryViewState {
     ];
     final selectedIndex = pages.indexOf(c.mainPage);
     final layout = _navLayout;
+    final floatingRadius = BorderRadius.circular(31 + _extraTextScale * 10);
     final bar = Container(
       height: layout.contentHeight,
       padding: EdgeInsets.fromLTRB(
@@ -661,24 +662,17 @@ extension _GalleryComponents on _GalleryViewState {
         c.docked ? 0 : 5,
       ),
       decoration: BoxDecoration(
-        color: c.docked ? t.surface2 : t.surface.withValues(alpha: .78),
-        borderRadius: c.docked
-            ? null
-            : BorderRadius.circular(31 + _extraTextScale * 10),
-        boxShadow: c.docked
-            ? null
-            : [
-                BoxShadow(
-                  color: Colors.black.withValues(
-                    alpha: Theme.of(context).brightness == Brightness.dark
-                        ? .28
-                        : .10,
-                  ),
-                  blurRadius: 20,
-                  offset: const Offset(0, 8),
-                ),
-              ],
+        color: c.docked
+            ? t.dockedNavigationSurface
+            : t.surface.withValues(alpha: .78),
+        borderRadius: c.docked ? null : floatingRadius,
       ),
+      foregroundDecoration: c.docked
+          ? null
+          : BoxDecoration(
+              borderRadius: floatingRadius,
+              border: t.floatingNavigationBorder,
+            ),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final gap = c.docked ? 0.0 : 5.0;
@@ -735,7 +729,7 @@ extension _GalleryComponents on _GalleryViewState {
     if (c.docked) {
       return ColoredBox(
         key: const ValueKey('gallery-docked-bar'),
-        color: t.surface2,
+        color: t.dockedNavigationSurface,
         child: Padding(
           padding: EdgeInsets.only(bottom: layout.bottomSpace),
           child: bar,
@@ -746,11 +740,17 @@ extension _GalleryComponents on _GalleryViewState {
       padding: EdgeInsets.only(left: 16, right: 16, bottom: layout.bottomSpace),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 320),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(31 + _extraTextScale * 10),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-            child: bar,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: floatingRadius,
+            boxShadow: t.floatingNavigationShadows,
+          ),
+          child: ClipRRect(
+            borderRadius: floatingRadius,
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+              child: bar,
+            ),
           ),
         ),
       ),
@@ -903,8 +903,7 @@ class _GalleryTabbedListState extends State<_GalleryTabbedList> {
       if (!mounted || target != widget.positionId || !_scroll.hasClients) {
         return;
       }
-      // The outgoing crossfade can be taller than the incoming content. During
-      // that overlap the stored incoming offset is still a valid scroll target.
+      // Restore after the incoming content has established its scroll extent.
       _scroll.jumpTo(
         (_offsets[target] ?? 0).clamp(0.0, _scroll.position.maxScrollExtent),
       );

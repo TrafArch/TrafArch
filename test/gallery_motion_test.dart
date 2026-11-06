@@ -154,6 +154,11 @@ void main() {
       final title = find.text('更换卡面');
       await tester.pump(const Duration(milliseconds: 65));
       final partialY = tester.getTopLeft(title).dy;
+      await tester.pump(const Duration(milliseconds: 220));
+      expect(
+        ModalRoute.of(tester.element(title))!.animation!.isCompleted,
+        isFalse,
+      );
       await tester.pumpAndSettle();
       final restingY = tester.getTopLeft(title).dy;
       expect(partialY, greaterThan(restingY));
@@ -169,6 +174,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
       expect(tester.getTopLeft(title).dy, greaterThan(restingY));
       expect(title.hitTestable(), findsNothing);
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(title, findsOneWidget);
       await tester.pumpAndSettle();
       expect(c.overlay, isNull);
       expect(c.page, GalleryPage.home);
@@ -422,7 +429,7 @@ void main() {
   );
 
   testWidgets(
-    'knowledge tabs crossfade and restore each protocol scroll position',
+    'knowledge switches protocols without refreshing its selector or fading content',
     (tester) async {
       c.navigate(GalleryPage.settings);
       c.navigate(GalleryPage.knowledge);
@@ -432,6 +439,12 @@ void main() {
       );
       final tu = find.text('交通联合参考数据');
       final cu = find.text('城市一卡通参考数据');
+      final scroll = tester.state<ScrollableState>(
+        find.descendant(of: list, matching: find.byType(Scrollable)),
+      );
+      final selector = tester.element(
+        find.byKey(const ValueKey('segments-knowledge-tabs-indicator')),
+      );
       await tester.drag(list, const Offset(0, -240));
       await tester.pumpAndSettle();
       double offset() => tester
@@ -445,16 +458,24 @@ void main() {
       c.update(() => c.knowledgeTab = 'cu');
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 40));
-      expect(tu, findsOneWidget);
+      expect(tu, findsNothing);
       expect(cu, findsOneWidget);
-      final transition = find
-          .ancestor(of: cu, matching: find.byType(FadeTransition))
-          .first;
       expect(
-        tester.widget<FadeTransition>(transition).opacity.value,
-        inExclusiveRange(0, 1),
+        find.descendant(of: list, matching: find.byType(FadeTransition)),
+        findsNothing,
       );
-      expect(tu.hitTestable(), findsNothing);
+      expect(
+        tester.element(
+          find.byKey(const ValueKey('segments-knowledge-tabs-indicator')),
+        ),
+        same(selector),
+      );
+      expect(
+        tester.state<ScrollableState>(
+          find.descendant(of: list, matching: find.byType(Scrollable)),
+        ),
+        same(scroll),
+      );
       await tester.pumpAndSettle();
       expect(tu, findsNothing);
       expect(offset(), 0);
@@ -463,6 +484,111 @@ void main() {
       expect(offset(), closeTo(savedOffset, .1));
     },
   );
+
+  testWidgets(
+    'knowledge builds coverage regions only as they approach the viewport',
+    (tester) async {
+      await mount(tester);
+      c.navigate(GalleryPage.settings);
+      await tester.pumpAndSettle();
+      c.navigate(GalleryPage.knowledge);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 70));
+      final system =
+          (c.data.knowledge['systems'] as Map)['tu'] as GalleryRecord;
+      final regions = (system['regions'] as List).cast<GalleryRecord>();
+      final last = find.text(regions.last['name'] as String);
+      expect(last, findsNothing);
+      expect(
+        tester.getTopLeft(find.byKey(const ValueKey(GalleryPage.knowledge))).dx,
+        inExclusiveRange(0, 412),
+      );
+      await tester.pumpAndSettle();
+      final list = find.byKey(
+        PageStorageKey('gallery-${c.generation}-knowledge'),
+      );
+      await tester.scrollUntilVisible(
+        last,
+        500,
+        scrollable: find.descendant(
+          of: list,
+          matching: find.byType(Scrollable),
+        ),
+      );
+      expect(last, findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  for (final lineCount in [1, 24]) {
+    testWidgets('coverage motion scales to $lineCount lines and can reverse', (
+      tester,
+    ) async {
+      final system =
+          (c.data.knowledge['systems'] as Map)['tu'] as GalleryRecord;
+      final regionData = (system['regions'] as List).first as GalleryRecord;
+      regionData['lines'] = (regionData['lines'] as List)
+          .take(lineCount)
+          .toList();
+      c.navigate(GalleryPage.knowledge);
+      await mount(tester);
+      final region = find.byKey(const ValueKey('knowledge-region-tu:0'));
+      final header = find.descendant(
+        of: region,
+        matching: find.byType(ListTile),
+      );
+      final clip = find
+          .descendant(of: region, matching: find.byType(ClipRect))
+          .first;
+      await tester.tap(header);
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      final partial = tester.getSize(clip).height;
+      await tester.pumpAndSettle();
+      final full = tester.getSize(clip).height;
+      if (lineCount == 1) {
+        expect(partial, closeTo(full, .1));
+      } else {
+        expect(partial, inExclusiveRange(0, full));
+      }
+      await tester.tap(header);
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      final shrinking = tester.getSize(clip).height;
+      expect(shrinking, inExclusiveRange(0, full));
+      await tester.tap(header);
+      await tester.pump();
+      await tester.pump();
+      expect(tester.getSize(clip).height, closeTo(shrinking, .1));
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(tester.getSize(clip).height, greaterThan(shrinking));
+      await tester.pumpAndSettle();
+      await tester.tap(header);
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      if (lineCount == 24) {
+        expect(tester.getSize(clip).height, inExclusiveRange(0, full));
+      }
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(of: region, matching: find.byType(ClipRect)),
+        findsNothing,
+      );
+      tester.platformDispatcher.accessibilityFeaturesTestValue =
+          const FakeAccessibilityFeatures(disableAnimations: true);
+      addTearDown(
+        tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(header);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(clip).height, closeTo(full, .1));
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets(
     'theme segment slides continuously and reverses from its current position',

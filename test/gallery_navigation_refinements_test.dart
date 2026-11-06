@@ -92,7 +92,9 @@ void main() {
             for (final entry in pixels.entries) {
               _expectColorNear(
                 entry.value,
-                entry.key == controller.page ? tokens.tone : tokens.surface2,
+                entry.key == controller.page
+                    ? tokens.tone
+                    : tokens.dockedNavigationSurface,
                 '$phase ${entry.key.name}',
               );
             }
@@ -102,7 +104,7 @@ void main() {
             final pixels = await sampleBackgrounds();
             for (final entry in pixels.entries) {
               final actual = _rgb(entry.value);
-              final surface = _rgb(tokens.surface2);
+              final surface = _rgb(tokens.dockedNavigationSurface);
               final tone = _rgb(tokens.tone);
               for (var channel = 0; channel < 3; channel++) {
                 final minimum = surface[channel] < tone[channel]

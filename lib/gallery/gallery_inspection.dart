@@ -225,250 +225,245 @@ extension _GalleryInspection on _GalleryViewState {
           id: 'knowledge-tabs',
         ),
         _gap(16),
-        _fade(
-          'knowledge-${c.knowledgeTab}',
+        _panel(
           Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _panel(
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
+              Row(
+                children: [
+                  Expanded(
+                    child: _text(
+                      '${data['name']}参考数据',
+                      role: GalleryTypography.body,
+                      weight: FontWeight.w600,
+                    ),
+                  ),
+                  _text(
+                    '本地数据',
+                    role: GalleryTypography.caption,
+                    color: t.onTone,
+                  ),
+                ],
+              ),
+              _gap(18),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: _text(
-                            '${data['name']}参考数据',
-                            role: GalleryTypography.body,
-                            weight: FontWeight.w600,
-                          ),
+                        _text(
+                          '${regions.length}',
+                          size: 28,
+                          weight: FontWeight.w600,
                         ),
                         _text(
-                          '本地数据',
+                          '覆盖地区',
                           role: GalleryTypography.caption,
-                          color: t.onTone,
+                          color: t.muted,
                         ),
                       ],
                     ),
-                    _gap(18),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _text(
-                                '${regions.length}',
-                                size: 28,
-                                weight: FontWeight.w600,
-                              ),
-                              _text(
-                                '覆盖地区',
-                                role: GalleryTypography.caption,
-                                color: t.muted,
-                              ),
-                            ],
-                          ),
-                        ),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _text(
-                                _groupNumber(data['entries'] as int),
-                                size: 28,
-                                weight: FontWeight.w600,
-                              ),
-                              _text(
-                                '站点编码条目',
-                                role: GalleryTypography.caption,
-                                color: t.muted,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    _gap(14),
-                    _text(
-                      '用于识别读卡结果中的城市、线路与站点。\n数据快照 ${c.data.knowledge['captured']}，两个体系独立统计。',
-                      role: GalleryTypography.caption,
-                      color: t.muted,
-                    ),
-                  ],
-                ),
-                color: t.tone,
-                border: false,
-                radius: 20,
-              ),
-              _gap(16),
-              _expand('knowledge:meta', '数据概况', [
-                _kv('源文件', data['source'] as String),
-                _kv('数据库版本', data['version'].toString()),
-                _kv('数据包版本', '${data['formatVersion']}'),
-                _kv('来源 SHA256', data['sha256'] as String),
-                for (final pair in [
-                  ('cities', '城市码表'),
-                  ('cards', '机构指纹'),
-                  ('terminals', '终端规则'),
-                  ('routes', '线路规则'),
-                  ('bus', '公交资料'),
-                  ('prefixes', '前缀规则'),
-                ])
-                  if (data[pair.$1] != null)
-                    _kv(pair.$2, _groupNumber(data[pair.$1] as int)),
-              ], initiallyOpen: c.knowledgeMetadata),
-              _sectionTitle('覆盖地区', trailing: '按城市编码排序'),
-              ...regions.indexed.map((item) {
-                final r = item.$2;
-                final key = '${c.knowledgeTab}:${item.$1}';
-                final open = c.knowledgeExpanded.contains(key);
-                final lines = (r['lines'] as List).cast<GalleryRecord>();
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: _panel(
-                    Column(
-                      children: [
-                        ListTile(
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          title: _text(
-                            r['name'] as String,
-                            role: GalleryTypography.body,
-                            weight: FontWeight.w600,
-                          ),
-                          subtitle: _text(
-                            '${r['lineCount']} 条线路 · ${_groupNumber(r['entries'] as int)} 条编码\n${r['province'] ?? ''}',
-                            role: GalleryTypography.caption,
-                            color: t.muted,
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _text(
-                                r['code'] as String,
-                                role: GalleryTypography.caption,
-                                mono: true,
-                                color: t.muted,
-                              ),
-                              const SizedBox(width: 8),
-                              _expandArrow(open, size: 18),
-                            ],
-                          ),
-                          onTap: () => c.update(
-                            () => open
-                                ? c.knowledgeExpanded.remove(key)
-                                : c.knowledgeExpanded.add(key),
-                          ),
-                        ),
-                        _collapse(
-                          open,
-                          (_) => Column(
-                            children: [
-                              const Divider(),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                ),
-                                child: Column(
-                                  children: lines.indexed.map((lineItem) {
-                                    final line = lineItem.$2;
-                                    final lineKey = '$key:${lineItem.$1}';
-                                    final lineOpen = c.knowledgeExpanded
-                                        .contains(lineKey);
-                                    final stations = (line['stations'] as List)
-                                        .cast<String>();
-                                    return Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.stretch,
-                                      children: [
-                                        InkWell(
-                                          onTap: () => c.update(
-                                            () => lineOpen
-                                                ? c.knowledgeExpanded.remove(
-                                                    lineKey,
-                                                  )
-                                                : c.knowledgeExpanded.add(
-                                                    lineKey,
-                                                  ),
-                                          ),
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                              vertical: 14,
-                                            ),
-                                            child: Row(
-                                              children: [
-                                                Expanded(
-                                                  child: _text(
-                                                    line['name'] as String,
-                                                    role:
-                                                        GalleryTypography.label,
-                                                  ),
-                                                ),
-                                                _text(
-                                                  '${stations.length} 站',
-                                                  role:
-                                                      GalleryTypography.caption,
-                                                  color: t.muted,
-                                                ),
-                                                const SizedBox(width: 8),
-                                                _expandArrow(
-                                                  lineOpen,
-                                                  size: 16,
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                        _collapse(
-                                          lineOpen,
-                                          (_) => Padding(
-                                            padding: const EdgeInsets.only(
-                                              bottom: 14,
-                                            ),
-                                            child: Wrap(
-                                              spacing: 6,
-                                              runSpacing: 6,
-                                              children: stations
-                                                  .map(
-                                                    (s) => Container(
-                                                      padding:
-                                                          const EdgeInsets.symmetric(
-                                                            horizontal: 9,
-                                                            vertical: 5,
-                                                          ),
-                                                      decoration: BoxDecoration(
-                                                        color: t.surface2,
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              8,
-                                                            ),
-                                                      ),
-                                                      child: _text(s, size: 12),
-                                                    ),
-                                                  )
-                                                  .toList(),
-                                            ),
-                                          ),
-                                        ),
-                                        const Divider(),
-                                      ],
-                                    );
-                                  }).toList(),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    padding: EdgeInsets.zero,
                   ),
-                );
-              }),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _text(
+                          _groupNumber(data['entries'] as int),
+                          size: 28,
+                          weight: FontWeight.w600,
+                        ),
+                        _text(
+                          '站点编码条目',
+                          role: GalleryTypography.caption,
+                          color: t.muted,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              _gap(14),
+              _text(
+                '用于识别读卡结果中的城市、线路与站点。\n数据快照 ${c.data.knowledge['captured']}，两个体系独立统计。',
+                role: GalleryTypography.caption,
+                color: t.muted,
+              ),
             ],
+          ),
+          color: t.tone,
+          border: false,
+          radius: 20,
+        ),
+        _gap(16),
+        _expand('knowledge:meta', '数据概况', [
+          _kv('源文件', data['source'] as String),
+          _kv('数据库版本', data['version'].toString()),
+          _kv('数据包版本', '${data['formatVersion']}'),
+          _kv('来源 SHA256', data['sha256'] as String),
+          for (final pair in [
+            ('cities', '城市码表'),
+            ('cards', '机构指纹'),
+            ('terminals', '终端规则'),
+            ('routes', '线路规则'),
+            ('bus', '公交资料'),
+            ('prefixes', '前缀规则'),
+          ])
+            if (data[pair.$1] != null)
+              _kv(pair.$2, _groupNumber(data[pair.$1] as int)),
+        ], initiallyOpen: c.knowledgeMetadata),
+        _sectionTitle('覆盖地区', trailing: '按城市编码排序'),
+        ...regions.indexed.map(
+          (item) => Builder(
+            key: ValueKey('knowledge-region-${c.knowledgeTab}:${item.$1}'),
+            builder: (context) {
+              final r = item.$2;
+              final key = '${c.knowledgeTab}:${item.$1}';
+              final open = c.knowledgeExpanded.contains(key);
+              final lines = (r['lines'] as List).cast<GalleryRecord>();
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _panel(
+                  Column(
+                    children: [
+                      ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        title: _text(
+                          r['name'] as String,
+                          role: GalleryTypography.body,
+                          weight: FontWeight.w600,
+                        ),
+                        subtitle: _text(
+                          '${r['lineCount']} 条线路 · ${_groupNumber(r['entries'] as int)} 条编码\n${r['province'] ?? ''}',
+                          role: GalleryTypography.caption,
+                          color: t.muted,
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _text(
+                              r['code'] as String,
+                              role: GalleryTypography.caption,
+                              mono: true,
+                              color: t.muted,
+                            ),
+                            const SizedBox(width: 8),
+                            _expandArrow(open, size: 18),
+                          ],
+                        ),
+                        onTap: () => c.update(
+                          () => open
+                              ? c.knowledgeExpanded.remove(key)
+                              : c.knowledgeExpanded.add(key),
+                        ),
+                      ),
+                      _collapse(
+                        open,
+                        (_) => Column(
+                          children: [
+                            const Divider(),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                              ),
+                              child: Column(
+                                children: lines.indexed.map((lineItem) {
+                                  final line = lineItem.$2;
+                                  final lineKey = '$key:${lineItem.$1}';
+                                  final lineOpen = c.knowledgeExpanded.contains(
+                                    lineKey,
+                                  );
+                                  final stations = (line['stations'] as List)
+                                      .cast<String>();
+                                  return Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      InkWell(
+                                        onTap: () => c.update(
+                                          () => lineOpen
+                                              ? c.knowledgeExpanded.remove(
+                                                  lineKey,
+                                                )
+                                              : c.knowledgeExpanded.add(
+                                                  lineKey,
+                                                ),
+                                        ),
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 14,
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Expanded(
+                                                child: _text(
+                                                  line['name'] as String,
+                                                  role: GalleryTypography.label,
+                                                ),
+                                              ),
+                                              _text(
+                                                '${stations.length} 站',
+                                                role: GalleryTypography.caption,
+                                                color: t.muted,
+                                              ),
+                                              const SizedBox(width: 8),
+                                              _expandArrow(lineOpen, size: 16),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      _collapse(
+                                        lineOpen,
+                                        (_) => Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 14,
+                                          ),
+                                          child: Wrap(
+                                            spacing: 6,
+                                            runSpacing: 6,
+                                            children: stations
+                                                .map(
+                                                  (s) => Container(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 9,
+                                                          vertical: 5,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      color: t.surface2,
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            8,
+                                                          ),
+                                                    ),
+                                                    child: _text(s, size: 12),
+                                                  ),
+                                                )
+                                                .toList(),
+                                          ),
+                                        ),
+                                        adaptiveDuration: true,
+                                      ),
+                                      const Divider(),
+                                    ],
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                          ],
+                        ),
+                        adaptiveDuration: true,
+                      ),
+                    ],
+                  ),
+                  padding: EdgeInsets.zero,
+                ),
+              );
+            },
           ),
         ),
       ],

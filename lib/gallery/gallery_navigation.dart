@@ -4,8 +4,8 @@ abstract final class _GalleryMotion {
   static const main = Duration(milliseconds: 240);
   static const page = Duration(milliseconds: 280);
   static const back = Duration(milliseconds: 220);
-  static const sheet = Duration(milliseconds: 260);
-  static const sheetBack = Duration(milliseconds: 200);
+  static const sheet = Duration(milliseconds: 380);
+  static const sheetBack = Duration(milliseconds: 300);
   static const dialog = Duration(milliseconds: 180);
   static const dialogBack = Duration(milliseconds: 140);
   static const menu = Duration(milliseconds: 180);
@@ -327,12 +327,10 @@ class _GalleryPageRoute extends PageRoute<void> with _GalleryPredictiveRoute {
     if (configuration.reduceMotion) return interactive(child);
     final primary = motionProgress(animation);
     // 只让当前页跟随手势位移：下层页保持静止，避免两层同时移动产生的
-    // 抖动；RepaintBoundary 隔离重页面（如知识库长列表）的逐帧重绘。
-    return RepaintBoundary(
-      child: FractionalTranslation(
-        translation: Offset(isFirst ? 0 : 1 - primary, 0),
-        child: interactive(child),
-      ),
+    // 抖动；位移放在 RepaintBoundary 外，让重页面复用已绘制的内容。
+    return FractionalTranslation(
+      translation: Offset(isFirst ? 0 : 1 - primary, 0),
+      child: RepaintBoundary(child: interactive(child)),
     );
   }
 }
@@ -572,8 +570,9 @@ class _GalleryCollapse extends StatefulWidget {
     required this.open,
     required this.builder,
     required this.reduceMotion,
+    this.adaptiveDuration = false,
   });
-  final bool open, reduceMotion;
+  final bool open, reduceMotion, adaptiveDuration;
   final WidgetBuilder builder;
   @override
   State<_GalleryCollapse> createState() => _GalleryCollapseState();
@@ -592,6 +591,7 @@ class _GalleryCollapseState extends State<_GalleryCollapse>
         }
       });
   Widget? _content;
+  final _measureKey = GlobalKey();
   @override
   void initState() {
     super.initState();
@@ -606,7 +606,22 @@ class _GalleryCollapseState extends State<_GalleryCollapse>
     if (widget.reduceMotion) {
       _animation.value = widget.open ? 1 : 0;
     } else if (widget.open != oldWidget.open) {
-      widget.open ? _animation.forward() : _animation.reverse();
+      if (widget.adaptiveDuration) {
+        _animation.stop();
+        final opening = widget.open;
+        // Even at heightFactor=0 the child gets its full natural layout. Measure
+        // that height once, then animate without rebuilding the long contents.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || widget.open != opening || widget.reduceMotion) return;
+          final height = _measureKey.currentContext?.size?.height ?? 0;
+          _animation.duration = Duration(
+            milliseconds: (280 + height * .35).round().clamp(280, 1200),
+          );
+          opening ? _animation.forward() : _animation.reverse();
+        });
+      } else {
+        widget.open ? _animation.forward() : _animation.reverse();
+      }
     }
   }
 
@@ -634,7 +649,12 @@ class _GalleryCollapseState extends State<_GalleryCollapse>
           ignoring: !widget.open,
           child: ExcludeFocus(
             excluding: !widget.open,
-            child: ExcludeSemantics(excluding: !widget.open, child: _content!),
+            child: ExcludeSemantics(
+              excluding: !widget.open,
+              child: RepaintBoundary(
+                child: SizedBox(key: _measureKey, child: _content!),
+              ),
+            ),
           ),
         ),
       ),

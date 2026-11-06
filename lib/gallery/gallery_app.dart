@@ -301,10 +301,15 @@ class _GalleryViewState extends State<_GalleryView> {
     child: child,
   );
 
-  Widget _collapse(bool open, WidgetBuilder builder) => _GalleryCollapse(
+  Widget _collapse(
+    bool open,
+    WidgetBuilder builder, {
+    bool adaptiveDuration = false,
+  }) => _GalleryCollapse(
     open: open,
     builder: builder,
     reduceMotion: _reduceMotion,
+    adaptiveDuration: adaptiveDuration,
   );
 
   Widget _expandArrow(bool open, {double size = 18}) => AnimatedRotation(
@@ -346,7 +351,9 @@ class _GalleryViewState extends State<_GalleryView> {
       value: (t.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
           .copyWith(
             statusBarColor: Colors.transparent,
-            systemNavigationBarColor: c.docked && _isMain ? t.surface2 : t.bg,
+            systemNavigationBarColor: c.docked && _isMain
+                ? t.dockedNavigationSurface
+                : t.bg,
             systemNavigationBarDividerColor: Colors.transparent,
           ),
       child: Shortcuts(

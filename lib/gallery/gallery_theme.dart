@@ -24,6 +24,7 @@ class GalleryTokens extends ThemeExtension<GalleryTokens> {
   Color get surface => scheme.surfaceContainerLow;
   Color get surface2 => scheme.surfaceContainerHighest;
   Color get segmentTrack => Color.lerp(surface, surface2, .25)!;
+  Color get dockedNavigationSurface => Color.lerp(surface, surface2, .25)!;
   Color get raised => scheme.surfaceContainerHigh;
   Color get text => scheme.onSurface;
   Color get muted => scheme.onSurfaceVariant;
@@ -64,6 +65,18 @@ class GalleryTokens extends ThemeExtension<GalleryTokens> {
     action.withValues(alpha: .12),
     Color.lerp(const Color(0xff152d4a), const Color(0xff00030a), _depth)!,
   );
+  Border? get floatingNavigationBorder => _depth == 0
+      ? null
+      : Border.all(color: line.withValues(alpha: line.a * _depth));
+  List<BoxShadow> get floatingNavigationShadows => _depth == 1
+      ? const []
+      : [
+          BoxShadow(
+            color: _shadow.withValues(alpha: .07 * (1 - _depth)),
+            offset: const Offset(0, 2),
+            blurRadius: 8,
+          ),
+        ];
   List<BoxShadow> shadows(GalleryElevation level) => switch (level) {
     GalleryElevation.flat => const [],
     GalleryElevation.card => [
