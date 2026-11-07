@@ -104,7 +104,9 @@ String buildArchiveHistoryExport(
         ..writeln('  · ${transaction.kindLabel} · ${transaction.locationLabel}')
         ..writeln('    ${transaction.timeLabel} | ${transaction.sourceLabel}')
         ..writeln('    终端原始编码：${transaction.record.terminalHex ?? '未知'}')
-        ..writeln('    金额原始值：${transaction.record.amountRaw}（单位未确认）')
+        ..writeln('    交易金额：${transaction.amountText() ?? '未知'}')
+        ..writeln('    金额原始字段：${transaction.record.amountHex}')
+        ..writeln('    金额四字节原始值：${transaction.record.amountRaw}')
         ..writeln('    来源：${cuSourceLabels[transaction]}')
         ..writeln('    原始记录：${transaction.record.rawHex}');
     }

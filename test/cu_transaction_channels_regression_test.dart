@@ -193,8 +193,10 @@ void main() {
       expect(find.text('地区 5180公共汽电车'), findsOneWidget);
       final card = tester.widget<TripEntryCard>(find.byType(TripEntryCard));
       expect(card.info.title, '异地消费 · 地点未匹配 · 序号 1');
+      expect(card.info.amountText, '-¥0.01');
       expect(card.info.fields, contains(('终端原始编码', '518020000001')));
-      expect(card.info.fields, contains(('金额原始值', '1（单位未确认）')));
+      expect(card.info.fields, contains(('金额原始字段', '00000001')));
+      expect(card.info.fields, contains(('金额四字节原始值', '1')));
       await tester.tap(find.byType(TripEntryCard));
       await tester.pumpAndSettle();
       expect(find.byType(DraggableScrollableSheet), findsOneWidget);

@@ -125,6 +125,7 @@ class _TripsBody extends StatelessWidget {
             initialFilters: app.recoveryFilters['live:cu'],
             onFiltersChanged: (values) =>
                 app.recoveryFilters['live:cu'] = values,
+            currencySymbol: app.cardCurrency.symbol,
           ),
       ],
     );

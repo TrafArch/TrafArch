@@ -147,6 +147,16 @@ extension CityUnionWalletTransactionEvidence on CityUnionWalletTransaction {
     }
     return null;
   }
+
+  /// Trip Reader 1.7.17 reads bytes 07-09 as a 24-bit monetary magnitude and
+  /// applies the transaction direction from the decoded file role.
+  /// Byte 06 remains part of the raw four-byte field but is not the magnitude.
+  int? get interpretedAmountFen {
+    final hex = amountHex.replaceAll(RegExp(r'\s'), '').toUpperCase();
+    if (!RegExp(r'^[0-9A-F]{8}$').hasMatch(hex)) return null;
+    final magnitude = int.parse(hex.substring(2), radix: 16);
+    return kind == CityUnionTransactionKind.recharge ? magnitude : -magnitude;
+  }
 }
 
 /// CJ/T 331-2016 表 5：公共应用基本信息文件（SFI 0x15）解析结果。
