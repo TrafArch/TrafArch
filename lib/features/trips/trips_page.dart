@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../transit_analysis/tunion_analysis_models.dart';
 import '../../shared/presentation/adaptive_layout.dart';
+import '../../shared/domain/remote_card_use.dart';
 import '../../app/app_dependencies.dart';
 import '../qr/presentation/qr_action_button.dart';
 import '../settings/presentation/settings_action_button.dart';
@@ -103,17 +104,28 @@ class _TripsBody extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (analysis != null) ...[
+        if (analysis != null || app.cityUnionDetected) ...[
           _SessionHeader(
             analysis: analysis,
             app: app,
-            recordCount: stream.length,
+            recordCount: stream.length + cuRecords.independent.length,
           ),
           const SizedBox(height: 12),
         ],
         if (stream.isNotEmpty)
           TripStreamView(stream: stream, app: app, isRemote: app.isRemoteUse),
-        if (cuTransactions.isNotEmpty) CuApplicationRecords(records: cuRecords),
+        if (cuTransactions.isNotEmpty)
+          CuApplicationRecords(
+            records: cuRecords,
+            cityNameOf: app.cuCityNameOf,
+            isRemote: (transaction) => isRemoteCardUse(
+              app.cityUnionPublicInfo?.cityCode,
+              transaction.regionCode,
+            ),
+            initialFilters: app.recoveryFilters['live:cu'],
+            onFiltersChanged: (values) =>
+                app.recoveryFilters['live:cu'] = values,
+          ),
       ],
     );
   }
@@ -121,7 +133,7 @@ class _TripsBody extends StatelessWidget {
 
 /// 本次读卡会话摘要：卡片名称、余额与合并后可见记录总数。
 class _SessionHeader extends StatelessWidget {
-  final CardAnalysisResult analysis;
+  final CardAnalysisResult? analysis;
   final AppDependencies app;
   final int recordCount;
   const _SessionHeader({
@@ -134,11 +146,22 @@ class _SessionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final identity = analysis.identity;
-    final wallet = analysis.wallet;
-    final prefix = app.cardPrefixOf(wallet.cardNumber);
-    final cardName =
-        prefix?.cardName ?? identity.cardFamily ?? identity.operatorName ?? '—';
+    final identity = analysis?.identity;
+    final wallet = analysis?.wallet;
+    final cardNumber = app.cityUnionDetected
+        ? app.lastIdentified?.cardNumber ??
+              app.cityUnionPublicInfo?.cityCardNumber
+        : wallet?.cardNumber;
+    final prefix = analysis == null ? null : app.cardPrefixOf(cardNumber);
+    final cardName = app.cityUnionDetected
+        ? app.lastIdentified?.displayName ?? '城市一卡通'
+        : prefix?.cardName ??
+              identity?.cardFamily ??
+              identity?.operatorName ??
+              '—';
+    final balance =
+        wallet?.balanceFen ??
+        (app.cityUnionDetected ? app.parsedCard?.info.balanceFen : null);
 
     return Card(
       child: Padding(
@@ -157,7 +180,7 @@ class _SessionHeader extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    wallet.cardNumber ?? '—',
+                    cardNumber ?? '—',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: scheme.onSurfaceVariant,
                     ),
@@ -170,8 +193,9 @@ class _SessionHeader extends StatelessWidget {
               children: [
                 Text(
                   app.balanceDisplay.formatBalance(
-                        wallet.balanceFen,
-                        symbol: wallet.currency.symbol,
+                        balance,
+                        symbol:
+                            wallet?.currency.symbol ?? app.cardCurrency.symbol,
                       ) ??
                       '—',
                   style: theme.textTheme.titleMedium?.copyWith(

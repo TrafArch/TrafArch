@@ -218,8 +218,15 @@ class _CardDetailBody extends StatelessWidget {
           ),
         if (cityUnion.transactions.isNotEmpty)
           CuApplicationRecords(
+            key: ValueKey('cu:${history.card!.id}'),
             records: cuRecords,
             sourceLabels: cityUnion.sourceLabels,
+            isRemote: (transaction) =>
+                cityUnion.isRemoteUse(transaction, history.batches),
+            initialFilters: recoveryFilters?['card:${history.card!.id}:cu'],
+            onFiltersChanged: (values) {
+              recoveryFilters?['card:${history.card!.id}:cu'] = values;
+            },
           ),
         LocalCardHistoryRecords(records: history.localCardRecords),
         for (final issue in cityUnion.issues)

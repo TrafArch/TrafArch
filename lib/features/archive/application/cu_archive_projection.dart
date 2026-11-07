@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import '../../../shared/domain/remote_card_use.dart';
+import '../../../protocols/transit/card_parser.dart' show CardParserIds;
 import '../../../protocols/transit/city_union/city_union_models.dart';
 import '../../reference_data/domain/reference_match.dart';
 import '../../reference_data/domain/station_codes.dart';
@@ -41,6 +43,30 @@ class CuArchiveProjection {
   final List<CuTransactionView> transactions;
   final Map<CuTransactionView, List<ArchiveRecordSource>> sources;
   final List<String> issues;
+
+  /// Each retained capture must independently establish the CU issuing city.
+  /// A TU issuing city from a dual-application card is a different namespace.
+  bool isRemoteUse(
+    CuTransactionView transaction,
+    List<ArchiveBatchEvidence> batches,
+  ) {
+    final observations = sources[transaction] ?? const [];
+    final byId = {for (final batch in batches) batch.id: batch};
+    return observations.isNotEmpty &&
+        observations.every((source) {
+          final snapshot = byId[source.batchId]?.decoded.snapshot;
+          if (snapshot == null) return false;
+          final cities = <String>{
+            for (final file in snapshot.rawEvidence)
+              if (file['kind'] == 'cu_file' && file['sfi'] == '0x15')
+                if (file['cityCode'] case final String city) city,
+            if (snapshot.context.systemId == CardParserIds.cityUnion)
+              ?snapshot.cardCityCode,
+          };
+          return cities.length == 1 &&
+              isRemoteCardUse(cities.single, transaction.regionCode);
+        });
+  }
 
   Map<CuTransactionView, String> get sourceLabels => {
     for (final entry in sources.entries)

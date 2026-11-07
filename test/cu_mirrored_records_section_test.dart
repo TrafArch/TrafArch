@@ -4,6 +4,8 @@ import 'package:transit_card_analyzer/features/reference_data/domain/reference_m
 import 'package:transit_card_analyzer/features/transit_analysis/cu_transaction_analysis.dart';
 import 'package:transit_card_analyzer/features/trips/cu_transaction_list.dart';
 import 'package:transit_card_analyzer/features/trips/shanghai_mirrored_records.dart';
+import 'package:transit_card_analyzer/features/trips/trip_entry_card.dart';
+import 'package:transit_card_analyzer/features/trips/trip_entry_presenter.dart';
 import 'package:transit_card_analyzer/protocols/transit/city_union/city_union_file_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/city_union/city_union_models.dart';
 
@@ -20,17 +22,27 @@ void main() {
         },
       );
       expect(find.text('城市一卡通应用记录 · 1 条'), findsOneWidget);
-      expect(find.textContaining('交易序号 14'), findsNothing);
+      expect(find.byType(TripEntryCard), findsNothing);
       await tester.tap(find.text('城市一卡通应用记录 · 1 条'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('交易序号 14'), findsOneWidget);
-      await tester.tap(find.textContaining('交易序号 14'));
+      expect(find.textContaining('序号 14'), findsOneWidget);
+      await tester.tap(find.byType(TripEntryCard));
       await tester.pumpAndSettle();
       expect(
         find.textContaining('batch-a/cuProjection.transactions[0], batch-b/'),
         findsOneWidget,
       );
-      expect(find.text(view.record.rawHex), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text(groupTripHex(view.record.rawHex)),
+        150,
+        scrollable: find
+            .descendant(
+              of: find.byType(DraggableScrollableSheet),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      expect(find.text(groupTripHex(view.record.rawHex)), findsOneWidget);
     },
   );
 
@@ -44,8 +56,8 @@ void main() {
           mirrored: [_view(14)],
         ),
       );
-      expect(find.textContaining('交易序号 13'), findsOneWidget);
-      expect(find.textContaining('交易序号 14'), findsNothing);
+      expect(find.textContaining('序号 13'), findsOneWidget);
+      expect(find.textContaining('序号 14'), findsNothing);
       expect(find.text('城市一卡通应用记录 · 1 条'), findsOneWidget);
     },
   );
@@ -57,7 +69,7 @@ void main() {
       tester,
       ShanghaiMirroredRecords(independent: [_view(13)], mirrored: []),
     );
-    expect(find.textContaining('交易序号 13'), findsOneWidget);
+    expect(find.textContaining('序号 13'), findsOneWidget);
     expect(find.textContaining('城市一卡通应用记录'), findsNothing);
     await _show(tester, ShanghaiMirroredRecords(independent: [], mirrored: []));
     expect(find.byType(CuTransactionList), findsNothing);
