@@ -72,10 +72,29 @@ class CardIdentificationService {
         );
       case CardParserIds.localCard:
         final local = card.localCard;
-        if (local?.info.isMacauPass != true) return null;
+        if (local == null) return null;
+        // 通用地方卡（武汉通 / 北京互通卡 / 深圳通本地 / 苏州苏薪·计次 /
+        // 天府通等）：以解析器级系统标识 + 应用到卡号构建稳定指纹，
+        // 正式卡名用解析结果（卡种可读名），城市 / 发行方不猜测。
+        if (local.info.isMacauPass != true) {
+          final fingerprint = CardFingerprint.build(
+            system: CardParserIds.localCard,
+            cardNumber: local.info.cardNumber,
+          );
+          if (fingerprint == null) return null;
+          return IdentifiedCard(
+            fingerprint: fingerprint,
+            identity: resolve(
+              cardType: CardTypes.localCard,
+              officialName: local.info.cardKindLabel,
+              source: CardIdentificationSources.parserOnly,
+            ),
+            cardNumber: local.info.cardNumber,
+          );
+        }
         final fingerprint = CardFingerprint.build(
           system: CardParserIds.localCard,
-          cardNumber: local!.info.cardNumber,
+          cardNumber: local.info.cardNumber,
         );
         if (fingerprint == null) return null;
         return IdentifiedCard(

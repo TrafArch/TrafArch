@@ -30,6 +30,7 @@ TripCardPresentation<CuTripSourceFilter> describeCuTrip(
   String? cityName,
   bool remote = false,
   String? savedSource,
+  String currencySymbol = '¥',
 }) {
   final record = transaction.record;
   final location = transaction.location.value;
@@ -49,6 +50,7 @@ TripCardPresentation<CuTripSourceFilter> describeCuTrip(
   final city =
       cityName ??
       (transaction.regionCode == null ? null : '地区 ${transaction.regionCode}');
+  final amountText = transaction.amountText(symbol: currencySymbol);
   final info = TripEntryInfo(
     sourceLabel: transaction.sourceLabel,
     title:
@@ -56,7 +58,7 @@ TripCardPresentation<CuTripSourceFilter> describeCuTrip(
         '序号 ${record.sequence}',
     line: line,
     timeText: transaction.timeLabel,
-    amountText: '金额未知',
+    amountText: amountText ?? '金额未知',
     isConsume: record.kind != CityUnionTransactionKind.recharge,
     category: CityUnionLookupRules.presentation(transaction.carrier)?.$2,
     badges: switch (transaction.location.status) {
@@ -84,7 +86,9 @@ TripCardPresentation<CuTripSourceFilter> describeCuTrip(
         '0x${record.transactionType.toRadixString(16).toUpperCase().padLeft(2, '0')}'
             ' · ${record.transactionTypeName}',
       ),
-      ('金额原始值', '${record.amountRaw}（单位未确认）'),
+      ('交易金额', amountText ?? '未知'),
+      ('金额原始字段', record.amountHex),
+      ('金额四字节原始值', '${record.amountRaw}'),
       if (transaction.location.issue case final issue?) ('地点诊断', issue),
       for (final error in record.errors) ('解析诊断', error),
     ],
@@ -119,7 +123,7 @@ TripCardPresentation<CuTripSourceFilter> describeCuTrip(
             .toUtc(),
         timeText: transaction.timeLabel,
       ),
-      amountText: info.amountText,
+      amountText: amountText,
     ),
   );
 }

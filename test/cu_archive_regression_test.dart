@@ -132,8 +132,10 @@ void main() {
       expect(find.text('城市一卡通 · 1 条记录'), findsOneWidget);
       final tripCard = tester.widget<TripEntryCard>(find.byType(TripEntryCard));
       expect(tripCard.journey, isNotNull);
+      expect(tripCard.info.amountText, '-¥0.01');
       expect(tripCard.info.fields, contains(('终端原始编码', '2000110A0100')));
-      expect(tripCard.info.fields, contains(('金额原始值', '1（单位未确认）')));
+      expect(tripCard.info.fields, contains(('金额原始字段', '00000001')));
+      expect(tripCard.info.fields, contains(('金额四字节原始值', '1')));
       await tester.ensureVisible(find.byType(TripEntryCard));
       await tester.pumpAndSettle();
       await tester.tap(find.byType(TripEntryCard));
