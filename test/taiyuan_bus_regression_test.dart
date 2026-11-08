@@ -1,4 +1,12 @@
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:transit_card_analyzer/features/archive/application/archive_application_display.dart';
+import 'package:transit_card_analyzer/features/archive/application/archive_history.dart';
+import 'package:transit_card_analyzer/features/archive/domain/card_session_snapshot.dart';
+import 'package:transit_card_analyzer/features/archive/presentation/archive_trip_presenter.dart';
+import 'package:transit_card_analyzer/features/trips/trip_cards_view.dart';
 import 'package:transit_card_analyzer/features/trips/trip_entry_presenter.dart';
 import 'package:transit_card_analyzer/features/trips/trip_presentation_context.dart';
 import 'package:sqlite3/sqlite3.dart';
@@ -302,6 +310,78 @@ void main() {
     expect(info.title, contains('0000'));
     expect(info.rawHex, _reportedHex.replaceAll(' ', ''));
   });
+
+  testWidgets(
+    'reported archived bus keeps Taiyuan when opening record details',
+    (tester) async {
+      final record = const TUnionProcessParser().parseCycleTrip(
+        _bytes(_reportedHex),
+      )!;
+      // The issuing city is synthetic; the reported process bytes are unchanged.
+      final snapshot = CardSessionSnapshot(
+        parseVersion: kTripParseVersion,
+        cardCityCode: '3910',
+        context: const ArchiveContext(
+          systemId: 'tunion',
+          applicationId: 'A000000632010105',
+          currencyCode: 'CNY',
+          minorUnitDigits: 2,
+        ),
+        processTrips: [record],
+        recordProvenance: {
+          'cycle[0]': {
+            'capturedDisplay': captureProcessDisplay(knowledge, record),
+          },
+        },
+      );
+      final original = snapshot.encode();
+      final restored = CardSessionSnapshot.decode(original)!;
+      final payload = jsonDecode(restored.encode()) as Map<String, dynamic>;
+      final fields = Map<String, dynamic>.from(
+        (payload['cycle'] as List).single,
+      );
+      final originalFields = jsonEncode(fields);
+      expect(fields['cityName'], isNull);
+      final projection = presentArchiveTrips([
+        ArchiveHistoryRecord(
+          kind: ArchiveRecordKind.process,
+          fields: fields,
+          context: restored.context,
+          cardCityCode: restored.cardCityCode,
+          sources: const [
+            ArchiveRecordSource('reported', 'cycle[0]', 15, null),
+          ],
+        ),
+      ], onDiagnostics: (_) {});
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: TripCardsView(
+                entries: projection.entries,
+                sourceLabels: archiveTripSourceLabels,
+                summaryText: projection.summaryText,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('太原公共汽电车'), findsOneWidget);
+      expect(find.text('864路'), findsOneWidget);
+      await tester.tap(find.text('太原公共汽电车'));
+      await tester.pumpAndSettle();
+      expect(find.text('异地用卡 · 受理城市：太原（1610）'), findsOneWidget);
+      expect(find.textContaining('未知城市'), findsNothing);
+      expect(find.text('0000413180000756'), findsOneWidget);
+      expect(find.text('0016000000D500'), findsOneWidget);
+      expect(find.text('12971610FFFFFFFF'), findsOneWidget);
+      expect(restored.encode(), original);
+      expect(jsonEncode(fields), originalFields);
+      expect(record.rawHex, _reportedHex.replaceAll(' ', ''));
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
 
 final _display = _displayForStations(StationCodeTable.empty);
