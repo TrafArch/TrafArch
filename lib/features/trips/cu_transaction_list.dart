@@ -15,6 +15,7 @@ class CuApplicationRecords extends StatelessWidget {
     this.isRemote,
     this.initialFilters,
     this.onFiltersChanged,
+    this.currencySymbol = '¥',
   });
 
   final ShanghaiMirroredRecords records;
@@ -23,6 +24,7 @@ class CuApplicationRecords extends StatelessWidget {
   final bool Function(CuTransactionView)? isRemote;
   final List<String>? initialFilters;
   final ValueChanged<List<String>>? onFiltersChanged;
+  final String currencySymbol;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -36,6 +38,7 @@ class CuApplicationRecords extends StatelessWidget {
           isRemote: isRemote,
           initialFilters: initialFilters,
           onFiltersChanged: onFiltersChanged,
+          currencySymbol: currencySymbol,
         ),
       if (records.mirrored.isNotEmpty)
         Card(
@@ -50,6 +53,7 @@ class CuApplicationRecords extends StatelessWidget {
                 showHeader: false,
                 cityNameOf: cityNameOf,
                 isRemote: isRemote,
+                currencySymbol: currencySymbol,
               ),
             ],
           ),
@@ -68,6 +72,7 @@ class CuTransactionList extends StatelessWidget {
     this.isRemote,
     this.initialFilters,
     this.onFiltersChanged,
+    this.currencySymbol = '¥',
   });
   final List<CuTransactionView> transactions;
   final Map<CuTransactionView, String> sourceLabels;
@@ -76,6 +81,7 @@ class CuTransactionList extends StatelessWidget {
   final bool Function(CuTransactionView)? isRemote;
   final List<String>? initialFilters;
   final ValueChanged<List<String>>? onFiltersChanged;
+  final String currencySymbol;
 
   @override
   Widget build(BuildContext context) {
@@ -86,6 +92,7 @@ class CuTransactionList extends StatelessWidget {
           cityName: cityNameOf?.call(transaction.regionCode),
           remote: isRemote?.call(transaction) ?? false,
           savedSource: sourceLabels[transaction],
+          currencySymbol: currencySymbol,
         ),
     ];
     return TripCardsView(

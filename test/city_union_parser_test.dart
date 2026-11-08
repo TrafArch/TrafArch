@@ -179,6 +179,7 @@ void main() {
       expect(record.reservedHex, '000000');
       expect(record.amountRaw, 1000);
       expect(record.amountHex, '000003E8');
+      expect(record.interpretedAmountFen, -1000);
       expect(record.transactionType, 0x06);
       expect(record.transactionTypeHex, '06');
       expect(record.transactionTypeName, '消费');
@@ -197,6 +198,7 @@ void main() {
       );
       expect(record.amountRaw, 1000);
       expect(record.amountHex, '000003E8');
+      expect(record.interpretedAmountFen, -1000);
       expect(record.fields[2].format, CjFieldFormat.hex);
     });
 
@@ -224,6 +226,9 @@ void main() {
       );
       expect(unknown.transactionTypeName, '未知类型');
       expect(unknown.fields[3].note, '未知类型');
+      expect(consume.interpretedAmountFen, -1000);
+      expect(composite.interpretedAmountFen, -1000);
+      expect(unknown.interpretedAmountFen, -1000);
     });
 
     test('长度错误（非 23 字节）抛 FormatException', () {
@@ -285,6 +290,7 @@ void main() {
       expect(record.reservedHex, '000000');
       expect(record.amountRaw, 1000);
       expect(record.amountHex, '000003E8');
+      expect(record.interpretedAmountFen, 1000);
       expect(record.transactionType, 0x02);
       expect(record.transactionTypeHex, '02');
       expect(record.transactionTypeName, '充值');

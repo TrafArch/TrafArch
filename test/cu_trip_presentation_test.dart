@@ -35,34 +35,34 @@ import 'support/test_database.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test(
-    'CU uses its carrier and civil date without claiming a direction or fare',
-    () {
-      final before = _view(sequence: 10, amount: 0);
-      final after = _view(sequence: 11);
-      final bytesBefore = before.record.toJson();
-      final entries = [describeCuTrip(after), describeCuTrip(before)];
-      final journeys = projectJourneys([
-        for (final entry in entries) entry.journeyEvent!,
-      ]);
-      expect(journeys, hasLength(2));
-      for (final journey in journeys) {
-        expect(journey.mode, TripModeFilter.rail);
-        expect(journey.state, JourneyState.incomplete);
-        expect(journey.start, isNull);
-        expect(journey.end, isNull);
-        expect(journey.duration, isNull);
-        expect(journey.amountText, '金额未知');
-        expect(journey.balanceAfterText, isNull);
-      }
-      final endpoint = entries.first.journeyEvent!.endpoint;
-      expect(endpoint.time, DateTime.utc(2026, 11, 7, 0, 5));
-      expect(endpoint.timeText, '2026-11-07 00:05:00');
-      expect(endpoint.line, '2号线');
-      expect(endpoint.station, '演示站');
-      expect(before.record.toJson(), bytesBefore);
-    },
-  );
+  test('CU uses its carrier, civil date and Trip Reader amount without inventing endpoints', () {
+    final before = _view(sequence: 10, amount: 0);
+    final after = _view(sequence: 11);
+    final bytesBefore = before.record.toJson();
+    final entries = [describeCuTrip(after), describeCuTrip(before)];
+    final journeys = projectJourneys([
+      for (final entry in entries) entry.journeyEvent!,
+    ]);
+    expect(journeys, hasLength(2));
+    for (final journey in journeys) {
+      expect(journey.mode, TripModeFilter.rail);
+      expect(journey.state, JourneyState.incomplete);
+      expect(journey.start, isNull);
+      expect(journey.end, isNull);
+      expect(journey.duration, isNull);
+      expect(journey.balanceAfterText, isNull);
+    }
+    expect(
+      journeys.map((journey) => journey.amountText),
+      orderedEquals(['-¥3.00', '-¥0.00']),
+    );
+    final endpoint = entries.first.journeyEvent!.endpoint;
+    expect(endpoint.time, DateTime.utc(2026, 11, 7, 0, 5));
+    expect(endpoint.timeText, '2026-11-07 00:05:00');
+    expect(endpoint.line, '2号线');
+    expect(endpoint.station, '演示站');
+    expect(before.record.toJson(), bytesBefore);
+  });
 
   test('CU preserves ambiguity and cannot turn recharge or unknown types into rides', () {
     final candidates = const [
@@ -101,6 +101,7 @@ void main() {
     expect(recharge.mode, TripModeFilter.other);
     expect(recharge.source, CuTripSourceFilter.recharge);
     expect(recharge.info.isConsume, isFalse);
+    expect(recharge.info.amountText, '+¥3.00');
     expect(describeCuTrip(_view(sfi: 0x1A)).source, CuTripSourceFilter.foreign);
     expect(
       describeCuTrip(_view(sfi: 0x06)).source,
@@ -110,7 +111,22 @@ void main() {
     expect(bus.mode, TripModeFilter.bus);
     expect(bus.journeyEvent!.endpoint.line, '345路');
     expect(describeCuTrip(_view(carrier: 1, line: '00345')).info.line, '00345');
+    final unknownType = describeCuTrip(_view(transactionType: 0x0A));
+    expect(unknownType.info.amountText, '-¥3.00');
+    expect(unknownType.info.fields, contains(('交易金额', '-¥3.00')));
   });
+
+  test(
+    'CU keeps the four-byte field while interpreting its low three bytes',
+    () {
+      final transaction = _view(amountField: const [0x12, 0x34, 0x56, 0x78]);
+      expect(transaction.record.amountRaw, 0x12345678);
+      expect(transaction.record.amountHex, '12345678');
+      expect(transaction.record.interpretedAmountFen, -0x345678);
+      expect(transaction.interpretedAmountFen, -0x345678);
+      expect(transaction.amountText(), '-¥34300.08');
+    },
+  );
 
   test(
     'CU archived tickets consume frozen locations and preserve every source',
@@ -128,6 +144,7 @@ void main() {
       );
       expect(entry.journeyEvent!.endpoint.line, '2号线');
       expect(entry.journeyEvent!.endpoint.station, '演示站');
+      expect(entry.info.amountText, '-¥3.00');
       expect(
         entry.info.fields,
         contains((
@@ -224,7 +241,12 @@ void main() {
             matching: find.byType(Scrollable),
           )
           .first;
-      for (final label in ['终端原始编码', '金额原始值', '原始数据（HEX）']) {
+      for (final label in [
+        '终端原始编码',
+        '金额原始字段',
+        '金额四字节原始值',
+        '原始数据（HEX）',
+      ]) {
         await tester.scrollUntilVisible(
           find.text(label),
           100,
@@ -481,6 +503,8 @@ CuTransactionView _view({
   String line = '2号线',
   CityUnionTransactionKind kind = CityUnionTransactionKind.consumption,
   ReferenceMatch<StationCodeEntry>? location,
+  int? transactionType,
+  List<int>? amountField,
 }) => CuTransactionView(
   record: CityUnionFileParser.parseWalletRecord(
     sfi,
@@ -490,11 +514,10 @@ CuTransactionView _view({
       0,
       0,
       0,
-      0,
-      0,
-      amount >> 8,
-      amount & 0xff,
-      kind == CityUnionTransactionKind.recharge ? 2 : 9,
+      ...(amountField ??
+          [0, (amount >> 16) & 0xff, (amount >> 8) & 0xff, amount & 0xff]),
+      transactionType ??
+          (kind == CityUnionTransactionKind.recharge ? 0x02 : 0x09),
       0x20,
       0x00,
       0x11,

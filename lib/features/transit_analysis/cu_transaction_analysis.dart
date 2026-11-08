@@ -42,6 +42,15 @@ class CuTransactionView {
         ReferenceMatchStatus.unavailable => '参考数据不可用',
         _ => '地点未匹配',
       };
+
+  int? get interpretedAmountFen => record.interpretedAmountFen;
+
+  String? amountText({String symbol = '¥'}) {
+    final fen = interpretedAmountFen;
+    if (fen == null) return null;
+    final sign = record.kind == CityUnionTransactionKind.recharge ? '+' : '-';
+    return '$sign$symbol${(fen.abs() / 100).toStringAsFixed(2)}';
+  }
 }
 
 List<CuTransactionView> analyzeCuTransactions(
