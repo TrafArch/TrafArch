@@ -168,6 +168,48 @@ void main() {
     expect(identified.cardNumber, '6132766247');
   });
 
+  test('通用地方卡（武汉通）以解析卡种生成稳定档案身份', () {
+    final localInfo = CardInfo()
+      ..isWHCTC = true
+      ..cardNumber = '0102030405'
+      ..balance = 1000;
+    final card = ParsedCard(
+      parserId: CardParserIds.localCard,
+      parserName: '地方交通卡 · 武汉通',
+      info: TUnionCardInfo(),
+      transactions: const [],
+      localCard: ReadResult(
+        info: localInfo,
+        records: const [],
+        extras: CardExtras(),
+      ),
+    );
+
+    final identified = CardIdentificationService(KnowledgeBase.empty())
+        .identify(card)!;
+    expect(identified.identity.cardType, CardTypes.localCard);
+    expect(identified.identity.officialName, '武汉通');
+    expect(identified.identity.cityName, isNull, reason: '不猜测城市');
+    expect(identified.fingerprint, 'local_card::0102030405');
+    expect(identified.cardNumber, '0102030405');
+  });
+
+  test('通用地方卡缺少卡号：无法生成指纹，跳过建档', () {
+    final localInfo = CardInfo()..isWHCTC = true;
+    final card = ParsedCard(
+      parserId: CardParserIds.localCard,
+      parserName: '地方交通卡 · 武汉通',
+      info: TUnionCardInfo(),
+      transactions: const [],
+      localCard: ReadResult(
+        info: localInfo,
+        records: const [],
+        extras: CardExtras(),
+      ),
+    );
+    expect(CardIdentificationService(KnowledgeBase.empty()).identify(card), isNull);
+  });
+
   group('城市一卡通卡识别', () {
     final service = CardIdentificationService(_knowledge());
 

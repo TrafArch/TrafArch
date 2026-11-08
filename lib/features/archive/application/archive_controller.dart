@@ -202,6 +202,41 @@ class ArchiveController extends OwnedNotifier {
                   },
               ],
             },
+          // 通用地方卡（武汉通 / 北京互通卡 / 深圳通本地 / 苏州苏薪·计次 /
+          // 天府通，parserId=localCard）：保存解析出的行程流水，历史详情与
+          // 恢复现场经同一票据式行程卡展示；不会与岭南通 / 澳门通 / BMAC
+          // 的专属扩展重复。
+          if (parsed.parserId == CardParserIds.localCard &&
+              parsed.localCard != null &&
+              !parsed.localCard!.info.isMacauPass)
+            'localCardTrips': {
+              'cardKindLabel': parsed.localCard!.info.cardKindLabel,
+              'version': 1,
+              'records': [
+                for (final record in parsed.localCard!.trips)
+                  {
+                    'recordNumber': record.recordNumber,
+                    'fileSelector': record.fileSelector,
+                    'statusCode': record.statusCode,
+                    'posType': record.posType,
+                    'timestamp': record.timestamp.millisecondsSinceEpoch,
+                    'balanceDelta': record.balanceDelta,
+                    'cityCode': record.cityCode,
+                    'isMetro': record.isMetro,
+                    'isBus': record.isBus,
+                    'isFerry': record.isFerry,
+                    'isOtherA': record.isOtherA,
+                    'isOtherB': record.isOtherB,
+                    'terminalHex': record.terminalHex,
+                    'label': record.label,
+                    // 原始字节：rawBody 缺失时回退 response（武汉通 /
+                    // TripRecordReader 行程仅写入 response）。
+                    'rawBody': (record.rawBody ?? record.response) == null
+                        ? null
+                        : List<int>.of(record.rawBody ?? record.response!),
+                  },
+              ],
+            },
           if (parsed.parserId == CardParserIds.shenzhenTunion &&
               parsed.localCard != null)
             'shenzhenTong': {
@@ -326,6 +361,8 @@ class ArchiveController extends OwnedNotifier {
                         .where((r) => r.label == '澳门通交易记录')
                         .length
                   : parsed.localCard?.info.isLNT == true
+                  ? parsed.localCard!.trips.length
+                  : parsed.parserId == CardParserIds.localCard
                   ? parsed.localCard!.trips.length
                   : parsed.parserId == CardParserIds.cityUnion
                   ? view.cityUnionTransactions.length

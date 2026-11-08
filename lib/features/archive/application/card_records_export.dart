@@ -8,6 +8,7 @@ import 'archive_history.dart';
 import 'cu_archive_projection.dart';
 import '../../../protocols/transit/city_union/city_union_models.dart';
 import '../presentation/archive_record_presenter.dart';
+import '../../trips/local_card_trip_presenter.dart' as local_presenter;
 
 /// Full-batch export uses precisely the same history query as archive detail.
 class ArchiveExportService {
@@ -81,7 +82,12 @@ String buildArchiveHistoryExport(
     for (final entry in history.latestObservedFields.entries) {
       if (!entry.value) buffer.writeln('本次未观察到：${entry.key}；摘要保留既往已观察值');
     }
-    if (history.records.isEmpty && cityUnion.transactions.isEmpty) {
+    final localTrips = history.localCardRecords
+        .where((record) => record.cardType == 'localCardTrips')
+        .toList();
+    if (history.records.isEmpty &&
+        cityUnion.transactions.isEmpty &&
+        localTrips.isEmpty) {
       buffer.writeln(
         history.hasDiagnostics ? '行程记录：（无可解码记录，详见批次诊断）' : '行程记录：（无）',
       );
@@ -109,6 +115,30 @@ String buildArchiveHistoryExport(
         ..writeln('    金额四字节原始值：${transaction.record.amountRaw}')
         ..writeln('    来源：${cuSourceLabels[transaction]}')
         ..writeln('    原始记录：${transaction.record.rawHex}');
+    }
+    if (localTrips.isNotEmpty) {
+      buffer.writeln('地方交通卡行程（${localTrips.length} 条）：');
+      for (final record in localTrips) {
+        final trip = local_presenter.restoreLocalTripRecord(record.fields);
+        if (trip == null) {
+          buffer.writeln('  · 记录不完整，原始快照已保留');
+          continue;
+        }
+        final presentation = local_presenter.describeLocalTrip(
+          trip,
+          currencySymbol: '¥',
+        );
+        buffer
+          ..writeln('  · ${presentation.info.title}')
+          ..writeln('    ${presentation.info.timeText ?? '时间未知'}'
+              ' | ${presentation.info.amountText ?? '金额未知'}')
+          ..writeln(
+            '    来源：${record.batchId}（本地卡 ${presentation.info.sourceLabel}）',
+          );
+        if (presentation.info.rawHex case final raw?) {
+          buffer.writeln('    原始记录：$raw');
+        }
+      }
     }
     for (final issue in cityUnion.issues) {
       buffer.writeln('CU 诊断：$issue');

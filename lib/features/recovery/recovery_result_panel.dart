@@ -130,6 +130,12 @@ class RecoveryResultPanel extends StatelessWidget {
                 app.recoveryFilters['live:cu'] = values,
           ),
         if (batch != null)
+          ArchivedLocalCardTrips(
+            records: ArchiveHistory.projectLocalCardRecords([batch])
+                .where((record) => record.cardType == 'localCardTrips')
+                .toList(),
+          ),
+        if (batch != null)
           LocalCardHistoryRecords(
             records: ArchiveHistory.projectLocalCardRecords([batch]),
           ),
