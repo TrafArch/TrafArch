@@ -356,70 +356,88 @@ void main() {
     }
   });
 
-  testWidgets('wallet currency, numbers and counts share aligned columns', (
-    tester,
-  ) async {
-    for (final (id, balance) in [
-      ('usd-sample', r'USD $0.00'),
-      ('mop-sample', 'MOP ¥-123,456.78'),
-    ]) {
-      c.cards.add(
-        GalleryCard.fromJson({
-          ...c.data.cards.first,
-          'id': id,
-          'saved': true,
-          'name': id,
-          'balance': balance,
-        }),
-      );
-    }
-    c.cards[1].rawBalance = '-1,234,567.89';
-    final originalBalances = [for (final card in c.cards) card.rawBalance];
-    c.navigate(GalleryPage.cards);
-    await mount(tester);
-    for (final width in [320.0, 360.0, 412.0]) {
-      for (final scale in [1.0, 1.5, 2.0]) {
-        tester.view.physicalSize = Size(width, 2400);
-        tester.platformDispatcher.textScaleFactorTestValue = scale;
-        await tester.pumpAndSettle();
-        double? center;
-        double? numberHeight;
-        for (final card in c.savedCards) {
-          final number = tester.getRect(
-            find.byKey(ValueKey('wallet-number-${card.id}')),
-          );
-          final count = tester.getRect(
-            find.byKey(ValueKey('wallet-count-${card.id}')),
-          );
-          center ??= number.center.dx;
-          numberHeight ??= number.height;
-          expect(number.center.dx, closeTo(center, .1));
-          expect(count.center.dx, closeTo(center, .1));
-          expect(number.height, closeTo(numberHeight, .1));
-          expect(count.top, greaterThan(number.bottom));
-          final label = tester.widget<Text>(
-            find.byKey(ValueKey('wallet-currency-${card.id}')),
-          );
-          final value = GalleryBalancePresentation.parse(
-            card.balance(c.includeOverdraft),
-            currencyCode: card.currency?.name.toUpperCase(),
-          );
-          expect(label.data, value.currencyLabel);
-          expect(
-            find.byKey(ValueKey('card-thumbnail-${card.id}')),
-            findsNothing,
-          );
-          final item = tester.getRect(
-            find.byKey(ValueKey('wallet-card-${card.id}')),
-          );
-          expect(item.contains(number.center), isTrue);
-          expect(item.contains(count.center), isTrue);
-        }
-        expect(tester.takeException(), isNull, reason: '$width / $scale');
+  testWidgets(
+    'wallet aligns balances and keeps explanations below the divider',
+    (tester) async {
+      for (final (id, balance) in [
+        ('usd-sample', r'USD $0.00'),
+        ('mop-sample', 'MOP ¥-123,456.78'),
+      ]) {
+        c.cards.add(
+          GalleryCard.fromJson({
+            ...c.data.cards.first,
+            'id': id,
+            'saved': true,
+            'name': id,
+            'balance': balance,
+          }),
+        );
       }
-    }
-    expect([for (final card in c.cards) card.rawBalance], originalBalances);
-  });
+      c.cards[1].rawBalance = '-1,234,567.89';
+      final originalBalances = [for (final card in c.cards) card.rawBalance];
+      c.navigate(GalleryPage.cards);
+      await mount(tester);
+      for (final width in [320.0, 360.0, 412.0]) {
+        for (final scale in [1.0, 1.5, 2.0]) {
+          tester.view.physicalSize = Size(width, 2400);
+          tester.platformDispatcher.textScaleFactorTestValue = scale;
+          await tester.pumpAndSettle();
+          double? center;
+          double? numberHeight;
+          for (final card in c.savedCards) {
+            final number = tester.getRect(
+              find.byKey(ValueKey('wallet-number-${card.id}')),
+            );
+            final count = tester.getRect(
+              find.byKey(ValueKey('wallet-count-${card.id}')),
+            );
+            final divider = tester.getRect(
+              find.byKey(ValueKey('wallet-divider-${card.id}')),
+            );
+            center ??= number.center.dx;
+            numberHeight ??= number.height;
+            expect(number.center.dx, closeTo(center, .1));
+            expect(number.height, closeTo(numberHeight, .1));
+            expect(number.bottom, lessThan(divider.top));
+            expect(count.top, greaterThan(divider.bottom));
+            final panel = find.byKey(ValueKey('wallet-card-${card.id}'));
+            final metadata = find.descendant(
+              of: panel,
+              matching: find.text('${card.city} · ${card.type}'),
+            );
+            final when = find.descendant(
+              of: panel,
+              matching: find.text('最近读取 ${card.when}'),
+            );
+            expect(metadata, findsOneWidget);
+            expect(when, findsOneWidget);
+            expect(tester.getTopLeft(metadata).dy, greaterThan(divider.bottom));
+            expect(tester.getTopLeft(when).dy, greaterThan(divider.bottom));
+            expect(find.textContaining('交联'), findsNothing);
+            final label = tester.widget<Text>(
+              find.byKey(ValueKey('wallet-currency-${card.id}')),
+            );
+            final value = GalleryBalancePresentation.parse(
+              card.balance(c.includeOverdraft),
+              currencyCode: card.currency?.name.toUpperCase(),
+            );
+            expect(label.data, value.currencyLabel);
+            expect(
+              find.byKey(ValueKey('card-thumbnail-${card.id}')),
+              findsNothing,
+            );
+            final item = tester.getRect(
+              find.byKey(ValueKey('wallet-card-${card.id}')),
+            );
+            expect(item.contains(number.center), isTrue);
+            expect(item.contains(count.center), isTrue);
+          }
+          expect(tester.takeException(), isNull, reason: '$width / $scale');
+        }
+      }
+      expect([for (final card in c.cards) card.rawBalance], originalBalances);
+    },
+  );
 
   testWidgets(
     'wallet uses themed panels, face badges and ghost menus with grouped actions',

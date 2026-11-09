@@ -34,6 +34,10 @@ class GalleryTokens extends ThemeExtension<GalleryTokens> {
   Color get onTone => scheme.onPrimaryContainer;
   Color get action => scheme.primary;
   Color get onAction => scheme.onPrimary;
+  Color get shanghaiLineOne =>
+      Color.lerp(const Color(0xffc92135), const Color(0xffffb3b9), _depth)!;
+  Color get onShanghaiLineOne =>
+      Color.lerp(const Color(0xffffffff), const Color(0xff650012), _depth)!;
   Color get secondary => scheme.secondary;
   Color get secondaryContainer => scheme.secondaryContainer;
   Color get onSecondaryContainer => scheme.onSecondaryContainer;

@@ -665,6 +665,184 @@ extension _GalleryComponents on _GalleryViewState {
     return size;
   }
 
+  Widget _cardBadge(GalleryCard card, {required String id}) => Container(
+    width: 40,
+    height: 40,
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(14),
+      gradient: LinearGradient(colors: _faceColors(card.face)),
+    ),
+    child: Icon(
+      Icons.contactless_outlined,
+      key: ValueKey('$id-contactless-${card.id}'),
+      size: 32,
+      color: GalleryCardFace.byId(card.face).foreground,
+    ),
+  );
+
+  Widget _cardMetadata(GalleryCard card, {required String id}) {
+    final color = card.image == null
+        ? t.muted
+        : _faceForeground(card, secondary: true);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _gap(10),
+        Divider(
+          key: ValueKey('$id-divider-${card.id}'),
+          height: 1,
+          color: color.withValues(alpha: .18),
+        ),
+        _gap(10),
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          spacing: 12,
+          runSpacing: 4,
+          children: [
+            _text(
+              '${card.city} · ${card.type}',
+              role: GalleryTypography.caption,
+              color: color,
+            ),
+            Text(
+              card.count,
+              key: ValueKey('$id-count-${card.id}'),
+              style: GalleryTypography.caption.copyWith(color: color),
+            ),
+          ],
+        ),
+        _gap(4),
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          spacing: 12,
+          runSpacing: 6,
+          children: [
+            Text(
+              '•••• ${card.tail}',
+              key: ValueKey('$id-tail-${card.id}'),
+              style: GalleryTypography.caption.copyWith(
+                color: color,
+                fontFamily: 'monospace',
+              ),
+            ),
+            _text(
+              '最近读取 ${card.when}',
+              role: GalleryTypography.caption,
+              color: color,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _homeCard(GalleryCard card) {
+    final foreground = card.image == null ? t.text : _faceForeground(card);
+    final balance = _balancePresentation(card);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: t.shadows(GalleryElevation.card),
+      ),
+      child: Container(
+        key: ValueKey('card-face-${card.id}'),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: card.image != null
+            ? _faceDecoration(card, radius: 24)
+            : BoxDecoration(
+                color: t.surface,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: t.line.withValues(alpha: .65)),
+              ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final amountStyle = GalleryTypography.amount.copyWith(
+              color: foreground,
+            );
+            final unitStyle = GalleryTypography.caption.copyWith(
+              color: foreground,
+            );
+            final amountWidth = balance.known
+                ? _measureTextWidth(balance.number, amountStyle) +
+                      _measureTextWidth(balance.currencyLabel, unitStyle) +
+                      8
+                : _measureTextWidth(balance.displayText, unitStyle);
+            final stacked =
+                _extraTextScale >= .5 ||
+                constraints.maxWidth - amountWidth - 60 <
+                    _measureTextWidth('交通卡片', GalleryTypography.card);
+            final identity = Row(
+              children: [
+                _cardBadge(card, id: 'face'),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    card.name,
+                    key: ValueKey('face-title-${card.id}'),
+                    style: GalleryTypography.card.copyWith(color: foreground),
+                  ),
+                ),
+              ],
+            );
+            final amount = Semantics(
+              label: '余额，${balance.displayText}',
+              excludeSemantics: true,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerRight,
+                child: balance.known
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          if (balance.currencyLabel.isNotEmpty) ...[
+                            Text(
+                              balance.currencyLabel,
+                              key: ValueKey('face-currency-${card.id}'),
+                              style: unitStyle,
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          Text(
+                            balance.number,
+                            key: ValueKey('face-number-${card.id}'),
+                            style: amountStyle,
+                          ),
+                        ],
+                      )
+                    : Text(
+                        balance.displayText,
+                        key: ValueKey('face-unknown-${card.id}'),
+                        style: unitStyle,
+                      ),
+              ),
+            );
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (stacked) ...[
+                  identity,
+                  _gap(12),
+                  Align(alignment: Alignment.centerRight, child: amount),
+                ] else
+                  Row(
+                    children: [
+                      Expanded(child: identity),
+                      const SizedBox(width: 12),
+                      SizedBox(width: amountWidth, child: amount),
+                    ],
+                  ),
+                _cardMetadata(card, id: 'face'),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   Widget _face(GalleryCard card, {bool minimal = false}) => Container(
     key: ValueKey('card-face-${card.id}'),
     constraints: BoxConstraints(minHeight: 204 + _extraTextScale * 80),

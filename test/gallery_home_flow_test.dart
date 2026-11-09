@@ -39,6 +39,62 @@ void main() {
       .getTranslation()
       .x;
 
+  testWidgets('home result shares compact wallet notes in both themes', (
+    tester,
+  ) async {
+    c.hasRead = true;
+    await mount(tester, reduced: true);
+    for (final theme in [ThemeMode.light, ThemeMode.dark]) {
+      for (final width in [240.0, 320.0, 412.0]) {
+        for (final scale in [1.0, 2.0]) {
+          tester.view.physicalSize = Size(width, 1500);
+          tester.platformDispatcher.textScaleFactorTestValue = scale;
+          for (final balance in ['86.50', '-1,234,567.89', '—']) {
+            c.update(() {
+              c.themeMode = theme;
+              c.current.rawBalance = balance;
+            });
+            await tester.pumpAndSettle();
+            final panel = find.byKey(const ValueKey('card-face-shanghai'));
+            final divider = tester.getRect(
+              find.byKey(const ValueKey('face-divider-shanghai')),
+            );
+            final amount = tester.getRect(
+              find.byKey(
+                ValueKey(
+                  'face-${balance == '—' ? 'unknown' : 'number'}-shanghai',
+                ),
+              ),
+            );
+            expect(amount.bottom, lessThan(divider.top));
+            for (final text in [
+              '上海 · 交通联合卡',
+              '交易 12 笔',
+              '最近读取 今天 09:41',
+              '•••• 6821',
+            ]) {
+              final note = find.descendant(
+                of: panel,
+                matching: find.text(text),
+              );
+              expect(note, findsOneWidget);
+              expect(tester.getTopLeft(note).dy, greaterThan(divider.bottom));
+            }
+            expect(find.text('当前余额'), findsNothing);
+            if (width == 412 && scale == 1 && balance == '86.50') {
+              expect(tester.getSize(panel).height, lessThan(150));
+            }
+            expect(
+              tester.takeException(),
+              isNull,
+              reason: '$theme $width $scale $balance',
+            );
+          }
+        }
+      }
+    }
+  });
+
   testWidgets('home reveals the reading step only after starting', (
     tester,
   ) async {

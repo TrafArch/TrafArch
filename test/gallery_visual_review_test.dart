@@ -190,6 +190,13 @@ void main() {
         await tester.pump(const Duration(milliseconds: 1050));
         await capture('$mode-home-reading-320-2x', settle: false);
         c.cancelRead();
+        c.update(() {
+          c.hasRead = true;
+          c.readState = GalleryReadState.success;
+        });
+        await capture('$mode-home-card-320-2x');
+        c.navigate(GalleryPage.trips);
+        await capture('$mode-trips-320-2x');
         tester.platformDispatcher.clearTextScaleFactorTestValue();
         tester.view.physicalSize = normalSize;
       }

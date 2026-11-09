@@ -1,0 +1,26 @@
+// Read the configured Android outputs without packaging or consuming a build.
+// From the repository root (quote the -P arguments in PowerShell):
+// ./android/gradlew.bat -p android -I ../dev/gallery/verify_version_codes.gradle \
+//   :app:verifyVersionCodes '-Ptarget=lib/main_gallery.dart' '-Psplit-per-abi=true'
+gradle.projectsEvaluated {
+    def app = gradle.rootProject.findProject(':app')
+    if (app == null) return // Flutter's included Gradle build has no app module.
+    app.tasks.register('verifyVersionCodes') {
+        doLast {
+            def pubspec = new File(app.rootProject.projectDir, '../pubspec.yaml')
+            def match = pubspec.text =~ /(?m)^version:\s*([^\s+]+)\+(\d+)/
+            assert match.find(): 'pubspec version missing'
+            def expected = match.group(2).toInteger()
+            def count = 0
+            app.android.applicationVariants.each { variant ->
+                variant.outputs.each { output ->
+                    assert output.versionCode == expected:
+                        "${variant.name}/${output.name}: ${output.versionCode} != ${expected}"
+                    println "Verified ${variant.name}/${output.name}: versionCode=${output.versionCode}"
+                    count++
+                }
+            }
+            assert count > 0: 'No Android outputs were checked'
+        }
+    }
+}

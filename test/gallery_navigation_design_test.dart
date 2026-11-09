@@ -370,15 +370,18 @@ void main() {
         final tail = tester.getRect(
           find.byKey(const ValueKey('face-tail-shanghai')),
         );
-        final label = tester.getRect(
-          find.byKey(const ValueKey('face-balance-label-shanghai')),
+        final divider = tester.getRect(
+          find.byKey(const ValueKey('face-divider-shanghai')),
         );
         final balance = tester.getRect(
           find.byKey(const ValueKey('face-number-shanghai')),
         );
         expect(tail.top, greaterThan(title.bottom));
-        expect(label.top, greaterThan(title.bottom));
-        expect(balance.top, greaterThan(label.bottom));
+        expect(divider.top, greaterThan(title.bottom));
+        expect(divider.top, greaterThan(balance.bottom));
+        expect(tail.top, greaterThan(divider.bottom));
+        expect(find.text('当前余额'), findsNothing);
+        expect(balance.overlaps(title), isFalse);
         expect(balance.overlaps(tail), isFalse);
         expect(tester.takeException(), isNull);
       }

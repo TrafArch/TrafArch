@@ -24,7 +24,7 @@ if (hasGoogleServicesConfig && !repairBuild && !galleryBuild) {
 }
 
 // ===================== 版本号自动递增 =====================
-// pubspec.yaml 的 "version: x.y.z+N" 为版本唯一来源（N = 构建版本号，如 2003）：
+// pubspec.yaml 的 "version: x.y.z+N" 为版本唯一来源（N = Android versionCode）：
 // - Debug / Profile / Release 的 APK / AAB 构建均使用当前 N，包括 repairBuild；
 // - 生成安装包后把 N+1 预留为下一次构建号，写回 pubspec.yaml；
 // - 构建开始前同步 lib/app/app_info.dart，保证产物内 UI 显示的即本次号；
@@ -38,6 +38,9 @@ val versionMatch = versionRegex.find(pubspecText)
     ?: error("pubspec.yaml 中未找到 'version: x.y.z+N' 格式的版本号")
 val appVersionName = versionMatch.groupValues[1]
 val appVersionCode = versionMatch.groupValues[2].toInt()
+check(providers.gradleProperty("force-version-code-ignoring-abi").orNull == "true") {
+    "Keep force-version-code-ignoring-abi=true: pubspec, AppInfo and Android versionCode must agree."
+}
 
 val buildModes = listOf("Debug", "Profile", "Release")
 val artifactTaskNames = buildModes.flatMap { mode ->

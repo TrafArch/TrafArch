@@ -99,7 +99,7 @@ def main() -> None:
         "applicationId": result["applicationId"] == "com.kajolno.TrafArch",
         "versionName": result["versionName"] == args.expected_version_name,
         "versionCodeAdvances": code > args.min_version_code,
-        "arm64AbiVersionOffset": code == args.expected_build_number + 2000,
+        "versionCodeMatchesBuildNumber": code == args.expected_build_number,
         "originalDeveloperSignature": result["originalDeveloperSignature"],
         "arm64Only": abis == ["arm64-v8a"],
         "firebaseInitProviderAbsent": result["firebaseInitProviderAbsent"],

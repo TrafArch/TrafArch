@@ -36,7 +36,7 @@ extension _GalleryPages on _GalleryViewState {
                   failed: failed,
                   compact: _compactHeight,
                 )
-              : _face(card),
+              : _homeCard(card),
         ),
         if (showResult) ...[
           _gap(10),
@@ -124,7 +124,7 @@ extension _GalleryPages on _GalleryViewState {
           _gap(20),
           _text('读取失败，保留上次结果', role: GalleryTypography.label, color: t.warn),
           _gap(12),
-          _face(card),
+          _homeCard(card),
         ],
         if (showResult) ...[
           _gap(16),
@@ -202,12 +202,11 @@ extension _GalleryPages on _GalleryViewState {
     for (final trip in trips) {
       grouped.putIfAbsent(trip['date'] as String, () => []).add(trip);
     }
-    final count = c.trips.where((t) => t['kind'] != 'event').length;
     return _TripsBody(
       reduceMotion: _reduceMotion,
       capsule: c.hasRead ? _tripsSummaryCapsule() : const SizedBox.shrink(),
       list: _list([
-        if (c.hasRead) _tripsSummary(count),
+        if (c.hasRead) _tripsSummary(),
         _gap(14),
         Wrap(
           spacing: 8,
@@ -237,17 +236,24 @@ extension _GalleryPages on _GalleryViewState {
         else
           ...grouped.entries.expand(
             (entry) => [
-              _sectionTitle(entry.key, trailing: '${entry.value.length} 条'),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(2, 22, 2, 12),
+                child: Semantics(
+                  header: true,
+                  child: _text(entry.key, role: GalleryTypography.stat),
+                ),
+              ),
               _panel(
                 Column(
                   children: [
                     for (int i = 0; i < entry.value.length; i++) ...[
-                      if (i > 0) const Divider(),
+                      if (i > 0) Divider(height: 1, color: t.line),
                       _trip(entry.value[i]),
                     ],
                   ],
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 14),
+                radius: 24,
               ),
             ],
           ),
@@ -255,61 +261,55 @@ extension _GalleryPages on _GalleryViewState {
     );
   }
 
-  /// 行程页汇总：金额右对齐；页面下滚后由 [_TripsBody] 在其位置悬浮胶囊。
-  Widget _tripsSummary(int count) => _panel(
-    Row(
+  /// 当前卡名与余额共用紧凑摘要；滚动后在原位置显示小胶囊。
+  Widget _tripsSummary() => Container(
+    key: const ValueKey('trips-summary'),
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+    decoration: BoxDecoration(
+      color: t.tone,
+      borderRadius: BorderRadius.circular(24),
+    ),
+    child: Row(
       children: [
+        Icon(Icons.credit_card_rounded, size: 28, color: t.onTone),
+        const SizedBox(width: 12),
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _text(
-                c.current.name,
-                role: GalleryTypography.label,
-                weight: FontWeight.w600,
-              ),
-              _gap(12),
-              _text(
-                '行程 $count 次',
-                role: GalleryTypography.caption,
-                color: t.onTone,
-              ),
-            ],
+          flex: 3,
+          child: _text(
+            c.current.name,
+            role: GalleryTypography.card,
+            color: t.onTone,
           ),
         ),
         const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              _text(
-                '本次开销',
-                role: GalleryTypography.caption,
-                color: t.onTone,
-                align: TextAlign.right,
-              ),
-              const SizedBox(height: 2),
-              Align(
-                alignment: Alignment.centerRight,
-                child: _amount(
-                  c.current,
-                  size: 28,
-                  alignment: Alignment.centerRight,
-                ),
-              ),
-            ],
+        SizedBox(
+          height: 24,
+          child: VerticalDivider(
+            width: 1,
+            color: t.onTone.withValues(alpha: .2),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Flexible(
+          flex: 2,
+          child: Semantics(
+            label: '当前余额',
+            child: _amount(
+              c.current,
+              size: 24,
+              alignment: Alignment.centerRight,
+            ),
           ),
         ),
       ],
     ),
-    color: t.tone,
-    border: false,
   );
 
   Widget _tripsSummaryCapsule() => DecoratedBox(
     key: const ValueKey('trips-summary-capsule'),
     decoration: BoxDecoration(
       color: t.tone,
+      border: Border.all(color: t.line),
       borderRadius: BorderRadius.circular(24),
       boxShadow: t.shadows(GalleryElevation.card),
     ),
@@ -381,40 +381,51 @@ extension _GalleryPages on _GalleryViewState {
             ? (trip['title'] as String).replaceFirst('地铁 ', '')
             : (trip['title'] as String).replaceFirst('公交 ', ''));
     final exitLine = trip['exitLine'] as String? ?? entryLine;
+    final city = trip['city'] as String? ?? '';
+    Widget lineBadge(String line) {
+      final redLine =
+          rail && city == '上海' && RegExp(r'^1\s*号线$').hasMatch(line);
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: redLine
+              ? t.shanghaiLineOne
+              : rail
+              ? t.tone
+              : t.action,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: _text(
+          line,
+          role: GalleryTypography.label,
+          color: redLine
+              ? t.onShanghaiLineOne
+              : rail
+              ? t.onTone
+              : t.onAction,
+        ),
+      );
+    }
+
     Widget endpoint(String phase, String line, String time, String station) =>
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            LayoutBuilder(
-              builder: (context, constraints) => Wrap(
-                spacing: 4,
-                runSpacing: 2,
+        Semantics(
+          label: phase,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _text(time, role: GalleryTypography.amount),
+              _gap(6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  _text(
-                    phase,
-                    role: GalleryTypography.caption,
-                    color: t.muted,
-                    height: 18 / 11,
-                  ),
-                  _chip(line),
-                  _text(
-                    time,
-                    role: GalleryTypography.caption,
-                    color: t.onTone,
-                    height: 1.8,
-                  ),
+                  if (line.isNotEmpty) lineBadge(line),
+                  _text(station, role: GalleryTypography.card),
                 ],
               ),
-            ),
-            _gap(6),
-            _text(
-              station,
-              role: GalleryTypography.body,
-              height: 22 / 14,
-              weight: FontWeight.w600,
-            ),
-          ],
+            ],
+          ),
         );
     final body = Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -452,30 +463,35 @@ extension _GalleryPages on _GalleryViewState {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Container(
-                          width: 28,
-                          height: 28,
+                          width: 34,
+                          height: 34,
                           decoration: BoxDecoration(
-                            color: rail ? t.tone : t.ok.withValues(alpha: .08),
-                            borderRadius: BorderRadius.circular(8),
+                            color: rail ? t.tone : t.secondaryContainer,
+                            borderRadius: BorderRadius.circular(11),
                           ),
                           child: Icon(
                             rail
                                 ? Icons.train_outlined
                                 : Icons.directions_bus_outlined,
-                            size: 17,
-                            color: rail ? t.onTone : t.ok,
+                            size: 23,
+                            color: rail ? t.onTone : t.onSecondaryContainer,
                           ),
                         ),
                         _text(
                           rail ? '轨道交通' : '公交',
-                          role: GalleryTypography.label,
-                          weight: FontWeight.w600,
+                          role: GalleryTypography.card,
                         ),
-                        _text(
-                          trip['city'] as String? ?? '',
-                          role: GalleryTypography.caption,
-                          color: t.muted,
-                        ),
+                        if (city.isNotEmpty) ...[
+                          SizedBox(
+                            height: 14,
+                            child: VerticalDivider(width: 1, color: t.muted),
+                          ),
+                          _text(
+                            city,
+                            role: GalleryTypography.body,
+                            color: t.muted,
+                          ),
+                        ],
                       ],
                     ),
                     if (trip['foreign'] == true) ...[
@@ -484,12 +500,11 @@ extension _GalleryPages on _GalleryViewState {
                     ],
                     _text(
                       trip['amount'] as String,
-                      role: GalleryTypography.label,
-                      weight: FontWeight.w600,
+                      role: GalleryTypography.card,
                     ),
                   ],
                 ),
-                _gap(13),
+                _gap(12),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -502,11 +517,18 @@ extension _GalleryPages on _GalleryViewState {
                       ),
                     ),
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 25, 8, 0),
-                      child: Icon(
-                        Icons.arrow_forward_rounded,
-                        size: 16,
-                        color: t.muted,
+                      padding: const EdgeInsets.fromLTRB(8, 20, 8, 0),
+                      child: Container(
+                        padding: const EdgeInsets.all(5),
+                        decoration: BoxDecoration(
+                          color: t.tone.withValues(alpha: .5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.arrow_forward_rounded,
+                          size: 20,
+                          color: t.muted,
+                        ),
                       ),
                     ),
                     Expanded(
@@ -519,7 +541,7 @@ extension _GalleryPages on _GalleryViewState {
                     ),
                   ],
                 ),
-                if (rail && trip['transferKnown'] == false) ...[
+                if (rail && trip['transferKnown'] == false && !interactive) ...[
                   _gap(10),
                   _text(
                     '未记录换乘站',
@@ -613,110 +635,63 @@ extension _GalleryPages on _GalleryViewState {
       return Semantics(
         label: '余额，${value.displayText}',
         excludeSemantics: true,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final scale = math.min(1.0, constraints.maxWidth / amountWidth);
-            return Column(
-              children: [
-                if (!value.known)
-                  _text(
-                    value.displayText,
-                    role: GalleryTypography.label,
-                    color: foreground(card, secondary: true),
-                    align: TextAlign.center,
-                  )
-                else
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: SizedBox(
-                      width: amountWidth,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.baseline,
-                        textBaseline: TextBaseline.alphabetic,
-                        children: [
-                          if (unitWidth > 0) ...[
-                            SizedBox(
-                              width: unitWidth,
-                              child: Text(
-                                value.currencyLabel,
-                                key: ValueKey('wallet-currency-${card.id}'),
-                                maxLines: 1,
-                                softWrap: false,
-                                textAlign: TextAlign.right,
-                                style: currencyStyle,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                          ],
-                          SizedBox(
-                            width: numberWidth,
-                            child: Text(
-                              value.number,
-                              key: ValueKey('wallet-number-${card.id}'),
-                              maxLines: 1,
-                              softWrap: false,
-                              textAlign: TextAlign.center,
-                              style: numberStyle,
-                            ),
+        child: !value.known
+            ? _text(
+                value.displayText,
+                role: GalleryTypography.label,
+                color: foreground(card, secondary: true),
+                align: TextAlign.center,
+              )
+            : FittedBox(
+                fit: BoxFit.scaleDown,
+                child: SizedBox(
+                  width: amountWidth,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      if (unitWidth > 0) ...[
+                        SizedBox(
+                          width: unitWidth,
+                          child: Text(
+                            value.currencyLabel,
+                            key: ValueKey('wallet-currency-${card.id}'),
+                            maxLines: 1,
+                            softWrap: false,
+                            textAlign: TextAlign.right,
+                            style: currencyStyle,
                           ),
-                        ],
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      SizedBox(
+                        width: numberWidth,
+                        child: Text(
+                          value.number,
+                          key: ValueKey('wallet-number-${card.id}'),
+                          maxLines: 1,
+                          softWrap: false,
+                          textAlign: TextAlign.center,
+                          style: numberStyle,
+                        ),
                       ),
-                    ),
-                  ),
-                _gap(4),
-                Padding(
-                  padding: EdgeInsets.only(left: unitSpace * scale),
-                  child: Text(
-                    card.count,
-                    key: ValueKey('wallet-count-${card.id}'),
-                    textAlign: TextAlign.center,
-                    style: GalleryTypography.caption.copyWith(
-                      color: foreground(card, secondary: true),
-                    ),
+                    ],
                   ),
                 ),
-              ],
-            );
-          },
-        ),
+              ),
       );
     }
 
     Widget identity(GalleryCard card) => Row(
       children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            gradient: LinearGradient(colors: _faceColors(card.face)),
-          ),
-          child: Icon(
-            Icons.contactless_outlined,
-            key: ValueKey('wallet-contactless-${card.id}'),
-            size: 32,
-            color: GalleryCardFace.byId(card.face).foreground,
-          ),
-        ),
+        _cardBadge(card, id: 'wallet'),
         const SizedBox(width: 8),
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _text(
-                card.name,
-                role: GalleryTypography.card,
-                color: foreground(card),
-                lines: 2,
-              ),
-              _gap(3),
-              _text(
-                '${card.city} · ${card.type == '交通联合卡' ? '交联' : card.type}',
-                role: GalleryTypography.caption,
-                color: foreground(card, secondary: true),
-                lines: stacked ? null : 1,
-              ),
-            ],
+          child: _text(
+            card.name,
+            role: GalleryTypography.card,
+            color: foreground(card),
+            lines: 2,
           ),
         ),
       ],
@@ -800,7 +775,7 @@ extension _GalleryPages on _GalleryViewState {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
-                      vertical: 20,
+                      vertical: 14,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -833,32 +808,7 @@ extension _GalleryPages on _GalleryViewState {
                               menu(card),
                             ],
                           ),
-                        _gap(16),
-                        Divider(
-                          color: foreground(
-                            card,
-                            secondary: true,
-                          ).withValues(alpha: .18),
-                        ),
-                        _gap(12),
-                        Wrap(
-                          alignment: WrapAlignment.spaceBetween,
-                          spacing: 12,
-                          runSpacing: 6,
-                          children: [
-                            _text(
-                              '•••• ${card.tail}',
-                              role: GalleryTypography.caption,
-                              color: foreground(card, secondary: true),
-                              mono: true,
-                            ),
-                            _text(
-                              card.when,
-                              role: GalleryTypography.caption,
-                              color: foreground(card, secondary: true),
-                            ),
-                          ],
-                        ),
+                        _cardMetadata(card, id: 'wallet'),
                       ],
                     ),
                   ),
