@@ -123,6 +123,17 @@ class RecoveryResultPanel extends StatelessWidget {
               independent: cu.transactions,
               mirrored: const [],
             ),
+            sourceLabels: cu.sourceLabels,
+            isRemote: (transaction) => cu.isRemoteUse(transaction, [batch!]),
+            initialFilters: app.recoveryFilters['live:cu'],
+            onFiltersChanged: (values) =>
+                app.recoveryFilters['live:cu'] = values,
+          ),
+        if (batch != null)
+          ArchivedLocalCardTrips(
+            records: ArchiveHistory.projectLocalCardRecords([batch])
+                .where((record) => record.cardType == 'localCardTrips')
+                .toList(),
           ),
         if (batch != null)
           LocalCardHistoryRecords(

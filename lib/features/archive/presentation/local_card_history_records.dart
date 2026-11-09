@@ -1,6 +1,36 @@
 import 'package:flutter/material.dart';
 
+import '../../trips/local_card_trip_presenter.dart';
+import '../../trips/local_card_trip_list.dart';
 import '../application/archive_history.dart';
+
+/// 归档中的通用地方卡行程用与 TU/CU 相同的票据式行程卡展示：还原捕获时的
+/// 记录字段，复用 [LocalCardTripList]（来源 / 方式筛选、详情弹层同一套）。
+class ArchivedLocalCardTrips extends StatelessWidget {
+  const ArchivedLocalCardTrips({super.key, required this.records});
+
+  final List<LocalCardHistoryRecord> records;
+
+  @override
+  Widget build(BuildContext context) {
+    final trips = [
+      for (final record in records) ?restoreLocalTripRecord(record.fields),
+    ];
+    if (trips.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        LocalCardTripList(
+          trips: trips,
+          currencySymbol: '¥',
+          titlePrefix: null,
+          showHeader: true,
+        ),
+        const SizedBox(height: 12),
+      ],
+    );
+  }
+}
 
 class LocalCardHistoryRecords extends StatelessWidget {
   const LocalCardHistoryRecords({super.key, required this.records});
@@ -9,17 +39,22 @@ class LocalCardHistoryRecords extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (records.isEmpty) return const SizedBox.shrink();
+    // 通用地方卡行程（localCardTrips）由票据式行程卡展示，不并入
+    // 岭南通 / 澳门通的纯文本记录列表。
+    final legacy = records
+        .where((record) => record.cardType != 'localCardTrips')
+        .toList();
+    if (legacy.isEmpty) return const SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 12),
         Text(
-          '本地卡交易记录 · ${records.length} 条',
+          '本地卡交易记录 · ${legacy.length} 条',
           style: Theme.of(context).textTheme.titleSmall,
         ),
         const SizedBox(height: 8),
-        for (final (index, record) in records.indexed)
+        for (final (index, record) in legacy.indexed)
           Card(
             child: ListTile(
               title: Text(_title(record, index)),

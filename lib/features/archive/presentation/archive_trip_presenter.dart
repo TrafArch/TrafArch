@@ -723,6 +723,13 @@ class _ArchiveEvent {
     return value is String && value.trim().isNotEmpty ? value.trim() : null;
   }
 
+  /// Journey headings and record details share the captured accepting city.
+  /// Application records use their own entry/exit side, never the station
+  /// mapping's owner city or a shared name from the other endpoint.
+  String? get acceptingCityName =>
+      capturedDisplay('cityName') ??
+      text(side == null ? 'cityName' : '${side}CityName');
+
   TUnionTripRecord? get process => record.kind != ArchiveRecordKind.process
       ? null
       : _processFromFields(fields, context: record.context);
@@ -848,9 +855,7 @@ class _ArchiveEvent {
             : text('${side}LineName') ??
                   text('${side}LineLabel') ??
                   text('${side}LineCode'));
-    final label =
-        capturedDisplay('cityName') ??
-        text(side == null ? 'cityName' : '${side}CityName');
+    final label = acceptingCityName;
     final seatAmount =
         fields[rail && side != null ? '${side}AmountFen' : 'amountFen'];
     final cycle = process;
@@ -1106,7 +1111,7 @@ class _ArchiveEvent {
       related:
           '已保存于 $batchCount 个批次'
           '${fields['matchedProcess'] is Map ? ' · 保存时已关联 0x1E 过程记录' : ''}',
-      remoteCityText: remote ? '${text('cityName') ?? '未知城市'}（$city）' : null,
+      remoteCityText: remote ? '${acceptingCityName ?? '未知城市'}（$city）' : null,
       rawHex: text('rawHex'),
       fields: detailFields(cycle),
     );

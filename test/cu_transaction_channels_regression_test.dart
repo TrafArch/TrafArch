@@ -6,6 +6,7 @@ import 'package:transit_card_analyzer/features/scan/domain/card_read_outcome.dar
 import 'package:transit_card_analyzer/features/scan/domain/scan_presentation.dart';
 import 'package:transit_card_analyzer/features/transit_analysis/cu_transaction_analysis.dart';
 import 'package:transit_card_analyzer/features/trips/cu_transaction_list.dart';
+import 'package:transit_card_analyzer/features/trips/trip_entry_card.dart';
 import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/city_union/city_union_file_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/city_union/city_union_models.dart';
@@ -189,11 +190,16 @@ void main() {
         ),
       );
       expect(find.text('城市一卡通 · 1 条记录'), findsOneWidget);
-      expect(find.text('异地消费 · 地点未匹配'), findsOneWidget);
-      await tester.tap(find.text('异地消费 · 地点未匹配'));
+      expect(find.text('地区 5180公共汽电车'), findsOneWidget);
+      final card = tester.widget<TripEntryCard>(find.byType(TripEntryCard));
+      expect(card.info.title, '异地消费 · 地点未匹配 · 序号 1');
+      expect(card.info.amountText, '-¥0.01');
+      expect(card.info.fields, contains(('终端原始编码', '518020000001')));
+      expect(card.info.fields, contains(('金额原始字段', '00000001')));
+      expect(card.info.fields, contains(('金额四字节原始值', '1')));
+      await tester.tap(find.byType(TripEntryCard));
       await tester.pumpAndSettle();
-      expect(find.text('终端原始编码：518020000001'), findsOneWidget);
-      expect(find.text('金额原始值：1（单位未确认）'), findsOneWidget);
+      expect(find.byType(DraggableScrollableSheet), findsOneWidget);
       expect(find.textContaining('CU 0x06 #5'), findsOneWidget);
     },
   );

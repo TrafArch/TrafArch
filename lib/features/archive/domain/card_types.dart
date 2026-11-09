@@ -23,6 +23,10 @@ abstract final class CardTypes {
   static const String beijingBmac = 'beijing_bmac';
   static const String macauPass = 'macau_pass';
 
+  /// 通用地方交通卡（武汉通 / 北京互通卡 / 深圳通本地 / 苏州苏薪·计次 /
+  /// 天府通等 parserId=localCard 的城市卡种）；正式卡名由解析结果提供。
+  static const String localCard = 'local_card';
+
   /// Suica（预留：FeliCa 解析器接入后启用）。
   static const String suica = 'suica';
 }
@@ -42,6 +46,7 @@ String cardTypeLabel(String cardType) => switch (cardType) {
   CardTypes.shenzhenTunion => '深圳通（交通联合版）',
   CardTypes.beijingBmac => '北京市政交通一卡通（BMAC）',
   CardTypes.macauPass => '澳门通',
+  CardTypes.localCard => '地方交通卡',
   CardTypes.suica => 'Suica',
   _ => '未识别交通卡',
 };

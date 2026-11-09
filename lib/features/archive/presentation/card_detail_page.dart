@@ -170,6 +170,12 @@ class _CardDetailBody extends StatelessWidget {
         }),
       ),
     );
+    // 通用地方卡行程（武汉通 / 北京互通卡 / 深圳通本地 / 苏州苏薪·计次 /
+    // 天府通）与 TU / CU 共用票据式行程卡展示；岭南通 / 澳门通继续使用
+    // 各自的纯文本列表。
+    final localTrips = history.localCardRecords
+        .where((record) => record.cardType == 'localCardTrips')
+        .toList();
     return ListView(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 28),
       children: [
@@ -218,8 +224,20 @@ class _CardDetailBody extends StatelessWidget {
           ),
         if (cityUnion.transactions.isNotEmpty)
           CuApplicationRecords(
+            key: ValueKey('cu:${history.card!.id}'),
             records: cuRecords,
             sourceLabels: cityUnion.sourceLabels,
+            isRemote: (transaction) =>
+                cityUnion.isRemoteUse(transaction, history.batches),
+            initialFilters: recoveryFilters?['card:${history.card!.id}:cu'],
+            onFiltersChanged: (values) {
+              recoveryFilters?['card:${history.card!.id}:cu'] = values;
+            },
+          ),
+        if (localTrips.isNotEmpty)
+          ArchivedLocalCardTrips(
+            key: ValueKey('local:${history.card!.id}'),
+            records: localTrips,
           ),
         LocalCardHistoryRecords(records: history.localCardRecords),
         for (final issue in cityUnion.issues)

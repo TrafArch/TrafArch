@@ -377,7 +377,11 @@ class ArchiveHistory {
     for (final batch in batches) {
       final snapshot = batch.decoded.snapshot;
       if (snapshot == null) continue;
-      for (final section in const ['lingnanTong', 'macauPass']) {
+      for (final section in const [
+        'lingnanTong',
+        'macauPass',
+        'localCardTrips',
+      ]) {
         final payload = snapshot.extensions[section];
         if (payload is! Map) continue;
         final rows = payload['records'];
