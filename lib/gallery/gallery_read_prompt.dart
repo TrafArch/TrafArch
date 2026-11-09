@@ -1,5 +1,125 @@
 part of 'gallery_app.dart';
 
+/// One mounted stage at a time: finish the exit before replacing its content.
+/// Keeping the displayed snapshot also keeps outgoing controls and captions in
+/// the same phase, including when a read completes during an interrupted exit.
+class _GalleryReadFlow extends StatefulWidget {
+  const _GalleryReadFlow({
+    required this.state,
+    required this.hasRead,
+    required this.builder,
+  });
+  final GalleryReadState state;
+  final bool hasRead;
+  final Widget Function(GalleryReadState, bool) builder;
+
+  @override
+  State<_GalleryReadFlow> createState() => _GalleryReadFlowState();
+}
+
+class _GalleryReadFlowState extends State<_GalleryReadFlow>
+    with SingleTickerProviderStateMixin {
+  late GalleryReadState _displayed = widget.state;
+  late bool _hasRead = widget.hasRead;
+  late final _visibility = AnimationController(vsync: this, value: 1)
+    ..addStatusListener(_onVisibilityStatus);
+  bool _reduced = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reduced = MediaQuery.disableAnimationsOf(context);
+    if (_reduced) _showImmediately();
+  }
+
+  @override
+  void didUpdateWidget(_GalleryReadFlow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.state != widget.state ||
+        oldWidget.hasRead != widget.hasRead) {
+      if (_reduced) {
+        _showImmediately();
+      } else {
+        _transition();
+      }
+    }
+  }
+
+  void _showImmediately() {
+    _visibility.stop(canceled: true);
+    _displayed = widget.state;
+    _hasRead = widget.hasRead;
+    if (_visibility.value != 1) _visibility.value = 1;
+  }
+
+  void _transition() {
+    if (_visibility.value == 0) {
+      _showNext();
+    } else {
+      _visibility.animateBack(
+        0,
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeInCubic,
+      );
+    }
+  }
+
+  void _onVisibilityStatus(AnimationStatus status) {
+    if (status == AnimationStatus.dismissed && mounted && !_reduced) {
+      _showNext();
+    }
+  }
+
+  void _showNext() {
+    setState(() {
+      _displayed = widget.state;
+      _hasRead = widget.hasRead;
+    });
+    _visibility.animateTo(
+      1,
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  @override
+  void dispose() {
+    _visibility.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final content = AnimatedBuilder(
+      animation: _visibility,
+      builder: (context, child) => IgnorePointer(
+        ignoring: _visibility.value < .99 || _displayed != widget.state,
+        child: ExcludeSemantics(
+          excluding: _visibility.value < .5 || _displayed != widget.state,
+          child: FadeTransition(
+            key: const ValueKey('home-read-stage'),
+            opacity: _visibility,
+            child: Transform.translate(
+              offset: Offset(0, 8 * (1 - _visibility.value)),
+              child: child,
+            ),
+          ),
+        ),
+      ),
+      child: widget.builder(_displayed, _hasRead),
+    );
+    return _reduced
+        ? SizedBox(key: const ValueKey('home-read-layout'), child: content)
+        : AnimatedSize(
+            key: const ValueKey('home-read-layout'),
+            duration: _GalleryMotion.readResult,
+            curve: Curves.easeInOutCubicEmphasized,
+            alignment: Alignment.topCenter,
+            child: content,
+          );
+  }
+}
+
 /// The illustration stays mounted as the first step becomes the reading step.
 class _GalleryReadPrompt extends StatefulWidget {
   const _GalleryReadPrompt({
@@ -25,6 +145,11 @@ class _GalleryReadPromptState extends State<_GalleryReadPrompt>
     vsync: this,
     duration: const Duration(milliseconds: 2800),
   );
+  late final _failure = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 520),
+    value: widget.failed ? 1 : 0,
+  );
   bool _reduceMotion = false;
 
   @override
@@ -37,11 +162,15 @@ class _GalleryReadPromptState extends State<_GalleryReadPrompt>
   @override
   void didUpdateWidget(_GalleryReadPrompt oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.reading != oldWidget.reading) _syncAnimation();
+    if (widget.reading != oldWidget.reading ||
+        widget.failed != oldWidget.failed) {
+      if (widget.failed && !oldWidget.failed) _failure.value = 0;
+      _syncAnimation();
+    }
   }
 
   void _syncAnimation() {
-    final target = widget.reading ? 1.0 : 0.0;
+    final target = widget.reading || widget.failed ? 1.0 : 0.0;
     if (_reduceMotion) {
       _morph.value = target;
     } else if (_morph.value != target) {
@@ -51,7 +180,14 @@ class _GalleryReadPromptState extends State<_GalleryReadPrompt>
       if (!_loop.isAnimating) _loop.repeat();
     } else {
       _loop.stop();
-      _loop.value = 0;
+      if (!widget.failed) _loop.value = 0;
+    }
+    if (_reduceMotion) {
+      _failure.value = widget.failed ? 1 : 0;
+    } else if (widget.failed) {
+      _failure.forward();
+    } else {
+      _failure.value = 0;
     }
   }
 
@@ -59,6 +195,7 @@ class _GalleryReadPromptState extends State<_GalleryReadPrompt>
   void dispose() {
     _morph.dispose();
     _loop.dispose();
+    _failure.dispose();
     super.dispose();
   }
 
@@ -81,7 +218,7 @@ class _GalleryReadPromptState extends State<_GalleryReadPrompt>
         RepaintBoundary(
           child: ExcludeSemantics(
             child: AnimatedBuilder(
-              animation: Listenable.merge([_morph, _loop]),
+              animation: Listenable.merge([_morph, _loop, _failure]),
               builder: (context, _) {
                 final morph = _morph.value;
                 final phase = _loop.value;
@@ -128,7 +265,13 @@ class _GalleryReadPromptState extends State<_GalleryReadPrompt>
                           Opacity(
                             opacity: morph,
                             child: Transform.translate(
-                              offset: Offset(-12 * morph, 12 * (1 - morph)),
+                              offset: Offset(
+                                -12 * morph +
+                                    math.sin(_failure.value * math.pi * 4) *
+                                        (1 - _failure.value) *
+                                        5,
+                                12 * (1 - morph),
+                              ),
                               child: Container(
                                 key: const ValueKey('home-read-phone'),
                                 width: 64,
@@ -196,6 +339,34 @@ class _GalleryReadPromptState extends State<_GalleryReadPrompt>
                               ),
                             ),
                           ),
+                          if (widget.failed)
+                            Positioned(
+                              right: 48,
+                              bottom: 12,
+                              child: Transform.scale(
+                                scale: Curves.easeOutCubic.transform(
+                                  _failure.value,
+                                ),
+                                child: Container(
+                                  key: const ValueKey('home-read-failure'),
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    color: t.dangerContainer,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: t.danger,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: Icon(
+                                    Icons.close_rounded,
+                                    color: t.onDangerContainer,
+                                    size: 22,
+                                  ),
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                     ),
@@ -226,45 +397,25 @@ class _GalleryReadPromptState extends State<_GalleryReadPrompt>
         const SizedBox(height: 18),
         Semantics(
           liveRegion: true,
-          child: AnimatedSwitcher(
-            duration: _reduceMotion
-                ? Duration.zero
-                : const Duration(milliseconds: 420),
-            transitionBuilder: (child, animation) => FadeTransition(
-              opacity: animation.drive(
-                CurveTween(
-                  curve: const Interval(.5, 1, curve: Curves.easeOutCubic),
+          child: Column(
+            key: ValueKey(title),
+            children: [
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: GalleryTypography.section.copyWith(color: t.text),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: GalleryTypography.label.copyWith(
+                  color: widget.failed ? t.warn : t.muted,
+                  fontWeight: FontWeight.w400,
+                  height: 22 / 13,
                 ),
               ),
-              child: child,
-            ),
-            layoutBuilder: (current, previous) => Stack(
-              alignment: Alignment.topCenter,
-              children: [
-                for (final child in previous) ExcludeSemantics(child: child),
-                ?current,
-              ],
-            ),
-            child: Column(
-              key: ValueKey(title),
-              children: [
-                Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  style: GalleryTypography.section.copyWith(color: t.text),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  subtitle,
-                  textAlign: TextAlign.center,
-                  style: GalleryTypography.label.copyWith(
-                    color: widget.failed ? t.warn : t.muted,
-                    fontWeight: FontWeight.w400,
-                    height: 22 / 13,
-                  ),
-                ),
-              ],
-            ),
+            ],
           ),
         ),
       ],

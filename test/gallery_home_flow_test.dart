@@ -81,14 +81,10 @@ void main() {
     expect(c.readState, GalleryReadState.reading);
     final start = cardOffset(tester);
     await tester.pump(const Duration(milliseconds: 200));
+    await tester.pump(const Duration(milliseconds: 200));
     final early = cardOffset(tester);
-    final captions = tester.widgetList<FadeTransition>(
-      find.descendant(
-        of: find.byKey(const ValueKey('home-read-prompt')),
-        matching: find.byType(FadeTransition),
-      ),
-    );
-    expect(captions.where((caption) => caption.opacity.value > .01).length, 1);
+    expect(find.text('贴卡，了解你的每一次出行'), findsNothing);
+    expect(find.text('把交通卡贴近手机背面'), findsOneWidget);
     await tester.pump(const Duration(milliseconds: 400));
     final middle = cardOffset(tester);
     expect(start, greaterThan(early));
@@ -168,6 +164,83 @@ void main() {
     expect(find.text('读取失败，保留上次结果'), findsOneWidget);
     expect(find.text('重新读取'), findsOneWidget);
   });
+
+  testWidgets('read phases never mount the prompt and new result together', (
+    tester,
+  ) async {
+    await mount(tester);
+    c.read();
+    await tester.pump();
+    for (var frame = 0; frame < 52; frame++) {
+      await tester.pump(const Duration(milliseconds: 40));
+      final prompt = find.byKey(const ValueKey('home-read-prompt'));
+      final result = find.byKey(const ValueKey('card-face-shanghai'));
+      expect(
+        prompt.evaluate().isNotEmpty && result.evaluate().isNotEmpty,
+        isFalse,
+        reason: 'frame $frame',
+      );
+      if (prompt.evaluate().isNotEmpty) {
+        expect(find.text('保存卡片'), findsNothing);
+        expect(find.text('最近一次行程'), findsNothing);
+      }
+      expect(tester.takeException(), isNull);
+    }
+    await tester.pumpAndSettle();
+    expect(find.text('保存卡片'), findsOneWidget);
+  });
+
+  testWidgets('failure animates, keeps the previous result and retries', (
+    tester,
+  ) async {
+    c.hasRead = true;
+    c.readState = GalleryReadState.success;
+    await mount(tester);
+    c.read(fail: true);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 160));
+    await tester.pump(const Duration(milliseconds: 1440));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('home-read-failure')), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-read-progress')), findsNothing);
+    expect(find.text('未能读到卡片'), findsOneWidget);
+    expect(find.text('读取失败，保留上次结果'), findsOneWidget);
+    expect(find.byKey(const ValueKey('card-face-shanghai')), findsOneWidget);
+    await tester.ensureVisible(find.text('重新读取'));
+    await tester.tap(find.text('重新读取'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 160));
+    await tester.pump(const Duration(milliseconds: 1440));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('home-read-failure')), findsNothing);
+    expect(find.text('今天 09:41 读取成功'), findsOneWidget);
+    expect(c.hasRead, isTrue);
+  });
+
+  testWidgets(
+    'interrupted exits and changing reduced motion use latest state',
+    (tester) async {
+      await mount(tester);
+      c.read();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 80));
+      c.cancelRead();
+      c.update(() {});
+      await tester.pumpAndSettle();
+      expect(find.text('开始读取'), findsOneWidget);
+      c.read(fail: true);
+      await tester.pump();
+      tester.platformDispatcher.accessibilityFeaturesTestValue =
+          const FakeAccessibilityFeatures(disableAnimations: true);
+      await tester.pump();
+      expect(find.text('把交通卡贴近手机背面'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 1600));
+      await tester.pumpAndSettle();
+      expect(find.text('未能读到卡片'), findsOneWidget);
+      expect(find.byKey(const ValueKey('home-read-failure')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'main headers keep settings mounted and animate only extra actions',

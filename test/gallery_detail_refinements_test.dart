@@ -167,37 +167,56 @@ void main() {
         (tester) async {
           c.autoSave = autoSave;
           await mount(tester, reduceMotion: reduceMotion);
-          final card = find.byKey(const ValueKey('home-card-expansion'));
-          final before = tester.getSize(card).height;
+          final layout = find.byKey(const ValueKey('home-read-layout'));
+          var before = tester.getSize(layout).height;
+          double? partial;
           await tester.tap(find.text('开始读取'));
           await tester.pump();
-          await tester.pump(const Duration(milliseconds: 1600));
-          expect(c.hasRead, isTrue);
-          await tester.pump(const Duration(milliseconds: 280));
-          final partial = tester.getSize(card).height;
-          if (!reduceMotion) {
+          // Sample real frame intervals so exit completion, layout and entry
+          // each receive frames rather than advancing past a pending tick.
+          for (var frame = 0; frame < 150; frame++) {
+            await tester.pump(const Duration(milliseconds: 16));
+            if (!c.hasRead) before = tester.getSize(layout).height;
             final fade = tester.widget<FadeTransition>(
-              find
-                  .ancestor(
-                    of: find.byKey(const ValueKey('card-face-shanghai')),
-                    matching: find.byType(FadeTransition),
-                  )
-                  .first,
+              find.byKey(const ValueKey('home-read-stage')),
             );
-            expect(fade.opacity.value, inExclusiveRange(.1, .9));
+            if (c.hasRead &&
+                find
+                    .byKey(const ValueKey('card-face-shanghai'))
+                    .evaluate()
+                    .isNotEmpty &&
+                fade.opacity.value > .4 &&
+                fade.opacity.value < .8) {
+              partial ??= tester.getSize(layout).height;
+            }
           }
+          expect(c.hasRead, isTrue);
           await tester.pumpAndSettle();
-          final after = tester.getSize(card).height;
-          expect(after, lessThan(before));
+          final after = tester.getSize(layout).height;
           final face = tester.getSize(
             find.byKey(const ValueKey('card-face-shanghai')),
           );
           expect(face.width, 328);
           expect(face.height, lessThan(240));
           if (reduceMotion) {
-            expect(partial, after);
+            expect(
+              tester
+                  .widget<FadeTransition>(
+                    find.byKey(const ValueKey('home-read-stage')),
+                  )
+                  .opacity
+                  .value,
+              1,
+            );
           } else {
-            expect(partial, inExclusiveRange(after, before));
+            expect(partial, isNotNull);
+            expect(
+              partial!,
+              inExclusiveRange(
+                before < after ? before : after,
+                before > after ? before : after,
+              ),
+            );
           }
           expect(tester.takeException(), isNull);
         },

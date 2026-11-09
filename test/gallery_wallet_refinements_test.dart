@@ -320,6 +320,42 @@ void main() {
     });
   });
 
+  testWidgets('wallet text stays readable in every light and dark palette', (
+    tester,
+  ) async {
+    c.navigate(GalleryPage.cards);
+    await mount(tester);
+    for (final palette in GalleryPalette.values) {
+      for (final mode in [ThemeMode.light, ThemeMode.dark]) {
+        c.update(() {
+          c.palette = palette.id;
+          c.themeMode = mode;
+        });
+        await tester.pumpAndSettle();
+        final panel = find.byKey(
+          ValueKey('wallet-card-${c.savedCards.first.id}'),
+        );
+        final tokens = Theme.of(tester.element(panel))
+            .extension<GalleryTokens>()!;
+        final background =
+            (tester.widget<Container>(panel).decoration! as BoxDecoration)
+                .color!;
+        for (final foreground in [tokens.text, tokens.muted]) {
+          final a = foreground.computeLuminance() + .05;
+          final b = background.computeLuminance() + .05;
+          expect(
+            a > b ? a / b : b / a,
+            greaterThanOrEqualTo(4.5),
+            reason: '${palette.id} $mode',
+          );
+        }
+        expect(tokens.dark, mode == ThemeMode.dark);
+        expect(find.text('•••• ${c.savedCards.first.tail}'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      }
+    }
+  });
+
   testWidgets('wallet currency, numbers and counts share aligned columns', (
     tester,
   ) async {
@@ -386,7 +422,7 @@ void main() {
   });
 
   testWidgets(
-    'wallet uses full card faces and ghost menus with grouped actions',
+    'wallet uses themed panels, face badges and ghost menus with grouped actions',
     (tester) async {
       c.navigate(GalleryPage.cards);
       await mount(tester);
@@ -405,8 +441,19 @@ void main() {
         final item = tester.widget<Container>(
           find.byKey(ValueKey('wallet-card-${card.id}')),
         );
+        final decoration = item.decoration as BoxDecoration;
+        expect(decoration.color, tokens.surface);
+        expect(decoration.border, isNotNull);
+        final badge = tester.widget<Container>(
+          find
+              .ancestor(
+                of: find.byKey(ValueKey('wallet-contactless-${card.id}')),
+                matching: find.byType(Container),
+              )
+              .first,
+        );
         final gradient =
-            (item.decoration as BoxDecoration).gradient as LinearGradient;
+            (badge.decoration as BoxDecoration).gradient! as LinearGradient;
         final face = GalleryCardFace.byId(card.face);
         expect(gradient.colors, [face.start, face.end]);
         final icon = tester.widget<Icon>(

@@ -113,6 +113,14 @@ void main() {
           c.current.saved = true;
         });
         await capture('$mode-home-card');
+        c.read(fail: true);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 1600));
+        await capture('$mode-home-failed');
+        c.read();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 1600));
+        await tester.pumpAndSettle();
         c.navigate(GalleryPage.cards);
         await capture('$mode-wallet');
         await tester.tap(find.byTooltip('深圳通 管理'));

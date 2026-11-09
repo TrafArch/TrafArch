@@ -1,26 +1,36 @@
 part of 'gallery_app.dart';
 
 extension _GalleryPages on _GalleryViewState {
-  Widget _home() {
+  Widget _home() => _fade(
+    'home',
+    _list([
+      _GalleryReadFlow(
+        state: c.readState,
+        hasRead: c.hasRead,
+        builder: _homeContent,
+      ),
+    ]),
+  );
+
+  Widget _homeContent(GalleryReadState state, bool hasRead) {
     final card = c.current;
-    final reading = c.readState == GalleryReadState.reading;
-    final failed = c.readState == GalleryReadState.failed;
-    final showResult = c.hasRead && !reading;
+    final reading = state == GalleryReadState.reading;
+    final failed = state == GalleryReadState.failed;
+    final showResult = hasRead && !reading && !failed;
     final recent = c.trips.where((r) => r['kind'] != 'event').firstOrNull;
-    return _fade(
-      'home',
-      _list([
-        AnimatedContainer(
-          duration: _reduceMotion ? Duration.zero : _GalleryMotion.readResult,
-          curve: Curves.easeInOutCubic,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
           height: showResult
               ? 0
               : _compactHeight
               ? 8
               : 32,
         ),
-        _homeCard(
-          !showResult
+        SizedBox(
+          key: const ValueKey('home-card-expansion'),
+          child: !showResult
               ? _GalleryReadPrompt(
                   reading: reading,
                   failed: failed,
@@ -69,7 +79,7 @@ extension _GalleryPages on _GalleryViewState {
               : 28,
         ),
         if (!reading)
-          if (!c.hasRead || failed)
+          if (!hasRead || failed)
             Center(
               child: SizedBox(
                 width: showResult ? double.infinity : 240,
@@ -110,6 +120,12 @@ extension _GalleryPages on _GalleryViewState {
                 ),
               ],
             ),
+        if (failed && hasRead) ...[
+          _gap(20),
+          _text('读取失败，保留上次结果', role: GalleryTypography.label, color: t.warn),
+          _gap(12),
+          _face(card),
+        ],
         if (showResult) ...[
           _gap(16),
           if (recent != null)
@@ -176,51 +192,9 @@ extension _GalleryPages on _GalleryViewState {
           color: t.muted,
           align: showResult ? TextAlign.left : TextAlign.center,
         ),
-      ]),
+      ],
     );
   }
-
-  Widget _homeCard(Widget child) => _reduceMotion
-      ? SizedBox(key: const ValueKey('home-card-expansion'), child: child)
-      : AnimatedSize(
-          key: const ValueKey('home-card-expansion'),
-          duration: _GalleryMotion.readResult,
-          curve: Curves.easeInOutCubic,
-          alignment: Alignment.topCenter,
-          child: AnimatedSwitcher(
-            duration: _GalleryMotion.readResult,
-            switchInCurve: Curves.easeInOutCubic,
-            switchOutCurve: Curves.easeOutCubic,
-            layoutBuilder: (current, previous) => Stack(
-              alignment: Alignment.topCenter,
-              children: [
-                for (final child in previous)
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: ExcludeSemantics(
-                        child: TickerMode(
-                          enabled: false,
-                          child: OverflowBox(
-                            alignment: Alignment.topCenter,
-                            minHeight: 0,
-                            maxHeight: double.infinity,
-                            child: child,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ?current,
-              ],
-            ),
-            child: KeyedSubtree(
-              key: ValueKey(
-                c.hasRead && c.readState != GalleryReadState.reading,
-              ),
-              child: child,
-            ),
-          ),
-        );
 
   Widget _trips() {
     final trips = c.filteredTrips;
@@ -570,6 +544,12 @@ extension _GalleryPages on _GalleryViewState {
 
   Widget _cards() {
     final cards = c.savedCards;
+    Color foreground(GalleryCard card, {bool secondary = false}) =>
+        card.image != null
+        ? _faceForeground(card, secondary: secondary)
+        : secondary
+        ? t.muted
+        : t.text;
     final faceText = GalleryCardFace.values.first;
     final numberStyle = GalleryTypography.amount.copyWith(
       inherit: false,
@@ -615,19 +595,19 @@ extension _GalleryPages on _GalleryViewState {
     final available = math.max(0.0, _readingWidth - 32 - 32);
     final balanceColumnWidth = math.min(amountWidth, available * .4);
     final identityMinimum =
-        34 + 12 + _measureTextWidth('交通卡片', GalleryTypography.card);
+        40 + 8 + _measureTextWidth('交通卡片', GalleryTypography.card);
     final stacked =
         _extraTextScale >= .5 ||
         available - balanceColumnWidth - 8 - 4 - 44 < identityMinimum;
     Widget amount(GalleryCard card) {
       final numberStyle = GalleryTypography.amount.copyWith(
         inherit: false,
-        color: _faceForeground(card),
+        color: foreground(card),
         fontFeatures: const [FontFeature.tabularFigures()],
       );
       final currencyStyle = GalleryTypography.caption.copyWith(
         inherit: false,
-        color: _faceForeground(card, secondary: true),
+        color: foreground(card, secondary: true),
       );
       final value = parts[card.id]!;
       return Semantics(
@@ -642,7 +622,7 @@ extension _GalleryPages on _GalleryViewState {
                   _text(
                     value.displayText,
                     role: GalleryTypography.label,
-                    color: _faceForeground(card, secondary: true),
+                    color: foreground(card, secondary: true),
                     align: TextAlign.center,
                   )
                 else
@@ -691,7 +671,7 @@ extension _GalleryPages on _GalleryViewState {
                     key: ValueKey('wallet-count-${card.id}'),
                     textAlign: TextAlign.center,
                     style: GalleryTypography.caption.copyWith(
-                      color: _faceForeground(card, secondary: true),
+                      color: foreground(card, secondary: true),
                     ),
                   ),
                 ),
@@ -704,13 +684,21 @@ extension _GalleryPages on _GalleryViewState {
 
     Widget identity(GalleryCard card) => Row(
       children: [
-        Icon(
-          Icons.contactless_outlined,
-          key: ValueKey('wallet-contactless-${card.id}'),
-          size: 34,
-          color: _faceForeground(card),
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            gradient: LinearGradient(colors: _faceColors(card.face)),
+          ),
+          child: Icon(
+            Icons.contactless_outlined,
+            key: ValueKey('wallet-contactless-${card.id}'),
+            size: 32,
+            color: GalleryCardFace.byId(card.face).foreground,
+          ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 8),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -718,14 +706,14 @@ extension _GalleryPages on _GalleryViewState {
               _text(
                 card.name,
                 role: GalleryTypography.card,
-                color: _faceForeground(card),
+                color: foreground(card),
                 lines: 2,
               ),
               _gap(3),
               _text(
-                '${card.city} ${card.type == '交通联合卡' ? '交联' : card.type}',
+                '${card.city} · ${card.type == '交通联合卡' ? '交联' : card.type}',
                 role: GalleryTypography.caption,
-                color: _faceForeground(card, secondary: true),
+                color: foreground(card, secondary: true),
                 lines: stacked ? null : 1,
               ),
             ],
@@ -743,11 +731,40 @@ extension _GalleryPages on _GalleryViewState {
           'card-${card.id}',
           card: card,
         ),
-        color: _faceForeground(card),
+        color: foreground(card),
         outlined: false,
       ),
     );
     return _list([
+      if (cards.isNotEmpty) ...[
+        Container(
+          key: const ValueKey('wallet-summary'),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          decoration: BoxDecoration(
+            color: t.tone,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.wallet_outlined, color: t.onTone, size: 26),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _text(
+                  '我的卡片',
+                  role: GalleryTypography.card,
+                  color: t.onTone,
+                ),
+              ),
+              _text(
+                '${cards.length} 张',
+                role: GalleryTypography.section,
+                color: t.onTone,
+              ),
+            ],
+          ),
+        ),
+        _gap(20),
+      ],
       if (cards.isEmpty)
         _empty(
           '还没有保存的卡片',
@@ -763,24 +780,33 @@ extension _GalleryPages on _GalleryViewState {
           padding: const EdgeInsets.only(bottom: 12),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(22),
+              borderRadius: BorderRadius.circular(24),
               boxShadow: t.shadows(GalleryElevation.card),
             ),
             child: Container(
               key: ValueKey('wallet-card-${card.id}'),
-              decoration: _faceDecoration(card),
+              decoration: card.image != null
+                  ? _faceDecoration(card, radius: 24)
+                  : BoxDecoration(
+                      color: t.surface,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: t.line.withValues(alpha: .65)),
+                    ),
               child: Material(
                 type: MaterialType.transparency,
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(22),
+                  borderRadius: BorderRadius.circular(24),
                   onTap: () => c.openCard(card),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 20,
                     ),
-                    child: stacked
-                        ? Column(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (stacked)
+                          Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               Row(
@@ -794,7 +820,8 @@ extension _GalleryPages on _GalleryViewState {
                               amount(card),
                             ],
                           )
-                        : Row(
+                        else
+                          Row(
                             children: [
                               Expanded(child: identity(card)),
                               const SizedBox(width: 8),
@@ -806,6 +833,34 @@ extension _GalleryPages on _GalleryViewState {
                               menu(card),
                             ],
                           ),
+                        _gap(16),
+                        Divider(
+                          color: foreground(
+                            card,
+                            secondary: true,
+                          ).withValues(alpha: .18),
+                        ),
+                        _gap(12),
+                        Wrap(
+                          alignment: WrapAlignment.spaceBetween,
+                          spacing: 12,
+                          runSpacing: 6,
+                          children: [
+                            _text(
+                              '•••• ${card.tail}',
+                              role: GalleryTypography.caption,
+                              color: foreground(card, secondary: true),
+                              mono: true,
+                            ),
+                            _text(
+                              card.when,
+                              role: GalleryTypography.caption,
+                              color: foreground(card, secondary: true),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

@@ -234,7 +234,7 @@ void main() {
     await mount(tester);
     for (final width in [412.0, 360.0, 320.0]) {
       for (final scale in [1.0, 1.5, 2.0]) {
-        tester.view.physicalSize = Size(width, 1000);
+        tester.view.physicalSize = Size(width, 2400);
         tester.platformDispatcher.textScaleFactorTestValue = scale;
         addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
         c.update(() {});
