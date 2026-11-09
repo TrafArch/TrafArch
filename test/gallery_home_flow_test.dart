@@ -39,7 +39,7 @@ void main() {
       .getTranslation()
       .x;
 
-  testWidgets('home result shares compact wallet notes in both themes', (
+  testWidgets('home restores the original face and retains custom artwork', (
     tester,
   ) async {
     c.hasRead = true;
@@ -47,52 +47,48 @@ void main() {
     for (final theme in [ThemeMode.light, ThemeMode.dark]) {
       for (final width in [240.0, 320.0, 412.0]) {
         for (final scale in [1.0, 2.0]) {
-          tester.view.physicalSize = Size(width, 1500);
+          tester.view.physicalSize = Size(width, 1800);
           tester.platformDispatcher.textScaleFactorTestValue = scale;
-          for (final balance in ['86.50', '-1,234,567.89', '—']) {
-            c.update(() {
-              c.themeMode = theme;
-              c.current.rawBalance = balance;
-            });
-            await tester.pumpAndSettle();
-            final panel = find.byKey(const ValueKey('card-face-shanghai'));
-            final divider = tester.getRect(
-              find.byKey(const ValueKey('face-divider-shanghai')),
-            );
-            final amount = tester.getRect(
-              find.byKey(
-                ValueKey(
-                  'face-${balance == '—' ? 'unknown' : 'number'}-shanghai',
-                ),
-              ),
-            );
-            expect(amount.bottom, lessThan(divider.top));
-            for (final text in [
-              '上海 · 交通联合卡',
-              '交易 12 笔',
-              '最近读取 今天 09:41',
-              '•••• 6821',
-            ]) {
-              final note = find.descendant(
-                of: panel,
-                matching: find.text(text),
-              );
-              expect(note, findsOneWidget);
-              expect(tester.getTopLeft(note).dy, greaterThan(divider.bottom));
-            }
-            expect(find.text('当前余额'), findsNothing);
-            if (width == 412 && scale == 1 && balance == '86.50') {
-              expect(tester.getSize(panel).height, lessThan(150));
-            }
-            expect(
-              tester.takeException(),
-              isNull,
-              reason: '$theme $width $scale $balance',
-            );
-          }
+          c.update(() => c.themeMode = theme);
+          await tester.pumpAndSettle();
+          final panel = find.byKey(const ValueKey('card-face-shanghai'));
+          final decoration =
+              tester.widget<Container>(panel).decoration! as BoxDecoration;
+          expect(decoration.gradient, isA<LinearGradient>());
+          expect(
+            find.byKey(const ValueKey('face-divider-shanghai')),
+            findsNothing,
+          );
+          expect(find.text('当前余额'), findsOneWidget);
+          expect(find.bySemanticsLabel('交通联合 CHINA T-UNION'), findsOneWidget);
+          expect(find.text('**** 6821'), findsOneWidget);
+          expect(find.text('最近读取 今天 09:41'), findsOneWidget);
+          expect(tester.getSize(panel).height, greaterThanOrEqualTo(204));
+          expect(
+            tester.takeException(),
+            isNull,
+            reason: '$theme $width $scale',
+          );
         }
       }
     }
+    final image = File('assets/icon/app_icon.png').readAsBytesSync();
+    c.update(() => c.current.image = image);
+    await tester.pumpAndSettle();
+    final face = tester.widget<Container>(
+      find.byKey(const ValueKey('card-face-shanghai')),
+    );
+    expect(
+      ((face.decoration! as BoxDecoration).image!.image as MemoryImage).bytes,
+      same(image),
+    );
+    c.read(fail: true);
+    await tester.pump(const Duration(milliseconds: 1600));
+    await tester.pumpAndSettle();
+    expect(find.text('读取失败，保留上次结果'), findsOneWidget);
+    expect(find.text('当前余额'), findsOneWidget);
+    expect(find.bySemanticsLabel('交通联合 CHINA T-UNION'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('home reveals the reading step only after starting', (

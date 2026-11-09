@@ -36,7 +36,7 @@ extension _GalleryPages on _GalleryViewState {
                   failed: failed,
                   compact: _compactHeight,
                 )
-              : _homeCard(card),
+              : _face(card),
         ),
         if (showResult) ...[
           _gap(10),
@@ -124,7 +124,7 @@ extension _GalleryPages on _GalleryViewState {
           _gap(20),
           _text('读取失败，保留上次结果', role: GalleryTypography.label, color: t.warn),
           _gap(12),
-          _homeCard(card),
+          _face(card),
         ],
         if (showResult) ...[
           _gap(16),
