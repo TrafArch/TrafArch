@@ -99,6 +99,19 @@ class GalleryCard {
   String face;
   Uint8List? image;
 
+  /// Display precision only; the original captured label remains unchanged.
+  String get readDateLabel {
+    final date = when
+        .replaceFirst(
+          RegExp(
+            r'\s*T?\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$',
+          ),
+          '',
+        )
+        .trim();
+    return date.isEmpty ? '日期未记录' : date;
+  }
+
   // These currencies belong to the frozen samples, not inferred real cards.
   GalleryCurrency? get currency => switch (id) {
     'shanghai' || 'shenzhen' => GalleryCurrency.cny,

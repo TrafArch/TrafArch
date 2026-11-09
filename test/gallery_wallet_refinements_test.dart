@@ -350,7 +350,7 @@ void main() {
           );
         }
         expect(tokens.dark, mode == ThemeMode.dark);
-        expect(find.text('•••• ${c.savedCards.first.tail}'), findsOneWidget);
+        expect(find.text('尾号 ${c.savedCards.first.tail}'), findsOneWidget);
         expect(tester.takeException(), isNull);
       }
     }
@@ -407,12 +407,40 @@ void main() {
             );
             final when = find.descendant(
               of: panel,
-              matching: find.text('最近读取 ${card.when}'),
+              matching: find.text('最近读取 ${card.readDateLabel}'),
             );
             expect(metadata, findsOneWidget);
             expect(when, findsOneWidget);
             expect(tester.getTopLeft(metadata).dy, greaterThan(divider.bottom));
             expect(tester.getTopLeft(when).dy, greaterThan(divider.bottom));
+            final tail = find.descendant(
+              of: panel,
+              matching: find.text('尾号 ${card.tail}'),
+            );
+            expect(tail, findsOneWidget);
+            expect(
+              tester.getRect(tail).center.dy,
+              closeTo(count.center.dy, .1),
+            );
+            expect(
+              tester.getRect(when).center.dy,
+              closeTo(count.center.dy, .1),
+            );
+            expect(
+              tester.getRect(metadata).center.dy,
+              closeTo(count.center.dy, .1),
+            );
+            expect(
+              find.descendant(
+                of: panel,
+                matching: find.textContaining(RegExp(r'\d{1,2}:\d{2}')),
+              ),
+              findsNothing,
+            );
+            expect(
+              find.descendant(of: panel, matching: find.textContaining('••••')),
+              findsNothing,
+            );
             expect(find.textContaining('交联'), findsNothing);
             final label = tester.widget<Text>(
               find.byKey(ValueKey('wallet-currency-${card.id}')),
@@ -430,7 +458,19 @@ void main() {
               find.byKey(ValueKey('wallet-card-${card.id}')),
             );
             expect(item.contains(number.center), isTrue);
-            expect(item.contains(count.center), isTrue);
+            final footer = find.byKey(ValueKey('wallet-footer-${card.id}'));
+            expect(item.contains(tester.getRect(footer).center), isTrue);
+            final scroll = find.descendant(
+              of: footer,
+              matching: find.byType(Scrollable),
+            );
+            final position = tester.state<ScrollableState>(scroll).position;
+            position.jumpTo(position.maxScrollExtent);
+            await tester.pump();
+            expect(
+              tester.getRect(footer).overlaps(tester.getRect(when)),
+              isTrue,
+            );
           }
           expect(tester.takeException(), isNull, reason: '$width / $scale');
         }

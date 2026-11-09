@@ -694,43 +694,36 @@ extension _GalleryComponents on _GalleryViewState {
           color: color.withValues(alpha: .18),
         ),
         _gap(10),
-        Wrap(
-          alignment: WrapAlignment.spaceBetween,
-          spacing: 12,
-          runSpacing: 4,
-          children: [
-            _text(
-              '${card.city} · ${card.type}',
-              role: GalleryTypography.caption,
-              color: color,
-            ),
-            Text(
-              card.count,
-              key: ValueKey('$id-count-${card.id}'),
-              style: GalleryTypography.caption.copyWith(color: color),
-            ),
-          ],
-        ),
-        _gap(4),
-        Wrap(
-          alignment: WrapAlignment.spaceBetween,
-          spacing: 12,
-          runSpacing: 6,
-          children: [
-            Text(
-              '•••• ${card.tail}',
-              key: ValueKey('$id-tail-${card.id}'),
-              style: GalleryTypography.caption.copyWith(
+        SingleChildScrollView(
+          key: ValueKey('$id-footer-${card.id}'),
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              _text(
+                '${card.city} · ${card.type}',
+                role: GalleryTypography.caption,
                 color: color,
-                fontFamily: 'monospace',
               ),
-            ),
-            _text(
-              '最近读取 ${card.when}',
-              role: GalleryTypography.caption,
-              color: color,
-            ),
-          ],
+              const SizedBox(width: 12),
+              Text(
+                card.count,
+                key: ValueKey('$id-count-${card.id}'),
+                style: GalleryTypography.caption.copyWith(color: color),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                '尾号 ${card.tail}',
+                key: ValueKey('$id-tail-${card.id}'),
+                style: GalleryTypography.caption.copyWith(color: color),
+              ),
+              const SizedBox(width: 12),
+              _text(
+                '最近读取 ${card.readDateLabel}',
+                role: GalleryTypography.caption,
+                color: color,
+              ),
+            ],
+          ),
         ),
       ],
     );
