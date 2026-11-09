@@ -89,4 +89,30 @@ void main() {
     }
     expect(jsonEncode(controller.trips), original);
   });
+
+  testWidgets(
+    'direction arrow stays centered between unequal endpoint heights',
+    (tester) async {
+      controller.trips.first['exitStation'] = '很长的终点站名称需要自然换行';
+      controller.trips.first['entryStation'] = '徐家汇';
+      await mount(tester);
+      for (final width in [240.0, 320.0, 412.0]) {
+        for (final scale in [1.0, 1.5, 2.0]) {
+          tester.view.physicalSize = Size(width, 1800);
+          tester.platformDispatcher.textScaleFactorTestValue = scale;
+          await tester.pumpAndSettle();
+          final endpoints = find.byKey(const ValueKey('trip-endpoints')).first;
+          final arrow = find.descendant(
+            of: endpoints,
+            matching: find.byKey(const ValueKey('trip-direction-arrow')),
+          );
+          final block = tester.getRect(endpoints);
+          final rect = tester.getRect(arrow);
+          expect(rect.center.dx, closeTo(block.center.dx, .1));
+          expect(rect.center.dy, closeTo(block.center.dy, .1));
+          expect(tester.takeException(), isNull, reason: '$width $scale');
+        }
+      }
+    },
+  );
 }

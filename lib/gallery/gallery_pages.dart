@@ -505,41 +505,47 @@ extension _GalleryPages on _GalleryViewState {
                   ],
                 ),
                 _gap(12),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: endpoint(
-                        rail ? '进站' : '上车',
-                        entryLine,
-                        trip['entryTime'] as String? ?? '未记录',
-                        entry,
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 20, 8, 0),
-                      child: Container(
-                        padding: const EdgeInsets.all(5),
-                        decoration: BoxDecoration(
-                          color: t.tone.withValues(alpha: .5),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          Icons.arrow_forward_rounded,
-                          size: 20,
-                          color: t.muted,
+                IntrinsicHeight(
+                  child: Row(
+                    key: const ValueKey('trip-endpoints'),
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: endpoint(
+                          rail ? '进站' : '上车',
+                          entryLine,
+                          trip['entryTime'] as String? ?? '未记录',
+                          entry,
                         ),
                       ),
-                    ),
-                    Expanded(
-                      child: endpoint(
-                        rail ? '出站' : '下车',
-                        exitLine,
-                        trip['time'] as String? ?? '未记录',
-                        exit,
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Center(
+                          child: Container(
+                            key: const ValueKey('trip-direction-arrow'),
+                            padding: const EdgeInsets.all(5),
+                            decoration: BoxDecoration(
+                              color: t.tone.withValues(alpha: .5),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.arrow_forward_rounded,
+                              size: 20,
+                              color: t.muted,
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                      Expanded(
+                        child: endpoint(
+                          rail ? '出站' : '下车',
+                          exitLine,
+                          trip['time'] as String? ?? '未记录',
+                          exit,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 if (rail && trip['transferKnown'] == false && !interactive) ...[
                   _gap(10),
