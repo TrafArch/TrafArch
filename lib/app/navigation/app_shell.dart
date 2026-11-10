@@ -24,7 +24,7 @@ class AppShell extends StatefulWidget {
   final AppDependencies app;
 
   /// 用于感知本壳页被其他页面（扫码解析、设置等）覆盖后再回显。
-  final RouteObserver<PageRoute<dynamic>>? routeObserver;
+  final RouteObserver<ModalRoute<dynamic>>? routeObserver;
 
   /// 可选的底栏控制器；缺省时由壳页自建并负责释放。
   final BottomBarController? bottomBarController;
@@ -93,13 +93,14 @@ class _AppShellState extends State<AppShell> with RouteAware {
     }
   }
 
-  /// 从扫码解析等页面返回时恢复底栏。
+  /// 从扫码解析等页面或保存卡片对话框返回时恢复底栏。
   ///
   /// 底栏的弹簧显隐由 motor 驱动，其 Ticker 在壳页被不透明路由覆盖时会被
   /// Route 的 TickerMode 静音：遮挡期间启动的动画要等恢复后才有首帧，
-  /// 若进入前底栏正处于“已隐藏”的终态，返回后会停留在隐藏状态、
-  /// 只剩“回到顶部”圆钮，看起来就是底栏动画没了。回到壳页时统一回显，
-  /// 让滚动静显动画从可见态重新开始。
+  /// 若进入前底栏正处于”已隐藏”的终态，返回后会停留在隐藏状态、
+  /// 只剩”回到顶部”圆钮，看起来就是底栏动画没了。回到壳页时统一回显，
+  /// 让滚动静显动画从可见态重新开始。保存对话框是 DialogRoute，观察器
+  /// 须以 ModalRoute 为泛型才能在关闭它时触发本回调（见 RecoveryRouteObserver）。
   @override
   void didPopNext() {
     WidgetsBinding.instance.addPostFrameCallback((_) {

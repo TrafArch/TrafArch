@@ -1,3 +1,7 @@
+<p align="center">
+  <img src=".github/assets/banner.svg" alt="TrafArch —— 读懂交通卡，留住每次出行" width="100%" />
+</p>
+
 # TrafArch
 
 TrafArch 是一款 Android 交通卡读取工具。将卡片贴近手机，即可查看卡片信息、可读取的余额和最近行程；也可以保存卡片，之后随时查看已保存的记录。

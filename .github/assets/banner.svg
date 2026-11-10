@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="2400" height="800" viewBox="0 0 2400 800" role="img" aria-labelledby="art-title art-desc"><title id="art-title">TrafArch 品牌横幅</title><desc id="art-desc">读懂交通卡，留住每次出行。3:1 横幅，采用已确定的新 UI。全新界面正在开发，敬请期待。数据仅供参考。所有正文为可编辑矢量文字。</desc><metadata>ISC License
+
+Copyright (c) 2026 Lucide Icons and Contributors
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED &quot;AS IS&quot; AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+---
+
+The following Lucide icons are derived from the Feather project:
+
+airplay, alert-circle, alert-octagon, alert-triangle, aperture, arrow-down-circle, arrow-down-left, arrow-down-right, arrow-down, arrow-left-circle, arrow-left, arrow-right-circle, arrow-right, arrow-up-circle, arrow-up-left, arrow-up-right, arrow-up, at-sign, calendar, cast, check, chevron-down, chevron-left, chevron-right, chevron-up, chevrons-down, chevrons-left, chevrons-right, chevrons-up, circle, clipboard, clock, code, columns, command, compass, corner-down-left, corner-down-right, corner-left-down, corner-left-up, corner-right-down, corner-right-up, corner-up-left, corner-up-right, crosshair, database, divide-circle, divide-square, dollar-sign, download, external-link, feather, frown, hash, headphones, help-circle, info, italic, key, layout, life-buoy, link-2, link, loader, lock, log-in, log-out, maximize, meh, minimize, minimize-2, minus-circle, minus-square, minus, monitor, moon, more-horizontal, more-vertical, move, music, navigation-2, navigation, octagon, pause-circle, percent, plus-circle, plus-square, plus, power, radio, rss, search, server, share, shopping-bag, sidebar, smartphone, smile, square, table-2, tablet, target, terminal, trash-2, trash, triangle, tv, type, upload, x-circle, x-octagon, x-square, x, zoom-in, zoom-out
+
+The MIT License (MIT) (for the icons listed above)
+
+Copyright (c) 2013-present Cole Bemis
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the &quot;Software&quot;), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+</metadata><defs>
+ <symbol id="appmark" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" fill="#D5E4F1"/><g fill="none" stroke="#4E7098" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"><path d="M 148 148 L 364 148 C 390.51 148 412 169.49 412 196 L 412 316 C 412 342.51 390.51 364 364 364 L 148 364 C 121.49 364 100 342.51 100 316 L 100 196 C 100 169.49 121.49 148 148 148 Z"/><path d="M 206 232 L 370 232 C 393.2 232 412 213.2 412 190 M 296 232 C 273.91 232 256 249.91 256 272 L 256 302"/><path d="M 158 202 L 194 202 C 200.63 202 206 207.37 206 214 L 206 250 C 206 256.63 200.63 262 194 262 L 158 262 C 151.37 262 146 256.63 146 250 L 146 214 C 146 207.37 151.37 202 158 202 Z" fill="#D5E4F1" stroke-width="20"/><circle cx="256" cy="328" r="26" fill="#D5E4F1" stroke-width="20"/></g></symbol>
+ <linearGradient id="sea" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#C4DFF7"/><stop offset="1" stop-color="#8FB8E1"/></linearGradient>
+ <linearGradient id="jade" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#B9E5D9"/><stop offset="1" stop-color="#82C7BD"/></linearGradient>
+ <filter id="cardShadow" x="-25%" y="-30%" width="155%" height="170%"><feDropShadow dx="0" dy="4" stdDeviation="7" flood-color="#152D4A" flood-opacity=".07"/></filter>
+ <filter id="floatShadow" x="-30%" y="-25%" width="170%" height="170%"><feDropShadow dx="0" dy="8" stdDeviation="7" flood-color="#101D50" flood-opacity=".09"/><feDropShadow dx="0" dy="24" stdDeviation="24" flood-color="#101D50" flood-opacity=".11"/></filter>
+ <filter id="navShadow" x="-30%" y="-80%" width="160%" height="280%"><feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#152D4A" flood-opacity=".12"/><feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#152D4A" flood-opacity=".10"/></filter>
+ <clipPath id="screen"><rect width="412" height="820" rx="34"/></clipPath>
+</defs><style>text{font-family:'OPPO Sans 4.0','OPPO Sans',sans-serif}path,rect,circle{shape-rendering:geometricPrecision}text{text-rendering:optimizeLegibility}</style><rect x="0" y="0" width="2400" height="800" rx="0" fill="#F1F4F9" /><g id="route-motif" fill="none" stroke-linecap="round"><path d="M1260 -100V126Q1260 214 1348 214H2170Q2260 214 2260 304V890" stroke="#E3E8FF" stroke-width="74"/><path d="M1350 -40V80Q1350 126 1396 126H2070Q2136 126 2136 192" stroke="#D9E9E5" stroke-width="12"/></g><g id="brand-lockup"><use href="#appmark" x="130" y="88" width="80" height="80"/><text x="232" y="148.8" font-size="65.6" font-weight="650" fill="#101D50" letter-spacing="-1.4">TrafArch</text></g><g id="headline"><text x="128" y="340" font-size="86" font-weight="650" fill="#101D50" letter-spacing="-2">读懂交通卡，</text><text x="128" y="449" font-size="86" font-weight="650" fill="#101D50" letter-spacing="-2">留住每次出行</text><text x="132" y="524" font-size="30" font-weight="400" fill="#58687C" >余额、行程与卡片信息，一贴即见。</text></g><g id="feature-line"><g transform="translate(134 594) scale(1.1666666666666667)" fill="none" stroke="#087F78" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8.32a7.43 7.43 0 0 1 0 7.36"/><path d="M9.46 6.21a11.76 11.76 0 0 1 0 11.58"/><path d="M12.91 4.1a15.91 15.91 0 0 1 .01 15.8"/><path d="M16.37 2a20.16 20.16 0 0 1 0 20"/></g><text x="176" y="618" font-size="24" font-weight="500" fill="#18263A" >读取卡片</text><g transform="translate(365 594) scale(1.1666666666666667)" fill="none" stroke="#087F78" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></g><text x="407" y="618" font-size="24" font-weight="500" fill="#18263A" >查看行程</text><g transform="translate(596 594) scale(1.1666666666666667)" fill="none" stroke="#087F78" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2"/><path d="M3 11h3c.8 0 1.6.3 2.1.9l1.1.9c1.6 1.6 4.1 1.6 5.7 0l1.1-.9c.5-.5 1.3-.9 2.1-.9H21"/></g><text x="638" y="618" font-size="24" font-weight="500" fill="#18263A" >管理卡包</text></g><text x="132" y="731" font-size="23" font-weight="400" fill="#58687C" >Android NFC 交通卡读取工具</text><g id="card-hero" transform="translate(1402 105) rotate(-7 380 210)">
+ <rect x="0" y="0" width="740" height="390" rx="36" fill="#101D50" filter="url(#floatShadow)"/>
+ <use href="#appmark" x="33" y="26" width="46" height="46"/><text x="95" y="60" font-size="30" font-weight="600" fill="#FFFFFF" >TrafArch</text><text x="702" y="59" font-size="20" font-weight="400" fill="#BCC8F0" text-anchor="end">卡包</text>
+ <rect x="30" y="91" width="680" height="68" rx="24" fill="#E3E8FF" /><g transform="translate(58 109) scale(1.2916666666666667)" fill="none" stroke="#101D50" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2"/><path d="M3 11h3c.8 0 1.6.3 2.1.9l1.1.9c1.6 1.6 4.1 1.6 5.7 0l1.1-.9c.5-.5 1.3-.9 2.1-.9H21"/></g><text x="109" y="136" font-size="26" font-weight="600" fill="#101D50" >我的卡片</text><text x="678" y="137" font-size="28" font-weight="600" fill="#101D50" text-anchor="end">4 张</text>
+ <rect x="30" y="177" width="680" height="183" rx="27" fill="#FFFFFF" /><rect x="54" y="201" width="48" height="48" rx="16" fill="url(#sea)" /><circle cx="78" cy="225" r="17" fill="none" stroke="#18263A" stroke-width="3"/><g transform="translate(66 213) scale(1)" fill="none" stroke="#18263A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8.32a7.43 7.43 0 0 1 0 7.36"/><path d="M9.46 6.21a11.76 11.76 0 0 1 0 11.58"/><path d="M12.91 4.1a15.91 15.91 0 0 1 .01 15.8"/><path d="M16.37 2a20.16 20.16 0 0 1 0 20"/></g>
+ <text x="120" y="233" font-size="27" font-weight="600" fill="#18263A" >上海公共交通卡</text><text x="486" y="233" font-size="18" font-weight="400" fill="#58687C" text-anchor="end">CNY ¥</text><text x="613" y="233" font-size="36" font-weight="600" fill="#18263A" text-anchor="end">78.50</text><g transform="translate(644 210) scale(1.25)" fill="none" stroke="#18263A" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></g>
+ <path d="M54 264H686" stroke="#CDD8E6" stroke-width="1.5"/><text x="54" y="301" font-size="21" font-weight="400" fill="#58687C" >上海 · 交通联合卡</text><text x="681" y="301" font-size="21" font-weight="400" fill="#58687C" text-anchor="end">交易 12 笔</text><text x="54" y="337" font-size="21" font-weight="400" fill="#58687C" >•••• 6821</text><text x="681" y="337" font-size="21" font-weight="400" fill="#58687C" text-anchor="end">最近读取 今天 09:41</text>
+ </g><g id="trip-hero" transform="translate(1492 485) rotate(4 350 120)">
+ <rect x="0" y="0" width="715" height="244" rx="30" fill="#FFFFFF" stroke="#CDD8E6" stroke-width="1.5" filter="url(#floatShadow)"/>
+ <rect x="27" y="28" width="48" height="48" rx="15" fill="#E3E8FF" /><g transform="translate(37 38) scale(1.1666666666666667)" fill="none" stroke="#101D50" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3.1V7a4 4 0 0 0 8 0V3.1"/><path d="m9 15-1-1"/><path d="m15 15 1-1"/><path d="M9 19c-2.8 0-5-2.2-5-5v-4a8 8 0 0 1 16 0v4c0 2.8-2.2 5-5 5Z"/><path d="m8 19-2 3"/><path d="m16 19 2 3"/></g><text x="92" y="63" font-size="26" font-weight="600" fill="#18263A" >轨道交通</text><path d="M211 41v26" stroke="#58687C" stroke-width="1.5"/><text x="230" y="63" font-size="24" font-weight="400" fill="#58687C" >上海</text><text x="679" y="63" font-size="29" font-weight="600" fill="#18263A" text-anchor="end">−¥4.00</text>
+ <text x="30" y="133" font-size="43" font-weight="600" fill="#18263A" >08:07</text><text x="402" y="133" font-size="43" font-weight="600" fill="#18263A" >08:42</text>
+ <rect x="30" y="157" width="101" height="40" rx="12" fill="#CB1735" /><text x="80" y="185" font-size="24" font-weight="500" fill="#FFFFFF" text-anchor="middle">1 号线</text><text x="147" y="189" font-size="33" font-weight="600" fill="#18263A" >徐家汇</text>
+ <circle cx="357" cy="167" r="27" fill="#F0F2FF" stroke="none" stroke-width="0"/><g transform="translate(340 150) scale(1.4166666666666667)" fill="none" stroke="#58687C" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></g>
+ <rect x="402" y="157" width="101" height="40" rx="12" fill="#E3E8FF" /><text x="452" y="185" font-size="24" font-weight="500" fill="#101D50" text-anchor="middle">2 号线</text><text x="519" y="189" font-size="33" font-weight="600" fill="#18263A" >陆家嘴</text>
+ </g><text x="2228" y="778" font-size="21" font-weight="400" fill="#58687C" text-anchor="end">全新界面正在开发，敬请期待。数据仅供参考</text></svg>
