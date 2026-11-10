@@ -2,6 +2,8 @@
 
 ## 2026-10-21 — 覆盖安装交付修正
 
+- 按用户要求追加交付 arm64-v8a Release：在 `2.x-preview`（含 main 全部提交与 2.x gallery）以 `lib/main_gallery.dart` 入口重新打包，版本名保持与 main 一致的 `1.0.5-beta.1`，本次构建号 4160，成功后自动预留 4161，AppInfo 保留 4160。实拆核验 Android versionCode 4160、显示名称 TrafArch、包名 `com.kajolno.TrafArch`、仅 arm64-v8a；使用仓库外开发者原签名，证书 SHA-256 与 4159 交付一致。源码无改动，未重跑测试；TU／CU 数据库及 manifest 的 SHA256 构建前后不变，产物复制后两端哈希一致；未进行设备安装。安装包与证据见工作树外 `Desktop/TrafArch-UI-Redesign/releases/gallery-1.0.5-4160/`。
+
 - 首页卡面恢复、行程箭头居中与卡包单行底栏分别提交后，追加交付 arm64-v8a Release。版本名保持 `1.0.5-beta.1`，本次构建号 4159，打包成功后自动预留 4160，AppInfo 保留 4159；使用仓库外的开发者签名配置，应用身份配置保持 TrafArch／`com.kajolno.TrafArch`。按用户要求仅运行新增与相关回归：首页相关 47 项、行程相关 23 项、卡包相关 50 项通过，最终字体修正后卡包专项 16 项再次通过；原有可选截图入口按设置跳过，独立截图测试及修改文件静态检查通过。按用户要求跳过安装包校验，未拆包核验实际 versionCode／签名，未进行设备安装；源码 TU／CU 数据库及 manifest 的 SHA256 前后不变。安装包、测试日志与截图保存在工作树外的 `Desktop/TrafArch-UI-Redesign/releases/card-corrections-4159/`。
 
 - 卡包底部说明合为单行信息带，保留地区／完整卡种、笔数和尾号，最近读取只展示日期；移除尾号前的掩码圆点，窄屏及大字号可横向查看完整信息。读取日期为纯展示投影，不改原始读取时间；补充日期精度、未知日期、单行布局与滚动可达回归。
