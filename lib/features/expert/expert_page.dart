@@ -152,7 +152,7 @@ class _ExpertPageState extends State<ExpertPage> {
     if (available.isEmpty) {
       return _tab('expert-info-get', const [
         ExpertHomeHint('尚未读取卡片，请先在首页贴卡读取'),
-        ExpertHomeHint('尚未读取银行卡：在首页贴卡读取后自动分析（交通应用未命中时按 EMV / PBOC 只读解析）'),
+        ExpertHomeHint('识别到银行卡应用后自动进行只读分析，未识别到支持的应用时显示“暂无可识别卡种”'),
       ], showReadHint: false);
     }
     final kind = _selection.resolve(available);

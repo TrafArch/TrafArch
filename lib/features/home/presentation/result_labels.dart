@@ -2,10 +2,13 @@ import '../../../protocols/transit/card_parser.dart';
 import '../../../protocols/bank/domain/models/bank_card_result.dart';
 import '../../archive/domain/card_types.dart';
 
+const unrecognizedCardTypeLabel = '暂无可识别卡种';
+
 String bankFamilyText(String family) => switch (family) {
   BankCardProtocolFamily.mixed => 'EMV + PBOC（按应用分别解析）',
   BankCardProtocolFamily.pboc => 'PBOC（JR/T 0025 系列规则）',
-  _ => 'EMV（通用规范规则）',
+  BankCardProtocolFamily.emv => 'EMV（通用规范规则）',
+  _ => unrecognizedCardTypeLabel,
 };
 
 String transitTypeLabel(String? parserId) => cardTypeLabel(switch (parserId) {
@@ -25,7 +28,7 @@ String transitDisplayName({
 }) =>
     identifiedName ??
     (parserId == null
-        ? '未识别卡片'
+        ? unrecognizedCardTypeLabel
         : parserId == CardParserIds.localCard
         ? localName ?? '地方交通卡'
         : transitTypeLabel(parserId));

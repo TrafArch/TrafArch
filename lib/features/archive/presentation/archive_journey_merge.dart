@@ -274,18 +274,30 @@ List<ArchiveJourney> mergeArchiveJourneys(
 
   // Find all equivalent observations before choosing a presentation. A null
   // field cannot act as a bridge that hides two conflicting known balances.
-  final pending = captures.toSet();
-  final groups = <List<ArchiveJourney>>[];
-  while (pending.isNotEmpty) {
+  List<ArchiveJourney> takeGroup(
+    Set<ArchiveJourney> pending, {
+    Map<ArchiveJourney, String>? facts,
+  }) {
     final group = <ArchiveJourney>[pending.first];
     pending.remove(group.first);
     for (var i = 0; i < group.length; i++) {
       final related = pending
-          .where((candidate) => sameJourney(group[i], candidate))
+          .where(
+            (candidate) =>
+                (facts == null || facts[group[i]] == facts[candidate]) &&
+                sameJourney(group[i], candidate),
+          )
           .toList();
       group.addAll(related);
       pending.removeAll(related);
     }
+    return group;
+  }
+
+  final pending = captures.toSet();
+  final groups = <List<ArchiveJourney>>[];
+  while (pending.isNotEmpty) {
+    final group = takeGroup(pending);
     final batches = <String>{};
     final uniqueCaptures = group.every((journey) {
       final sources = _batches(journey);
@@ -293,10 +305,25 @@ List<ArchiveJourney> mergeArchiveJourneys(
       batches.addAll(sources);
       return sources.isNotEmpty && !overlap;
     });
-    if (uniqueCaptures && _consistentFacts(group)) {
+    if (!uniqueCaptures) {
+      groups.addAll(group.map((journey) => [journey]));
+    } else if (_consistentFacts(group)) {
       groups.add(group);
     } else {
-      groups.addAll(group.map((journey) => [journey]));
+      // One conflicting historical observation must not expand every clean
+      // repeat into its own card. Keep exact fact variants separate (including
+      // null), then recompute connectivity within each variant: a different
+      // balance/unknown bridge cannot establish equivalence for its neighbours.
+      final facts = {for (final journey in group) journey: _factsKey(journey)};
+      final variants = group.toSet();
+      while (variants.isNotEmpty) {
+        final variant = takeGroup(variants, facts: facts);
+        if (_consistentFacts(variant)) {
+          groups.add(variant);
+        } else {
+          groups.addAll(variant.map((journey) => [journey]));
+        }
+      }
     }
   }
 
@@ -383,6 +410,23 @@ bool _consistentFacts(List<ArchiveJourney> group) =>
     ].every(
       (field) => group.map(field).whereType<String>().toSet().length <= 1,
     );
+
+String _factsKey(ArchiveJourney journey) {
+  final railApps =
+      journey.events
+          .map((event) => event.railAppTypeCode)
+          .whereType<int>()
+          .toSet()
+          .toList()
+        ..sort();
+  return jsonEncode([
+    railApps,
+    journey.amountText,
+    journey.fareAdjustmentAmountText,
+    journey.balanceAfterText,
+    journey.seatLabel,
+  ]);
+}
 
 Set<String> _batches(ArchiveJourney journey) => {
   for (final event in journey.events) ...event.sourceIds,
