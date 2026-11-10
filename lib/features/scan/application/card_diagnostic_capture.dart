@@ -1,4 +1,5 @@
 import '../../../protocols/transit/card_parser.dart';
+import '../../../protocols/bank/domain/models/bank_card_result.dart';
 import '../../../shared/diagnostics/raw_data_category.dart';
 import '../domain/card_read_outcome.dart';
 import 'response_diagnostic_capture.dart';
@@ -24,7 +25,10 @@ Map<String, Object?> captureCardInfo(CardReadOutcome result) =>
       BankReadOutcome(:final card) => {
         'cardNumber': card.applications.firstOrNull?.summary.pan,
         'cardName': card.applications.firstOrNull?.application.displayLabel,
-        'cardType': card.protocolFamily,
+        'cardType':
+            card.identifiedProtocolFamily == BankCardProtocolFamily.unknown
+            ? null
+            : card.identifiedProtocolFamily,
         'applications': [
           for (final application in card.applications)
             {
@@ -34,7 +38,10 @@ Map<String, Object?> captureCardInfo(CardReadOutcome result) =>
               'parserId': application.parserId,
             },
         ],
-        'identificationState': 'parser',
+        'identificationState':
+            card.identifiedProtocolFamily == BankCardProtocolFamily.unknown
+            ? 'unknown'
+            : 'parser',
       },
       FelicaReadOutcome(:final card) => {
         'cardNumber': null,

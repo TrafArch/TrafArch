@@ -57,6 +57,7 @@ python -X utf8 -m tools.reference_data validate  # 校验发布包与 manifest
 - Kotlin namespace 保持 `com.kajolno.TrafArch`，与 applicationId 同值，仅作为原生类命名空间。
 - Debug、Release 和验证构建都保持同一 applicationId；不得追加 `.repair` 等 applicationIdSuffix，也不得把显示名称改成 Alpha、“修复验证版”或其他名称。
 - 用户在 2026-10-30 明确要求每次构建（包括测试构建及 repairBuild）版本号自增。Debug / Profile / Release 的 APK / AAB 统一使用 pubspec 当前构建号，生成安装包后自动预留下一号；本次产物内 AppInfo 保留本次号。不得再用 repairBuild 跳过自增。普通测试、静态检查与 dry-run 不递增；主版本名未经指示不改。
+- 用户在 2026-11-09 明确要求从本次开始，每次修复都构建 APK 用于检验修复成果；完成源码修复及检查后须交付使用开发者原签名的 APK，并报告构建与产物核验结果。
 - 验收前核验最终 APK 的实际 Android versionCode，不把源码构建号直接当作拆包后的版本码；串行生成多个安装包时，每次构建均使用不同构建号。
 - 后续测试与发布构建使用用户提供的开发者原签名，供覆盖安装；签名材料保存在仓库外，不复制入仓库、不打印密码，不使用 Debug 证书替代原签名。
 - 验收最终 APK 的清单，而非仅检查 Gradle 源码；在交付说明中记录显示名称、包名、Android 版本码和签名状态。

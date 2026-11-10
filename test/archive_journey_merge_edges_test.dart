@@ -7,6 +7,120 @@ import 'package:transit_card_analyzer/features/trips/trip_entry_presenter.dart';
 import 'package:transit_card_analyzer/features/trips/trip_filters.dart';
 
 void main() {
+  test('一个旧余额冲突不能把八次相同出站观察放大为八张重复卡', () {
+    for (final conflictFirst in [false, true]) {
+      final fixture = _MergeFixture();
+      final repeated = [
+        for (var i = 0; i < 8; i++)
+          fixture.exitOnly(
+            batch: 'matching-read-$i',
+            keys: {'same-raw-exit'},
+            balance: '¥ 12.90',
+          ),
+      ];
+      final conflict = fixture.exitOnly(
+        batch: 'old-conflicting-balance',
+        keys: {'same-raw-exit'},
+        balance: '¥ 17.40',
+      );
+
+      final merged = mergeArchiveJourneys([
+        if (conflictFirst) conflict,
+        ...repeated,
+        if (!conflictFirst) conflict,
+      ], fixture.keys);
+
+      expect(merged, hasLength(2));
+      expect(
+        merged.singleWhere((j) => j.balanceAfterText == '¥ 12.90').events,
+        hasLength(8),
+      );
+      expect(
+        merged.singleWhere((j) => j.balanceAfterText == '¥ 17.40').events,
+        hasLength(1),
+      );
+      expect(merged.expand((journey) => journey.events), hasLength(9));
+    }
+  });
+
+  test('冲突组的未知观察不选边且不阻止两个已知版本各自折叠重复', () {
+    final fixture = _MergeFixture();
+    final captures = [
+      for (var i = 0; i < 4; i++) ...[
+        fixture.completed(
+          batch: 'first-version-$i',
+          entryKeys: {'same-entry'},
+          exitKeys: {'same-exit'},
+          balance: '¥ 12.90',
+        ),
+        fixture.completed(
+          batch: 'second-version-$i',
+          entryKeys: {'same-entry'},
+          exitKeys: {'same-exit'},
+          balance: '¥ 17.40',
+        ),
+      ],
+      fixture.completed(
+        batch: 'unknown-version',
+        entryKeys: {'same-entry'},
+        exitKeys: {'same-exit'},
+      ),
+    ];
+
+    final merged = mergeArchiveJourneys(captures, fixture.keys);
+
+    expect(merged, hasLength(3));
+    expect(merged.map((j) => j.balanceAfterText).toSet(), {
+      '¥ 12.90',
+      '¥ 17.40',
+      null,
+    });
+    expect(
+      merged
+          .where((j) => j.balanceAfterText != null)
+          .map((j) => j.events.length),
+      everyElement(8),
+    );
+    expect(
+      merged.singleWhere((j) => j.balanceAfterText == null).events,
+      hasLength(2),
+    );
+    expect(merged.expand((journey) => journey.events), hasLength(18));
+  });
+
+  test('冲突的未知桥接被分离后不同操作仍不能仅凭相同金额折叠', () {
+    final fixture = _MergeFixture();
+    final first = fixture.exitOnly(
+      batch: 'first-operation',
+      keys: {'first-exit'},
+      balance: '¥ 12.90',
+    );
+    final bridge = fixture.exitOnly(
+      batch: 'unknown-bridge',
+      keys: {'first-exit', 'second-exit'},
+    );
+    final second = fixture.exitOnly(
+      batch: 'second-operation',
+      keys: {'second-exit'},
+      balance: '¥ 12.90',
+    );
+    final conflict = fixture.exitOnly(
+      batch: 'conflicting-version',
+      keys: {'first-exit'},
+      balance: '¥ 17.40',
+    );
+
+    final merged = mergeArchiveJourneys([
+      first,
+      bridge,
+      second,
+      conflict,
+    ], fixture.keys);
+
+    expect(merged, hasLength(4));
+    expect(merged.map((j) => j.events.length), everyElement(1));
+  });
+
   test('两个结构候选不能先按余额过滤成唯一候选再吸收缺失进站的观察', () {
     final fixture = _MergeFixture();
     final first = fixture.completed(

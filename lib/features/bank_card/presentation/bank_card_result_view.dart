@@ -4,6 +4,7 @@ import '../../../protocols/bank/domain/models/bank_card_result.dart';
 import '../../../protocols/bank/domain/models/card_application.dart';
 import '../../../protocols/bank/domain/models/parse_issue.dart';
 import 'application_detail_page.dart';
+import '../../home/presentation/result_labels.dart';
 
 /// 银行卡只读分析结果视图（专家页「信息获取」页签内嵌展示）：
 /// 概览字段 → 应用列表（AID / 选择状态 / 记录数）→ 解析异常；
@@ -19,7 +20,12 @@ class BankCardResultView extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _kv('协议族', _familyText),
+        _kv(
+          result.identifiedProtocolFamily == BankCardProtocolFamily.unknown
+              ? '卡种'
+              : '协议族',
+          _familyText,
+        ),
         _kv('结果状态', _statusText),
         _kv('解析器版本', result.parserVersion),
         _kv('分析时间', _fmtTime(result.analyzedAt)),
@@ -40,11 +46,7 @@ class BankCardResultView extends StatelessWidget {
     );
   }
 
-  String get _familyText => switch (result.protocolFamily) {
-    BankCardProtocolFamily.mixed => 'EMV + PBOC（按应用分别解析）',
-    BankCardProtocolFamily.pboc => 'PBOC（JR/T 0025 系列规则）',
-    _ => 'EMV（通用规范规则）',
-  };
+  String get _familyText => bankFamilyText(result.identifiedProtocolFamily);
 
   String get _statusText {
     if (result.status == BankCardStatus.enumerationFailed) {

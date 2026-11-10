@@ -18,6 +18,7 @@ import '../domain/captured_cycle_money.dart';
 import 'archive_record_presenter.dart';
 import 'archive_journey_merge.dart';
 import 'archive_journey_identity.dart';
+import 'archive_legacy_process_witness.dart';
 import 'archive_partial_capture_merge.dart';
 
 const archiveTripSourceLabels = {
@@ -117,6 +118,7 @@ ArchiveTripProjection _presentArchiveRecords(
   required String? cardType,
   void Function(ArchiveJourneyEntry, List<_ArchiveEvent>)? onEvent,
 }) {
+  final transactionProcesses = _archiveTransactionProcessLinks(records);
   _ArchiveEvent eventFor(ArchiveHistoryRecord record, {String? side}) {
     final display = record.context.minorUnitDigits != 2
         ? const ShanghaiBalanceDisplay()
@@ -127,10 +129,28 @@ ArchiveTripProjection _presentArchiveRecords(
             cardType: cardType,
             currencyCode: record.context.currencyCode,
           );
-    return _ArchiveEvent(record, side: side, balanceDisplay: display);
+    final links = transactionProcesses[record];
+    final mode = _ArchiveEvent(record).mode;
+    final roles = {
+      for (final process in links?.values ?? <ArchiveHistoryRecord>[])
+        _archiveProcessRole(_processFromFields(process.fields), mode),
+    }..remove(null);
+    return _ArchiveEvent(
+      record,
+      side: side,
+      balanceDisplay: display,
+      verifiedRole:
+          links != null &&
+              roles.length == 1 &&
+              record.sources.isNotEmpty &&
+              record.sources.every(
+                (source) => links.containsKey(source.batchId),
+              )
+          ? roles.single
+          : null,
+    );
   }
 
-  final transactionProcesses = _archiveTransactionProcessLinks(records);
   // 保存时生成的关联按来源批次消费；不跨批次重新按 POS 配对。
   final links = <String, List<(String, int?)>>{};
   for (final record in records) {
@@ -456,11 +476,23 @@ _archiveTransactionProcessLinks(List<ArchiveHistoryRecord> records) {
     if (candidates == null) continue;
     final compatible = candidates.where((candidate) {
       final other = _ArchiveEvent(candidate);
+      final candidateEvent = other.journeyEvent(other.info);
+      var sourceEvent = event;
+      if (sourceEvent.role == JourneyEventRole.unknown) {
+        final role = verifiedLegacyCycleRole(
+          record,
+          candidate,
+          civilTime: sourceEvent.endpoint.time,
+        );
+        if (role == null) return false;
+        final inferred = _ArchiveEvent(record, verifiedRole: role);
+        sourceEvent = inferred.journeyEvent(inferred.info);
+      }
       return _sameArchiveOperation(
             source,
-            event,
+            sourceEvent,
             other,
-            other.journeyEvent(other.info),
+            candidateEvent,
           ) &&
           record.fields['amountFen'] is int &&
           record.fields['amountFen'] == candidate.fields['amountFen'];
@@ -698,10 +730,12 @@ class _ArchiveEvent {
     this.record, {
     this.side,
     this.balanceDisplay = const ShanghaiBalanceDisplay(),
+    this.verifiedRole,
   });
   final ArchiveHistoryRecord record;
   final String? side;
   final ShanghaiBalanceDisplay balanceDisplay;
+  final JourneyEventRole? verifiedRole;
   Map<String, dynamic> get fields => record.fields;
   bool get entry => side == 'entry';
   bool get rail => record.kind == ArchiveRecordKind.rail;
@@ -817,7 +851,7 @@ class _ArchiveEvent {
               ? JourneyEventRole.entry
               : mode == TripModeFilter.bus && fields['consume'] == true
               ? JourneyEventRole.single
-              : JourneyEventRole.unknown);
+              : verifiedRole ?? JourneyEventRole.unknown);
     } else {
       role = _archiveProcessRole(process, mode) ?? JourneyEventRole.unknown;
     }
