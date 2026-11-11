@@ -11,7 +11,7 @@ class EmvCandidateFailure {
   });
 
   final String aidHex;
-  final String reason; // select_rejected / fci_error / io_error
+  final String reason; // invalid_aid / select_rejected / fci_error / io_error
   final String message;
   final String? statusHex;
 }

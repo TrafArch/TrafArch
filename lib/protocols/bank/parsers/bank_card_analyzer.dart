@@ -73,7 +73,7 @@ class BankCardAnalyzer {
         ),
       );
       return BankCardResult(
-        protocolFamily: BankCardProtocolFamily.emv,
+        protocolFamily: BankCardProtocolFamily.unknown,
         analyzedAt: DateTime.now(),
         parserVersion: parserVersion,
         status: BankCardStatus.enumerationFailed,
@@ -246,6 +246,6 @@ class BankCardAnalyzer {
     if (hasPboc) {
       return BankCardProtocolFamily.pboc;
     }
-    return BankCardProtocolFamily.emv;
+    return hasEmv ? BankCardProtocolFamily.emv : BankCardProtocolFamily.unknown;
   }
 }

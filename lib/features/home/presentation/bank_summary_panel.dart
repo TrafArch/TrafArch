@@ -25,9 +25,16 @@ class BankSummaryPanel extends StatelessWidget {
           children: _bankPanel(context, bank),
         );
   List<Widget> _bankPanel(BuildContext context, BankCardResult bank) {
+    final family = bank.identifiedProtocolFamily;
     return [
-      ...summaryNameLine(context, '银行卡（EMV / PBOC）'),
-      summaryField(context, '协议族', bankFamilyText(bank.protocolFamily)),
+      ...summaryNameLine(
+        context,
+        family == BankCardProtocolFamily.unknown
+            ? unrecognizedCardTypeLabel
+            : '银行卡（EMV / PBOC）',
+      ),
+      if (family != BankCardProtocolFamily.unknown)
+        summaryField(context, '协议族', bankFamilyText(family)),
       summaryField(context, '结果状态', bankStatusText(bank)),
       if (bank.applications.isEmpty)
         summaryHint(context, '未解析到应用：${bankEmptyReason(bank)}')
@@ -74,7 +81,12 @@ class BankSummaryPanel extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _kv('协议族', bankFamilyText(bank.protocolFamily)),
+        _kv(
+          bank.identifiedProtocolFamily == BankCardProtocolFamily.unknown
+              ? '卡种'
+              : '协议族',
+          bankFamilyText(bank.identifiedProtocolFamily),
+        ),
         _kv('结果状态', bankStatusText(bank, detailed: true)),
         _kv('解析器版本', result.parserVersion),
         _kv('分析时间', _fmtTime(result.analyzedAt)),

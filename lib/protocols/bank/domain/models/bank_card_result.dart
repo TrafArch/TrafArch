@@ -5,6 +5,7 @@ import '../../../transport/transport_failure.dart';
 
 /// 银行卡协议族标识（不表示"识别成功支付网络"，仅表示所用解析规则来源）。
 abstract final class BankCardProtocolFamily {
+  static const String unknown = 'unknown';
   static const String emv = 'emv';
   static const String pboc = 'pboc';
   static const String mixed = 'mixed';
@@ -51,6 +52,21 @@ class BankCardResult {
     this.discoveryDiagnostics = const [],
     this.transportFailure,
   });
+
+  /// A rule family or a failed probe does not identify a card. Keep successful
+  /// discovery even if reselecting/reading the application later failed.
+  String get identifiedProtocolFamily {
+    final selected =
+        discoveredApplications.any(
+          (app) => app.selected && app.aidHex.trim().isNotEmpty,
+        ) ||
+        applications.any(
+          (app) =>
+              app.application.selected &&
+              app.application.aidHex.trim().isNotEmpty,
+        );
+    return selected ? protocolFamily : BankCardProtocolFamily.unknown;
+  }
 
   Map<String, dynamic> toJson() => {
     'protocolFamily': protocolFamily,

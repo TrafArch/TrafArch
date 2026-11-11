@@ -88,10 +88,26 @@ class EmvApplicationEnumerator {
     // 3) 逐个 SELECT 已知 / 目录 AID，解析 FCI
     for (final aid in candidates) {
       final isSupplemental = supplemental.contains(aid);
+      final List<int> aidBytes;
       try {
-        final response = await _exchange(
-          EmvApdu.selectByName(EmvTlvParser.fromHex(aid)),
+        aidBytes = EmvTlvParser.fromHex(aid);
+        if (aidBytes.length < 5 || aidBytes.length > 16) {
+          throw const FormatException('AID 长度应为 5–16 字节');
+        }
+      } on FormatException catch (error) {
+        // Local candidate/encoding errors are not a physical NFC failure.
+        // Retain the rejected value and continue probing valid candidates.
+        failures.add(
+          EmvCandidateFailure(
+            aidHex: aid,
+            reason: 'invalid_aid',
+            message: '候选 AID 格式无效：$aid（$error）',
+          ),
         );
+        continue;
+      }
+      try {
+        final response = await _exchange(EmvApdu.selectByName(aidBytes));
         if (!response.isSuccess) {
           // 补充探测的 AID 不在 PPSE 中，6A82 表示卡片未提供该应用，
           // 属于预期结果：保留诊断，不把整次读取标记为部分失败。
