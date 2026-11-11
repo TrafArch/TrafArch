@@ -66,7 +66,7 @@ void main() {
     final session = (await logger.readSessions()).single;
     final text = buildFullDiagnostics([session], DateTime.utc(2026));
     final document = jsonDecode(text);
-    expect(document['version'], 3);
+    expect(document['version'], 4);
     final exported = document['sessions'][0];
     final frames = (exported['apduGroups'] as List).expand(
       (g) => g['frames'] as List,
@@ -177,7 +177,7 @@ void main() {
       _frame(2, '', [0, 0xB0, 0x95, 0, 30], body),
       _frame(3, _tu, [0, 0xB0, 0x95, 5, 30], body),
     ]).toList();
-    expect(decoded[0]['parserId'], 'tunion');
+    expect(decoded[0]['parserId'], CardParserIds.shanghaiTunion);
     final tuFields = decoded[0]['fields'] as Map;
     expect(tuFields['issuerId'], '1122290000000000');
     expect(tuFields['applicationSerial'], '00310477000000000001');
