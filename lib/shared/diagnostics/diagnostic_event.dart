@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-enum DiagnosticSessionKind { scan, application }
+enum DiagnosticSessionKind { scan, application, qr }
 
 enum DiagnosticSeverity { info, warning, error }
 
@@ -122,6 +122,7 @@ class DiagnosticSession {
   DiagnosticEvent? get last => events.isEmpty ? null : events.last;
   DateTime? get startedAt => first?.at;
   bool get isScan => first?.data['kind'] == 'scan';
+  bool get isQr => first?.data['kind'] == 'qr';
   Map<String, Object?>? get cardInfo {
     for (final event in events.reversed) {
       if (event.type == 'card_info') return event.data;
@@ -149,6 +150,7 @@ class DiagnosticSession {
     if (legacy) return '旧版文本；无法核实会话完整性';
     if (incomplete) return running ? '记录中，部分日志未完整保存' : '日志未完整记录';
     if (running) return '记录中，尚未结束';
+    if (isQr) return outcome == 'success' ? '二维码解析完成' : '二维码解析失败';
     if (!isScan && outcome == 'success') return '应用记录已结束';
     return switch (outcome) {
       'success' => '读取完成',

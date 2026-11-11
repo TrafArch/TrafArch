@@ -65,7 +65,7 @@ void main() {
       );
       final document = jsonDecode(exporter.content!) as Map;
       expect(document['format'], 'trafarch.diagnostic_export');
-      expect(document['version'], 3);
+      expect(document['version'], 4);
       expect(document['kind'], 'full');
       expect(document['sessions'], isEmpty);
       expect(app.exportingLog, isFalse);

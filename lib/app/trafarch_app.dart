@@ -35,9 +35,9 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp>
   /// 才通知上层重建主题。
   final ValueNotifier<bool> _monetEnabled = ValueNotifier<bool>(true);
 
-  /// AppShell 需要感知“被其他页面覆盖后再回显”：扫码解析、设置等页面
-  /// pop 回来时靠它恢复悬浮底栏的显隐动画。
-  late final RouteObserver<PageRoute<dynamic>> _routeObserver;
+  /// AppShell 需要感知”被其他页面或对话框覆盖后再回显”：扫码解析、设置等
+  /// 页面以及保存卡片对话框 pop 回来时靠它恢复悬浮底栏的显隐动画。
+  late final RouteObserver<ModalRoute<dynamic>> _routeObserver;
 
   @override
   void initState() {

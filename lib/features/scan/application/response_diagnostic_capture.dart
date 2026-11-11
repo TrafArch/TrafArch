@@ -120,7 +120,7 @@ Map<String, Object?>? _transit(
           sfi == 0x16 ? body : null,
           sfi == 0x17 ? body : null,
         );
-        return _decoded(CardParserIds.tunion, _tuInfo(info, sfi!));
+        return _decoded(card.parserId, _tuInfo(info, sfi!));
       }
     }
     final processes = card.transitProcessRecords
@@ -137,7 +137,7 @@ Map<String, Object?>? _transit(
         processes.length == 1) {
       final record = processes.single;
       return _decoded(
-        CardParserIds.tunion,
+        card.parserId,
         processFields(record),
         state: record.isBlank
             ? 'blank'
@@ -159,7 +159,7 @@ Map<String, Object?>? _transit(
         (command[3] & 7) == 4 &&
         transactions.length == 1) {
       final r = transactions.single;
-      return _decoded(CardParserIds.tunion, {
+      return _decoded(card.parserId, {
         'sequence': r.sequence,
         'overdraftLimitFen': r.overdraftLimitFen,
         'amountFen': r.amountFen,
@@ -176,7 +176,7 @@ Map<String, Object?>? _transit(
         body.length == 4 &&
         command[2] == 0) {
       final value = body.fold<int>(0, (v, b) => (v << 8) | b);
-      return _decoded(CardParserIds.tunion, {
+      return _decoded(card.parserId, {
         'balanceFen': value,
         'role': 'wallet_observation',
       });

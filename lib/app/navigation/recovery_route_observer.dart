@@ -3,7 +3,12 @@ import 'package:flutter/material.dart';
 import '../app_dependencies.dart';
 
 /// Named recoverable screens only. Transient dialogs keep their parent screen.
-class RecoveryRouteObserver extends RouteObserver<PageRoute<dynamic>> {
+///
+/// 泛型取 [ModalRoute] 而非 [PageRoute]：保存卡片等对话框是 [DialogRoute]
+/// （非 PageRoute），若只观察 PageRoute，关闭对话框时 [RouteObserver.didPop]
+/// 的 `route is R` 判定不成立，壳页收不到 didPopNext，悬浮底栏会卡在隐藏态。
+/// 恢复路由栈仍只收录 PageRoute（见 [_sync]），对话框不影响恢复目标。
+class RecoveryRouteObserver extends RouteObserver<ModalRoute<dynamic>> {
   RecoveryRouteObserver(this.app);
   final AppDependencies app;
   final List<Route<dynamic>> _stack = [];

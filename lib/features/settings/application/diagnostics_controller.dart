@@ -21,7 +21,13 @@ class DiagnosticsController extends OwnedNotifier {
   String? get storageIssue => _logger.storageIssue;
   Future<List<DiagnosticSession>> sessions() async =>
       (await _logger.readSessions())
-          .where((s) => s.isScan || s.legacy || s.incomplete && s.first == null)
+          .where(
+            (s) =>
+                s.isScan ||
+                s.isQr ||
+                s.legacy ||
+                s.incomplete && s.first == null,
+          )
           .toList();
   Future<void> deleteSessions(Set<String> ids) => _logger.deleteSessions(ids);
 
@@ -38,12 +44,17 @@ class DiagnosticsController extends OwnedNotifier {
       // Snapshot inside the serial file queue; new events cannot move its end.
       var selected = await _logger.readSessions(ids: requestedIds);
       selected = selected
-          .where((s) => s.isScan || s.legacy || s.incomplete && s.first == null)
+          .where(
+            (s) =>
+                s.isScan ||
+                s.isQr ||
+                s.legacy ||
+                s.incomplete && s.first == null,
+          )
           .toList();
       if (disposed) return;
       if (requestedIds == null && selected.isNotEmpty) {
-        final scans = selected.where((s) => s.isScan);
-        selected = [scans.isNotEmpty ? scans.first : selected.first];
+        selected = [selected.first];
       }
       if (requestedIds != null && selected.length != requestedIds.length) {
         throw StateError('所选日志已被清理，请重新选择');

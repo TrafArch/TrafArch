@@ -87,7 +87,7 @@ class AppDependencies extends OwnedNotifier {
       browser: feedbackBrowser ?? const MethodChannelFeedbackBrowser(),
     );
     references = ReferenceDataController(assets);
-    qr = QrController(log: (_) {});
+    qr = QrController(log: (_) {}, diagnostics: _logger);
     diagnostics = DiagnosticsController(_logger, exporter);
     archive = ArchiveController(CardRepository(_database), exporter, (_) {});
     archiveTransfer = ArchiveTransferController(

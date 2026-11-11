@@ -15,6 +15,7 @@ import '../../../shared/application/owned_notifier.dart';
 import '../../../shared/diagnostics/diagnostic_event.dart';
 import '../../../shared/diagnostics/raw_data_category.dart';
 import 'card_diagnostic_capture.dart';
+import 'parser_diagnostic_capture.dart';
 import 'response_diagnostic_capture.dart';
 
 enum ScanPhase {
@@ -172,6 +173,23 @@ class ScanController extends OwnedNotifier {
         phase: DiagnosticPhase.processing,
         data: captureCardInfo(result),
       );
+      if (recording.sink?.recording == true) {
+        try {
+          for (final record in captureParserRecords(result)) {
+            recording.sink?.event(
+              'parser_record',
+              phase: DiagnosticPhase.processing,
+              data: record,
+            );
+          }
+        } catch (_) {
+          recording.sink?.event(
+            'capture_gap',
+            level: DiagnosticSeverity.warning,
+            data: {'reason': 'parser_fields_unavailable'},
+          );
+        }
+      }
       if (result case TransitReadOutcome(:final card)) {
         for (final record in captureProcessRecords(card)) {
           recording.sink?.event(

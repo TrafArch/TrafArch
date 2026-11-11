@@ -24,6 +24,8 @@ import 'package:transit_card_analyzer/features/expert/expert_widgets.dart';
 import 'package:transit_card_analyzer/features/home/home_page.dart';
 import 'package:transit_card_analyzer/platform/qr/qr_image_picker.dart';
 import 'package:transit_card_analyzer/app/app_dependencies.dart';
+import 'package:transit_card_analyzer/features/settings/application/diagnostic_export.dart';
+import 'package:transit_card_analyzer/platform/storage/app_logger.dart';
 
 import 'support/test_database.dart';
 
@@ -49,6 +51,37 @@ void main() {
     referenceDirectory.deleteSync(recursive: true);
   });
   group('JT/T 1179 二维码解析与展示扩展', () {
+    test('成功二维码及证书按两个解析器保存全部字段', () async {
+      final logger = AppLogger(store: MemoryLogStore())..enabled = true;
+      final app = AppDependencies(
+        database: testDatabase(),
+        settingsStore: MemorySettingsStore(),
+        logger: logger,
+      );
+      addTearDown(app.dispose);
+      expect(app.parseQrBytes(_sampleQr()), isTrue);
+      final session = (await app.diagnostics.sessions()).single;
+      expect(session.isQr, isTrue);
+      final exported = jsonDecode(
+        buildFullDiagnostics([session], DateTime.utc(2026)),
+      )['sessions'][0];
+      final groups = (exported['parserGroups'] as List).cast<Map>();
+      expect(groups.map((g) => g['parserId']), [
+        'jt_t1179_qr',
+        'jt_t1179_certificate',
+      ]);
+      final qrFields = (groups.first['fieldGroups'] as List)
+          .cast<Map>()
+          .singleWhere(
+            (g) => g['category'] == 'qrFields',
+          )['records'][0]['fields'];
+      expect(qrFields['singleConsumptionLimitFen'], 2000);
+      expect(qrFields, isNot(contains('issuerCertificate')));
+      final certificate = groups.last['fieldGroups'][0]['records'][0]['fields'];
+      expect(certificate['issuerId'], '01283910');
+      expect(exported['rawJsonl'], session.raw);
+    });
+
     test('样例二维码：表 2 全字段解析正确', () {
       final sample = _sampleQr();
       final data = JtT1179QrParser.parse(sample);

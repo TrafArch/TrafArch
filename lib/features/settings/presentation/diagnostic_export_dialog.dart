@@ -109,7 +109,11 @@ class _DiagnosticExportDialogState extends State<_DiagnosticExportDialog> {
       title: Text(
         session.legacy
             ? '旧版日志'
-            : '${session.isScan ? '读卡' : '应用'} · ${time == null ? '时间未知' : AppLogger.formatTimestamp(time.toLocal())}',
+            : '${session.isScan
+                  ? '读卡'
+                  : session.isQr
+                  ? '二维码'
+                  : '应用'} · ${time == null ? '时间未知' : AppLogger.formatTimestamp(time.toLocal())}',
       ),
       subtitle: Text(
         '${session.statusText} · ${(session.bytes / 1024).toStringAsFixed(1)} KiB'
@@ -145,10 +149,28 @@ class _DiagnosticExportDialogState extends State<_DiagnosticExportDialog> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Text(
-                '选择需要排查的读取记录。完整诊断包含已读取的卡号、卡片名称、卡种、分类 APDU 与过程记录，请检查后再分享。',
+                '选择需要排查的读取记录。完整诊断包含已读取的卡号、卡片名称、卡种；按解析器和字段分类，附带卡片或二维码原始数据，请检查后再分享。',
               ),
               const SizedBox(height: 12),
-              const Text('仅导出完整读卡诊断 JSON，包含当次解析字段和原始响应，保存在本机下载目录。'),
+              const Text('导出所选读卡及二维码记录中已支持解析器的当次解析字段与原始响应，保存在本机下载目录。'),
+              if (sessions.isNotEmpty)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: busy
+                        ? null
+                        : () => setState(() {
+                            if (selected.length == sessions.length) {
+                              selected.clear();
+                            } else {
+                              selected.addAll(sessions.map((s) => s.id));
+                            }
+                          }),
+                    child: Text(
+                      selected.length == sessions.length ? '取消全选' : '全选记录',
+                    ),
+                  ),
+                ),
               const Divider(),
               if (sessions.isEmpty)
                 const Center(child: Text('暂无日志记录'))
