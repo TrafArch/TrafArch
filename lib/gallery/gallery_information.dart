@@ -58,12 +58,14 @@ extension _GalleryInformation on _GalleryViewState {
     leading: Icon(icon, color: t.onTone),
     title: _text(title, role: GalleryTypography.body, weight: FontWeight.w500),
     subtitle: _text(value, role: GalleryTypography.caption, color: t.muted),
-    trailing: IconButton(
-      tooltip: '复制${copyLabel ?? title}',
-      icon: const Icon(Icons.copy_outlined, size: 19),
-      onPressed: () =>
-          _copyContact(copyValue ?? link ?? value, copyLabel ?? title),
-    ),
+    // 仅在显式指定 copyLabel 时提供复制按键；反馈与隐私政策等入口不再展示。
+    trailing: copyLabel == null
+        ? null
+        : IconButton(
+            tooltip: '复制$copyLabel',
+            icon: const Icon(Icons.copy_outlined, size: 19),
+            onPressed: () => _copyContact(copyValue ?? link ?? value, copyLabel),
+          ),
     onTap: _openingLink == null
         ? () => _openContact(link ?? value, email: email)
         : null,
@@ -125,7 +127,6 @@ extension _GalleryInformation on _GalleryViewState {
             '了解数据与隐私保护',
             Icons.privacy_tip_outlined,
             link: AppSupport.privacy,
-            copyLabel: '隐私政策链接',
           ),
         ],
       ),
@@ -156,8 +157,6 @@ extension _GalleryInformation on _GalleryViewState {
             AppSupport.qqGroup,
             Icons.groups_outlined,
             link: AppSupport.qqJoin,
-            copyLabel: '群号',
-            copyValue: AppSupport.qqGroup,
           ),
           const Divider(),
           _contactRow(
@@ -183,13 +182,6 @@ extension _GalleryInformation on _GalleryViewState {
       role: GalleryTypography.caption,
       color: t.muted,
       align: TextAlign.center,
-    ),
-    Center(
-      child: TextButton.icon(
-        onPressed: () => _copyContact(AppSupport.survey, '问卷链接'),
-        icon: const Icon(Icons.copy_outlined, size: 16),
-        label: const Text('复制问卷链接'),
-      ),
     ),
     ..._contactError(),
     _sectionTitle('描述问题时可以提供'),

@@ -325,7 +325,7 @@ class _GalleryViewState extends State<_GalleryView> {
       } else if (value == AppSupport.qqJoin) {
         // 与 1.x 一致：优先唤起 QQ 加群卡片，失败再打开邀请页。
         if (!await _openQqGroup()) {
-          throw const FeedbackBrowserException('无法打开 QQ 或加群页，请复制群号后在 QQ 中搜索。');
+          throw const FeedbackBrowserException('无法打开 QQ 或加群页，请安装 QQ 后重试。');
         }
       } else {
         final open = widget.openWebLink;
@@ -345,8 +345,8 @@ class _GalleryViewState extends State<_GalleryView> {
       if (mounted && c.page == page && c.generation == generation) {
         setState(
           () => _linkError = email
-              ? '无法打开邮件应用，请安装或启用邮件应用，或复制邮箱地址。'
-              : '无法打开页面，请安装或启用 Edge 或 Chrome 后重试，也可复制链接自行打开。',
+              ? '无法打开邮件应用，请安装或启用邮件应用。'
+              : '无法打开页面，请安装或启用浏览器后重试。',
         );
       }
     } finally {

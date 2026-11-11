@@ -98,7 +98,7 @@ void main() {
 
   for (final qqInstalled in [true, false]) {
     testWidgets(
-      'feedback opens selected contact and copies exact values, QQ installed=$qqInstalled',
+      'feedback opens selected contact without copy buttons, QQ installed=$qqInstalled',
       (tester) async {
         final opened = <String>[];
         final copied = <String>[];
@@ -148,13 +148,12 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(opened, isEmpty);
+        expect(find.byTooltip('复制群号'), findsNothing);
+        expect(find.byTooltip('复制邮箱'), findsNothing);
+        expect(find.text('复制问卷链接'), findsNothing);
         await tester.tap(find.text('QQ 群'));
         await tester.pumpAndSettle();
-        await tester.tap(find.byTooltip('复制群号'));
-        await tester.pumpAndSettle();
         await tester.tap(find.text('邮箱'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.byTooltip('复制邮箱'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('填写反馈问卷'));
         await tester.pumpAndSettle();
@@ -163,7 +162,7 @@ void main() {
         expect(launched.first.scheme, 'mqqapi');
         expect(launched.first.queryParameters['uin'], AppSupport.qqGroup);
         expect(opened, [AppSupport.email, AppSupport.survey]);
-        expect(copied, [AppSupport.qqGroup, AppSupport.email]);
+        expect(copied, isEmpty);
         await tester.pumpWidget(const SizedBox.shrink());
       },
     );
@@ -192,11 +191,69 @@ void main() {
       scrollable: galleryVerticalScroll(),
     );
     expect(find.textContaining('无法打开页面'), findsOneWidget);
-    expect(find.text('复制问卷链接'), findsOneWidget);
+    expect(find.text('复制问卷链接'), findsNothing);
     await tester.tap(find.text('填写反馈问卷'));
     await tester.pumpAndSettle();
     expect(attempts, 2);
     expect(find.textContaining('无法打开页面'), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('privacy policy opens the web link without a copy button', (
+    tester,
+  ) async {
+    final opened = <String>[];
+    tester.view.physicalSize = const Size(412, 892);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    c.navigate(GalleryPage.about);
+    await tester.pumpWidget(
+      GalleryApp(
+        controller: c,
+        // 与 1.x 主界面一致：隐私政策经浏览器层 Custom Tab 打开，
+        // 无提供方时回退默认浏览器（Native 层策略，由 feedback_browser 覆盖）。
+        openWebLink: (url) async => opened.add(url.toString()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('隐私政策'),
+      150,
+      scrollable: galleryVerticalScroll(),
+    );
+    expect(find.byTooltip('复制隐私政策链接'), findsNothing);
+    await tester.tap(find.text('隐私政策'));
+    await tester.pumpAndSettle();
+    expect(opened, [AppSupport.privacy]);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('acknowledgements keep their copy buttons', (tester) async {
+    final copied = <String>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied.add((call.arguments as Map)['text'] as String);
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    c.navigate(GalleryPage.acknowledgements);
+    await tester.pumpWidget(GalleryApp(controller: c));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('复制项目地址'), findsOneWidget);
+    expect(find.byTooltip('复制社区项目地址'), findsOneWidget);
+    await tester.tap(find.byTooltip('复制项目地址'));
+    await tester.pumpAndSettle();
+    expect(copied, [AppSupport.tripReader]);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 }
