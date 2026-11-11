@@ -386,7 +386,9 @@ void main() {
         for (final page in GalleryController.visibleMainPages) {
           final lists = find.descendant(
             of: find.byKey(ValueKey(page)),
-            matching: find.byType(ListView),
+            matching: find.byWidgetPredicate(
+              (widget) => widget is ListView || widget is CustomScrollView,
+            ),
           );
           if (lists.evaluate().isNotEmpty) {
             rectangles.add(tester.getRect(lists.first));
@@ -685,44 +687,80 @@ void main() {
     }
   }
 
-  testWidgets('detail content crossfades while its selector remains mounted', (
-    tester,
-  ) async {
-    c.openCard(c.current);
-    await mount(tester);
-    final list = find.byKey(
-      PageStorageKey('gallery-${c.generation}-detail-${c.current.id}'),
-    );
-    final scroll = tester.state<ScrollableState>(
-      galleryVerticalScroll(within: list),
-    );
-    final tabs = find.byKey(const ValueKey('segments-detail-tabs-indicator'));
-    await tester.ensureVisible(tabs);
-    await tester.pumpAndSettle();
-    final originalOffset = scroll.position.pixels;
-    await tester.tap(find.text('卡片信息'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 40));
-    final content = find.text('完整卡号');
-    final fade = find
-        .ancestor(of: content, matching: find.byType(FadeTransition))
-        .first;
-    expect(
-      tester.widget<FadeTransition>(fade).opacity.value,
-      inExclusiveRange(0, 1),
-    );
-    expect(
-      tester.state<ScrollableState>(galleryVerticalScroll(within: list)),
-      same(scroll),
-    );
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(tabs);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('最近交易'));
-    await tester.pumpAndSettle();
-    expect(scroll.position.pixels, closeTo(originalOffset, .1));
-    expect(tester.takeException(), isNull);
-  });
+  testWidgets(
+    'detail switches immediately with one scroll position and a stable selector',
+    (tester) async {
+      c.openCard(c.current);
+      await mount(tester);
+      final list = find.byKey(
+        PageStorageKey('gallery-${c.generation}-detail-${c.current.id}'),
+      );
+      final scroll = tester.state<ScrollableState>(
+        galleryVerticalScroll(within: list),
+      );
+      final tabs = find.byKey(const ValueKey('segments-detail-tabs-indicator'));
+      await tester.ensureVisible(tabs);
+      await tester.pumpAndSettle();
+      final selectorElement = tester.element(tabs);
+      scroll.position.jumpTo(120);
+      await tester.pump();
+      final originalOffset = scroll.position.pixels;
+      await tester.tap(find.text('卡片信息'));
+      await tester.pump();
+      final content = find.text('完整卡号');
+      expect(content, findsOneWidget);
+      expect(find.text('仅展示样例中保留的记录，可能不代表完整历史。'), findsNothing);
+      expect(scroll.position.pixels, closeTo(originalOffset, .1));
+      expect(tester.element(tabs), same(selectorElement));
+      expect(
+        tester.state<ScrollableState>(galleryVerticalScroll(within: list)),
+        same(scroll),
+      );
+      await tester.pumpAndSettle();
+      scroll.position.jumpTo(0);
+      await tester.pump();
+      c.update(() => c.detailTab = 0);
+      await tester.pumpAndSettle();
+      expect(scroll.position.pixels, 0);
+      expect(find.text('完整卡号'), findsNothing);
+      for (final index in [1, 2, 0, 2, 1, 0]) {
+        c.update(() => c.detailTab = index);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 20));
+        expect(tester.element(tabs), same(selectorElement));
+        expect(scroll.position.pixels, 0);
+      }
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'long detail ledgers only lay out nearby transactions and retain swipe navigation',
+    (tester) async {
+      final sample = c.ledger(c.current).first;
+      c.trips
+        ..clear()
+        ..addAll(
+          List.generate(
+            150,
+            (index) => {
+              ...sample,
+              'entryStation': '测试站点 $index',
+              'exitStation': '终点 $index',
+            },
+          ),
+        );
+      c.openCard(c.current);
+      await mount(tester);
+      expect(find.text('测试站点 0'), findsOneWidget);
+      expect(find.text('测试站点 149'), findsNothing);
+      await tester.fling(find.text('测试站点 0'), const Offset(-240, 0), 1200);
+      await tester.pumpAndSettle();
+      expect(c.detailTab, 1);
+      expect(find.text('测试站点 0'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('save and rename popup actions share the main button corners', (
     tester,

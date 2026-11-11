@@ -7,6 +7,8 @@ import 'package:transit_card_analyzer/gallery/gallery_app.dart';
 import 'package:transit_card_analyzer/gallery/gallery_controller.dart';
 import 'package:transit_card_analyzer/gallery/gallery_data.dart';
 
+import 'support/gallery_scroll.dart';
+
 void main() {
   late GalleryController controller;
   setUp(() {
@@ -30,6 +32,67 @@ void main() {
     await tester.pumpWidget(GalleryApp(controller: controller));
     await tester.pumpAndSettle();
   }
+
+  testWidgets('trip emphasis is limited to dates, times and places', (
+    tester,
+  ) async {
+    await mount(tester);
+    for (final value in [
+      '轨道交通',
+      '1 号线',
+      controller.trips.first['amount'] as String,
+      controller.current.name,
+    ]) {
+      expect(find.text(value), findsWidgets);
+      for (final text in tester.widgetList<Text>(find.text(value))) {
+        expect(text.style!.fontWeight, FontWeight.w400, reason: value);
+      }
+    }
+    expect(
+      tester.widget<Text>(find.text('08:07')).style!.fontWeight,
+      FontWeight.w600,
+    );
+    expect(
+      tester.widget<Text>(find.text('徐家汇').first).style!.fontWeight,
+      FontWeight.w600,
+    );
+  });
+
+  testWidgets(
+    'summary remains a single surface through scrolling, reversal and restoration',
+    (tester) async {
+      await mount(tester);
+      final summary = find.byKey(const ValueKey('trips-summary'));
+      final element = tester.element(summary);
+      final initial = tester.getRect(summary);
+      final scroll = tester.state<ScrollableState>(galleryVerticalScroll());
+      for (final offset in [4.0, 10.0, 18.0, 30.0, 80.0, 18.0, 8.0, 0.0]) {
+        scroll.position.jumpTo(offset);
+        await tester.pump();
+        expect(tester.element(summary), same(element));
+        expect(find.text(controller.current.name), findsOneWidget);
+        final rect = tester.getRect(summary);
+        expect(rect.top, closeTo(initial.top, .1));
+        expect(rect.height, lessThanOrEqualTo(initial.height));
+        final amount = find.descendant(
+          of: summary,
+          matching: find.text(controller.current.balance(false)),
+        );
+        final text = tester.getRect(amount);
+        expect(rect.right - text.right, inInclusiveRange(15.9, 18.1));
+        if (offset >= 30) expect(text.right, closeTo(rect.right - 18, .1));
+        expect(tester.takeException(), isNull);
+      }
+      scroll.position.jumpTo(100);
+      await tester.pump();
+      controller.navigate(GalleryPage.cards);
+      await tester.pumpAndSettle();
+      controller.navigate(GalleryPage.trips);
+      await tester.pumpAndSettle();
+      expect(tester.getRect(summary).height, lessThan(initial.height));
+      expect(find.text(controller.current.name), findsOneWidget);
+    },
+  );
 
   testWidgets(
     'trip layout keeps dates, endpoint evidence and working details',

@@ -385,7 +385,7 @@ extension _GalleryComponents on _GalleryViewState {
     );
   }
 
-  Widget _chip(String label, {Color? color}) => Container(
+  Widget _chip(String label, {Color? color, FontWeight? weight}) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
     decoration: BoxDecoration(
       color: t.secondaryContainer,
@@ -396,7 +396,7 @@ extension _GalleryComponents on _GalleryViewState {
       role: GalleryTypography.caption,
       height: 18 / 11,
       color: color ?? t.onSecondaryContainer,
-      weight: FontWeight.w500,
+      weight: weight ?? FontWeight.w500,
     ),
   );
 
@@ -587,6 +587,7 @@ extension _GalleryComponents on _GalleryViewState {
     GalleryCard card, {
     double size = 36,
     Color? color,
+    FontWeight weight = FontWeight.w600,
     Alignment alignment = Alignment.centerLeft,
   }) => LayoutBuilder(
     builder: (context, constraints) {
@@ -603,7 +604,7 @@ extension _GalleryComponents on _GalleryViewState {
                 : value.length > 11
                 ? size * .78
                 : size,
-            weight: FontWeight.w600,
+            weight: weight,
             color: color,
             height: 1.2,
           ),
@@ -672,12 +673,22 @@ extension _GalleryComponents on _GalleryViewState {
       borderRadius: BorderRadius.circular(14),
       gradient: LinearGradient(colors: _faceColors(card.face)),
     ),
-    child: Icon(
-      Icons.contactless_outlined,
-      key: ValueKey('$id-contactless-${card.id}'),
-      size: 32,
-      color: GalleryCardFace.byId(card.face).foreground,
-    ),
+    child: card.type == '交通联合卡'
+        ? Padding(
+            padding: const EdgeInsets.all(3),
+            child: SvgPicture.asset(
+              'assets/gallery/tunion-logo.svg',
+              key: ValueKey('$id-tunion-${card.id}'),
+              fit: BoxFit.contain,
+              semanticsLabel: '交通联合 CHINA T-UNION',
+            ),
+          )
+        : Icon(
+            Icons.contactless_outlined,
+            key: ValueKey('$id-contactless-${card.id}'),
+            size: 32,
+            color: GalleryCardFace.byId(card.face).foreground,
+          ),
   );
 
   Widget _cardMetadata(GalleryCard card, {required String id}) {
@@ -694,35 +705,29 @@ extension _GalleryComponents on _GalleryViewState {
           color: color.withValues(alpha: .18),
         ),
         _gap(10),
-        SingleChildScrollView(
-          key: ValueKey('$id-footer-${card.id}'),
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              _text(
-                '${card.city} · ${card.type}',
-                role: GalleryTypography.caption,
-                color: color,
+        LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            key: ValueKey('$id-footer-${card.id}'),
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _text(
+                    '${card.city} · ${card.type}',
+                    role: GalleryTypography.caption,
+                    color: color,
+                  ),
+                  const SizedBox(width: 12),
+                  _text(
+                    '最近读取 ${card.readDateLabel}',
+                    role: GalleryTypography.caption,
+                    color: color,
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Text(
-                card.count,
-                key: ValueKey('$id-count-${card.id}'),
-                style: GalleryTypography.caption.copyWith(color: color),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                '尾号 ${card.tail}',
-                key: ValueKey('$id-tail-${card.id}'),
-                style: GalleryTypography.caption.copyWith(color: color),
-              ),
-              const SizedBox(width: 12),
-              _text(
-                '最近读取 ${card.readDateLabel}',
-                role: GalleryTypography.caption,
-                color: color,
-              ),
-            ],
+            ),
           ),
         ),
       ],

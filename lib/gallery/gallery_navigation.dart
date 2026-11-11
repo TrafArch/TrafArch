@@ -8,6 +8,15 @@ class _GalleryAnchorRegistry extends ChangeNotifier {
   final Map<String, Rect?> _measured = {};
   bool _scheduled = false;
   bool _disposed = false;
+  String? _activeId;
+
+  void track(String? id) {
+    if (_activeId == id) return;
+    _activeId = id;
+    _contexts.removeWhere((_, context) => !context.mounted);
+    _measured.clear();
+    scheduleMeasure();
+  }
 
   void register(String id, BuildContext context) {
     _contexts[id] = context;
@@ -29,19 +38,19 @@ class _GalleryAnchorRegistry extends ChangeNotifier {
   }
 
   void scheduleMeasure() {
-    if (_scheduled || _disposed) return;
+    if (_scheduled || _disposed || _activeId == null) return;
     _scheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scheduled = false;
-      if (_disposed) return;
+      if (_disposed || _activeId == null) return;
       var changed = false;
-      for (final id in _contexts.keys.toList()) {
+      for (final id in [_activeId!]) {
         final rect = boundsOf(id);
         if (_measured[id] != rect) {
           _measured[id] = rect;
           changed = true;
         }
-        if (!_contexts[id]!.mounted) _contexts.remove(id);
+        if (_contexts[id]?.mounted == false) _contexts.remove(id);
       }
       if (changed) notifyListeners();
     });
@@ -107,6 +116,7 @@ class _GalleryNavigatorState extends State<_GalleryNavigator>
     widget.controller.addListener(_navigationChanged);
     widget.preferences.addListener(_navigationChanged);
     _anchors.addListener(_anchorChanged);
+    _anchors.track(widget.controller.navigationStack.last.anchorId);
   }
 
   void _anchorChanged() {
@@ -119,6 +129,7 @@ class _GalleryNavigatorState extends State<_GalleryNavigator>
   void didChangeMetrics() => _anchors.scheduleMeasure();
 
   void _navigationChanged() {
+    _anchors.track(widget.controller.navigationStack.last.anchorId);
     final active = _gesture;
     if (active != null &&
         (!widget.preferences.enabled ||
@@ -588,9 +599,11 @@ class _GalleryMainTransitionState extends State<_GalleryMainTransition>
                     excluding: item.key != widget.page,
                     child: TickerMode(
                       enabled: item.key == widget.page,
-                      child: ColoredBox(
-                        color: Theme.of(context).scaffoldBackgroundColor,
-                        child: item.value.child,
+                      child: RepaintBoundary(
+                        child: ColoredBox(
+                          color: Theme.of(context).scaffoldBackgroundColor,
+                          child: item.value.child,
+                        ),
                       ),
                     ),
                   ),

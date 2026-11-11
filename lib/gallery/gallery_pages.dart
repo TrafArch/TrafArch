@@ -202,138 +202,193 @@ extension _GalleryPages on _GalleryViewState {
     for (final trip in trips) {
       grouped.putIfAbsent(trip['date'] as String, () => []).add(trip);
     }
-    return _TripsBody(
-      reduceMotion: _reduceMotion,
-      capsule: c.hasRead ? _tripsSummaryCapsule() : const SizedBox.shrink(),
-      list: _list([
-        if (c.hasRead) _tripsSummary(),
-        _gap(14),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _filterButton(c.source, GalleryOverlay.source),
-            _filterButton(c.mode, GalleryOverlay.mode),
-          ],
-        ),
-        if (!c.hasRead)
-          _empty(
-            '尚未读取卡片',
-            '请先在首页读取一张交通卡',
-            icon: Icons.route_outlined,
-            action: _button(
-              '前往首页',
-              () => c.navigate(GalleryPage.home),
-              primary: true,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth - 32;
+        double titleHeight(TextStyle style, double available) {
+          final painter = TextPainter(
+            text: TextSpan(
+              text: c.current.name,
+              style: style.copyWith(fontWeight: FontWeight.w400),
             ),
-          )
-        else if (trips.isEmpty)
-          _empty(
-            c.trips.isEmpty ? '暂无行程记录' : '当前筛选下没有记录',
-            c.trips.isEmpty ? '卡内记录可能不完整' : '试试其他来源或交通方式',
-            icon: Icons.route_outlined,
-          )
-        else
-          ...grouped.entries.expand(
-            (entry) => [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(2, 22, 2, 12),
-                child: Semantics(
-                  header: true,
-                  child: _text(entry.key, role: GalleryTypography.stat),
+            textDirection: Directionality.of(context),
+            textScaler: MediaQuery.textScalerOf(context),
+          )..layout(maxWidth: math.max(1, available));
+          final height = painter.height;
+          painter.dispose();
+          return height;
+        }
+
+        final scaler = MediaQuery.textScalerOf(context);
+        final expandedHeight =
+            32.0 +
+            math.max(
+              28,
+              math.max(
+                titleHeight(GalleryTypography.card, (width - 97) * .6),
+                scaler.scale(24) * 1.2,
+              ),
+            );
+        final compactHeight =
+            18.0 +
+            math.max(
+              titleHeight(GalleryTypography.caption, (width - 44) * .6),
+              scaler.scale(18) * 1.2,
+            );
+        return CustomScrollView(
+          key: PageStorageKey('gallery-${c.generation}-trips-${_entry.qrView}'),
+          slivers: [
+            if (c.hasRead)
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                sliver: SliverPersistentHeader(
+                  pinned: true,
+                  delegate: _TripsSummaryDelegate(
+                    expandedHeight: _reduceMotion
+                        ? compactHeight
+                        : math.max(expandedHeight, compactHeight),
+                    compactHeight: compactHeight,
+                    builder: _tripsSummary,
+                  ),
                 ),
               ),
-              _panel(
-                Column(
-                  children: [
-                    for (int i = 0; i < entry.value.length; i++) ...[
-                      if (i > 0) Divider(height: 1, color: t.line),
-                      _trip(entry.value[i]),
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(16, 6, 16, _navLayout.listBottom),
+              sliver: SliverList.list(
+                children: [
+                  _gap(14),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _filterButton(c.source, GalleryOverlay.source),
+                      _filterButton(c.mode, GalleryOverlay.mode),
                     ],
-                  ],
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                radius: 24,
+                  ),
+                  if (!c.hasRead)
+                    _empty(
+                      '尚未读取卡片',
+                      '请先在首页读取一张交通卡',
+                      icon: Icons.route_outlined,
+                      action: _button(
+                        '前往首页',
+                        () => c.navigate(GalleryPage.home),
+                        primary: true,
+                      ),
+                    )
+                  else if (trips.isEmpty)
+                    _empty(
+                      c.trips.isEmpty ? '暂无行程记录' : '当前筛选下没有记录',
+                      c.trips.isEmpty ? '卡内记录可能不完整' : '试试其他来源或交通方式',
+                      icon: Icons.route_outlined,
+                    )
+                  else
+                    ...grouped.entries.expand(
+                      (entry) => [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(2, 22, 2, 12),
+                          child: Semantics(
+                            header: true,
+                            child: _text(
+                              entry.key,
+                              role: GalleryTypography.stat,
+                            ),
+                          ),
+                        ),
+                        _panel(
+                          Column(
+                            children: [
+                              for (int i = 0; i < entry.value.length; i++) ...[
+                                if (i > 0) Divider(height: 1, color: t.line),
+                                _trip(entry.value[i]),
+                              ],
+                            ],
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          radius: 24,
+                        ),
+                      ],
+                    ),
+                ],
               ),
-            ],
-          ),
-      ]),
+            ),
+          ],
+        );
+      },
     );
   }
 
-  /// 当前卡名与余额共用紧凑摘要；滚动后在原位置显示小胶囊。
-  Widget _tripsSummary() => Container(
+  /// One pinned surface contracts with scrolling, without overlapping copies.
+  Widget _tripsSummary(double progress) => Container(
     key: const ValueKey('trips-summary'),
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+    padding: EdgeInsets.symmetric(
+      horizontal: 16 + 2 * progress,
+      vertical: 16 - 7 * progress,
+    ),
     decoration: BoxDecoration(
       color: t.tone,
       borderRadius: BorderRadius.circular(24),
     ),
     child: Row(
       children: [
-        Icon(Icons.credit_card_rounded, size: 28, color: t.onTone),
-        const SizedBox(width: 12),
+        SizedBox(
+          width: 40 * (1 - progress),
+          child: Opacity(
+            opacity: 1 - progress,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: SizedBox(
+                width: 40,
+                height: 28,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Icon(
+                    Icons.credit_card_rounded,
+                    size: 28,
+                    color: t.onTone,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
         Expanded(
           flex: 3,
           child: _text(
             c.current.name,
-            role: GalleryTypography.card,
+            role: TextStyle.lerp(
+              GalleryTypography.card,
+              GalleryTypography.caption,
+              progress,
+            )!,
+            weight: FontWeight.w400,
             color: t.onTone,
           ),
         ),
-        const SizedBox(width: 12),
+        SizedBox(width: 12 - 8 * progress),
         SizedBox(
           height: 24,
+          width: 1 - progress,
           child: VerticalDivider(
             width: 1,
-            color: t.onTone.withValues(alpha: .2),
+            color: t.onTone.withValues(alpha: .2 * (1 - progress)),
           ),
         ),
-        const SizedBox(width: 12),
-        Flexible(
+        SizedBox(width: 12 - 8 * progress),
+        Expanded(
           flex: 2,
           child: Semantics(
             label: '当前余额',
             child: _amount(
               c.current,
-              size: 24,
+              size: 24 - 6 * progress,
+              weight: FontWeight.w400,
               alignment: Alignment.centerRight,
             ),
           ),
         ),
       ],
-    ),
-  );
-
-  Widget _tripsSummaryCapsule() => DecoratedBox(
-    key: const ValueKey('trips-summary-capsule'),
-    decoration: BoxDecoration(
-      color: t.tone,
-      border: Border.all(color: t.line),
-      borderRadius: BorderRadius.circular(24),
-      boxShadow: t.shadows(GalleryElevation.card),
-    ),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
-      child: Row(
-        children: [
-          Expanded(
-            child: _text(
-              c.current.name,
-              role: GalleryTypography.caption,
-              color: t.onTone,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: _amount(
-              c.current,
-              size: 18,
-              alignment: Alignment.centerRight,
-            ),
-          ),
-        ],
-      ),
     ),
   );
 
@@ -398,6 +453,7 @@ extension _GalleryPages on _GalleryViewState {
         child: _text(
           line,
           role: GalleryTypography.label,
+          weight: FontWeight.w400,
           color: redLine
               ? t.onShanghaiLineOne
               : rail
@@ -444,7 +500,11 @@ extension _GalleryPages on _GalleryViewState {
                   color: t.muted,
                 ),
                 const SizedBox(width: 12),
-                _text(trip['title'] as String, role: GalleryTypography.label),
+                _text(
+                  trip['title'] as String,
+                  role: GalleryTypography.label,
+                  weight: FontWeight.w400,
+                ),
                 _text('过程记录', role: GalleryTypography.caption, color: t.muted),
               ],
             )
@@ -480,6 +540,7 @@ extension _GalleryPages on _GalleryViewState {
                         _text(
                           rail ? '轨道交通' : '公交',
                           role: GalleryTypography.card,
+                          weight: FontWeight.w400,
                         ),
                         if (city.isNotEmpty) ...[
                           SizedBox(
@@ -495,57 +556,56 @@ extension _GalleryPages on _GalleryViewState {
                       ],
                     ),
                     if (trip['foreign'] == true) ...[
-                      _chip('异地用卡'),
+                      _chip('异地用卡', weight: FontWeight.w400),
                       const SizedBox(width: 6),
                     ],
                     _text(
                       trip['amount'] as String,
                       role: GalleryTypography.card,
+                      weight: FontWeight.w400,
                     ),
                   ],
                 ),
                 _gap(12),
-                IntrinsicHeight(
-                  child: Row(
-                    key: const ValueKey('trip-endpoints'),
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(
-                        child: endpoint(
-                          rail ? '进站' : '上车',
-                          entryLine,
-                          trip['entryTime'] as String? ?? '未记录',
-                          entry,
-                        ),
+                Row(
+                  key: const ValueKey('trip-endpoints'),
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: endpoint(
+                        rail ? '进站' : '上车',
+                        entryLine,
+                        trip['entryTime'] as String? ?? '未记录',
+                        entry,
                       ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: Center(
-                          child: Container(
-                            key: const ValueKey('trip-direction-arrow'),
-                            padding: const EdgeInsets.all(5),
-                            decoration: BoxDecoration(
-                              color: t.tone.withValues(alpha: .5),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              Icons.arrow_forward_rounded,
-                              size: 20,
-                              color: t.muted,
-                            ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Center(
+                        child: Container(
+                          key: const ValueKey('trip-direction-arrow'),
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: t.tone.withValues(alpha: .5),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.arrow_forward_rounded,
+                            size: 20,
+                            color: t.muted,
                           ),
                         ),
                       ),
-                      Expanded(
-                        child: endpoint(
-                          rail ? '出站' : '下车',
-                          exitLine,
-                          trip['time'] as String? ?? '未记录',
-                          exit,
-                        ),
+                    ),
+                    Expanded(
+                      child: endpoint(
+                        rail ? '出站' : '下车',
+                        exitLine,
+                        trip['time'] as String? ?? '未记录',
+                        exit,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
                 if (rail && trip['transferKnown'] == false && !interactive) ...[
                   _gap(10),
@@ -829,163 +889,152 @@ extension _GalleryPages on _GalleryViewState {
   Widget _detail() {
     final card = _selectedCard;
     final ledger = c.ledger(card);
-    return _list(
-      [
-        _header(
-          '卡片详情',
-          back: true,
-          actions: [
-            _icon(
-              Icons.download_outlined,
-              '导出本卡记录',
-              () => c.export(),
-              outlined: false,
-              grouped: true,
-              color: t.text,
+    Widget swipe(Widget child) => GestureDetector(
+      onHorizontalDragEnd: (details) {
+        final velocity = details.primaryVelocity ?? 0;
+        if (velocity.abs() > 100) {
+          c.update(
+            () => c.detailTab = (c.detailTab + (velocity < 0 ? 1 : -1)).clamp(
+              0,
+              2,
+            ),
+          );
+        }
+      },
+      child: child,
+    );
+    return _list([
+      _header(
+        '卡片详情',
+        back: true,
+        actions: [
+          _icon(
+            Icons.download_outlined,
+            '导出本卡记录',
+            () => c.export(),
+            outlined: false,
+            grouped: true,
+            color: t.text,
+          ),
+        ],
+      ),
+      _face(card, minimal: true),
+      _gap(16),
+      _text(
+        card.name,
+        role: GalleryTypography.section,
+        weight: FontWeight.w600,
+      ),
+      _gap(4),
+      _text(
+        '${card.city} · 尾号 ${card.tail}   上次读取 ${card.when}',
+        role: GalleryTypography.caption,
+        color: t.muted,
+      ),
+      _gap(18),
+      _tabs(
+        ['最近交易', '本周消费', '卡片信息'],
+        c.detailTab,
+        (i) => c.update(() => c.detailTab = i),
+        id: 'detail-tabs',
+      ),
+      _gap(16),
+      swipe(switch (c.detailTab) {
+        // Transactions are separate list children below, so long ledgers
+        // are laid out only as they approach the viewport.
+        0 => const SizedBox.shrink(),
+        1 => _weekly(card),
+        _ => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _panel(
+              Column(
+                children: [
+                  for (final row in <(String, String)>[
+                    ('完整卡号', card.pan),
+                    ('发卡地', card.city),
+                    ('卡种', card.type),
+                    ('有效期', card.valid == '—' ? '未知' : '${card.valid}（未记录日）'),
+                    ('当前余额', card.balance(c.includeOverdraft)),
+                    ('最近读取', card.when),
+                    ('协议', card.type == 'FeliCa' ? 'FeliCa' : 'ISO-DEP / 交通联合'),
+                  ])
+                    _kv(row.$1, row.$2),
+                ],
+              ),
+            ),
+            _sectionTitle('原始数据', trailing: '模拟样例'),
+            if (c.data.raw[card.id] case final Map raw) ...[
+              _hexBox('SFI 0x18\n${raw['sfi18']}\n\nSFI 0x1E\n${raw['sfi1e']}'),
+              _gap(8),
+              Wrap(
+                spacing: 8,
+                children: [
+                  TextButton.icon(
+                    onPressed: () {
+                      Clipboard.setData(
+                        ClipboardData(text: '${raw['sfi18']}\n${raw['sfi1e']}'),
+                      );
+                      _toast('已复制模拟原始数据');
+                    },
+                    icon: const Icon(Icons.copy_outlined, size: 16),
+                    label: const Text('复制'),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => c.showOverlay(GalleryOverlay.rawFeedback),
+                    icon: const Icon(Icons.feedback_outlined, size: 16),
+                    label: const Text('反馈预览'),
+                  ),
+                ],
+              ),
+            ] else
+              _text(
+                '本样例未保留原始数据',
+                role: GalleryTypography.caption,
+                color: t.muted,
+              ),
+            _gap(16),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _button('重命名', () => c.showOverlay(GalleryOverlay.rename)),
+                _button('更换卡面', () => c.showOverlay(GalleryOverlay.face)),
+                _button('导出记录', () => c.export()),
+                _button(
+                  '删除本卡',
+                  () => c.showOverlay(GalleryOverlay.delete),
+                  danger: true,
+                ),
+              ],
             ),
           ],
         ),
-        _face(card, minimal: true),
+      }),
+      if (c.detailTab == 0) ...[
+        if (ledger.isEmpty) _empty('暂无交易记录', '卡内记录可能不完整'),
+        ...ledger.map(
+          (r) => swipe(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _sectionTitle(r['date'] as String? ?? '日期未记录'),
+                _panel(
+                  _trip(r),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                ),
+              ],
+            ),
+          ),
+        ),
         _gap(16),
         _text(
-          card.name,
-          role: GalleryTypography.section,
-          weight: FontWeight.w600,
-        ),
-        _gap(4),
-        _text(
-          '${card.city} · 尾号 ${card.tail}   上次读取 ${card.when}',
+          '仅展示样例中保留的记录，可能不代表完整历史。',
           role: GalleryTypography.caption,
           color: t.muted,
         ),
-        _gap(18),
-        _tabs(
-          ['最近交易', '本周消费', '卡片信息'],
-          c.detailTab,
-          (i) => c.update(() => c.detailTab = i),
-          id: 'detail-tabs',
-        ),
-        _gap(16),
-        GestureDetector(
-          onHorizontalDragEnd: (details) {
-            final velocity = details.primaryVelocity ?? 0;
-            if (velocity.abs() > 100) {
-              c.update(
-                () => c.detailTab = (c.detailTab + (velocity < 0 ? 1 : -1))
-                    .clamp(0, 2),
-              );
-            }
-          },
-          child: _fade('detail-${card.id}-${c.detailTab}', switch (c
-              .detailTab) {
-            0 => Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (ledger.isEmpty) _empty('暂无交易记录', '卡内记录可能不完整'),
-                ...ledger.map(
-                  (r) => Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _sectionTitle(r['date'] as String? ?? '日期未记录'),
-                      _panel(
-                        _trip(r),
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                      ),
-                    ],
-                  ),
-                ),
-                _gap(16),
-                _text(
-                  '仅展示样例中保留的记录，可能不代表完整历史。',
-                  role: GalleryTypography.caption,
-                  color: t.muted,
-                ),
-              ],
-            ),
-            1 => _weekly(card),
-            _ => Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _panel(
-                  Column(
-                    children: [
-                      for (final row in <(String, String)>[
-                        ('完整卡号', card.pan),
-                        ('发卡地', card.city),
-                        ('卡种', card.type),
-                        (
-                          '有效期',
-                          card.valid == '—' ? '未知' : '${card.valid}（未记录日）',
-                        ),
-                        ('当前余额', card.balance(c.includeOverdraft)),
-                        ('最近读取', card.when),
-                        (
-                          '协议',
-                          card.type == 'FeliCa' ? 'FeliCa' : 'ISO-DEP / 交通联合',
-                        ),
-                      ])
-                        _kv(row.$1, row.$2),
-                    ],
-                  ),
-                ),
-                _sectionTitle('原始数据', trailing: '模拟样例'),
-                if (c.data.raw[card.id] case final Map raw) ...[
-                  _hexBox(
-                    'SFI 0x18\n${raw['sfi18']}\n\nSFI 0x1E\n${raw['sfi1e']}',
-                  ),
-                  _gap(8),
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      TextButton.icon(
-                        onPressed: () {
-                          Clipboard.setData(
-                            ClipboardData(
-                              text: '${raw['sfi18']}\n${raw['sfi1e']}',
-                            ),
-                          );
-                          _toast('已复制模拟原始数据');
-                        },
-                        icon: const Icon(Icons.copy_outlined, size: 16),
-                        label: const Text('复制'),
-                      ),
-                      TextButton.icon(
-                        onPressed: () =>
-                            c.showOverlay(GalleryOverlay.rawFeedback),
-                        icon: const Icon(Icons.feedback_outlined, size: 16),
-                        label: const Text('反馈预览'),
-                      ),
-                    ],
-                  ),
-                ] else
-                  _text(
-                    '本样例未保留原始数据',
-                    role: GalleryTypography.caption,
-                    color: t.muted,
-                  ),
-                _gap(16),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    _button('重命名', () => c.showOverlay(GalleryOverlay.rename)),
-                    _button('更换卡面', () => c.showOverlay(GalleryOverlay.face)),
-                    _button('导出记录', () => c.export()),
-                    _button(
-                      '删除本卡',
-                      () => c.showOverlay(GalleryOverlay.delete),
-                      danger: true,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          }),
-        ),
       ],
-      id: 'detail-${card.id}',
-      positionId: '${c.detailTab}',
-    );
+    ], id: 'detail-${card.id}');
   }
 
   Widget _weekly(GalleryCard card) {
@@ -1629,72 +1678,34 @@ extension _GalleryPages on _GalleryViewState {
   }
 }
 
-/// 行程页滚动容器：汇总卡滚出视野后，在其位置悬浮一个收缩胶囊。
-class _TripsBody extends StatefulWidget {
-  const _TripsBody({
-    required this.list,
-    required this.capsule,
-    required this.reduceMotion,
+class _TripsSummaryDelegate extends SliverPersistentHeaderDelegate {
+  _TripsSummaryDelegate({
+    required this.expandedHeight,
+    required this.compactHeight,
+    required this.builder,
   });
 
-  final Widget list;
-  final Widget capsule;
-  final bool reduceMotion;
+  final double expandedHeight, compactHeight;
+  final Widget Function(double) builder;
 
   @override
-  State<_TripsBody> createState() => _TripsBodyState();
-}
-
-class _TripsBodyState extends State<_TripsBody> {
-  final ValueNotifier<double> _offset = ValueNotifier<double>(0);
+  double get maxExtent => expandedHeight;
+  @override
+  double get minExtent => compactHeight;
 
   @override
-  void dispose() {
-    _offset.dispose();
-    super.dispose();
-  }
-
-  bool _onScroll(ScrollNotification notification) {
-    if (notification.depth == 0) {
-      _offset.value = notification.metrics.pixels;
-    }
-    return false;
-  }
-
-  double _progress(double offset) {
-    if (widget.reduceMotion) return offset > 40 ? 1 : 0;
-    return ((offset - 24) / 48).clamp(0.0, 1.0).toDouble();
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    final distance = maxExtent - minExtent;
+    final progress = distance <= 0
+        ? 1.0
+        : (shrinkOffset / distance).clamp(0.0, 1.0);
+    return RepaintBoundary(child: SizedBox.expand(child: builder(progress)));
   }
 
   @override
-  Widget build(BuildContext context) => Stack(
-    children: [
-      NotificationListener<ScrollNotification>(
-        onNotification: _onScroll,
-        child: widget.list,
-      ),
-      Positioned(
-        top: 0,
-        left: 16,
-        right: 16,
-        child: IgnorePointer(
-          child: ValueListenableBuilder<double>(
-            valueListenable: _offset,
-            child: widget.capsule,
-            builder: (context, offset, child) {
-              final progress = _progress(offset);
-              if (progress <= 0) return const SizedBox.shrink();
-              return Opacity(
-                opacity: progress,
-                child: Transform.translate(
-                  offset: Offset(0, -8 * (1 - progress)),
-                  child: child,
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-    ],
-  );
+  bool shouldRebuild(_TripsSummaryDelegate oldDelegate) => true;
 }

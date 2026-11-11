@@ -385,9 +385,12 @@ void main() {
       c.update(() => c.current.name = '重新命名的交通卡');
       await tester.pumpAndSettle();
       expect(find.text('重新命名的交通卡'), findsOneWidget);
-      await tester.drag(find.byType(ListView).first, const Offset(0, -240));
+      await tester.drag(
+        find.byType(CustomScrollView).first,
+        const Offset(0, -240),
+      );
       await tester.pumpAndSettle();
-      final capsule = find.byKey(const ValueKey('trips-summary-capsule'));
+      final capsule = find.byKey(const ValueKey('trips-summary'));
       expect(
         find.descendant(of: capsule, matching: find.text('重新命名的交通卡')),
         findsOneWidget,

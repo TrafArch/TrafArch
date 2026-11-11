@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/gallery/gallery_app.dart';
@@ -350,7 +351,7 @@ void main() {
           );
         }
         expect(tokens.dark, mode == ThemeMode.dark);
-        expect(find.text('尾号 ${c.savedCards.first.tail}'), findsOneWidget);
+        expect(find.text('尾号 ${c.savedCards.first.tail}'), findsNothing);
         expect(tester.takeException(), isNull);
       }
     }
@@ -388,8 +389,9 @@ void main() {
             final number = tester.getRect(
               find.byKey(ValueKey('wallet-number-${card.id}')),
             );
-            final count = tester.getRect(
+            expect(
               find.byKey(ValueKey('wallet-count-${card.id}')),
+              findsNothing,
             );
             final divider = tester.getRect(
               find.byKey(ValueKey('wallet-divider-${card.id}')),
@@ -399,7 +401,6 @@ void main() {
             expect(number.center.dx, closeTo(center, .1));
             expect(number.height, closeTo(numberHeight, .1));
             expect(number.bottom, lessThan(divider.top));
-            expect(count.top, greaterThan(divider.bottom));
             final panel = find.byKey(ValueKey('wallet-card-${card.id}'));
             final metadata = find.descendant(
               of: panel,
@@ -417,18 +418,10 @@ void main() {
               of: panel,
               matching: find.text('尾号 ${card.tail}'),
             );
-            expect(tail, findsOneWidget);
-            expect(
-              tester.getRect(tail).center.dy,
-              closeTo(count.center.dy, .1),
-            );
-            expect(
-              tester.getRect(when).center.dy,
-              closeTo(count.center.dy, .1),
-            );
+            expect(tail, findsNothing);
             expect(
               tester.getRect(metadata).center.dy,
-              closeTo(count.center.dy, .1),
+              closeTo(tester.getRect(when).center.dy, .1),
             );
             expect(
               find.descendant(
@@ -468,6 +461,10 @@ void main() {
             position.jumpTo(position.maxScrollExtent);
             await tester.pump();
             expect(
+              tester.getRect(when).right,
+              closeTo(tester.getRect(footer).right, .1),
+            );
+            expect(
               tester.getRect(footer).overlaps(tester.getRect(when)),
               isTrue,
             );
@@ -505,7 +502,11 @@ void main() {
         final badge = tester.widget<Container>(
           find
               .ancestor(
-                of: find.byKey(ValueKey('wallet-contactless-${card.id}')),
+                of: find.byKey(
+                  ValueKey(
+                    'wallet-${card.type == '交通联合卡' ? 'tunion' : 'contactless'}-${card.id}',
+                  ),
+                ),
                 matching: find.byType(Container),
               )
               .first,
@@ -514,10 +515,30 @@ void main() {
             (badge.decoration as BoxDecoration).gradient! as LinearGradient;
         final face = GalleryCardFace.byId(card.face);
         expect(gradient.colors, [face.start, face.end]);
-        final icon = tester.widget<Icon>(
-          find.byKey(ValueKey('wallet-contactless-${card.id}')),
-        );
-        expect(icon.size, greaterThanOrEqualTo(32));
+        expect(tester.getSize(find.byWidget(badge)), const Size(40, 40));
+        if (card.type == '交通联合卡') {
+          final logo = tester.widget<SvgPicture>(
+            find.byKey(ValueKey('wallet-tunion-${card.id}')),
+          );
+          expect(
+            (logo.bytesLoader as SvgAssetLoader).assetName,
+            'assets/gallery/tunion-logo.svg',
+          );
+          expect(logo.colorFilter, isNull);
+          expect(
+            find.byKey(ValueKey('wallet-contactless-${card.id}')),
+            findsNothing,
+          );
+        } else {
+          final icon = tester.widget<Icon>(
+            find.byKey(ValueKey('wallet-contactless-${card.id}')),
+          );
+          expect(icon.size, greaterThanOrEqualTo(32));
+          expect(
+            find.byKey(ValueKey('wallet-tunion-${card.id}')),
+            findsNothing,
+          );
+        }
         final menu = tester.widget<IconButton>(
           find.ancestor(
             of: find.byTooltip('${card.name} 管理'),

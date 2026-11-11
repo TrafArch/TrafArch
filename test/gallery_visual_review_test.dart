@@ -128,6 +128,14 @@ void main() {
         c.back();
         c.navigate(GalleryPage.trips);
         await capture('$mode-trips');
+        final tripsScroll = tester
+            .state<ScrollableState>(galleryVerticalScroll())
+            .position;
+        tripsScroll.jumpTo(12);
+        await capture('$mode-trips-contracting');
+        tripsScroll.jumpTo(80);
+        await capture('$mode-trips-capsule');
+        tripsScroll.jumpTo(0);
         c.showOverlay(
           GalleryOverlay.source,
           anchor: const Rect.fromLTWH(16, 120, 145, 42),

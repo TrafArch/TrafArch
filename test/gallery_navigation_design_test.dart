@@ -448,7 +448,11 @@ void main() {
       Future<void> auditEntireList(String state) async {
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull, reason: state);
-        final list = find.byType(ListView).first;
+        final list = find
+            .byWidgetPredicate(
+              (widget) => widget is ListView || widget is CustomScrollView,
+            )
+            .first;
         final scroll = tester.state<ScrollableState>(
           find.descendant(of: list, matching: find.byType(Scrollable)).first,
         );
