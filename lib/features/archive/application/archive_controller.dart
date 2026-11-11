@@ -169,14 +169,18 @@ class ArchiveController extends OwnedNotifier {
               'records': [
                 for (final record in parsed.localCard!.trips)
                   {
+                    'profile': 'lingnan',
                     'recordNumber': record.recordNumber,
                     'fileSelector': record.fileSelector,
                     'timestamp': record.timestamp.millisecondsSinceEpoch,
                     'type': record.type,
                     'subtype': record.posType,
+                    'statusCode': record.statusCode,
                     'amountDelta': record.balanceDelta,
                     'terminalHex': record.terminalHex,
                     'isMetro': record.isMetro,
+                    'yearInferred': true,
+                    'secondsKnown': false,
                     'rawBody': record.rawBody == null
                         ? null
                         : List<int>.of(record.rawBody!),
@@ -204,8 +208,7 @@ class ArchiveController extends OwnedNotifier {
             },
           // 通用地方卡（武汉通 / 北京互通卡 / 深圳通本地 / 苏州苏薪·计次 /
           // 天府通，parserId=localCard）：保存解析出的行程流水，历史详情与
-          // 恢复现场经同一票据式行程卡展示；不会与岭南通 / 澳门通 / BMAC
-          // 的专属扩展重复。
+          // 恢复现场经同一票据式行程卡展示；澳门通 / BMAC 保留专属扩展。
           if (parsed.parserId == CardParserIds.localCard &&
               parsed.localCard != null &&
               !parsed.localCard!.info.isMacauPass)
@@ -215,6 +218,7 @@ class ArchiveController extends OwnedNotifier {
               'records': [
                 for (final record in parsed.localCard!.trips)
                   {
+                    if (parsed.localCard!.info.isSZT) 'profile': 'shenzhen',
                     'recordNumber': record.recordNumber,
                     'fileSelector': record.fileSelector,
                     'statusCode': record.statusCode,
@@ -246,11 +250,23 @@ class ArchiveController extends OwnedNotifier {
               'readError': parsed.localCard!.readError?.toString(),
               'observations': parsed.localCard!.extras.slots,
               'records': [
-                for (final record in parsed.localCard!.records)
+                for (final record in parsed.localCard!.trips)
                   {
+                    'profile': 'shenzhen',
                     'recordNumber': record.recordNumber,
                     'fileSelector': record.fileSelector,
-                    'response': record.response,
+                    'statusCode': record.statusCode,
+                    'posType': record.posType,
+                    'timestamp': record.timestamp.millisecondsSinceEpoch,
+                    'balanceDelta': record.balanceDelta,
+                    'cityCode': record.cityCode,
+                    'isMetro': record.isMetro,
+                    'isBus': record.isBus,
+                    'terminalHex': record.terminalHex,
+                    'label': record.label,
+                    'rawBody': (record.rawBody ?? record.response) == null
+                        ? null
+                        : List<int>.of(record.rawBody ?? record.response!),
                     'hasError': record.hasError,
                   },
               ],
@@ -360,8 +376,11 @@ class ArchiveController extends OwnedNotifier {
                   ? parsed.localCard!.records
                         .where((r) => r.label == '澳门通交易记录')
                         .length
-                  : parsed.localCard?.info.isLNT == true
+                  : parsed.parserId == CardParserIds.lingnanTong
                   ? parsed.localCard!.trips.length
+                  : parsed.parserId == CardParserIds.lingnanTunion ||
+                        parsed.parserId == CardParserIds.shenzhenTunion
+                  ? parsed.transactions.length + parsed.localCard!.trips.length
                   : parsed.parserId == CardParserIds.localCard
                   ? parsed.localCard!.trips.length
                   : parsed.parserId == CardParserIds.cityUnion

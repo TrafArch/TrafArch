@@ -155,7 +155,7 @@ void main() {
       await f.read();
       expect(f.summary.isYCT, isTrue);
       expect(f.summary.isLNT, isTrue);
-      expect(f.summary.cardKindLabel, '岭南通·羊城通');
+      expect(f.summary.cardKindLabel, '岭南通');
       expect(f.summary.currencyCode, 'CNY');
       expect(f.summary.cardNumber, '9534635882');
       expect(f.summary.issuerCode, '01015100');

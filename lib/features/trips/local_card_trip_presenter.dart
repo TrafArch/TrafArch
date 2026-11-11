@@ -13,19 +13,38 @@ enum LocalTripSourceFilter {
   bus,
   ferry,
   suxinTx,
+  lingnan,
+  shenzhen,
   other,
 }
+
+/// A local wallet can coexist with TU. Its SFI 0x18 alone does not prove
+/// rail travel; only the local parser's explicit mode flag can do that.
+enum LocalTripProfile { general, lingnan, shenzhen }
 
 const localTripSourceLabels = <LocalTripSourceFilter, String>{
   LocalTripSourceFilter.metro: '地铁流水',
   LocalTripSourceFilter.bus: '公交流水',
   LocalTripSourceFilter.ferry: '轮渡流水',
   LocalTripSourceFilter.suxinTx: '通行流水',
+  LocalTripSourceFilter.lingnan: '岭南通流水',
+  LocalTripSourceFilter.shenzhen: '深圳通流水',
   LocalTripSourceFilter.other: '其他文件',
 };
 
 /// 按行程记录标志 / 文件选择子映射来源；空白记录回退 [other]。
-LocalTripSourceFilter localTripSourceOf(ApduRecord record) {
+LocalTripSourceFilter localTripSourceOf(
+  ApduRecord record, {
+  LocalTripProfile profile = LocalTripProfile.general,
+}) {
+  if (profile == LocalTripProfile.lingnan) {
+    return record.isMetro
+        ? LocalTripSourceFilter.metro
+        : LocalTripSourceFilter.lingnan;
+  }
+  if (profile == LocalTripProfile.shenzhen) {
+    return LocalTripSourceFilter.shenzhen;
+  }
   if (record.isMetro) return LocalTripSourceFilter.metro;
   if (record.isBus) return LocalTripSourceFilter.bus;
   if (record.isFerry) return LocalTripSourceFilter.ferry;
@@ -60,16 +79,19 @@ String localTripKindLabel(ApduRecord record) {
 TripCardPresentation<LocalTripSourceFilter> describeLocalTrip(
   ApduRecord record, {
   required String currencySymbol,
+  LocalTripProfile profile = LocalTripProfile.general,
   String? cityName,
   bool remote = false,
   String? titlePrefix,
 }) {
-  final source = localTripSourceOf(record);
+  final source = localTripSourceOf(record, profile: profile);
   final mode = switch (source) {
     LocalTripSourceFilter.metro => TripModeFilter.rail,
     LocalTripSourceFilter.bus => TripModeFilter.bus,
     LocalTripSourceFilter.ferry ||
     LocalTripSourceFilter.suxinTx ||
+    LocalTripSourceFilter.lingnan ||
+    LocalTripSourceFilter.shenzhen ||
     LocalTripSourceFilter.other => TripModeFilter.other,
   };
   final amountFen = record.balanceDelta;
@@ -77,7 +99,15 @@ TripCardPresentation<LocalTripSourceFilter> describeLocalTrip(
       ? null
       : '${amountFen < 0 ? '-' : '+'}$currencySymbol'
             '${(amountFen.abs() / 100).toStringAsFixed(2)}';
-  final time = _recordTime(record.timestamp);
+  final time = _recordTime(
+    record.timestamp,
+    secondsKnown: profile != LocalTripProfile.lingnan,
+  );
+  // The LNT year is inferred; its minute must remain a display observation,
+  // not a verified instant used to join two independent wallet events.
+  final timeLabel = time == null || profile != LocalTripProfile.lingnan
+      ? time
+      : '$time（年份推断，秒未知）';
   final rawHex = _recordRaw(record);
   final info = TripEntryInfo(
     sourceLabel: localTripSourceLabels[source]!,
@@ -86,12 +116,10 @@ TripCardPresentation<LocalTripSourceFilter> describeLocalTrip(
       localTripKindLabel(record),
       '序号 ${record.recordNumber}',
     ].join(' · '),
-    timeText: time,
+    timeText: timeLabel,
     amountText: amountText,
     isConsume: amountFen < 0,
-    subText: record.posType == 0
-        ? null
-        : '类型 0x${record.posType.toRadixString(16).padLeft(2, '0').toUpperCase()}',
+    subText: null,
     category: switch (mode) {
       TripModeFilter.rail => '轨道交通',
       TripModeFilter.bus => '公共汽电车',
@@ -101,10 +129,13 @@ TripCardPresentation<LocalTripSourceFilter> describeLocalTrip(
     fields: [
       ('记录类型', localTripKindLabel(record)),
       ('交易序号', '${record.recordNumber}'),
-      ('交易时间', time ?? '未知'),
+      ('交易时间', timeLabel ?? '未知'),
+      if (profile == LocalTripProfile.lingnan) ('时间精度', '年份推断，秒未知'),
       if (amountText != null) ('金额变化', amountText),
-      ('状态字节', '0x${record.statusCode.toRadixString(16).padLeft(2, '0').toUpperCase()}'),
-      ('类型字节', '0x${record.posType.toRadixString(16).padLeft(2, '0').toUpperCase()}'),
+      (
+        '状态字节',
+        '0x${record.statusCode.toRadixString(16).padLeft(2, '0').toUpperCase()}',
+      ),
       if (record.terminalHex != null && record.terminalHex!.isNotEmpty)
         ('终端 HEX', record.terminalHex!),
       if (record.cityCode > 0) ('城市代码', record.cityCode.toString()),
@@ -123,21 +154,24 @@ TripCardPresentation<LocalTripSourceFilter> describeLocalTrip(
       mode: mode,
       role: JourneyEventRole.unknown,
       endpoint: JourneyEndpoint(
-        time: record.timestamp.millisecondsSinceEpoch == 0
+        time:
+            profile == LocalTripProfile.lingnan ||
+                record.timestamp.millisecondsSinceEpoch == 0
             ? null
             : record.timestamp,
-        timeText: time,
+        timeText: timeLabel,
       ),
       amountText: amountText,
     ),
   );
 }
 
-String? _recordTime(DateTime timestamp) {
+String? _recordTime(DateTime timestamp, {bool secondsKnown = true}) {
   if (timestamp.millisecondsSinceEpoch == 0) return null;
   String two(int value) => value.toString().padLeft(2, '0');
   return '${timestamp.year}-${two(timestamp.month)}-${two(timestamp.day)} '
-      '${two(timestamp.hour)}:${two(timestamp.minute)}:${two(timestamp.second)}';
+      '${two(timestamp.hour)}:${two(timestamp.minute)}'
+      '${secondsKnown ? ':${two(timestamp.second)}' : ''}';
 }
 
 String? _recordRaw(ApduRecord record) {
@@ -150,26 +184,45 @@ String? _recordRaw(ApduRecord record) {
 
 /// 归档字段 → [ApduRecord]：卡片详情 / 恢复现场用捕获时保存的字段还原
 /// 地方卡行程，复用同一票据式展示；无法还原（缺关键字段）返回 null。
-ApduRecord? restoreLocalTripRecord(Map<String, dynamic> fields) {
+ApduRecord? restoreLocalTripRecord(
+  Map<String, dynamic> fields, {
+  LocalTripProfile profile = LocalTripProfile.general,
+}) {
   final recordNumber = fields['recordNumber'];
   final timestamp = fields['timestamp'];
   if (recordNumber is! int || timestamp is! int) return null;
   final raw = fields['rawBody'] ?? fields['response'];
   final record = ApduRecord()
     ..recordNumber = recordNumber
-    ..fileSelector = fields['fileSelector'] is int ? fields['fileSelector'] as int : 0
+    ..fileSelector = fields['fileSelector'] is int
+        ? fields['fileSelector'] as int
+        : 0
     ..statusCode = fields['statusCode'] is int ? fields['statusCode'] as int : 0
-    ..posType = fields['posType'] is int ? fields['posType'] as int : 0
-    ..balanceDelta = fields['balanceDelta'] is int ? fields['balanceDelta'] as int : 0
+    ..posType = fields['posType'] is int
+        ? fields['posType'] as int
+        : fields['subtype'] is int
+        ? fields['subtype'] as int
+        : 0
+    ..balanceDelta = fields['balanceDelta'] is int
+        ? fields['balanceDelta'] as int
+        : fields['amountDelta'] is int
+        ? fields['amountDelta'] as int
+        : 0
     ..cityCode = fields['cityCode'] is int ? fields['cityCode'] as int : 0
     ..isMetro = fields['isMetro'] == true
     ..isBus = fields['isBus'] == true
     ..isFerry = fields['isFerry'] == true
     ..isOtherA = fields['isOtherA'] == true
     ..isOtherB = fields['isOtherB'] == true
-    ..terminalHex = fields['terminalHex'] is String ? fields['terminalHex'] as String : null
+    ..terminalHex = fields['terminalHex'] is String
+        ? fields['terminalHex'] as String
+        : null
     ..label = fields['label'] is String ? fields['label'] as String : null;
-  record.timestamp = DateTime.fromMillisecondsSinceEpoch(timestamp);
+  record.timestamp = DateTime.fromMillisecondsSinceEpoch(
+    timestamp,
+    isUtc:
+        profile == LocalTripProfile.lingnan || fields['yearInferred'] == true,
+  );
   if (raw is List) {
     record.rawBody = Uint8List.fromList(
       raw.map((value) => value is int ? value : 0).toList(),
@@ -177,3 +230,12 @@ ApduRecord? restoreLocalTripRecord(Map<String, dynamic> fields) {
   }
   return record;
 }
+
+LocalTripProfile localTripProfileOf(
+  Map<String, dynamic> fields, {
+  String? cardType,
+}) => switch (fields['profile'] ?? cardType) {
+  'lingnan' || 'lingnanTong' => LocalTripProfile.lingnan,
+  'shenzhen' || 'shenzhenTong' => LocalTripProfile.shenzhen,
+  _ => LocalTripProfile.general,
+};

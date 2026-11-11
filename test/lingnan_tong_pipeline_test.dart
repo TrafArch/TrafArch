@@ -240,6 +240,11 @@ void main() {
         ).read())!;
         expect(result.parsedCard!.parserId, CardParserIds.lingnanTong);
         _expectLnt(result.readResult!);
+        expect(result.parsedCard!.localCard!.info.cardKindLabel, '岭南通');
+        final identified = CardIdentificationService(KnowledgeBase.empty())
+            .identify(result.parsedCard!)!;
+        expect(identified.identity.officialName, '岭南通');
+        expect(identified.identity.cardType, CardTypes.lingnanTong);
         expect(result.shanghai, isNull);
         expect(result.readResult!.extras.slots['lnt.tuCard'], isNotNull);
         expect(bank.calls, 0);

@@ -12,6 +12,7 @@ import 'trip_stream_view.dart';
 import 'cu_transaction_list.dart';
 import 'shanghai_mirrored_records.dart';
 import 'local_card_trip_list.dart';
+import 'local_card_trip_presenter.dart';
 import '../recovery/recovery_result_panel.dart';
 
 /// 行程页：展示最近一次读卡解析出的行程流（0x18 交易明细为主干，
@@ -80,9 +81,22 @@ class _TripsBody extends StatelessWidget {
     final cuTransactions = app.cityUnionTransactions;
     // 地方交通卡（parserId=localCard：武汉通 / 北京互通卡 / 深圳通本地 /
     // 苏州苏薪·计次 / 天府通）的行程流水单独投影到同一票据式行程卡；
-    // 岭南通 / 澳门通 / BMAC 各自有专属面板，TU 家族（含岭南通·交通联合 /
-    // 深圳通交通联合版）已由分析链路接管，均不在此重复展示。
-    final localTrips = app.parsedCard?.parserId == CardParserIds.localCard
+    // TU 行程和本地钱包各有来源；双应用同时展示，不合并两边的记录。
+    final parser = app.parsedCard?.parserId;
+    final localProfile =
+        parser == CardParserIds.lingnanTong ||
+            parser == CardParserIds.lingnanTunion
+        ? LocalTripProfile.lingnan
+        : parser == CardParserIds.shenzhenTunion ||
+              parser == CardParserIds.localCard &&
+                  app.localReadResult?.info.isSZT == true
+        ? LocalTripProfile.shenzhen
+        : LocalTripProfile.general;
+    final localTrips =
+        parser == CardParserIds.localCard ||
+            parser == CardParserIds.lingnanTong ||
+            parser == CardParserIds.lingnanTunion ||
+            parser == CardParserIds.shenzhenTunion
         ? (app.localReadResult?.trips ?? const <ApduRecord>[])
         : const <ApduRecord>[];
     // 0x18 交易明细为主干，0x1A 按侧拆分、0x1E 未关联记录独立保留，
@@ -114,11 +128,14 @@ class _TripsBody extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (analysis != null || app.cityUnionDetected || localTrips.isNotEmpty) ...[
+        if (analysis != null ||
+            app.cityUnionDetected ||
+            localTrips.isNotEmpty) ...[
           _SessionHeader(
             analysis: analysis,
             app: app,
-            recordCount: stream.length +
+            recordCount:
+                stream.length +
                 cuRecords.independent.length +
                 localTrips.length,
           ),
@@ -129,6 +146,7 @@ class _TripsBody extends StatelessWidget {
         if (localTrips.isNotEmpty)
           LocalCardTripList(
             trips: localTrips,
+            profile: localProfile,
             currencySymbol: app.cardCurrency.symbol,
             cityNameOf: app.cityNameOf,
             titlePrefix: app.localReadResult?.info.cardKindLabel,
@@ -188,11 +206,10 @@ class _SessionHeader extends StatelessWidget {
               identity?.cardFamily ??
               identity?.operatorName ??
               '—';
-    final balance =
-        isLocal
-            ? local.info.observedBalance
-            : wallet?.balanceFen ??
-                  (app.cityUnionDetected ? app.parsedCard?.info.balanceFen : null);
+    final balance = isLocal
+        ? local.info.observedBalance
+        : wallet?.balanceFen ??
+              (app.cityUnionDetected ? app.parsedCard?.info.balanceFen : null);
 
     return Card(
       child: Padding(
