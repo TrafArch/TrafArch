@@ -251,10 +251,6 @@ class _GalleryViewState extends State<_GalleryView> {
   final _menuRoot = GlobalKey();
   Size _bodySize = Size.zero;
   bool get _compactHeight => _bodySize.height < 480;
-  double get _readingWidth => math.min(
-    GalleryWindowLayout.readingWidth,
-    MediaQuery.sizeOf(context).width - MediaQuery.paddingOf(context).horizontal,
-  );
   String? _openingLink;
   String? _linkError;
   bool _pickingFaceImage = false;
@@ -322,6 +318,8 @@ class _GalleryViewState extends State<_GalleryView> {
   }
 
   Future<List<LicenseEntry>>? _licenses;
+  final _licenseParagraphs =
+      Map<LicenseEntry, List<LicenseParagraph>>.identity();
   Future<void> _openContact(String value, {bool email = false}) async {
     if (_openingLink != null) return;
     final page = c.page;
@@ -391,7 +389,10 @@ class _GalleryViewState extends State<_GalleryView> {
     return false;
   }
 
-  void _reloadLicenses() => setState(() => _licenses = null);
+  void _reloadLicenses() => setState(() {
+    _licenses = null;
+    _licenseParagraphs.clear();
+  });
 
   bool get _reduceMotion => MediaQuery.disableAnimationsOf(context);
 

@@ -1079,6 +1079,7 @@ extension _GalleryComponents on _GalleryViewState {
     List<Widget> children, {
     bool initiallyOpen = false,
     bool surface = true,
+    WidgetBuilder? bodyBuilder,
   }) {
     final open =
         c.expanded.contains(id) ||
@@ -1125,10 +1126,12 @@ extension _GalleryComponents on _GalleryViewState {
               surface ? 16 : 0,
               12,
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: children,
-            ),
+            child:
+                bodyBuilder?.call(context) ??
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: children,
+                ),
           ),
         ),
       ],

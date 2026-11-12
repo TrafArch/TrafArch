@@ -238,35 +238,97 @@ extension _GalleryInformation on _GalleryViewState {
     ),
   ]);
 
+  Future<List<LicenseEntry>> _collectLicenses() {
+    final result = Completer<List<LicenseEntry>>();
+    final entries = <LicenseEntry>[];
+    late final StreamSubscription<LicenseEntry> subscription;
+    subscription = LicenseRegistry.licenses.listen(
+      (entry) {
+        if (!result.isCompleted) entries.add(entry);
+      },
+      onError: (Object error, StackTrace stack) {
+        // Report the read failure before cancellation: the registry's nested
+        // addStream can otherwise leave toList waiting for cancellation.
+        if (!result.isCompleted) result.completeError(error, stack);
+        subscription.cancel().ignore();
+      },
+      onDone: () {
+        if (!result.isCompleted) result.complete(List.unmodifiable(entries));
+      },
+    );
+    return result.future;
+  }
+
   Widget _licensePage() {
-    final licenses = _licenses ??= LicenseRegistry.licenses.toList();
+    final licenses = _licenses ??= _collectLicenses();
     return FutureBuilder<List<LicenseEntry>>(
       future: licenses,
-      builder: (context, snapshot) => _list([
-        _header('开放源代码许可', back: true),
-        _text(
-          '${AppInfo.appName} ${AppInfo.version}',
-          role: GalleryTypography.body,
-          color: t.muted,
-        ),
-        _gap(16),
-        if (snapshot.hasError)
-          _button('重新加载许可', _reloadLicenses)
-        else if (!snapshot.hasData)
-          const Center(child: CircularProgressIndicator())
-        else
-          for (final (index, license) in snapshot.data!.indexed)
-            _expand('license:$index', license.packages.join(', '), [
-              for (final paragraph in license.paragraphs)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: SelectableText(
-                    paragraph.text,
-                    style: GalleryTypography.caption.copyWith(color: t.muted),
+      builder: (context, snapshot) {
+        return ListView.builder(
+          key: PageStorageKey(
+            'gallery-${c.generation}-licenses-${_entry.qrView}',
+          ),
+          padding: EdgeInsets.fromLTRB(
+            16,
+            6,
+            16,
+            30 + MediaQuery.paddingOf(context).bottom,
+          ),
+          itemCount: 1 + (snapshot.data?.length ?? 0),
+          itemBuilder: (context, index) {
+            if (index == 0) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _header('开放源代码许可', back: true),
+                  _text(
+                    '${AppInfo.appName} ${AppInfo.version}',
+                    role: GalleryTypography.body,
+                    color: t.muted,
                   ),
-                ),
-            ]),
-      ]),
+                  _gap(16),
+                  if (snapshot.hasError)
+                    _button('重新加载许可', _reloadLicenses)
+                  else if (!snapshot.hasData)
+                    const Center(child: CircularProgressIndicator()),
+                ],
+              );
+            }
+            final license = snapshot.data![index - 1];
+            return KeyedSubtree(
+              key: ValueKey('license-row-${index - 1}'),
+              child: _expand(
+                'license:${index - 1}',
+                license.packages.join(', '),
+                const [],
+                bodyBuilder: (_) {
+                  // LicenseEntryWithLineBreaks parses its entire text each time
+                  // paragraphs is accessed. Closed entries must never do that.
+                  final paragraphs = _licenseParagraphs.putIfAbsent(
+                    license,
+                    () => license.paragraphs.toList(growable: false),
+                  );
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final paragraph in paragraphs)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: SelectableText(
+                            paragraph.text,
+                            style: GalleryTypography.caption.copyWith(
+                              color: t.muted,
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }
