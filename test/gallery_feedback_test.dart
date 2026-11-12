@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/gallery/gallery_app.dart';
 import 'package:transit_card_analyzer/gallery/gallery_controller.dart';
@@ -264,6 +265,43 @@ void main() {
       await tester.pump(const Duration(seconds: 7));
       await tester.pump();
       expect(surface, findsNothing);
+      expect(tester.takeException(), isNull);
+      semantics.dispose();
+    },
+  );
+
+  testWidgets(
+    'feedback action is readable at large text, announced and invoked once',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      await mount(
+        tester,
+        size: const Size(240, 700),
+        scale: 2,
+        accessible: true,
+      );
+      var actions = 0;
+      GalleryFeedbackHost.show(
+        pageContext,
+        '已删除通勤卡',
+        actionLabel: '撤销',
+        onAction: () => actions++,
+      );
+      await tester.pumpAndSettle();
+      final action = find.byKey(const ValueKey('gallery-feedback-action'));
+      final node = tester.getSemantics(action).getSemanticsData();
+      expect(node.label, '撤销');
+      expect(node.hasAction(SemanticsAction.tap), isTrue);
+      expect(tester.getSize(surface).width, lessThanOrEqualTo(208));
+      await tester.pump(const Duration(seconds: 4));
+      expect(action, findsOneWidget);
+      await tester.tap(action);
+      await tester.tap(action);
+      await tester.pumpAndSettle();
+      expect(actions, 1);
+      expect(surface, findsNothing);
+      await tester.pump(const Duration(seconds: 10));
+      expect(actions, 1);
       expect(tester.takeException(), isNull);
       semantics.dispose();
     },

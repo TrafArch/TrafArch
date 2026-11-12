@@ -632,6 +632,15 @@ extension _GalleryPages on _GalleryViewState {
 
   Widget _cards() {
     final cards = c.savedCards;
+    final ids = cards.map((card) => card.id).toSet();
+    if (_walletCardIds != null)
+      _walletArrivals.addAll(ids.difference(_walletCardIds!));
+    _walletCardIds = ids;
+    if (_walletArrivals.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _walletArrivals.clear(),
+      );
+    }
     Color foreground(GalleryCard card, {bool secondary = false}) =>
         card.image != null
         ? _faceForeground(card, secondary: secondary)
@@ -861,9 +870,13 @@ extension _GalleryPages on _GalleryViewState {
       itemCount: cards.length,
       itemBuilder: (context, index) {
         final card = cards[index];
-        return Padding(
+        return _GalleryWalletItem(
           key: ValueKey('wallet-item-${card.id}'),
-          padding: const EdgeInsets.only(bottom: 12),
+          id: card.id,
+          name: card.name,
+          reduceMotion: _reduceMotion,
+          inserted: _walletArrivals.contains(card.id),
+          onDelete: () => _deleteWalletCard(card),
           child: DecoratedBox(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(24),
@@ -908,6 +921,17 @@ extension _GalleryPages on _GalleryViewState {
           ),
         );
       },
+    );
+  }
+
+  void _deleteWalletCard(GalleryCard card) {
+    final removal = c.deleteCard(card);
+    if (removal == null || !mounted) return;
+    _toast(
+      '已删除“${card.name}”',
+      type: GalleryFeedbackType.info,
+      actionLabel: '撤销',
+      onAction: () => c.restoreCard(removal),
     );
   }
 

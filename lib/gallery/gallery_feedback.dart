@@ -26,11 +26,16 @@ class GalleryFeedbackHost extends StatefulWidget {
     String message, {
     GalleryFeedbackType type = GalleryFeedbackType.info,
     String? title,
+    String? actionLabel,
+    VoidCallback? onAction,
   }) {
+    assert((actionLabel == null) == (onAction == null));
     context.findAncestorStateOfType<_GalleryFeedbackHostState>()!._show((
       type: type,
       title: title,
       message: message,
+      actionLabel: actionLabel,
+      onAction: onAction,
     ));
   }
 
@@ -38,7 +43,13 @@ class GalleryFeedbackHost extends StatefulWidget {
   State<GalleryFeedbackHost> createState() => _GalleryFeedbackHostState();
 }
 
-typedef _Message = ({GalleryFeedbackType type, String? title, String message});
+typedef _Message = ({
+  GalleryFeedbackType type,
+  String? title,
+  String message,
+  String? actionLabel,
+  VoidCallback? onAction,
+});
 
 class _GalleryFeedbackHostState extends State<GalleryFeedbackHost>
     with SingleTickerProviderStateMixin {
@@ -56,6 +67,7 @@ class _GalleryFeedbackHostState extends State<GalleryFeedbackHost>
   final _pending = <_Message>[];
   _Message? _current;
   Timer? _timer;
+  bool _dismissing = false;
 
   bool get _reduceMotion => MediaQuery.disableAnimationsOf(context);
 
@@ -80,6 +92,7 @@ class _GalleryFeedbackHostState extends State<GalleryFeedbackHost>
   void _showNext() {
     if (_pending.isEmpty) return;
     final message = _pending.removeAt(0);
+    _dismissing = false;
     setState(() => _current = message);
     if (_reduceMotion) {
       _animation.value = 1;
@@ -91,7 +104,11 @@ class _GalleryFeedbackHostState extends State<GalleryFeedbackHost>
     final duration = MediaQuery.accessibleNavigationOf(context)
         ? math.max(10000, textLength * 180)
         : math.max(
-            message.type == GalleryFeedbackType.error ? 3000 : 2500,
+            message.onAction != null
+                ? 6000
+                : message.type == GalleryFeedbackType.error
+                ? 3000
+                : 2500,
             textLength * 100,
           );
     _timer = Timer(
@@ -102,12 +119,21 @@ class _GalleryFeedbackHostState extends State<GalleryFeedbackHost>
   }
 
   void _dismiss() {
+    if (_current == null || _dismissing) return;
+    _dismissing = true;
+    _timer?.cancel();
     _animation.reverseDuration = _reduceMotion ? Duration.zero : _motion;
     _animation.reverse().whenCompleteOrCancel(() {
       if (!mounted) return;
       setState(() => _current = null);
       _showNext();
     });
+  }
+
+  void _performAction(_Message message) {
+    if (_current != message || _dismissing) return;
+    _dismiss();
+    message.onAction?.call();
   }
 
   @override
@@ -152,7 +178,12 @@ class _GalleryFeedbackHostState extends State<GalleryFeedbackHost>
                         media.size.height - media.padding.top - bottom - 16,
                       ),
                     ),
-                    child: _FeedbackSurface(message: message),
+                    child: _FeedbackSurface(
+                      message: message,
+                      onAction: _dismissing || message.onAction == null
+                          ? null
+                          : () => _performAction(message),
+                    ),
                   ),
                 ),
               ),
@@ -164,8 +195,9 @@ class _GalleryFeedbackHostState extends State<GalleryFeedbackHost>
 }
 
 class _FeedbackSurface extends StatelessWidget {
-  const _FeedbackSurface({required this.message});
+  const _FeedbackSurface({required this.message, this.onAction});
   final _Message message;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -194,33 +226,34 @@ class _FeedbackSurface extends StatelessWidget {
     return Semantics(
       container: true,
       liveRegion: true,
+      explicitChildNodes: true,
       label: '${title ?? status}，${message.message}',
-      child: ExcludeSemantics(
-        child: DefaultTextStyle(
-          style: Theme.of(context).textTheme.bodyMedium!,
-          child: IntrinsicWidth(
-            child: DecoratedBox(
-              key: const ValueKey('gallery-feedback'),
-              decoration: BoxDecoration(
-                color: tokens.feedbackSurface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: tokens.line.withValues(alpha: .5),
-                  width: .5,
-                ),
-                boxShadow: tokens.shadows(GalleryElevation.card),
+      child: DefaultTextStyle(
+        style: Theme.of(context).textTheme.bodyMedium!,
+        child: IntrinsicWidth(
+          child: DecoratedBox(
+            key: const ValueKey('gallery-feedback'),
+            decoration: BoxDecoration(
+              color: tokens.feedbackSurface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: tokens.line.withValues(alpha: .5),
+                width: .5,
               ),
-              child: SingleChildScrollView(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: 48),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
+              boxShadow: tokens.shadows(GalleryElevation.card),
+            ),
+            child: SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 48),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  child: Row(
+                    children: [
+                      ExcludeSemantics(
+                        child: Container(
                           width: 30,
                           height: 30,
                           decoration: BoxDecoration(
@@ -229,8 +262,10 @@ class _FeedbackSurface extends StatelessWidget {
                           ),
                           child: Icon(icon, color: foreground, size: 18),
                         ),
-                        const SizedBox(width: 10),
-                        Flexible(
+                      ),
+                      const SizedBox(width: 10),
+                      Flexible(
+                        child: ExcludeSemantics(
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -257,8 +292,23 @@ class _FeedbackSurface extends StatelessWidget {
                             ],
                           ),
                         ),
+                      ),
+                      if (message.actionLabel != null) ...[
+                        const SizedBox(width: 6),
+                        TextButton(
+                          key: const ValueKey('gallery-feedback-action'),
+                          onPressed: onAction,
+                          style: TextButton.styleFrom(
+                            foregroundColor: tokens.action,
+                            minimumSize: const Size(48, 44),
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                            shape: GalleryGeometry.buttonShape,
+                            textStyle: GalleryTypography.feedback,
+                          ),
+                          child: Text(message.actionLabel!),
+                        ),
                       ],
-                    ),
+                    ],
                   ),
                 ),
               ),

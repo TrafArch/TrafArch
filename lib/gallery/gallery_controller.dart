@@ -69,6 +69,13 @@ class GalleryRouteEntry {
 }
 
 /// UI-only session. No repositories, platform channels, IO or real card models.
+class GalleryCardRemoval {
+  const GalleryCardRemoval._(this.card, this.generation);
+  final GalleryCard card;
+  final int generation;
+}
+
+/// UI-only session. No repositories, platform channels, IO or real card models.
 class GalleryController extends ChangeNotifier {
   GalleryController(this.data) {
     qr = GalleryQrController(data)..addListener(_qrChanged);
@@ -122,6 +129,7 @@ class GalleryController extends ChangeNotifier {
   int generation = 0;
   Timer? _readTimer;
   bool _disposed = false;
+  final Map<String, GalleryCardRemoval> _removedCards = {};
 
   GalleryCard get current => cards.firstWhere((c) => c.id == 'shanghai');
   GalleryCard get selectedCard =>
@@ -257,6 +265,7 @@ class GalleryController extends ChangeNotifier {
     expanded.clear();
     logs.clear();
     selectedTrip = null;
+    _removedCards.clear();
     sceneId = null;
     generation++;
   }
@@ -393,15 +402,36 @@ class GalleryController extends ChangeNotifier {
     }, '调整卡包顺序');
   }
 
-  void deleteCard() {
+  GalleryCardRemoval? deleteCard([GalleryCard? target]) {
+    final card = target ?? selectedCard;
+    if (_disposed || !cards.contains(card) || !card.saved) return null;
+    final removal = GalleryCardRemoval._(card, generation);
     update(() {
-      selectedCard.saved = false;
+      // Keep the object and its slot: undo retains the exact face, image,
+      // captured labels and position, including after other rows are reordered.
+      card.saved = false;
+      _removedCards[card.id] = removal;
       overlay = null;
-      if (page == GalleryPage.detail) {
+      if (page == GalleryPage.detail && selectedCardId == card.id) {
         page = GalleryPage.cards;
         _history.clear();
       }
     }, '删除模拟卡片');
+    return removal;
+  }
+
+  bool restoreCard(GalleryCardRemoval removal) {
+    if (_disposed ||
+        removal.generation != generation ||
+        !identical(_removedCards[removal.card.id], removal) ||
+        !cards.contains(removal.card) ||
+        removal.card.saved)
+      return false;
+    update(() {
+      removal.card.saved = true;
+      _removedCards.remove(removal.card.id);
+    }, '撤销删除卡片');
+    return true;
   }
 
   void setAutoSave(bool value) => update(() {

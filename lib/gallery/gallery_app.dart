@@ -33,6 +33,7 @@ part 'gallery_information.dart';
 part 'gallery_navigation.dart';
 part 'gallery_navigation_item.dart';
 part 'gallery_read_prompt.dart';
+part 'gallery_wallet_item.dart';
 
 class GalleryApp extends StatefulWidget {
   const GalleryApp({
@@ -258,6 +259,8 @@ class _GalleryViewState extends State<_GalleryView> {
   String? _linkError;
   bool _pickingFaceImage = false;
   String? _faceImageError;
+  Set<String>? _walletCardIds;
+  final Set<String> _walletArrivals = {};
 
   Future<void> _pickFaceImage() async {
     if (_pickingFaceImage) return;
@@ -614,5 +617,14 @@ class _GalleryViewState extends State<_GalleryView> {
     String text, {
     GalleryFeedbackType type = GalleryFeedbackType.success,
     String? title,
-  }) => GalleryFeedbackHost.show(context, text, type: type, title: title);
+    String? actionLabel,
+    VoidCallback? onAction,
+  }) => GalleryFeedbackHost.show(
+    context,
+    text,
+    type: type,
+    title: title,
+    actionLabel: actionLabel,
+    onAction: onAction,
+  );
 }

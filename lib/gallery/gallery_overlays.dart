@@ -179,8 +179,7 @@ extension _GalleryOverlays on _GalleryViewState {
             const SizedBox(width: 10),
             Expanded(
               child: _button('删除', () {
-                c.deleteCard();
-                _toast('已删除模拟卡片');
+                _deleteWalletCard(_selectedCard);
               }, danger: true),
             ),
           ],
