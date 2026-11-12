@@ -358,7 +358,7 @@ void main() {
   });
 
   testWidgets(
-    'wallet aligns balances and keeps explanations below the divider',
+    'wallet puts smaller balances below names and keeps the metadata band',
     (tester) async {
       for (final (id, balance) in [
         ('usd-sample', r'USD $0.00'),
@@ -402,6 +402,20 @@ void main() {
             expect(number.height, closeTo(numberHeight, .1));
             expect(number.bottom, lessThan(divider.top));
             final panel = find.byKey(ValueKey('wallet-card-${card.id}'));
+            final title = find.descendant(
+              of: panel,
+              matching: find.text(card.name),
+            );
+            expect(number.top, greaterThan(tester.getBottomLeft(title).dy));
+            expect(
+              tester
+                  .widget<Text>(
+                    find.byKey(ValueKey('wallet-number-${card.id}')),
+                  )
+                  .style!
+                  .fontSize,
+              lessThan(tester.widget<Text>(title).style!.fontSize!),
+            );
             final metadata = find.descendant(
               of: panel,
               matching: find.text('${card.city} · ${card.type}'),
@@ -477,7 +491,7 @@ void main() {
   );
 
   testWidgets(
-    'wallet uses themed panels, face badges and ghost menus with grouped actions',
+    'wallet uses themed panels, transparent brand logos and grouped actions',
     (tester) async {
       c.navigate(GalleryPage.cards);
       await mount(tester);
@@ -499,45 +513,30 @@ void main() {
         final decoration = item.decoration as BoxDecoration;
         expect(decoration.color, tokens.surface);
         expect(decoration.border, isNotNull);
-        final badge = tester.widget<Container>(
-          find
-              .ancestor(
-                of: find.byKey(
-                  ValueKey(
-                    'wallet-${card.type == '交通联合卡' ? 'tunion' : 'contactless'}-${card.id}',
-                  ),
-                ),
-                matching: find.byType(Container),
-              )
-              .first,
+        final badge = find.byKey(ValueKey('wallet-badge-${card.id}'));
+        expect(tester.getSize(badge), const Size(48, 56));
+        expect(
+          find.descendant(of: badge, matching: find.byType(DecoratedBox)),
+          findsNothing,
         );
-        final gradient =
-            (badge.decoration as BoxDecoration).gradient! as LinearGradient;
-        final face = GalleryCardFace.byId(card.face);
-        expect(gradient.colors, [face.start, face.end]);
-        expect(tester.getSize(find.byWidget(badge)), const Size(40, 40));
-        if (card.type == '交通联合卡') {
+        for (final application in card.applications) {
+          final brand = switch (application) {
+            'tu' => 'tunion',
+            'cu' => 'city-union',
+            _ => application,
+          };
           final logo = tester.widget<SvgPicture>(
-            find.byKey(ValueKey('wallet-tunion-${card.id}')),
+            find.byKey(
+              ValueKey(
+                'wallet-${application == 'tu' ? 'tunion' : application}-${card.id}',
+              ),
+            ),
           );
           expect(
             (logo.bytesLoader as SvgAssetLoader).assetName,
-            'assets/gallery/tunion-logo.svg',
+            'assets/gallery/$brand-logo.svg',
           );
           expect(logo.colorFilter, isNull);
-          expect(
-            find.byKey(ValueKey('wallet-contactless-${card.id}')),
-            findsNothing,
-          );
-        } else {
-          final icon = tester.widget<Icon>(
-            find.byKey(ValueKey('wallet-contactless-${card.id}')),
-          );
-          expect(icon.size, greaterThanOrEqualTo(32));
-          expect(
-            find.byKey(ValueKey('wallet-tunion-${card.id}')),
-            findsNothing,
-          );
         }
         final menu = tester.widget<IconButton>(
           find.ancestor(
@@ -561,6 +560,41 @@ void main() {
       expect(c.overlay, GalleryOverlay.export);
     },
   );
+
+  testWidgets('dual applications stack TU above CU and survive renaming', (
+    tester,
+  ) async {
+    c.current.saved = true;
+    c.current.name = '自定义通勤卡';
+    c.navigate(GalleryPage.cards);
+    await mount(tester);
+    final tu = find.byKey(const ValueKey('wallet-tunion-shanghai'));
+    final cu = find.byKey(const ValueKey('wallet-cu-shanghai'));
+    expect(tester.getBottomLeft(tu).dy, lessThan(tester.getTopLeft(cu).dy));
+    expect(c.current.applications, ['tu', 'cu']);
+    final generic = GalleryCard.fromJson({
+      ...c.data.cards.first,
+      'id': 'unidentified',
+      'name': 'Suica 八达通',
+      'type': 'FeliCa',
+      'saved': true,
+    });
+    c.update(() => c.cards.add(generic));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('wallet-contactless-unidentified')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('wallet-suica-unidentified')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('wallet-octopus-unidentified')),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'card face keeps its fields separate for long and unknown money',

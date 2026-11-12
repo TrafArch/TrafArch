@@ -666,30 +666,55 @@ extension _GalleryComponents on _GalleryViewState {
     return size;
   }
 
-  Widget _cardBadge(GalleryCard card, {required String id}) => Container(
-    width: 40,
-    height: 40,
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(14),
-      gradient: LinearGradient(colors: _faceColors(card.face)),
-    ),
-    child: card.type == '交通联合卡'
-        ? Padding(
-            padding: const EdgeInsets.all(3),
-            child: SvgPicture.asset(
-              'assets/gallery/tunion-logo.svg',
-              key: ValueKey('$id-tunion-${card.id}'),
-              fit: BoxFit.contain,
-              semanticsLabel: '交通联合 CHINA T-UNION',
+  Widget _cardBadge(GalleryCard card, {required String id}) {
+    final brands = [
+      for (final application in ['tu', 'cu', 'suica', 'octopus'])
+        if (card.applications.contains(application)) application,
+    ];
+    Widget logo(String brand) => SvgPicture.asset(
+      'assets/gallery/${switch (brand) {
+        'tu' => 'tunion',
+        'cu' => 'city-union',
+        _ => brand,
+      }}-logo.svg',
+      key: ValueKey('$id-${brand == 'tu' ? 'tunion' : brand}-${card.id}'),
+      colorFilter: brand == 'suica' && (t.dark || card.image != null)
+          ? ColorFilter.mode(
+              card.image == null ? t.text : _faceForeground(card),
+              BlendMode.srcIn,
+            )
+          : null,
+      fit: BoxFit.contain,
+      semanticsLabel: switch (brand) {
+        'tu' => '交通联合 CHINA T-UNION',
+        'cu' => '城市一卡通 CITY UNION',
+        'suica' => 'Suica',
+        _ => '八达通 Octopus',
+      },
+    );
+    return SizedBox(
+      key: ValueKey('$id-badge-${card.id}'),
+      width: 48,
+      height: 56,
+      child: brands.isEmpty
+          ? Icon(
+              Icons.contactless_outlined,
+              key: ValueKey('$id-contactless-${card.id}'),
+              size: 32,
+              color: card.image == null ? t.onTone : _faceForeground(card),
+            )
+          : brands.length == 1
+          ? Center(child: logo(brands.single))
+          : Column(
+              children: [
+                for (final (index, brand) in brands.indexed) ...[
+                  if (index > 0) const SizedBox(height: 4),
+                  Expanded(child: logo(brand)),
+                ],
+              ],
             ),
-          )
-        : Icon(
-            Icons.contactless_outlined,
-            key: ValueKey('$id-contactless-${card.id}'),
-            size: 32,
-            color: GalleryCardFace.byId(card.face).foreground,
-          ),
-  );
+    );
+  }
 
   Widget _cardMetadata(GalleryCard card, {required String id}) {
     final color = card.image == null

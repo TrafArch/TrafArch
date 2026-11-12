@@ -83,7 +83,22 @@ class GalleryCard {
       valid = json['valid'] as String,
       when = json['when'] as String,
       count = json['count'] as String,
-      face = json['face'] as String;
+      face = json['face'] as String,
+      // Explicit applications win over the frozen sample's known identity.
+      // A user-editable name is never evidence of a card's brand or protocol.
+      applications = List.unmodifiable(
+        (json['applications'] as List?)?.cast<String>() ??
+            switch (json['id']) {
+              'shanghai' => ['tu', 'cu'],
+              'suica' => ['suica'],
+              'octopus' => ['octopus'],
+              _ => switch (json['type']) {
+                '交通联合卡' => ['tu'],
+                '城市一卡通' || '城市一卡通卡' => ['cu'],
+                _ => <String>[],
+              },
+            },
+      );
 
   final String id;
   bool saved;
@@ -96,6 +111,7 @@ class GalleryCard {
   final String valid;
   final String when;
   final String count;
+  final List<String> applications;
   String face;
   Uint8List? image;
 

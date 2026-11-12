@@ -639,7 +639,7 @@ extension _GalleryPages on _GalleryViewState {
         ? t.muted
         : t.text;
     final faceText = GalleryCardFace.values.first;
-    final numberStyle = GalleryTypography.amount.copyWith(
+    final numberStyle = GalleryTypography.lead.copyWith(
       inherit: false,
       color: faceText.foreground,
       fontFeatures: const [FontFeature.tabularFigures()],
@@ -680,15 +680,8 @@ extension _GalleryPages on _GalleryViewState {
     numberWidth = math.max(64, numberWidth);
     final unitSpace = unitWidth > 0 ? unitWidth + 8 : 0.0;
     final amountWidth = numberWidth + unitSpace;
-    final available = math.max(0.0, _readingWidth - 32 - 32);
-    final balanceColumnWidth = math.min(amountWidth, available * .4);
-    final identityMinimum =
-        40 + 8 + _measureTextWidth('交通卡片', GalleryTypography.card);
-    final stacked =
-        _extraTextScale >= .5 ||
-        available - balanceColumnWidth - 8 - 4 - 44 < identityMinimum;
     Widget amount(GalleryCard card) {
-      final numberStyle = GalleryTypography.amount.copyWith(
+      final numberStyle = GalleryTypography.lead.copyWith(
         inherit: false,
         color: foreground(card),
         fontFeatures: const [FontFeature.tabularFigures()],
@@ -706,10 +699,10 @@ extension _GalleryPages on _GalleryViewState {
                 value.displayText,
                 role: GalleryTypography.label,
                 color: foreground(card, secondary: true),
-                align: TextAlign.center,
               )
             : FittedBox(
                 fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
                 child: SizedBox(
                   width: amountWidth,
                   child: Row(
@@ -724,7 +717,7 @@ extension _GalleryPages on _GalleryViewState {
                             key: ValueKey('wallet-currency-${card.id}'),
                             maxLines: 1,
                             softWrap: false,
-                            textAlign: TextAlign.right,
+                            textAlign: TextAlign.left,
                             style: currencyStyle,
                           ),
                         ),
@@ -751,13 +744,19 @@ extension _GalleryPages on _GalleryViewState {
     Widget identity(GalleryCard card) => Row(
       children: [
         _cardBadge(card, id: 'wallet'),
-        const SizedBox(width: 8),
+        const SizedBox(width: 12),
         Expanded(
-          child: _text(
-            card.name,
-            role: GalleryTypography.card,
-            color: foreground(card),
-            lines: 2,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _text(
+                card.name,
+                role: GalleryTypography.card,
+                color: foreground(card),
+              ),
+              _gap(4),
+              amount(card),
+            ],
           ),
         ),
       ],
@@ -841,39 +840,18 @@ extension _GalleryPages on _GalleryViewState {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
-                      vertical: 14,
+                      vertical: 16,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        if (stacked)
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(child: identity(card)),
-                                  const SizedBox(width: 8),
-                                  menu(card),
-                                ],
-                              ),
-                              _gap(12),
-                              amount(card),
-                            ],
-                          )
-                        else
-                          Row(
-                            children: [
-                              Expanded(child: identity(card)),
-                              const SizedBox(width: 8),
-                              SizedBox(
-                                width: balanceColumnWidth,
-                                child: amount(card),
-                              ),
-                              const SizedBox(width: 4),
-                              menu(card),
-                            ],
-                          ),
+                        Row(
+                          children: [
+                            Expanded(child: identity(card)),
+                            const SizedBox(width: 8),
+                            menu(card),
+                          ],
+                        ),
                         _cardMetadata(card, id: 'wallet'),
                       ],
                     ),

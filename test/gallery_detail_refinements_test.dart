@@ -41,37 +41,31 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets(
-    'wallet keeps balances beside identities when four title characters fit, otherwise stacks uniformly',
-    (tester) async {
-      c.navigate(GalleryPage.cards);
-      await mount(tester);
-      for (final width in [320.0, 360.0, 412.0]) {
-        tester.view.physicalSize = Size(width, 1000);
-        await tester.pumpAndSettle();
-        for (final card in c.savedCards) {
-          final title = tester.getRect(find.text(card.name));
-          final number = tester.getRect(
-            find.byKey(ValueKey('wallet-number-${card.id}')),
-          );
-          if (width == 320) {
-            expect(number.top, greaterThan(title.bottom));
-            expect(
-              tester
-                  .renderObject<RenderBox>(find.text(card.name))
-                  .constraints
-                  .maxWidth,
-              greaterThanOrEqualTo(4 * 17),
-            );
-          } else {
-            expect(number.left, greaterThan(title.right));
-            expect(number.top, lessThan(title.bottom + 10));
-          }
-        }
-        expect(tester.takeException(), isNull);
+  testWidgets('wallet keeps balances under names at every reading width', (
+    tester,
+  ) async {
+    c.navigate(GalleryPage.cards);
+    await mount(tester);
+    for (final width in [320.0, 360.0, 412.0]) {
+      tester.view.physicalSize = Size(width, 1000);
+      await tester.pumpAndSettle();
+      for (final card in c.savedCards) {
+        final title = tester.getRect(find.text(card.name));
+        final number = tester.getRect(
+          find.byKey(ValueKey('wallet-number-${card.id}')),
+        );
+        expect(number.top, greaterThan(title.bottom));
+        expect(
+          tester
+              .renderObject<RenderBox>(find.text(card.name))
+              .constraints
+              .maxWidth,
+          greaterThanOrEqualTo(4 * 17),
+        );
       }
-    },
-  );
+      expect(tester.takeException(), isNull);
+    }
+  });
 
   testWidgets(
     'footprint metrics stay in one row at narrow widths and large text',
