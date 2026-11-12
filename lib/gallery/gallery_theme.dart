@@ -26,6 +26,10 @@ class GalleryTokens extends ThemeExtension<GalleryTokens> {
   Color get segmentTrack => Color.lerp(surface, surface2, .25)!;
   Color get dockedNavigationSurface => Color.lerp(surface, surface2, .25)!;
   Color get raised => scheme.surfaceContainerHigh;
+  Color get feedbackSurface => Color.lerp(surface, raised, .35)!;
+  Color get successContainer =>
+      Color.alphaBlend(ok.withValues(alpha: .12), surface);
+  Color get onSuccessContainer => ok;
   Color get text => scheme.onSurface;
   Color get muted => scheme.onSurfaceVariant;
   Color get line => scheme.outlineVariant;

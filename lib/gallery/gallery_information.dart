@@ -8,7 +8,7 @@ extension _GalleryInformation on _GalleryViewState {
 
   Future<void> _copyContact(String value, String label) async {
     await Clipboard.setData(ClipboardData(text: value));
-    if (mounted) _toast('$label已复制到剪贴板');
+    if (mounted) _toast('$label已复制到剪贴板', title: '操作成功');
   }
 
   Widget _informationHero(Widget icon, String title, String subtitle) =>
@@ -64,7 +64,8 @@ extension _GalleryInformation on _GalleryViewState {
         : IconButton(
             tooltip: '复制$copyLabel',
             icon: const Icon(Icons.copy_outlined, size: 19),
-            onPressed: () => _copyContact(copyValue ?? link ?? value, copyLabel),
+            onPressed: () =>
+                _copyContact(copyValue ?? link ?? value, copyLabel),
           ),
     onTap: _openingLink == null
         ? () => _openContact(link ?? value, email: email)

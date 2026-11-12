@@ -22,6 +22,7 @@ import 'gallery_theme.dart';
 import 'gallery_design.dart';
 import 'gallery_layout.dart';
 import 'gallery_preferences.dart';
+import 'gallery_feedback.dart';
 
 part 'gallery_components.dart';
 part 'gallery_pages.dart';
@@ -134,7 +135,14 @@ class _GalleryAppState extends State<GalleryApp> {
                         ),
                 child: ColoredBox(
                   color: tokens.bg,
-                  child: GalleryWindow(child: child!),
+                  child: GalleryWindow(
+                    child: GalleryFeedbackHost(
+                      key: ValueKey(c.generation),
+                      mainPage: c.isMainPage,
+                      docked: c.docked,
+                      child: child!,
+                    ),
+                  ),
                 ),
               );
             },
@@ -336,7 +344,7 @@ class _GalleryViewState extends State<_GalleryView> {
       if (mounted && c.page == page && c.generation == generation) {
         if (error.copiedToClipboard) {
           // 无可用浏览器时链接已复制到剪贴板，与 1.x 一样以气泡提示。
-          _toast(error.message);
+          _toast(error.message, type: GalleryFeedbackType.info);
         } else {
           setState(() => _linkError = error.message);
         }
@@ -601,26 +609,9 @@ class _GalleryViewState extends State<_GalleryView> {
     return ListView(key: key, padding: padding, children: children);
   }
 
-  void _toast(String text) {
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    final horizontal = math.max(
-      16.0,
-      (MediaQuery.sizeOf(context).width - GalleryWindowLayout.readingWidth) /
-              2 +
-          16,
-    );
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(text),
-        duration: const Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-        margin: EdgeInsets.fromLTRB(
-          horizontal,
-          0,
-          horizontal,
-          c.isMainPage ? _navLayout.toastBottom : 16 + _navLayout.safeBottom,
-        ),
-      ),
-    );
-  }
+  void _toast(
+    String text, {
+    GalleryFeedbackType type = GalleryFeedbackType.success,
+    String? title,
+  }) => GalleryFeedbackHost.show(context, text, type: type, title: title);
 }

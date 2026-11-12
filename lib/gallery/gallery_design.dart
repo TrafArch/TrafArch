@@ -9,6 +9,11 @@ abstract final class GalleryGeometry {
 }
 
 abstract final class GalleryTypography {
+  static const feedback = TextStyle(
+    fontSize: 14,
+    height: 20 / 14,
+    fontWeight: FontWeight.w500,
+  );
   static const amount = TextStyle(
     fontFamily: 'sans-serif',
     fontSize: 20,
