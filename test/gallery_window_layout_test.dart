@@ -266,10 +266,12 @@ void main() {
       c.navigate(GalleryPage.cards);
       await tester.pumpAndSettle();
       final card = c.savedCards.first;
+      c.openCard(card);
+      await tester.pumpAndSettle();
       final button = find.byTooltip('${card.name} 管理');
       await tester.tap(button);
       await tester.pumpAndSettle();
-      expect(c.navigationStack.last.anchorId, 'card-${card.id}');
+      expect(c.navigationStack.last.anchorId, 'detail-card-${card.id}');
       for (final size in const [
         Size(1000, 800),
         Size(280, 600),
@@ -484,6 +486,8 @@ void main() {
             await tester.pumpAndSettle();
           }
           if (scenario == 'menu') {
+            c.openCard(c.savedCards.first);
+            await tester.pumpAndSettle();
             await tester.tap(find.byTooltip('${c.savedCards.first.name} 管理'));
           } else if (scenario == 'sheet') {
             c.showOverlay(GalleryOverlay.face);

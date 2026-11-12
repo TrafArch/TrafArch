@@ -761,62 +761,108 @@ extension _GalleryPages on _GalleryViewState {
         ),
       ],
     );
-    Widget menu(GalleryCard card) => _menuAnchor(
-      'card-${card.id}',
-      _icon(
-        Icons.more_horiz_rounded,
-        '${card.name} 管理',
-        () => _openDropdown(
-          GalleryOverlay.cardMenu,
-          'card-${card.id}',
-          card: card,
+    Widget handle(GalleryCard card, int index) => Semantics(
+      container: true,
+      excludeSemantics: true,
+      label: '${card.name}，长按拖动排序',
+      customSemanticsActions: {
+        if (index > 0)
+          CustomSemanticsAction(label: '上移'): () =>
+              c.reorderSavedCards(index, index - 1),
+        if (index < cards.length - 1)
+          CustomSemanticsAction(label: '下移'): () =>
+              c.reorderSavedCards(index, index + 1),
+      },
+      child: ReorderableDelayedDragStartListener(
+        index: index,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {},
+          child: Tooltip(
+            message: '长按拖动${card.name}',
+            triggerMode: TooltipTriggerMode.manual,
+            child: SizedBox(
+              key: ValueKey('wallet-drag-${card.id}'),
+              width: 44,
+              height: 48,
+              child: Icon(
+                Icons.drag_indicator_rounded,
+                color: foreground(card, secondary: true),
+              ),
+            ),
+          ),
         ),
-        color: foreground(card),
-        outlined: false,
       ),
     );
-    return _list([
-      if (cards.isNotEmpty) ...[
-        Container(
-          key: const ValueKey('wallet-summary'),
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-          decoration: BoxDecoration(
-            color: t.tone,
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.wallet_outlined, color: t.onTone, size: 26),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _text(
-                  '我的卡片',
-                  role: GalleryTypography.card,
-                  color: t.onTone,
-                ),
-              ),
-              _text(
-                '${cards.length} 张',
-                role: GalleryTypography.section,
-                color: t.onTone,
-              ),
-            ],
+    return ReorderableListView.builder(
+      key: PageStorageKey('gallery-${c.generation}-cards'),
+      padding: EdgeInsets.fromLTRB(16, 6, 16, _navLayout.listBottom),
+      buildDefaultDragHandles: false,
+      onReorderItem: c.reorderSavedCards,
+      proxyDecorator: (child, index, animation) => AnimatedBuilder(
+        animation: animation,
+        child: child,
+        builder: (context, child) => Transform.scale(
+          scale: _reduceMotion
+              ? 1
+              : 1 + .02 * Curves.easeOutCubic.transform(animation.value),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: t.shadows(GalleryElevation.floating),
+            ),
+            child: child,
           ),
         ),
-        _gap(20),
-      ],
-      if (cards.isEmpty)
-        _empty(
-          '还没有保存的卡片',
-          '读取一张交通卡并保存到卡包',
-          action: _button(
-            '前往首页',
-            () => c.navigate(GalleryPage.home),
-            primary: true,
-          ),
-        ),
-      for (final card in cards)
-        Padding(
+      ),
+      header: Column(
+        children: [
+          if (cards.isNotEmpty) ...[
+            Container(
+              key: const ValueKey('wallet-summary'),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+              decoration: BoxDecoration(
+                color: t.tone,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.wallet_outlined, color: t.onTone, size: 26),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _text(
+                      '我的卡片',
+                      role: GalleryTypography.card,
+                      color: t.onTone,
+                    ),
+                  ),
+                  _text(
+                    '${cards.length} 张',
+                    role: GalleryTypography.section,
+                    color: t.onTone,
+                  ),
+                ],
+              ),
+            ),
+            _gap(20),
+          ],
+          if (cards.isEmpty)
+            _empty(
+              '还没有保存的卡片',
+              '读取一张交通卡并保存到卡包',
+              action: _button(
+                '前往首页',
+                () => c.navigate(GalleryPage.home),
+                primary: true,
+              ),
+            ),
+        ],
+      ),
+      itemCount: cards.length,
+      itemBuilder: (context, index) {
+        final card = cards[index];
+        return Padding(
+          key: ValueKey('wallet-item-${card.id}'),
           padding: const EdgeInsets.only(bottom: 12),
           child: DecoratedBox(
             decoration: BoxDecoration(
@@ -849,7 +895,7 @@ extension _GalleryPages on _GalleryViewState {
                           children: [
                             Expanded(child: identity(card)),
                             const SizedBox(width: 8),
-                            menu(card),
+                            handle(card, index),
                           ],
                         ),
                         _cardMetadata(card, id: 'wallet'),
@@ -860,8 +906,9 @@ extension _GalleryPages on _GalleryViewState {
               ),
             ),
           ),
-        ),
-    ], id: 'cards');
+        );
+      },
+    );
   }
 
   Widget _detail() {
@@ -886,6 +933,19 @@ extension _GalleryPages on _GalleryViewState {
         '卡片详情',
         back: true,
         actions: [
+          _menuAnchor(
+            'detail-card-${card.id}',
+            _icon(
+              Icons.more_horiz_rounded,
+              '${card.name} 管理',
+              () => _openDropdown(
+                GalleryOverlay.cardMenu,
+                'detail-card-${card.id}',
+                card: card,
+              ),
+              outlined: false,
+            ),
+          ),
           _icon(
             Icons.download_outlined,
             '导出本卡记录',

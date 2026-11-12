@@ -123,6 +123,8 @@ void main() {
         await tester.pumpAndSettle();
         c.navigate(GalleryPage.cards);
         await capture('$mode-wallet');
+        c.openCard(c.savedCards.first);
+        await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('深圳通 管理'));
         await capture('$mode-card-menu');
         c.back();

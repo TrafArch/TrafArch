@@ -374,6 +374,25 @@ class GalleryController extends ChangeNotifier {
     }, '重命名模拟卡片');
   }
 
+  void reorderSavedCards(int oldIndex, int newIndex) {
+    final ordered = savedCards;
+    if (oldIndex < 0 ||
+        oldIndex >= ordered.length ||
+        newIndex < 0 ||
+        newIndex >= ordered.length) {
+      return;
+    }
+    if (oldIndex == newIndex) return;
+    ordered.insert(newIndex, ordered.removeAt(oldIndex));
+    final saved = ordered.iterator;
+    update(() {
+      cards = [
+        for (final card in cards)
+          if (card.saved) (saved..moveNext()).current else card,
+      ];
+    }, '调整卡包顺序');
+  }
+
   void deleteCard() {
     update(() {
       selectedCard.saved = false;

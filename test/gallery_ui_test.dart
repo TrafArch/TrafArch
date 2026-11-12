@@ -168,7 +168,7 @@ void main() {
       expect(find.byKey(const ValueKey(GalleryPage.home)), findsOneWidget);
       final incoming = find.descendant(
         of: find.byKey(const ValueKey(GalleryPage.cards)),
-        matching: find.byType(ListView),
+        matching: find.byType(ReorderableListView),
       );
       expect(tester.getTopLeft(incoming).dx, closeTo(360, .1));
       expect(find.byKey(const ValueKey(GalleryPage.trips)), findsNothing);
@@ -317,6 +317,8 @@ void main() {
     addTearDown(c.dispose);
     await tester.pumpWidget(GalleryApp(controller: c));
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('wallet-card-shenzhen')));
+    await tester.pumpAndSettle();
     final trigger = find.byTooltip('深圳通 管理');
     final anchor = tester.getRect(trigger);
     await tester.tap(trigger);
@@ -325,7 +327,7 @@ void main() {
     final rect = tester.getRect(menu);
     expect(rect.top, closeTo(anchor.bottom + 6, 1));
     expect(rect.right, closeTo(anchor.right, 1));
-    expect(c.page, GalleryPage.cards);
+    expect(c.page, GalleryPage.detail);
     expect(find.text('卡片管理'), findsNothing);
     expect(
       find.descendant(of: menu, matching: find.byType(TextButton)),

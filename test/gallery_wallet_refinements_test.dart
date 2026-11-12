@@ -538,21 +538,19 @@ void main() {
           );
           expect(logo.colorFilter, isNull);
         }
-        final menu = tester.widget<IconButton>(
-          find.ancestor(
-            of: find.byTooltip('${card.name} 管理'),
-            matching: find.byType(IconButton),
-          ),
-        );
-        expect(menu.style!.side!.resolve({}), BorderSide.none);
-        expect(menu.style!.backgroundColor?.resolve({}), isNull);
+        expect(find.byKey(ValueKey('wallet-drag-${card.id}')), findsOneWidget);
+        expect(find.byTooltip('${card.name} 管理'), findsNothing);
       }
+      await tester.tap(find.byKey(const ValueKey('wallet-card-shenzhen')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('深圳通 管理'));
       await tester.pumpAndSettle();
-      expect(c.page, GalleryPage.cards);
+      expect(c.page, GalleryPage.detail);
       expect(c.selectedCard.id, 'shenzhen');
       expect(c.overlay, GalleryOverlay.cardMenu);
       expect(find.text('重命名'), findsOneWidget);
+      c.back();
+      await tester.pumpAndSettle();
       c.back();
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('导出卡片记录'));

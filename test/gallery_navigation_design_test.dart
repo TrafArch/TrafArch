@@ -114,7 +114,9 @@ void main() {
       Finder surface(GalleryPage page) => find
           .descendant(
             of: find.byKey(ValueKey(page)),
-            matching: find.byType(ListView),
+            matching: find.byWidgetPredicate(
+              (widget) => widget is ListView || widget is ReorderableListView,
+            ),
           )
           .first;
       final home = surface(GalleryPage.home);
