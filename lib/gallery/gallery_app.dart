@@ -263,7 +263,8 @@ class _GalleryViewState extends State<_GalleryView> {
   final Set<String> _walletArrivals = {};
   GallerySpendingSelection _spendingSelection =
       const GallerySpendingSelection.all();
-  bool _detailShrinkEnabled = true;
+  double _detailScrollDeficit = 0;
+  double _detailMaxExtent = 0;
   double _detailShrinkDistance = 0;
   void _updateDetail(VoidCallback update) => setState(update);
 

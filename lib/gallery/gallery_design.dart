@@ -121,6 +121,13 @@ abstract final class GalleryJourneyTypography {
     height: 28 / 22,
     fontWeight: FontWeight.w400,
   );
+  // 单向公交仅记录上车，时间比常规时间小两号（二号 22 → 三号 16）且不加粗。
+  static const oneWayTime = TextStyle(
+    fontFamily: 'sans-serif',
+    fontSize: 16,
+    height: 22 / 16,
+    fontWeight: FontWeight.w400,
+  );
   static const station = TextStyle(
     fontFamily: 'sans-serif',
     fontSize: 18,

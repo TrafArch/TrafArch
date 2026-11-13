@@ -208,8 +208,9 @@ void main() {
     final time = tester.widget<Text>(
       find.descendant(of: row, matching: find.text('07:52')),
     );
-    expect(time.style!.fontSize, 22);
-    expect(time.style!.fontWeight, FontWeight.w600);
+    // 单向公交仅记录上车，时间比常规小两号（22 → 16）且不加粗。
+    expect(time.style!.fontSize, 16);
+    expect(time.style!.fontWeight, FontWeight.w400);
     expect(find.text('公交'), findsWidgets);
     expect(find.text('上海'), findsWidgets);
     expect(tester.takeException(), isNull);
@@ -268,6 +269,11 @@ void main() {
       final time = tester.getRect(find.text('08:07'));
       final station = tester.getRect(find.text('徐家汇').first);
       expect(time.bottom, lessThan(station.top));
+      // 线路徽章移到时间右侧，不再与站点同组。
+      final badge = tester.getRect(find.text('1 号线').first);
+      expect(badge.left, greaterThan(time.right));
+      expect(badge.center.dy, closeTo(time.center.dy, 1.5));
+      expect(badge.bottom, lessThanOrEqualTo(station.top));
       await tester.tap(find.text('陆家嘴'));
       await tester.pumpAndSettle();
       expect(controller.overlay, GalleryOverlay.trip);

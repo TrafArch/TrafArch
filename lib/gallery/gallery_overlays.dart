@@ -428,8 +428,6 @@ extension _GalleryOverlays on _GalleryViewState {
           role: GalleryTypography.caption,
           color: t.muted,
         ),
-        _gap(16),
-        _button('关闭', c.back, primary: true),
       ],
     );
   }
@@ -520,20 +518,6 @@ extension _GalleryOverlays on _GalleryViewState {
           ),
         ),
       ],
-      _gap(10),
-      _button(
-        '恢复默认卡面',
-        () => c.update(() {
-          _selectedCard.face = _selectedCard.id == 'shanghai'
-              ? 'blue'
-              : _selectedCard.id == 'shenzhen'
-              ? 'teal'
-              : _selectedCard.id == 'suica'
-              ? 'graphite'
-              : 'amber';
-          _selectedCard.image = null;
-        }),
-      ),
       _gap(10),
       _button('完成', c.back, primary: true),
     ],

@@ -153,7 +153,7 @@ class _GalleryFeedbackHostState extends State<GalleryFeedbackHost>
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
     final navigation = GalleryNavigationLayout(media, docked: widget.docked);
-    final top = math.max(media.padding.top, media.viewPadding.top) + 12;
+    final top = navigation.feedbackTop(mainPage: widget.mainPage);
     final bottom =
         media.viewInsets.bottom +
         (widget.mainPage ? navigation.toastBottom : 16 + navigation.safeBottom);

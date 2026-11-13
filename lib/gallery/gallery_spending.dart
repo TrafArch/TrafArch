@@ -111,6 +111,9 @@ class GallerySpendingEntry {
 
 typedef GallerySpendingBucket = ({DateTime date, String label, int amount});
 
+/// The aggregation a trend bar represents; it follows the selected range.
+enum GallerySpendingBucketUnit { day, month, year }
+
 /// A read-only projection of retained debits. No inferred dates or currencies.
 class GallerySpendingSummary {
   GallerySpendingSummary(
@@ -173,16 +176,25 @@ class GallerySpendingSummary {
 
   String format(int value) => currency?.format(value) ?? '暂不可用';
 
+  GallerySpendingBucketUnit get bucketUnit {
+    if (firstDay == null) return GallerySpendingBucketUnit.day;
+    if (selection.period == GallerySpendingPeriod.year) {
+      return GallerySpendingBucketUnit.month;
+    }
+    final span = lastDay!.difference(firstDay!).inDays + 1;
+    if (span > 366) return GallerySpendingBucketUnit.year;
+    if (span > 31) return GallerySpendingBucketUnit.month;
+    return GallerySpendingBucketUnit.day;
+  }
+
   List<GallerySpendingBucket> get buckets {
     if (firstDay == null || currency == null) return [];
-    final span = lastDay!.difference(firstDay!).inDays + 1;
-    final monthly = selection.period == GallerySpendingPeriod.year || span > 31;
-    final yearly = span > 366 && selection.period != GallerySpendingPeriod.year;
-    DateTime key(DateTime date) => yearly
-        ? DateTime.utc(date.year)
-        : monthly
-        ? DateTime.utc(date.year, date.month)
-        : date;
+    final unit = bucketUnit;
+    DateTime key(DateTime date) => switch (unit) {
+      GallerySpendingBucketUnit.year => DateTime.utc(date.year),
+      GallerySpendingBucketUnit.month => DateTime.utc(date.year, date.month),
+      GallerySpendingBucketUnit.day => date,
+    };
     final amounts = <DateTime, int>{};
     for (final entry in daily.entries) {
       amounts.update(
@@ -197,20 +209,22 @@ class GallerySpendingSummary {
     while (!date.isAfter(end)) {
       result.add((
         date: date,
-        label: yearly
-            ? '${date.year}年'
-            : monthly
-            ? '${date.year}/${date.month}'
-            : selection.period == GallerySpendingPeriod.week
-            ? ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][date.weekday - 1]
-            : '${date.month}/${date.day}',
+        label: switch (unit) {
+          GallerySpendingBucketUnit.year => '${date.year}年',
+          GallerySpendingBucketUnit.month => '${date.year}/${date.month}',
+          GallerySpendingBucketUnit.day =>
+            selection.period == GallerySpendingPeriod.week
+                ? ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][date.weekday -
+                      1]
+                : '${date.month}/${date.day}',
+        },
         amount: amounts[date] ?? 0,
       ));
-      date = yearly
-          ? DateTime.utc(date.year + 1)
-          : monthly
-          ? DateTime.utc(date.year, date.month + 1)
-          : date.add(const Duration(days: 1));
+      date = switch (unit) {
+        GallerySpendingBucketUnit.year => DateTime.utc(date.year + 1),
+        GallerySpendingBucketUnit.month => DateTime.utc(date.year, date.month + 1),
+        GallerySpendingBucketUnit.day => date.add(const Duration(days: 1)),
+      };
     }
     return result;
   }

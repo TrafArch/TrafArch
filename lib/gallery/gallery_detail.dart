@@ -81,15 +81,26 @@ extension _GalleryDetail on _GalleryViewState {
         Expanded(
           child: NotificationListener<ScrollMetricsNotification>(
             onNotification: (notification) {
-              // Short ledgers cannot scroll far enough to fully contract the
-              // face; keep it expanded instead of resting half-contracted.
-              final enabled =
-                  notification.metrics.maxScrollExtent >=
-                  _detailShrinkDistance - 1;
-              if (enabled != _detailShrinkEnabled) {
+              // Short ledgers still contract to the capsule: pad the scroll
+              // range up to the shrink distance so the content can ride up.
+              // Adjust by the measured shortfall so a clamped (zero) extent
+              // converges instead of subtracting a stale deficit.
+              _detailMaxExtent = notification.metrics.maxScrollExtent;
+              final target = math.max(
+                0.0,
+                _detailScrollDeficit +
+                    (_detailShrinkDistance - _detailMaxExtent),
+              );
+              if ((target - _detailScrollDeficit).abs() > .5) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted && _detailShrinkEnabled != enabled) {
-                    _updateDetail(() => _detailShrinkEnabled = enabled);
+                  if (!mounted) return;
+                  final next = math.max(
+                    0.0,
+                    _detailScrollDeficit +
+                        (_detailShrinkDistance - _detailMaxExtent),
+                  );
+                  if ((next - _detailScrollDeficit).abs() > .5) {
+                    _updateDetail(() => _detailScrollDeficit = next);
                   }
                 });
               }
@@ -119,7 +130,9 @@ extension _GalleryDetail on _GalleryViewState {
                     ).height +
                     16;
                 _detailShrinkDistance =
-                    layout.expandedHeight - layout.compactHeight;
+                    layout.expandedHeight +
+                    metadataHeight -
+                    layout.compactHeight;
                 return CustomScrollView(
                   key: PageStorageKey(
                     'gallery-${c.generation}-detail-${card.id}',
@@ -135,12 +148,7 @@ extension _GalleryDetail on _GalleryViewState {
                               metadataHeight +
                               tabsHeight +
                               24,
-                          compactHeight: _detailShrinkEnabled
-                              ? layout.compactHeight + tabsHeight + 24
-                              : layout.expandedHeight +
-                                    metadataHeight +
-                                    tabsHeight +
-                                    24,
+                          compactHeight: layout.compactHeight + tabsHeight + 24,
                           builder: (progress) => ColoredBox(
                             key: const ValueKey('detail-pinned-header'),
                             color: t.bg,
@@ -150,28 +158,28 @@ extension _GalleryDetail on _GalleryViewState {
                                   height: _detailLerp(
                                     layout.expandedHeight,
                                     layout.compactHeight,
-                                    _detailProgress(progress),
+                                    progress,
                                   ),
                                   child: _GalleryDetailFace(
                                     key: ValueKey('detail-face-${card.id}'),
                                     card: card,
                                     balance: _balancePresentation(card),
                                     layout: layout,
-                                    progress: _detailProgress(progress),
+                                    progress: progress,
                                   ),
                                 ),
                                 ClipRect(
                                   child: SizedBox(
                                     height:
                                         metadataHeight *
-                                        (1 - _detailProgress(progress)),
+                                        (1 - progress),
                                     child: OverflowBox(
                                       alignment: Alignment.topLeft,
                                       minHeight: metadataHeight,
                                       maxHeight: metadataHeight,
                                       child: Opacity(
                                         opacity:
-                                            (1 - _detailProgress(progress) * 3)
+                                            (1 - progress * 3)
                                                 .clamp(0.0, 1.0),
                                         child: Align(
                                           alignment: Alignment.centerLeft,
@@ -208,7 +216,9 @@ extension _GalleryDetail on _GalleryViewState {
                         16,
                         4,
                         16,
-                        30 + MediaQuery.paddingOf(context).bottom,
+                        30 +
+                            MediaQuery.paddingOf(context).bottom +
+                            _detailScrollDeficit,
                       ),
                       sliver: SliverList.builder(
                         itemCount: body.length,
@@ -224,8 +234,6 @@ extension _GalleryDetail on _GalleryViewState {
       ],
     );
   }
-
-  double _detailProgress(double raw) => _detailShrinkEnabled ? raw : 0.0;
 
   List<Widget> _cardInformation(GalleryCard card) {
     final raw = c.data.raw[card.id];
@@ -458,7 +466,14 @@ extension _GalleryDetail on _GalleryViewState {
         ),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 20),
       ),
-      _sectionTitle('消费趋势'),
+      _sectionTitle(
+        '消费趋势',
+        trailing: switch (summary.bucketUnit) {
+          GallerySpendingBucketUnit.day => '按日',
+          GallerySpendingBucketUnit.month => '按月',
+          GallerySpendingBucketUnit.year => '按年',
+        },
+      ),
       _panel(_spendingChart(summary)),
       _sectionTitle('分类开销'),
       _panel(_spendingCategories(summary)),
@@ -555,10 +570,20 @@ extension _GalleryDetail on _GalleryViewState {
         icon: Icons.bar_chart_rounded,
       );
     }
-    final maximum = math.max(
-      1,
-      buckets.map((entry) => entry.amount).reduce(math.max),
-    );
+    final rawMax = buckets.map((entry) => entry.amount).reduce(math.max);
+    final axis = _niceAxisScale(rawMax);
+    final ticks = [for (var v = 0; v <= axis.max; v += axis.step) v];
+    final tickLabels = [for (final v in ticks) summary.format(v)];
+    final axisWidth =
+        tickLabels
+            .map((label) => _measureTextWidth(label, GalleryTypography.caption))
+            .reduce(math.max) +
+        12;
+    const barHeight = 120.0;
+    final scaler = MediaQuery.textScalerOf(context);
+    final labelHeight = scaler.scale(18);
+    final topOffset = labelHeight + 8;
+    final totalHeight = topOffset + barHeight + 8 + labelHeight;
     final columnWidth = math.max(
       52.0,
       buckets
@@ -576,65 +601,134 @@ extension _GalleryDetail on _GalleryViewState {
           .reduce(math.max),
     );
     return LayoutBuilder(
-      builder: (context, constraints) => SingleChildScrollView(
-        key: const PageStorageKey('gallery-spending-chart'),
-        scrollDirection: Axis.horizontal,
-        child: SizedBox(
-          width: math.max(constraints.maxWidth, columnWidth * buckets.length),
+      builder: (context, constraints) {
+        final gutter = math.min(axisWidth, constraints.maxWidth * .5);
+        final chartWidth = math.max(
+          constraints.maxWidth - gutter,
+          columnWidth * buckets.length,
+        );
+        return SizedBox(
+          height: totalHeight,
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              for (final (index, bucket) in buckets.indexed)
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 5),
-                    child: Semantics(
-                      label: '${bucket.label}，${summary.format(bucket.amount)}',
-                      excludeSemantics: true,
-                      child: Column(
-                        children: [
-                          _text(
-                            summary.format(bucket.amount),
-                            role: GalleryTypography.caption,
-                          ),
-                          _gap(8),
-                          Container(
-                            height: 120,
-                            alignment: Alignment.bottomCenter,
-                            child: TweenAnimationBuilder<double>(
-                              key: ValueKey('spending-bar-$index'),
-                              tween: Tween(
-                                begin: 0,
-                                end: bucket.amount / maximum,
-                              ),
-                              duration: _reduceMotion
-                                  ? Duration.zero
-                                  : const Duration(milliseconds: 260),
-                              curve: Curves.easeInOutCubic,
-                              builder: (_, value, _) => Container(
-                                height: math.max(2, value * 120),
-                                decoration: BoxDecoration(
-                                  color: t.secondary,
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                              ),
-                            ),
-                          ),
-                          _gap(8),
-                          _text(
-                            bucket.label,
+              SizedBox(
+                width: gutter,
+                height: totalHeight,
+                child: Stack(
+                  children: [
+                    for (final (index, value) in ticks.indexed)
+                      Positioned(
+                        right: 6,
+                        width: math.max(8, gutter - 10),
+                        top:
+                            topOffset +
+                            barHeight * (1 - value / axis.max) -
+                            labelHeight / 2,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerRight,
+                          child: _text(
+                            tickLabels[index],
                             role: GalleryTypography.caption,
                             color: t.muted,
+                            lines: 1,
                           ),
-                        ],
+                        ),
                       ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  key: const PageStorageKey('gallery-spending-chart'),
+                  scrollDirection: Axis.horizontal,
+                  child: SizedBox(
+                    width: chartWidth,
+                    height: totalHeight,
+                    child: Stack(
+                      children: [
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          top: topOffset,
+                          height: barHeight,
+                          child: CustomPaint(
+                            painter: _SpendingGridPainter(
+                              ticks.length - 1,
+                              t.line,
+                            ),
+                          ),
+                        ),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            for (final (index, bucket) in buckets.indexed)
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 5,
+                                  ),
+                                  child: Semantics(
+                                    label:
+                                        '${bucket.label}，${summary.format(bucket.amount)}',
+                                    excludeSemantics: true,
+                                    child: Column(
+                                      children: [
+                                        _text(
+                                          summary.format(bucket.amount),
+                                          role: GalleryTypography.caption,
+                                          lines: 1,
+                                        ),
+                                        _gap(8),
+                                        Container(
+                                          height: barHeight,
+                                          alignment: Alignment.bottomCenter,
+                                          child: TweenAnimationBuilder<double>(
+                                            key: ValueKey('spending-bar-$index'),
+                                            tween: Tween(
+                                              begin: 0,
+                                              end: bucket.amount / axis.max,
+                                            ),
+                                            duration: _reduceMotion
+                                                ? Duration.zero
+                                                : const Duration(
+                                                    milliseconds: 260,
+                                                  ),
+                                            curve: Curves.easeInOutCubic,
+                                            builder: (_, value, _) => Container(
+                                              height: math.max(2, value * barHeight),
+                                              decoration: BoxDecoration(
+                                                color: t.secondary,
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        _gap(8),
+                                        _text(
+                                          bucket.label,
+                                          role: GalleryTypography.caption,
+                                          color: t.muted,
+                                          lines: 1,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                 ),
+              ),
             ],
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -737,6 +831,27 @@ extension _GalleryDetail on _GalleryViewState {
 
 double _detailLerp(double first, double last, double progress) =>
     first + (last - first) * progress;
+
+/// Round the trend scale to a 1/2/5 unit so the axis quantum stays readable and
+/// changes with the selected range's amounts. Values are currency minor units.
+({int max, int step}) _niceAxisScale(int rawMax) {
+  if (rawMax <= 1) return (max: 1, step: 1);
+  final rough = rawMax / 4;
+  final magnitude = math
+      .pow(10, (math.log(rough) / math.ln10).floor())
+      .toDouble();
+  final residual = rough / magnitude;
+  final nice = residual <= 1
+      ? 1.0
+      : residual <= 2
+      ? 2.0
+      : residual <= 5
+      ? 5.0
+      : 10.0;
+  final step = math.max(1, (nice * magnitude).round());
+  final max = ((rawMax + step - 1) ~/ step) * step;
+  return (max: max, step: step);
+}
 
 Size _measureDetailText(
   BuildContext context,
@@ -1143,6 +1258,27 @@ class _SpendingRingPainter extends CustomPainter {
       !listEquals(values, old.values) ||
       !listEquals(colors, old.colors) ||
       track != old.track;
+}
+
+class _SpendingGridPainter extends CustomPainter {
+  _SpendingGridPainter(this.intervals, this.color);
+  final int intervals;
+  final Color color;
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (intervals <= 0) return;
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1;
+    for (var i = 0; i <= intervals; i++) {
+      final y = size.height * (1 - i / intervals);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_SpendingGridPainter old) =>
+      intervals != old.intervals || color != old.color;
 }
 
 bool _sameCalendarDay(DateTime a, DateTime b) =>

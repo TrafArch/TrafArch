@@ -148,12 +148,14 @@ void main() {
   );
 
   testWidgets(
-    'sheets move up and down, and canceling back leaves their parent intact',
+    'sheets contract inward then slide down, and canceling back keeps the parent',
     (tester) async {
       await mount(tester);
       c.showOverlay(GalleryOverlay.face, card: c.current);
       await tester.pump();
       final title = find.text('更换卡面');
+      double titleWidth() =>
+          tester.getBottomRight(title).dx - tester.getTopLeft(title).dx;
       await tester.pump(const Duration(milliseconds: 65));
       final partialY = tester.getTopLeft(title).dy;
       await tester.pump(const Duration(milliseconds: 220));
@@ -163,20 +165,27 @@ void main() {
       );
       await tester.pumpAndSettle();
       final restingY = tester.getTopLeft(title).dy;
+      final restingWidth = titleWidth();
       expect(partialY, greaterThan(restingY));
+      // 手势前期先向内收缩（宽度变小），尚未下移。
       await gestureEvent(tester, 'startBackGesture');
       await gestureEvent(tester, 'updateBackGestureProgress', .3);
+      expect(titleWidth(), lessThan(restingWidth));
+      // 手势后期才向下滑出。
+      await gestureEvent(tester, 'updateBackGestureProgress', .8);
       expect(tester.getTopLeft(title).dy, greaterThan(restingY));
       await gestureEvent(tester, 'cancelBackGesture');
       await tester.pumpAndSettle();
       expect(c.overlay, GalleryOverlay.face);
       expect(tester.getTopLeft(title).dy, closeTo(restingY, .1));
+      expect(titleWidth(), closeTo(restingWidth, .1));
       c.back();
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
-      expect(tester.getTopLeft(title).dy, greaterThan(restingY));
+      expect(titleWidth(), lessThan(restingWidth));
       expect(title.hitTestable(), findsNothing);
       await tester.pump(const Duration(milliseconds: 200));
+      expect(tester.getTopLeft(title).dy, greaterThan(restingY));
       expect(title, findsOneWidget);
       await tester.pumpAndSettle();
       expect(c.overlay, isNull);

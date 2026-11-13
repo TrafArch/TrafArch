@@ -226,7 +226,10 @@ void main() {
         if (!docked) await show(tester, message, title: '操作成功');
         final media = MediaQuery.of(pageContext);
         final navigation = GalleryNavigationLayout(media, docked: docked);
-        expect(tester.getTopRight(surface).dy, closeTo(36, .01));
+        expect(
+          tester.getTopRight(surface).dy,
+          closeTo(navigation.feedbackTop(mainPage: true), .01),
+        );
         expect(
           tester.getBottomRight(surface).dy,
           lessThanOrEqualTo(540 - navigation.toastBottom),
@@ -243,7 +246,12 @@ void main() {
         reduced: true,
         cleanup: false,
       );
-      expect(tester.getTopRight(surface).dy, closeTo(36, .01));
+      final subMedia = MediaQuery.of(pageContext);
+      final subNavigation = GalleryNavigationLayout(subMedia, docked: false);
+      expect(
+        tester.getTopRight(surface).dy,
+        closeTo(subNavigation.feedbackTop(mainPage: false), .01),
+      );
       expect(
         tester.getBottomRight(surface).dy,
         lessThanOrEqualTo(800 - 300 - 16),

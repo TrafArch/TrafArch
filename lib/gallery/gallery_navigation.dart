@@ -529,9 +529,12 @@ class _GalleryPopupRoute extends PopupRoute<void> with _GalleryPredictiveRoute {
     final value = configuration.reduceMotion ? 1.0 : motionProgress(animation);
     final content = interactive(child);
     if (_sheet) {
+      // Predictive back contracts the sheet inward first, then slides it down.
+      final shrink = ((1 - value) / .45).clamp(0.0, 1.0);
+      final slide = ((.55 - value) / .55).clamp(0.0, 1.0);
       return FractionalTranslation(
-        translation: Offset(0, 1 - value),
-        child: content,
+        translation: Offset(0, slide),
+        child: Transform.scale(scale: 1 - .1 * shrink, child: content),
       );
     }
     if (_menu) return content;

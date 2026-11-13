@@ -154,16 +154,18 @@ void main() {
     },
   );
 
-  testWidgets('short ledger keeps the face expanded instead of half-contracted', (
+  testWidgets('short ledger still contracts to the capsule by riding content up', (
     tester,
   ) async {
     c.openCard(c.cards.firstWhere((card) => card.id == 'suica'));
     await mount(tester);
     final face = find.byKey(const ValueKey('card-face-suica'));
     final scroll = tester.state<ScrollableState>(galleryVerticalScroll());
+    // 记录较短也补足滚动距离，滚到底时卡面完整收为胶囊，内容随之上移。
+    expect(scroll.position.maxScrollExtent, greaterThan(0));
     scroll.position.jumpTo(scroll.position.maxScrollExtent);
     await tester.pumpAndSettle();
-    expect(tester.getSize(face).height, greaterThan(150));
+    expect(tester.getSize(face).height, lessThan(80));
     final sample = c.trips.first;
     c.data.ledger('suica').addAll(
       List.generate(30, (index) => {...sample, 'entryStation': '站点 $index'}),

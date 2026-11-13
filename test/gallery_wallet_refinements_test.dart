@@ -297,7 +297,7 @@ void main() {
       });
     }
 
-    testWidgets('restore default removes custom bytes and restores dark text', (
+    testWidgets('default preset removes custom bytes and restores dark text', (
       tester,
     ) async {
       mockPicker(() async => imagePath);
@@ -305,7 +305,9 @@ void main() {
       await pickAndFinish(tester);
       c.update(() => c.current.face = 'amber');
       await tester.pumpAndSettle();
-      await tester.tap(find.text('恢复默认卡面'));
+      // 独立“恢复默认卡面”按钮已移除，改由卡面预设回到默认。
+      expect(find.text('恢复默认卡面'), findsNothing);
+      await tester.tap(find.text('海蓝'));
       await tester.pumpAndSettle();
       expect(c.current.image, isNull);
       expect(c.current.face, 'blue');

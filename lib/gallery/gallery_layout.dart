@@ -84,13 +84,26 @@ class GalleryNavigationLayout {
         0,
         media.viewPadding.bottom - media.viewInsets.bottom,
       ),
-      extraHeight = math.max(0, media.textScaler.scale(14) / 14 - 1) * 20;
+      extraHeight = math.max(0, media.textScaler.scale(14) / 14 - 1) * 20,
+      _safeTop = math.max(media.padding.top, media.viewPadding.top),
+      _titleRow = math.max(44.0, media.textScaler.scale(32)),
+      _compactTitle =
+          media.size.height - math.max(media.padding.top, media.viewPadding.top) <
+          480;
   final bool docked;
   final double safeBottom, extraHeight;
+  final double _safeTop, _titleRow;
+  final bool _compactTitle;
   double get contentHeight => (docked ? 65 : 62) + extraHeight;
   double get gap => docked ? (safeBottom > 0 ? 8 : 0) : 18;
   double get bottomSpace => safeBottom + gap;
   double get occupiedHeight => contentHeight + bottomSpace;
   double get listBottom => occupiedHeight + 16;
   double get toastBottom => occupiedHeight + 12;
+
+  /// Feedback sits just below the page title band, not over the title itself.
+  double feedbackTop({required bool mainPage}) {
+    final headerPadding = mainPage ? (_compactTitle ? 16.0 : 32.0) : 26.0;
+    return _safeTop + _titleRow + headerPadding + 8;
+  }
 }

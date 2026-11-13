@@ -478,25 +478,26 @@ extension _GalleryPages on _GalleryViewState {
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
-            child: _text(
-              time,
-              role: GalleryJourneyTypography.time,
-              weight: departure && time != '未记录'
-                  ? FontWeight.w600
-                  : FontWeight.w400,
-              lines: 1,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _text(
+                  time,
+                  role: GalleryJourneyTypography.time,
+                  weight: departure && time != '未记录'
+                      ? FontWeight.w600
+                      : FontWeight.w400,
+                  lines: 1,
+                ),
+                if (line.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  lineBadge(line),
+                ],
+              ],
             ),
           ),
           _gap(6),
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              if (line.isNotEmpty) lineBadge(line),
-              _text(station, role: GalleryJourneyTypography.station),
-            ],
-          ),
+          _text(station, role: GalleryJourneyTypography.station),
         ],
       ),
     );
@@ -605,10 +606,7 @@ extension _GalleryPages on _GalleryViewState {
                             fit: BoxFit.scaleDown,
                             child: _text(
                               boarding,
-                              role: GalleryJourneyTypography.time,
-                              weight: boarding != '未记录'
-                                  ? FontWeight.w600
-                                  : FontWeight.w400,
+                              role: GalleryJourneyTypography.oneWayTime,
                               lines: 1,
                             ),
                           ),
