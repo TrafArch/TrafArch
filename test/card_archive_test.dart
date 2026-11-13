@@ -13,6 +13,7 @@ import 'package:transit_card_analyzer/features/archive/data/app_database.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_archive_identity.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_fingerprint.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_name_extension.dart';
+import 'package:transit_card_analyzer/features/archive/domain/pending_card_save.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_session_snapshot.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_types.dart';
 import 'package:transit_card_analyzer/features/archive/data/card_repository.dart';
@@ -264,6 +265,37 @@ void main() {
   });
 
   group('SavedCardDisplayName 名称展示规则', () {
+    test('旧岭南通单标档案只读显示新名称，自定义名仍优先', () {
+      final old = _savedCard(
+        cardType: CardTypes.lingnanTong,
+        officialName: '岭南通·羊城通',
+        issuerName: null,
+        cityName: null,
+      );
+      expect(old.officialName, '岭南通·羊城通');
+      expect(old.displayName, '岭南通');
+      expect(old.subtitle, '岭南通');
+      final renamed = _savedCard(
+        cardType: CardTypes.lingnanTong,
+        officialName: '岭南通·羊城通',
+        customName: '通勤卡',
+        issuerName: null,
+        cityName: null,
+      );
+      expect(renamed.displayName, '通勤卡');
+      expect(renamed.subtitle, '岭南通');
+      expect(cardTypeLabel(CardTypes.lingnanTong), '岭南通');
+      final pending = PendingCardSave(
+        pendingSaveId: 'old-lnt',
+        fingerprint: 'lingnan:1',
+        identity: const CardArchiveIdentity(
+          cardType: CardTypes.lingnanTong,
+          officialName: '岭南通·羊城通',
+        ),
+      );
+      expect(pending.displayName, '岭南通');
+    });
+
     test('无自定义名称：展示正式卡名；副标题为发行方 · 城市', () {
       final card = _savedCard();
       expect(card.displayName, '福路通·榕城通');

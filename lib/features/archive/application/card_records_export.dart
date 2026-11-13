@@ -83,7 +83,12 @@ String buildArchiveHistoryExport(
       if (!entry.value) buffer.writeln('本次未观察到：${entry.key}；摘要保留既往已观察值');
     }
     final localTrips = history.localCardRecords
-        .where((record) => record.cardType == 'localCardTrips')
+        .where(
+          (record) =>
+              record.cardType == 'localCardTrips' ||
+              record.cardType == 'lingnanTong' ||
+              record.cardType == 'shenzhenTong',
+        )
         .toList();
     if (history.records.isEmpty &&
         cityUnion.transactions.isEmpty &&
@@ -119,7 +124,14 @@ String buildArchiveHistoryExport(
     if (localTrips.isNotEmpty) {
       buffer.writeln('地方交通卡行程（${localTrips.length} 条）：');
       for (final record in localTrips) {
-        final trip = local_presenter.restoreLocalTripRecord(record.fields);
+        final profile = local_presenter.localTripProfileOf(
+          record.fields,
+          cardType: record.cardType,
+        );
+        final trip = local_presenter.restoreLocalTripRecord(
+          record.fields,
+          profile: profile,
+        );
         if (trip == null) {
           buffer.writeln('  · 记录不完整，原始快照已保留');
           continue;
@@ -127,11 +139,14 @@ String buildArchiveHistoryExport(
         final presentation = local_presenter.describeLocalTrip(
           trip,
           currencySymbol: '¥',
+          profile: profile,
         );
         buffer
           ..writeln('  · ${presentation.info.title}')
-          ..writeln('    ${presentation.info.timeText ?? '时间未知'}'
-              ' | ${presentation.info.amountText ?? '金额未知'}')
+          ..writeln(
+            '    ${presentation.info.timeText ?? '时间未知'}'
+            ' | ${presentation.info.amountText ?? '金额未知'}',
+          )
           ..writeln(
             '    来源：${record.batchId}（本地卡 ${presentation.info.sourceLabel}）',
           );

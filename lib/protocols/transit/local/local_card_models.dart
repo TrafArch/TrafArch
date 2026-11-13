@@ -133,7 +133,6 @@ class CardInfo {
     if (isBmac) return '北京市政交通一卡通（BMAC）';
     if (isBeijing) return '北京互通卡';
     if (isWHCTC) return '武汉通';
-    if (isLNT && isYCT) return '岭南通·羊城通';
     if (isLNT) return '岭南通';
     if (isYCT) return '羊城通';
     if (isSZT) return '深圳通';

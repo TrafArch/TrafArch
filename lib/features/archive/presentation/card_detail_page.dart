@@ -171,10 +171,15 @@ class _CardDetailBody extends StatelessWidget {
       ),
     );
     // 通用地方卡行程（武汉通 / 北京互通卡 / 深圳通本地 / 苏州苏薪·计次 /
-    // 天府通）与 TU / CU 共用票据式行程卡展示；岭南通 / 澳门通继续使用
-    // 各自的纯文本列表。
+    // 天府通）及岭南通 / 深圳通地方钱包与 TU / CU 共用票据式行程卡；
+    // 澳门通仍使用独立文本记录。
     final localTrips = history.localCardRecords
-        .where((record) => record.cardType == 'localCardTrips')
+        .where(
+          (record) =>
+              record.cardType == 'localCardTrips' ||
+              record.cardType == 'lingnanTong' ||
+              record.cardType == 'shenzhenTong',
+        )
         .toList();
     return ListView(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 28),

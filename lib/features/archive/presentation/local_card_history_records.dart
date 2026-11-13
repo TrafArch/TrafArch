@@ -4,7 +4,7 @@ import '../../trips/local_card_trip_presenter.dart';
 import '../../trips/local_card_trip_list.dart';
 import '../application/archive_history.dart';
 
-/// 归档中的通用地方卡行程用与 TU/CU 相同的票据式行程卡展示：还原捕获时的
+/// 归档中的地方钱包行程用与 TU/CU 相同的票据式行程卡展示：还原捕获时的
 /// 记录字段，复用 [LocalCardTripList]（来源 / 方式筛选、详情弹层同一套）。
 class ArchivedLocalCardTrips extends StatelessWidget {
   const ArchivedLocalCardTrips({super.key, required this.records});
@@ -13,19 +13,31 @@ class ArchivedLocalCardTrips extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final trips = [
-      for (final record in records) ?restoreLocalTripRecord(record.fields),
-    ];
-    if (trips.isEmpty) return const SizedBox.shrink();
+    final groups = <LocalTripProfile, List<LocalCardHistoryRecord>>{};
+    for (final record in records) {
+      final profile = localTripProfileOf(
+        record.fields,
+        cardType: record.cardType,
+      );
+      if (restoreLocalTripRecord(record.fields, profile: profile) == null) {
+        continue;
+      }
+      groups.putIfAbsent(profile, () => []).add(record);
+    }
+    if (groups.isEmpty) return const SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        LocalCardTripList(
-          trips: trips,
-          currencySymbol: '¥',
-          titlePrefix: null,
-          showHeader: true,
-        ),
+        for (final profile in groups.keys)
+          LocalCardTripList(
+            trips: [
+              for (final record in groups[profile]!)
+                restoreLocalTripRecord(record.fields, profile: profile)!,
+            ],
+            currencySymbol: '¥',
+            profile: profile,
+            showHeader: true,
+          ),
         const SizedBox(height: 12),
       ],
     );
@@ -39,10 +51,22 @@ class LocalCardHistoryRecords extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 通用地方卡行程（localCardTrips）由票据式行程卡展示，不并入
-    // 岭南通 / 澳门通的纯文本记录列表。
+    // Decodable local wallet rows use the ticket cards above. Keep only
+    // incomplete legacy rows in the text view so their evidence is visible.
     final legacy = records
-        .where((record) => record.cardType != 'localCardTrips')
+        .where(
+          (record) =>
+              record.cardType == 'macauPass' ||
+              record.cardType != 'localCardTrips' &&
+                  restoreLocalTripRecord(
+                        record.fields,
+                        profile: localTripProfileOf(
+                          record.fields,
+                          cardType: record.cardType,
+                        ),
+                      ) ==
+                      null,
+        )
         .toList();
     if (legacy.isEmpty) return const SizedBox.shrink();
     return Column(
@@ -79,7 +103,7 @@ class LocalCardHistoryRecords extends StatelessWidget {
       };
       return '$type · 序号 ${_sequence(f) ?? index + 1}';
     }
-    return '澳门通交易 · 序号 ${f['recordNumber'] ?? index + 1}';
+    return '${record.cardType == 'shenzhenTong' ? '深圳通' : '澳门通'}交易 · 序号 ${f['recordNumber'] ?? index + 1}';
   }
 
   String _details(LocalCardHistoryRecord record) {

@@ -7,6 +7,8 @@ import '../../shared/presentation/adaptive_layout.dart';
 import '../archive/application/archive_history.dart';
 import '../archive/application/cu_archive_projection.dart';
 import '../archive/domain/card_session_snapshot.dart';
+import '../archive/domain/card_types.dart';
+import '../../protocols/transit/card_parser.dart';
 import '../archive/presentation/archive_trip_presenter.dart';
 import '../archive/presentation/local_card_history_records.dart';
 import '../trips/trip_cards_view.dart';
@@ -62,7 +64,14 @@ class RecoveryResultPanel extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 8),
-                Text(capture.summary['cardName']?.toString() ?? '卡片信息'),
+                Text(
+                  capture.pending?.identity.cardType == CardTypes.lingnanTong ||
+                          capture.summary['parserId'] ==
+                              CardParserIds.lingnanTong ||
+                          capture.summary['cardType'] == CardTypes.lingnanTong
+                      ? '岭南通'
+                      : capture.summary['cardName']?.toString() ?? '卡片信息',
+                ),
                 if (capture.summary['cardNumber'] case final String number)
                   SelectableText(number),
                 Text('读取时间：${capture.readAt.toLocal()}'),
@@ -132,7 +141,12 @@ class RecoveryResultPanel extends StatelessWidget {
         if (batch != null)
           ArchivedLocalCardTrips(
             records: ArchiveHistory.projectLocalCardRecords([batch])
-                .where((record) => record.cardType == 'localCardTrips')
+                .where(
+                  (record) =>
+                      record.cardType == 'localCardTrips' ||
+                      record.cardType == 'lingnanTong' ||
+                      record.cardType == 'shenzhenTong',
+                )
                 .toList(),
           ),
         if (batch != null)

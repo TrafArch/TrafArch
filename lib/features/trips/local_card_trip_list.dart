@@ -13,6 +13,7 @@ class LocalCardTripList extends StatelessWidget {
     super.key,
     required this.trips,
     required this.currencySymbol,
+    this.profile = LocalTripProfile.general,
     this.cityNameOf,
     this.isRemote,
     this.titlePrefix,
@@ -23,6 +24,7 @@ class LocalCardTripList extends StatelessWidget {
 
   final List<ApduRecord> trips;
   final String currencySymbol;
+  final LocalTripProfile profile;
   final String? Function(String?)? cityNameOf;
   final bool Function(ApduRecord)? isRemote;
   final String? titlePrefix;
@@ -37,7 +39,10 @@ class LocalCardTripList extends StatelessWidget {
         describeLocalTrip(
           trip,
           currencySymbol: currencySymbol,
-          cityName: trip.cityCode > 0 ? cityNameOf?.call('${trip.cityCode}') : null,
+          profile: profile,
+          cityName: trip.cityCode > 0
+              ? cityNameOf?.call('${trip.cityCode}')
+              : null,
           remote: isRemote?.call(trip) ?? false,
           titlePrefix: titlePrefix,
         ),
@@ -46,7 +51,11 @@ class LocalCardTripList extends StatelessWidget {
       entries: entries,
       sourceLabels: localTripSourceLabels,
       summaryText: showHeader
-          ? '地方交通卡 · ${trips.length} 条记录'
+          ? '${switch (profile) {
+              LocalTripProfile.lingnan => '岭南通',
+              LocalTripProfile.shenzhen => '深圳通',
+              LocalTripProfile.general => '地方交通卡',
+            }} · ${trips.length} 条记录'
           : '记录 ${trips.length} 条',
       initialFilters: initialFilters,
       onFiltersChanged: onFiltersChanged,
