@@ -383,8 +383,6 @@ void main() {
           tester.view.physicalSize = Size(width, 2400);
           tester.platformDispatcher.textScaleFactorTestValue = scale;
           await tester.pumpAndSettle();
-          double? center;
-          double? numberHeight;
           for (final card in c.savedCards) {
             final number = tester.getRect(
               find.byKey(ValueKey('wallet-number-${card.id}')),
@@ -396,10 +394,10 @@ void main() {
             final divider = tester.getRect(
               find.byKey(ValueKey('wallet-divider-${card.id}')),
             );
-            center ??= number.center.dx;
-            numberHeight ??= number.height;
-            expect(number.center.dx, closeTo(center, .1));
-            expect(number.height, closeTo(numberHeight, .1));
+            final unit = tester.getRect(
+              find.byKey(ValueKey('wallet-currency-${card.id}')),
+            );
+            expect(number.left - unit.right, inInclusiveRange(0, 4.1));
             expect(number.bottom, lessThan(divider.top));
             final panel = find.byKey(ValueKey('wallet-card-${card.id}'));
             final title = find.descendant(

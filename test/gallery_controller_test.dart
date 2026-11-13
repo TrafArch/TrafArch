@@ -5,8 +5,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/gallery/gallery_controller.dart';
 import 'package:transit_card_analyzer/gallery/gallery_data.dart';
+import 'package:transit_card_analyzer/gallery/gallery_spending.dart';
 
 void main() {
+  GallerySpendingSummary weeklySummary(
+    GalleryCurrency? currency,
+    Iterable<GalleryRecord> records,
+  ) => GallerySpendingSummary(
+    currency,
+    records,
+    selection: GallerySpendingSelection.forPeriod(
+      GallerySpendingPeriod.week,
+      GalleryController.clock,
+    ),
+  );
   late GalleryController c;
   setUp(() {
     final json = jsonDecode(
@@ -188,7 +200,7 @@ void main() {
       (GalleryCurrency.jpy, '−1,234 JPY', 1234, '1,234 JPY'),
       (GalleryCurrency.hkd, '−HK\$1,234.56', 123456, 'HK\$1,234.56'),
     ]) {
-      final summary = GalleryWeeklySpending(sample.$1, [
+      final summary = weeklySummary(sample.$1, [
         {'isoDate': '2026-10-26', 'amount': sample.$2, 'kind': 'rail'},
         {'isoDate': '2026-11-01', 'amount': sample.$2, 'kind': 'bus'},
         {'isoDate': '2026-10-25', 'amount': sample.$2, 'kind': 'rail'},
@@ -198,8 +210,16 @@ void main() {
         {'isoDate': '2026-10-27', 'amount': '+¥20.00', 'kind': 'rail'},
         {'isoDate': '2026-10-27', 'amount': '−EUR2.00', 'kind': 'rail'},
       ]);
-      expect(summary.count, 2);
-      expect(summary.days, [sample.$3, 0, 0, 0, 0, 0, sample.$3]);
+      expect(summary.rideCount, 2);
+      expect(summary.buckets.map((bucket) => bucket.amount).toList(), [
+        sample.$3,
+        0,
+        0,
+        0,
+        0,
+        0,
+        sample.$3,
+      ]);
       expect(summary.total, sample.$3 * 2);
       expect(summary.categories, {'轨道交通': sample.$3, '公共汽电车': sample.$3});
       expect(summary.format(sample.$3), sample.$4);
@@ -210,19 +230,16 @@ void main() {
 
   test('weekly snapshot does not invent dates or an unknown currency', () {
     final original = jsonEncode(c.data.json);
-    expect(
-      GalleryWeeklySpending(c.current.currency, c.ledger(c.current)).total,
-      1000,
-    );
+    expect(weeklySummary(c.current.currency, c.ledger(c.current)).total, 1000);
     for (final card in c.cards.where(
       (card) => card.id == 'suica' || card.id == 'octopus',
     )) {
-      final weekly = GalleryWeeklySpending(card.currency, c.ledger(card));
-      expect(weekly.count, 0);
+      final weekly = weeklySummary(card.currency, c.ledger(card));
+      expect(weekly.rideCount, 0);
       expect(weekly.total, 0);
       expect(weekly.format(0), card.id == 'suica' ? '0 JPY' : 'HK\$0.00');
     }
-    final unknown = GalleryWeeklySpending(null, [
+    final unknown = weeklySummary(null, [
       {'isoDate': '2026-10-27', 'amount': '−¥2.00', 'kind': 'bus'},
     ]);
     expect(unknown.format(0), '暂不可用');

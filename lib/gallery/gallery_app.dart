@@ -24,6 +24,7 @@ import 'gallery_design.dart';
 import 'gallery_layout.dart';
 import 'gallery_preferences.dart';
 import 'gallery_feedback.dart';
+import 'gallery_spending.dart';
 
 part 'gallery_components.dart';
 part 'gallery_pages.dart';
@@ -34,6 +35,7 @@ part 'gallery_navigation.dart';
 part 'gallery_navigation_item.dart';
 part 'gallery_read_prompt.dart';
 part 'gallery_wallet_item.dart';
+part 'gallery_detail.dart';
 
 class GalleryApp extends StatefulWidget {
   const GalleryApp({
@@ -257,6 +259,9 @@ class _GalleryViewState extends State<_GalleryView> {
   String? _faceImageError;
   Set<String>? _walletCardIds;
   final Set<String> _walletArrivals = {};
+  GallerySpendingSelection _spendingSelection =
+      const GallerySpendingSelection.all();
+  void _updateDetail(VoidCallback update) => setState(update);
 
   Future<void> _pickFaceImage() async {
     if (_pickingFaceImage) return;
@@ -543,12 +548,8 @@ class _GalleryViewState extends State<_GalleryView> {
     );
   }
 
-  Widget _menuAnchor(String id, Widget child) => Builder(
-    builder: (anchorContext) {
-      widget.anchors.register(id, anchorContext);
-      return child;
-    },
-  );
+  Widget _menuAnchor(String id, Widget child) =>
+      _GalleryMenuAnchor(registry: widget.anchors, id: id, child: child);
 
   Rect? _measureMenuBounds(String id) {
     final root = _menuRoot.currentContext?.findRenderObject();

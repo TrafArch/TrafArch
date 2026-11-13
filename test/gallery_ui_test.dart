@@ -52,9 +52,9 @@ void main() {
     await tester.tap(find.text('我的通勤卡'));
     await tester.pumpAndSettle();
     expect(find.text('卡片详情'), findsOneWidget);
-    await tester.tap(find.text('本周消费'));
+    await tester.tap(find.text('消费统计'));
     await tester.pumpAndSettle();
-    expect(find.text('每日消费'), findsOneWidget);
+    expect(find.text('消费趋势'), findsOneWidget);
     await tester.tap(find.byTooltip('返回'));
     await tester.pumpAndSettle();
     c.navigate(GalleryPage.settings);
@@ -340,6 +340,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(c.cards.firstWhere((card) => card.id == 'shenzhen').name, '通勤深圳通');
     expect(c.current.name, '上海公共交通卡');
+    // The accepted top-right feedback temporarily covers the fixed actions.
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('通勤深圳通 管理'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('更改卡面'));
@@ -459,9 +462,9 @@ void main() {
   );
 
   for (final sample in [
-    ('shanghai', '¥10.00', '周一 ¥6.00'),
-    ('suica', '337 JPY', '周一 337 JPY'),
-    ('octopus', 'HK\$10.60', '周一 HK\$10.60'),
+    ('shanghai', '¥10.00', '周一，¥6.00'),
+    ('suica', '337 JPY', '周一，337 JPY'),
+    ('octopus', 'HK\$10.60', '周一，HK\$10.60'),
   ]) {
     testWidgets('weekly totals and chart semantics use ${sample.$1} currency', (
       tester,
@@ -484,6 +487,8 @@ void main() {
       c.openCard(c.cards.firstWhere((card) => card.id == sample.$1));
       c.update(() => c.detailTab = 1);
       await tester.pumpWidget(GalleryApp(controller: c));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ChoiceChip, '本周'));
       await tester.pumpAndSettle();
       expect(find.text(sample.$2), findsWidgets);
       expect(

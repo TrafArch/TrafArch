@@ -184,42 +184,6 @@ enum GalleryCurrency {
   }
 }
 
-class GalleryWeeklySpending {
-  GalleryWeeklySpending(this.currency, Iterable<GalleryRecord> records) {
-    if (currency == null) return;
-    for (final row in records) {
-      final text = row['isoDate'] as String? ?? '';
-      final date = DateTime.tryParse(text);
-      if (date == null || date.toIso8601String().split('T').first != text) {
-        continue;
-      }
-      final day = date.difference(DateTime(2026, 10, 26)).inDays;
-      if (day < 0 || day > 6) continue;
-      final amount = currency!.debit(row['amount'] as String? ?? '');
-      if (amount == null) continue;
-      days[day] += amount;
-      final category = switch (row['kind']) {
-        'rail' => '轨道交通',
-        'bus' => '公共汽电车',
-        _ => '其他',
-      };
-      categories.update(
-        category,
-        (value) => value + amount,
-        ifAbsent: () => amount,
-      );
-      count++;
-    }
-  }
-
-  final GalleryCurrency? currency;
-  final List<int> days = List<int>.filled(7, 0);
-  final Map<String, int> categories = {};
-  int count = 0;
-  int get total => days.fold(0, (sum, value) => sum + value);
-  String format(int amount) => currency?.format(amount) ?? '暂不可用';
-}
-
 String formatGalleryMoney(int fen) {
   final absolute = fen.abs();
   final whole = (absolute ~/ 100).toString().replaceAllMapped(

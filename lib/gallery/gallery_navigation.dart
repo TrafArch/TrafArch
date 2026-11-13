@@ -23,6 +23,12 @@ class _GalleryAnchorRegistry extends ChangeNotifier {
     scheduleMeasure();
   }
 
+  void unregister(String id, BuildContext context) {
+    if (!identical(_contexts[id], context)) return;
+    _contexts.remove(id);
+    scheduleMeasure();
+  }
+
   Rect? boundsOf(String id) {
     final context = _contexts[id];
     if (context == null || !context.mounted) return null;
@@ -62,6 +68,43 @@ class _GalleryAnchorRegistry extends ChangeNotifier {
     _contexts.clear();
     _measured.clear();
     super.dispose();
+  }
+}
+
+/// Retire contexts on deactivation, before an outgoing route is disposed.
+class _GalleryMenuAnchor extends StatefulWidget {
+  const _GalleryMenuAnchor({
+    required this.registry,
+    required this.id,
+    required this.child,
+  });
+  final _GalleryAnchorRegistry registry;
+  final String id;
+  final Widget child;
+
+  @override
+  State<_GalleryMenuAnchor> createState() => _GalleryMenuAnchorState();
+}
+
+class _GalleryMenuAnchorState extends State<_GalleryMenuAnchor> {
+  @override
+  void deactivate() {
+    widget.registry.unregister(widget.id, context);
+    super.deactivate();
+  }
+
+  @override
+  void didUpdateWidget(_GalleryMenuAnchor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.id != widget.id || oldWidget.registry != widget.registry) {
+      oldWidget.registry.unregister(oldWidget.id, context);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    widget.registry.register(widget.id, context);
+    return widget.child;
   }
 }
 

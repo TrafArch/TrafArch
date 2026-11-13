@@ -123,9 +123,10 @@ void main() {
         await tester.pumpAndSettle();
         c.navigate(GalleryPage.cards);
         await capture('$mode-wallet');
-        c.openCard(c.savedCards.first);
+        final firstSavedCard = c.savedCards.first;
+        c.openCard(firstSavedCard);
         await tester.pumpAndSettle();
-        await tester.tap(find.byTooltip('深圳通 管理'));
+        await tester.tap(find.byTooltip('${firstSavedCard.name} 管理'));
         await capture('$mode-card-menu');
         c.back();
         c.navigate(GalleryPage.trips);
@@ -150,11 +151,43 @@ void main() {
           c.openCard(card);
           await capture('$mode-detail-${card.id}');
           c.back();
+          await tester.pumpAndSettle();
         }
         c.openCard(c.current);
+        await capture('$mode-detail-expanded');
+        final detail = find.byKey(
+          PageStorageKey('gallery-${c.generation}-detail-${c.current.id}'),
+        );
+        final detailScroll = tester.state<ScrollableState>(
+          galleryVerticalScroll(within: detail),
+        );
+        detailScroll.position.jumpTo(100);
+        await capture('$mode-detail-contracting');
+        detailScroll.position.jumpTo(300);
+        await capture('$mode-detail-capsule');
         c.update(() => c.detailTab = 1);
-        await capture('$mode-weekly');
+        await tester.pumpAndSettle();
+        expect(
+          tester.state<ScrollableState>(galleryVerticalScroll(within: detail)),
+          same(detailScroll),
+        );
+        detailScroll.position.jumpTo(0);
+        await capture('$mode-spending-expanded');
+        detailScroll.position.jumpTo(300);
+        await capture('$mode-spending');
+        await tester.scrollUntilVisible(
+          find.text('分类开销'),
+          180,
+          scrollable: galleryVerticalScroll(within: detail),
+        );
+        await capture('$mode-spending-categories');
         c.update(() => c.detailTab = 2);
+        await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(
+          find.byKey(const ValueKey('detail-raw-header')),
+          150,
+          scrollable: galleryVerticalScroll(within: detail),
+        );
         await capture('$mode-detail-info');
         c.back();
         c.navigate(GalleryPage.knowledge);

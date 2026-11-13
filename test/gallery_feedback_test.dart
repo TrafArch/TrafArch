@@ -226,9 +226,10 @@ void main() {
         if (!docked) await show(tester, message, title: '操作成功');
         final media = MediaQuery.of(pageContext);
         final navigation = GalleryNavigationLayout(media, docked: docked);
+        expect(tester.getTopRight(surface).dy, closeTo(36, .01));
         expect(
           tester.getBottomRight(surface).dy,
-          closeTo(540 - navigation.toastBottom, .01),
+          lessThanOrEqualTo(540 - navigation.toastBottom),
         );
         expect(tester.getSize(surface).width, lessThanOrEqualTo(208));
         expect(find.text(message), findsOneWidget);
@@ -242,7 +243,11 @@ void main() {
         reduced: true,
         cleanup: false,
       );
-      expect(tester.getBottomRight(surface).dy, closeTo(800 - 300 - 16, .01));
+      expect(tester.getTopRight(surface).dy, closeTo(36, .01));
+      expect(
+        tester.getBottomRight(surface).dy,
+        lessThanOrEqualTo(800 - 300 - 16),
+      );
       expect(tester.getSize(surface).width, lessThanOrEqualTo(560));
       expect(tester.takeException(), isNull);
     },

@@ -49,7 +49,7 @@ flutter run -t lib/main_gallery.dart
 - 新版不创建业务依赖或数据库，不调用 NFC、相机或文件导出。更换卡面可由用户主动调用 Android 系统照片选择器（不可用时回退系统文件选择器），无需存储权限；所选图片仅用于本次会话，不上传、不写档案数据库。选择取消或失败时保留原卡面，关闭弹层或重置后丢弃迟到结果；图片解码后保存在内存中，不依赖会被下次选择清理的原生缓存。公共支持链接通过内部宿主注入的回调，仅在用户主动点击后调用浏览器或打开邮件应用；不自动填入、上传或提交卡片与日志。复制仅响应用户操作；导出显示“尚未保存文件”的内容预览。
 - 日志开关只收集本次启用后的界面动作，不记录卡名、卡号或站点；关闭停止收集。
 - 上海样例总余额原值为 86.50 元，默认显示 78.50 元，每次从原值计算，交易金额与原始字节不变。其他卡片和未知余额保持各自语义。
-- 周消费按固定演示周（2026-10-26 至 2026-11-01）统计明确日期与币种的扣款；总额、日均、分类和图表读屏使用样例自身币种，Suica 为整数 JPY，八达通为 HK$，未知币种显示暂不可用。不补写缺失日期，不把充值计入消费。
+- 消费统计默认全部保留记录，可选本周／本月／本年／自定义日期并切换相邻区间，周期以既有演示时钟为准。总额、日均、分类及趋势使用样例自身币种，Suica 为整数 JPY，八达通为 HK$，未知币种显示暂不可用。全部中的缺失日期扣款保留在总额、分类与明细中，趋势／日均仅使用完整日期，并明确说明；不补写日期、不把充值或过程事件计入消费。详情卡面随滚动连续收为包含名称、尾号和余额的胶囊，与三段切换条共同悬停；自定义图片从内存取色并缓存，原始数据操作置于本区标题右侧。
 - 知识库为 2026-10-30 的设计快照，TU 41 地区／7658 编码，CU 7 地区／1732 编码，保留来源与 SHA256；不是当前发布数据库的实时统计。
 
 可离线重新提取设计样例与原始交通联合 SVG：
@@ -68,7 +68,7 @@ node dev/gallery/extract_demo.cjs '<TrafArch-UI-Redesign 目录>'
 flutter build apk --release -t lib/main_gallery.dart --target-platform android-arm64 --split-per-abi
 ```
 
-内部 target 排除 Google Services 和 Firebase Analytics，现有界面关闭自动更新检查。名称固定 TrafArch，包名固定 `com.kajolno.TrafArch`，主版本名沿用源码，每次生成安装包预留下一构建号；arm64 保留 ABI 版本偏移。最终核验 APK 清单、证书、对齐和 SHA256。
+内部 target 排除 Google Services 和 Firebase Analytics，现有界面关闭自动更新检查。名称固定 TrafArch，包名固定 `com.kajolno.TrafArch`，主版本名沿用源码，每次生成安装包预留下一构建号；当前 Gradle 使用 `force-version-code-ignoring-abi=true`，Android versionCode 与源码本次构建号一致，不叠加 ABI 偏移。最终仍核验 APK 实际清单、证书、对齐和 SHA256。
 
 打包前检查各分支已消耗的构建号及可用交付／设备记录，选择尚未使用的新号。核验时明确传入本次源码构建号与最新已消耗 Android 版本码基线，不以历史固定版本码代替升级比较：
 
@@ -76,7 +76,7 @@ flutter build apk --release -t lib/main_gallery.dart --target-platform android-a
 python -X utf8 dev/gallery/verify_apk.py '<APK路径>' --build-tools '<Android build-tools目录>' --output '<核验输出目录>' --expected-build-number <本次构建号> --min-version-code <已消耗版本码基线>
 ```
 
-脚本核验版本名、名称、包名、arm64 ABI 版本偏移、原签名、Release 标记、Gallery 资产、Firebase 自动组件缺席、ZIP CRC／16KiB 对齐及每个原生库的 ELF LOAD 对齐。输出 `apk-verification.json` 与 `SHA256SUMS.txt`，任一检查失败均以非零状态退出；核验报告不代表已完成设备安装。
+脚本核验版本名、名称、包名、arm64 ABI、构建号与实际 versionCode 一致、原签名、Release 标记、Gallery 资产、Firebase 自动组件缺席、ZIP CRC／16KiB 对齐及每个原生库的 ELF LOAD 对齐。调用时通过 `--expected-version-name` 传入当前版本名。输出 `apk-verification.json` 与 `SHA256SUMS.txt`，任一检查失败均以非零状态退出；核验报告不代表已完成设备安装。
 
 ```powershell
 flutter test

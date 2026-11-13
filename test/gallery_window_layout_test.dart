@@ -133,9 +133,9 @@ void main() {
             scrollable: verticalScroll(),
           );
           await tester.pumpAndSettle();
-          expect(find.text('本周消费').hitTestable(), findsWidgets);
+          expect(find.text('消费统计').hitTestable(), findsWidgets);
           await tester.scrollUntilVisible(
-            find.text('每日消费'),
+            find.text('消费趋势'),
             180,
             scrollable: verticalScroll(),
           );
@@ -260,7 +260,7 @@ void main() {
   );
 
   testWidgets(
-    'live menus follow buttons across resizing and close when the trigger scrolls away',
+    'live menus follow fixed detail buttons across resizing and scrolling',
     (tester) async {
       await mount(tester);
       c.navigate(GalleryPage.cards);
@@ -289,13 +289,19 @@ void main() {
       }
       tester.view.physicalSize = const Size(280, 320);
       await tester.pumpAndSettle();
-      final list = find.byType(ListView).first;
+      final list = find.byType(CustomScrollView).first;
       final scroll = tester.state<ScrollableState>(
         find.descendant(of: list, matching: find.byType(Scrollable)).first,
       );
       scroll.position.jumpTo(scroll.position.maxScrollExtent);
       await tester.pumpAndSettle();
-      expect(c.overlay, isNull);
+      expect(c.overlay, GalleryOverlay.cardMenu);
+      expect(find.byTooltip('${card.name} 管理').hitTestable(), findsNothing);
+      final pinnedAnchor = tester.getRect(button);
+      final pinnedMenu = tester.getRect(
+        find.byKey(const ValueKey('gallery-dropdown')),
+      );
+      expect(pinnedMenu.top, closeTo(pinnedAnchor.bottom + 6, .1));
     },
   );
 
