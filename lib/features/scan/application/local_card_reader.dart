@@ -268,7 +268,7 @@ class LocalCardReader {
           try {
             if (await szt.select(sztInfo, sztRecords)) {
               sztExtras.slots['szt.confirmed'] = true;
-              await szt.read(sztInfo, sztRecords);
+              await szt.read(sztInfo, sztRecords, sztExtras);
             }
           } on Exception catch (e) {
             sztError = e;
@@ -409,7 +409,7 @@ class LocalCardReader {
       onStage?.call(Shenzhentong.moduleName);
       if (await szt.select(info, records)) {
         callback.onProgress(35);
-        await szt.read(info, records);
+        await szt.read(info, records, extras);
         callback.onProgress(95);
         return _localOutcome(
           ReadResult(info: info, records: records, extras: extras),
