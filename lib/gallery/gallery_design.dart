@@ -107,6 +107,52 @@ abstract final class GalleryTypography {
   );
 }
 
+/// Journey tickets follow the user's reference rather than the general type scale.
+abstract final class GalleryJourneyTypography {
+  static const date = TextStyle(
+    fontFamily: 'sans-serif',
+    fontSize: 26,
+    height: 32 / 26,
+    fontWeight: FontWeight.w600,
+  );
+  static const time = TextStyle(
+    fontFamily: 'sans-serif',
+    fontSize: 22,
+    height: 28 / 22,
+    fontWeight: FontWeight.w400,
+  );
+  static const station = TextStyle(
+    fontFamily: 'sans-serif',
+    fontSize: 18,
+    height: 26 / 18,
+    fontWeight: FontWeight.w600,
+  );
+  static const mode = TextStyle(
+    fontFamily: 'sans-serif',
+    fontSize: 16,
+    height: 22 / 16,
+    fontWeight: FontWeight.w400,
+  );
+  static const city = TextStyle(
+    fontFamily: 'sans-serif',
+    fontSize: 14,
+    height: 20 / 14,
+    fontWeight: FontWeight.w400,
+  );
+  static const amount = TextStyle(
+    fontFamily: 'sans-serif',
+    fontSize: 18,
+    height: 24 / 18,
+    fontWeight: FontWeight.w400,
+  );
+  static const line = TextStyle(
+    fontFamily: 'sans-serif',
+    fontSize: 13,
+    height: 18 / 13,
+    fontWeight: FontWeight.w400,
+  );
+}
+
 @immutable
 class GalleryPalette {
   const GalleryPalette(this.id, this.name, this.lightPrimary, this.darkPrimary);

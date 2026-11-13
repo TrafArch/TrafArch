@@ -2,10 +2,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:transit_card_analyzer/features/trips/journey_transport_icon.dart';
 import 'package:transit_card_analyzer/gallery/gallery_app.dart';
 import 'package:transit_card_analyzer/gallery/gallery_controller.dart';
 import 'package:transit_card_analyzer/gallery/gallery_data.dart';
+import 'package:transit_card_analyzer/gallery/gallery_theme.dart';
 
 import 'support/gallery_scroll.dart';
 
@@ -33,7 +36,7 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('trip emphasis is limited to dates, times and places', (
+  testWidgets('trip reference typography keeps arrival regular', (
     tester,
   ) async {
     await mount(tester);
@@ -56,7 +59,136 @@ void main() {
       tester.widget<Text>(find.text('徐家汇').first).style!.fontWeight,
       FontWeight.w600,
     );
+    for (final (value, size, lineHeight, weight) in [
+      ('今天', 26.0, 32.0, FontWeight.w600),
+      ('08:07', 22.0, 28.0, FontWeight.w600),
+      ('08:42', 22.0, 28.0, FontWeight.w400),
+      ('徐家汇', 18.0, 26.0, FontWeight.w600),
+      ('轨道交通', 16.0, 22.0, FontWeight.w400),
+      ('上海', 14.0, 20.0, FontWeight.w400),
+      ('−¥4.00', 18.0, 24.0, FontWeight.w400),
+      ('1 号线', 13.0, 18.0, FontWeight.w400),
+    ]) {
+      for (final text in tester.widgetList<Text>(find.text(value))) {
+        expect(text.style!.fontSize, size, reason: value);
+        expect(
+          text.style!.height! * size,
+          closeTo(lineHeight, .01),
+          reason: value,
+        );
+        expect(text.style!.fontWeight, weight, reason: value);
+      }
+    }
+    await tester.tap(find.text('陆家嘴'));
+    await tester.pumpAndSettle();
+    for (final text in tester.widgetList<Text>(find.text('08:42'))) {
+      expect(text.style!.fontSize, 22);
+      expect(text.style!.fontWeight, FontWeight.w400);
+    }
+    controller.back();
+    await tester.pumpAndSettle();
+    controller.openCard(controller.current);
+    await tester.pumpAndSettle();
+    expect(tester.widget<Text>(find.text('今天')).style!.fontSize, 26);
+    expect(
+      tester.widget<Text>(find.text('08:42')).style!.fontWeight,
+      FontWeight.w400,
+    );
   });
+
+  testWidgets('logo follows spending city and preserves the existing badge', (
+    tester,
+  ) async {
+    final sample = {...controller.trips.first, 'city': '北京市', 'foreign': true};
+    controller.trips
+      ..clear()
+      ..add(sample);
+    final original = jsonEncode(controller.trips);
+    await mount(tester);
+    for (final theme in [ThemeMode.light, ThemeMode.dark]) {
+      controller.update(() => controller.themeMode = theme);
+      await tester.pumpAndSettle();
+      final logo = find.descendant(
+        of: find.byType(JourneyTransportIcon),
+        matching: find.byType(SvgPicture),
+      );
+      expect(logo, findsOneWidget);
+      final picture = tester.widget<SvgPicture>(logo);
+      expect(
+        (picture.bytesLoader as SvgAssetLoader).assetName,
+        'assets/metro/metro_logo_beijing.svg',
+      );
+      expect(picture.colorFilter, isNull);
+      expect(tester.getSize(logo), const Size(23, 23));
+      final badge = find.ancestor(
+        of: logo,
+        matching: find.byWidgetPredicate(
+          (w) =>
+              w is Container &&
+              w.constraints?.maxWidth == 34 &&
+              w.constraints?.maxHeight == 34,
+        ),
+      );
+      expect(badge, findsOneWidget);
+      final decoration =
+          tester.widget<Container>(badge).decoration! as BoxDecoration;
+      final tokens = Theme.of(tester.element(badge))
+          .extension<GalleryTokens>()!;
+      expect(decoration.color, tokens.tone);
+      expect(decoration.borderRadius, BorderRadius.circular(11));
+      expect(find.text('异地用卡'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    }
+    expect(jsonEncode(controller.trips), original);
+    // The card issuer remains Shanghai while the ticket uses Beijing's logo.
+    expect(controller.current.city, '上海');
+  });
+
+  testWidgets(
+    'unknown, multi-city and cross-city rail keep the themed fallback and bus stays unchanged',
+    (tester) async {
+      final base = controller.trips.first;
+      controller.trips
+        ..clear()
+        ..add({...base});
+      await mount(tester);
+      for (final (city, kind, crossCity, icon) in [
+        ('未知城市', 'rail', false, Icons.train_outlined),
+        ('上海 / 北京', 'rail', false, Icons.train_outlined),
+        ('上海', 'rail', true, Icons.train_outlined),
+        ('上海', 'bus', false, Icons.directions_bus_outlined),
+      ]) {
+        controller.update(
+          () => controller.trips[0] = {
+            ...base,
+            'city': city,
+            'kind': kind,
+            'isCrossCity': crossCity,
+          },
+        );
+        await tester.pumpAndSettle();
+        final transport = find.byType(JourneyTransportIcon);
+        expect(
+          find.descendant(of: transport, matching: find.byType(SvgPicture)),
+          findsNothing,
+        );
+        final fallback = find.descendant(
+          of: transport,
+          matching: find.byIcon(icon),
+        );
+        expect(fallback, findsOneWidget);
+        final tokens = Theme.of(tester.element(fallback))
+            .extension<GalleryTokens>()!;
+        final widget = tester.widget<Icon>(fallback);
+        expect(widget.size, 23);
+        expect(
+          widget.color,
+          kind == 'rail' ? tokens.onTone : tokens.onSecondaryContainer,
+        );
+        expect(tester.takeException(), isNull);
+      }
+    },
+  );
 
   testWidgets(
     'summary remains a single surface through scrolling, reversal and restoration',
@@ -146,6 +278,15 @@ void main() {
           expect(
             summary.contains(title.bottomRight - const Offset(.1, .1)),
             isTrue,
+          );
+          final departure = find.text('08:07');
+          final timeStyle = tester.widget<Text>(departure).style!;
+          // A complete time must remain one line at large system font scales.
+          expect(
+            tester.getSize(departure).height,
+            lessThanOrEqualTo(
+              scale * timeStyle.fontSize! * timeStyle.height! + 1,
+            ),
           );
         }
       }

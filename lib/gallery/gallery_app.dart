@@ -13,6 +13,8 @@ import 'package:dynamic_color/dynamic_color.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../app/app_info.dart';
+import '../features/trips/journey_transport_icon.dart';
+import '../features/trips/trip_filters.dart';
 import '../platform/browser/feedback_browser.dart';
 import '../platform/qr/qr_image_picker.dart';
 import '../shared/app_support.dart';

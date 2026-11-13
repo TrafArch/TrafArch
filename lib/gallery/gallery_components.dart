@@ -400,7 +400,11 @@ extension _GalleryComponents on _GalleryViewState {
     ),
   );
 
-  Widget _sectionTitle(String title, {String? trailing}) => Padding(
+  Widget _sectionTitle(
+    String title, {
+    String? trailing,
+    TextStyle role = GalleryTypography.section,
+  }) => Padding(
     padding: const EdgeInsets.fromLTRB(2, 20, 2, 10),
     child: Wrap(
       alignment: WrapAlignment.spaceBetween,
@@ -408,7 +412,7 @@ extension _GalleryComponents on _GalleryViewState {
       runSpacing: 4,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        _text(title, role: GalleryTypography.section),
+        _text(title, role: role),
         if (trailing != null)
           _text(trailing, role: GalleryTypography.caption, color: t.muted),
       ],

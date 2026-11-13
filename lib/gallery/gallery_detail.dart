@@ -27,7 +27,10 @@ extension _GalleryDetail on _GalleryViewState {
           Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _sectionTitle(record['date'] as String? ?? '日期未记录'),
+              _sectionTitle(
+                record['date'] as String? ?? '日期未记录',
+                role: GalleryJourneyTypography.date,
+              ),
               _panel(
                 _trip(record),
                 padding: const EdgeInsets.symmetric(horizontal: 14),

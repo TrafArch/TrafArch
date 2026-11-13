@@ -291,7 +291,7 @@ extension _GalleryPages on _GalleryViewState {
                             header: true,
                             child: _text(
                               entry.key,
-                              role: GalleryTypography.stat,
+                              role: GalleryJourneyTypography.date,
                             ),
                           ),
                         ),
@@ -452,8 +452,7 @@ extension _GalleryPages on _GalleryViewState {
         ),
         child: _text(
           line,
-          role: GalleryTypography.label,
-          weight: FontWeight.w400,
+          role: GalleryJourneyTypography.line,
           color: redLine
               ? t.onShanghaiLineOne
               : rail
@@ -463,26 +462,40 @@ extension _GalleryPages on _GalleryViewState {
       );
     }
 
-    Widget endpoint(String phase, String line, String time, String station) =>
-        Semantics(
-          label: phase,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    Widget endpoint(
+      String phase,
+      String line,
+      String time,
+      String station, {
+      required bool departure,
+    }) => Semantics(
+      label: phase,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: _text(
+              time,
+              role: GalleryJourneyTypography.time,
+              weight: departure ? FontWeight.w600 : FontWeight.w400,
+              lines: 1,
+            ),
+          ),
+          _gap(6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              _text(time, role: GalleryTypography.amount),
-              _gap(6),
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  if (line.isNotEmpty) lineBadge(line),
-                  _text(station, role: GalleryTypography.card),
-                ],
-              ),
+              if (line.isNotEmpty) lineBadge(line),
+              _text(station, role: GalleryJourneyTypography.station),
             ],
           ),
-        );
+        ],
+      ),
+    );
     final body = Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: event
@@ -529,18 +542,27 @@ extension _GalleryPages on _GalleryViewState {
                             color: rail ? t.tone : t.secondaryContainer,
                             borderRadius: BorderRadius.circular(11),
                           ),
-                          child: Icon(
-                            rail
-                                ? Icons.train_outlined
-                                : Icons.directions_bus_outlined,
-                            size: 23,
-                            color: rail ? t.onTone : t.onSecondaryContainer,
+                          child: Center(
+                            child: JourneyTransportIcon(
+                              mode: rail
+                                  ? TripModeFilter.rail
+                                  : TripModeFilter.bus,
+                              cityLabel: city,
+                              // Different from the issuer does not mean cross-city.
+                              isCrossCity: trip['isCrossCity'] == true,
+                              size: 23,
+                              fallbackIcon: rail
+                                  ? Icons.train_outlined
+                                  : Icons.directions_bus_outlined,
+                              fallbackColor: rail
+                                  ? t.onTone
+                                  : t.onSecondaryContainer,
+                            ),
                           ),
                         ),
                         _text(
                           rail ? '轨道交通' : '公交',
-                          role: GalleryTypography.card,
-                          weight: FontWeight.w400,
+                          role: GalleryJourneyTypography.mode,
                         ),
                         if (city.isNotEmpty) ...[
                           SizedBox(
@@ -549,7 +571,7 @@ extension _GalleryPages on _GalleryViewState {
                           ),
                           _text(
                             city,
-                            role: GalleryTypography.body,
+                            role: GalleryJourneyTypography.city,
                             color: t.muted,
                           ),
                         ],
@@ -561,8 +583,7 @@ extension _GalleryPages on _GalleryViewState {
                     ],
                     _text(
                       trip['amount'] as String,
-                      role: GalleryTypography.card,
-                      weight: FontWeight.w400,
+                      role: GalleryJourneyTypography.amount,
                     ),
                   ],
                 ),
@@ -577,6 +598,7 @@ extension _GalleryPages on _GalleryViewState {
                         entryLine,
                         trip['entryTime'] as String? ?? '未记录',
                         entry,
+                        departure: true,
                       ),
                     ),
                     Padding(
@@ -603,6 +625,7 @@ extension _GalleryPages on _GalleryViewState {
                         exitLine,
                         trip['time'] as String? ?? '未记录',
                         exit,
+                        departure: false,
                       ),
                     ),
                   ],
