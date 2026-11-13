@@ -218,6 +218,22 @@ Map<String, Object?>? _transit(
     return _decoded(parser, _localRecord(records.single, local));
   }
   final slots = local.extras.slots;
+  if (local.info.isSZT &&
+      aid == '5041592E535A54' &&
+      _hex(command) == '805C000204' &&
+      body.length == 4 &&
+      slots['szt.balanceRaw'] is List &&
+      _hex(body) == _hex((slots['szt.balanceRaw'] as List).cast<int>()) &&
+      local.info.observedBalance != null) {
+    return _decoded(parser, {
+      'balanceFen': local.info.observedBalance,
+      'encoding': slots['szt.balanceEncoding'],
+      'rawHex': _hex(body),
+      'unsignedHexFen': slots['szt.balanceHexFen'],
+      'bcdCandidateFen': slots['szt.balanceBcdFen'],
+      'bit31': slots['szt.balanceBit31'],
+    });
+  }
   if (local.info.isBmac) {
     if (command.length >= 4 && command[1] == 0xB0 && command[3] == 0) {
       if (_sameHex(body, slots['bmac.basicRaw'] as String?)) {

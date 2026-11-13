@@ -47,7 +47,7 @@ python -X utf8 -m tools.reference_data validate  # 校验发布包与 manifest
 - 2.x 视觉与交互优化先读根 `design.md` 和 `docs/DESIGN_MEMORY.md`。按语义色阶、字体角色、阴影用途和系统安全区规范实现；浅影必须配细线，菜单与模态使用对应悬浮层级，阴影随背景／主题变化。页面左右滑动不改变专家内部栏位。
 
 - `docs/` 下带日期的文件（如 `*_20261021.md`）是历史证据与交接记录，不随代码现状更新；描述当前架构的只有 `ARCHITECTURE.md`、`NATIVE_SESSION_CONTRACT.md`、`MIGRATION.md`、`REFERENCE_DATA_TOOLING.md`，代码与这些文档冲突时以代码为准并回写文档。
-- CHANGELOG 按实际改动日期（Asia/Shanghai）分节、中文书写，日期倒序排列；同日改动并入当天条目，跨日时新建对应日期节，不得沿用过期日期。用户已要求每次构建自动递增构建号，见下方版本约束。
+- CHANGELOG 按日期分节、中文书写。用户于 2026-11-13 明确要求：changelog 不定死在单一日期，每条改动按实际更新当天的日期写入对应日期节（什么时候更新就写哪条的时间），不同日期的改动不得并入同一日期节。用户已要求每次构建自动递增构建号，见下方版本约束。
 
 ## Android 应用身份
 
