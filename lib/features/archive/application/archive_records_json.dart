@@ -9,6 +9,7 @@ import '../domain/archive_export_options.dart';
 import '../domain/captured_cycle_money.dart';
 import '../domain/card_name_extension.dart';
 import '../presentation/archive_record_presenter.dart';
+import '../../trips/local_card_trip_presenter.dart';
 import 'archive_history.dart';
 import 'cu_archive_projection.dart';
 
@@ -240,6 +241,38 @@ List<Map<String, dynamic>> projectArchiveRecords(
         'amount_unit': 'unknown',
         'city': view.regionCode,
         'terminal': record.terminalHex,
+      });
+    }
+    for (final record in history.localCardRecords) {
+      if (record.cardType != 'localCardTrips' &&
+          record.cardType != 'lingnanTong' &&
+          record.cardType != 'shenzhenTong') {
+        continue;
+      }
+      final profile = localTripProfileOf(
+        record.fields,
+        cardType: record.cardType,
+      );
+      final trip = restoreLocalTripRecord(record.fields, profile: profile);
+      if (trip == null) continue;
+      final presentation = describeLocalTrip(
+        trip,
+        currencySymbol: '¥',
+        profile: profile,
+      );
+      result.add({
+        ..._base(card),
+        'record_type': localTripKindLabel(trip),
+        'source': presentation.info.sourceLabel,
+        'time': presentation.info.timeText,
+        'time_basis': profile == LocalTripProfile.lingnan
+            ? '年份推断，秒未知'
+            : '卡内时间，时区未核实',
+        'amount': presentation.info.amountText,
+        'amount_raw': trip.balanceDelta.toString(),
+        'amount_unit': '分',
+        'currency': 'CNY',
+        'terminal': trip.terminalHex,
       });
     }
     // Imported fields remain exactly as captured; a current card label or

@@ -1,11 +1,15 @@
 import 'dart:convert';
 
+import 'package:uuid/uuid.dart';
+
 import '../../../protocols/transit/qr/jt_t1179_qr_parser.dart';
 import '../../../shared/application/owned_notifier.dart';
+import '../../../shared/diagnostics/diagnostic_event.dart';
 
 class QrController extends OwnedNotifier {
-  QrController({required this.log});
+  QrController({required this.log, this.diagnostics});
   final void Function(String) log;
+  final DiagnosticRecorder? diagnostics;
   JtT1179QrData? _qrData;
 
   /// 最近一次解析成功的 JT/T 1179 二维码数据；解析失败或清除后为 null。
@@ -28,15 +32,63 @@ class QrController extends OwnedNotifier {
   /// 成功时保存解析结果并清除错误；失败时保留原始字节并记录错误。
   bool parseQrBytes(List<int> bytes) {
     _qrRaw = List<int>.unmodifiable(bytes);
+    final sink = diagnostics?.startSession(
+      const Uuid().v4(),
+      kind: DiagnosticSessionKind.qr,
+    );
+    sink?.event(
+      'qr_source',
+      phase: DiagnosticPhase.reading,
+      data: {'parserId': 'jt_t1179_qr', 'raw': _qrRaw},
+    );
     try {
       _qrData = JtT1179QrParser.parse(bytes);
       _qrError = null;
+      if (sink?.recording == true) {
+        try {
+          final fields = Map<String, dynamic>.of(_qrData!.toJson());
+          final certificate = fields.remove('issuerCertificate');
+          sink!.event(
+            'parser_record',
+            phase: DiagnosticPhase.processing,
+            data: {
+              'parserId': 'jt_t1179_qr',
+              'fieldCategory': 'qrFields',
+              'fields': fields,
+            },
+          );
+          sink.event(
+            'parser_record',
+            phase: DiagnosticPhase.processing,
+            data: {
+              'parserId': 'jt_t1179_certificate',
+              'fieldCategory': 'certificateFields',
+              'fields': certificate,
+            },
+          );
+        } catch (_) {
+          // Diagnostic serialization must not change the parser result.
+          sink?.event(
+            'capture_gap',
+            level: DiagnosticSeverity.warning,
+            data: {'reason': 'qr_fields_unavailable'},
+          );
+        }
+      }
+      sink?.end(DiagnosticOutcome.success);
       log('二维码解析成功：${bytes.length} 字节');
       notifyListeners();
       return true;
     } catch (e) {
       _qrData = null;
       _qrError = '$e';
+      sink?.event(
+        'parse_failure',
+        level: DiagnosticSeverity.warning,
+        phase: DiagnosticPhase.processing,
+        data: {'parserId': 'jt_t1179_qr', 'message': _qrError},
+      );
+      sink?.end(DiagnosticOutcome.failed);
       log('二维码解析失败：$e');
       notifyListeners();
       return false;
@@ -48,6 +100,17 @@ class QrController extends OwnedNotifier {
   bool parseQrText(String input) {
     final bytes = decodeQrText(input);
     if (bytes == null) {
+      final sink = diagnostics?.startSession(
+        const Uuid().v4(),
+        kind: DiagnosticSessionKind.qr,
+      );
+      sink?.event(
+        'parse_failure',
+        level: DiagnosticSeverity.warning,
+        phase: DiagnosticPhase.processing,
+        data: {'parserId': 'jt_t1179_qr', 'message': '输入内容无法识别为 HEX / Base64'},
+      );
+      sink?.end(DiagnosticOutcome.failed);
       _qrRaw = null;
       _qrData = null;
       _qrError = '无法识别输入内容：请输入十六进制或 Base64 编码的二维码数据';

@@ -143,6 +143,46 @@ void main() {
     expect((document['sessions'] as List).single['sessionId'], 'finished');
     expect(find.byType(AlertDialog), findsNothing);
   });
+
+  testWidgets('日志管理器全选后导出所有读卡会话', (tester) async {
+    final logger = AppLogger(store: MemoryLogStore())..enabled = true;
+    logger.startSession('first').end(DiagnosticOutcome.success);
+    logger.startSession('second').end(DiagnosticOutcome.success);
+    final exporter = _Exporter();
+    final app = AppDependencies(
+      database: testDatabase(),
+      bundle: MissingTestAssets(),
+      settingsStore: MemorySettingsStore(),
+      logger: logger,
+      logExporter: exporter,
+    );
+    addTearDown(app.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => showDiagnosticExportDialog(context, app),
+              child: const Text('打开日志'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('打开日志'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('全选记录'));
+    await tester.pumpAndSettle();
+    expect(find.text('取消全选'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, '导出'));
+    await tester.pumpAndSettle();
+    expect(
+      (jsonDecode(exporter.content!)['sessions'] as List)
+          .map((s) => s['sessionId'])
+          .toSet(),
+      {'first', 'second'},
+    );
+  });
 }
 
 class _Exporter implements LogExporter {

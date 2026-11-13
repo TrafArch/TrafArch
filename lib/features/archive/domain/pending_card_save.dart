@@ -50,8 +50,9 @@ class PendingCardSave {
   });
 
   /// 展示名称：正式卡名优先，未识别时回退卡型通用名称（不猜测）。
-  String get displayName =>
-      identity.officialName ?? cardTypeLabel(identity.cardType);
+  String get displayName => identity.cardType == CardTypes.lingnanTong
+      ? '岭南通'
+      : identity.officialName ?? cardTypeLabel(identity.cardType);
 
   /// 对话框卡号文本：完整卡号；未读取到时为兜底文案。
   String get cardNumberText => cardNumber ?? '未读取到卡号';

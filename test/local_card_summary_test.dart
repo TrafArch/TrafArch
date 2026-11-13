@@ -59,7 +59,7 @@ ParsedCard _lingnanCard() {
     ..timestamp = DateTime(2026, 10, 29, 19, 24, 17);
   return ParsedCard(
     parserId: CardParserIds.lingnanTong,
-    parserName: '地方交通卡 · 岭南通·羊城通',
+    parserName: '地方交通卡 · 岭南通',
     info: const TUnionCardInfo(applicationSerial: '9357249770'),
     transactions: const [],
     localCard: ReadResult(info: info, records: [trip], extras: extras),
@@ -86,7 +86,7 @@ ParsedCard _macauCard() {
 }
 
 void main() {
-  testWidgets('岭南通·羊城通摘要仅显示卡片字段且隐藏未确认互通状态', (tester) async {
+  testWidgets('岭南通单标卡摘要统一显示岭南通且隐藏未确认互通状态', (tester) async {
     final app = _App(_lingnanCard());
     addTearDown(app.dispose);
     await tester.pumpWidget(
@@ -95,7 +95,8 @@ void main() {
       ),
     );
 
-    expect(find.text('岭南通·羊城通'), findsWidgets);
+    expect(find.text('岭南通'), findsWidgets);
+    expect(find.text('岭南通·羊城通'), findsNothing);
     expect(find.text('发卡日期'), findsNothing);
     expect(find.text('岭南通应用'), findsNothing);
     expect(find.text('岭南通钱包应用'), findsNothing);

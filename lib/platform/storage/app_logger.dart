@@ -59,7 +59,7 @@ class AppLogger extends OwnedNotifier implements DiagnosticRecorder {
     String id, {
     DiagnosticSessionKind kind = DiagnosticSessionKind.scan,
   }) {
-    if (!enabled || !_accepting || kind != DiagnosticSessionKind.scan) {
+    if (!enabled || !_accepting || kind == DiagnosticSessionKind.application) {
       return const _SilentSink();
     }
     final existing = _active[id];

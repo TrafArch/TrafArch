@@ -26,7 +26,7 @@ String transitDisplayName({
   String? identifiedName,
   String? localName,
 }) =>
-    identifiedName ??
+    (parserId == CardParserIds.lingnanTong ? '岭南通' : identifiedName) ??
     (parserId == null
         ? unrecognizedCardTypeLabel
         : parserId == CardParserIds.localCard

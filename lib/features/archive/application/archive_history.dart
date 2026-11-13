@@ -379,6 +379,7 @@ class ArchiveHistory {
       if (snapshot == null) continue;
       for (final section in const [
         'lingnanTong',
+        'shenzhenTong',
         'macauPass',
         'localCardTrips',
       ]) {
@@ -389,6 +390,14 @@ class ArchiveHistory {
         for (final row in rows) {
           if (row is! Map) continue;
           final fields = Map<String, dynamic>.from(row);
+          // Old local-card captures did not carry a profile per row. The
+          // captured card kind is sufficient to select the Shenzhen display
+          // rule; this projection leaves the saved snapshot untouched.
+          if (section == 'localCardTrips' &&
+              fields['profile'] == null &&
+              payload['cardKindLabel'] == '深圳通') {
+            fields['profile'] = 'shenzhen';
+          }
           final raw = fields['rawBody'];
           final key = jsonEncode(
             _canonical({

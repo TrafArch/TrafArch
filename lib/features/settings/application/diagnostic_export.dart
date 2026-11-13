@@ -23,6 +23,9 @@ String buildFullDiagnostics(
           'legacyText': session.raw
         else ...{
           'cardInfo': session.cardInfo,
+          // Primary reading order: parser, then the kind of field it read.
+          // Old sessions are projected from their frozen events only.
+          'parserGroups': _parserGroups(session),
           'apduGroups': [
             for (final category in RawDataCategory.values)
               {
@@ -54,6 +57,89 @@ String buildFullDiagnostics(
         },
       },
   ], exportedAt);
+}
+
+List<Map<String, Object?>> _parserGroups(DiagnosticSession session) {
+  final groups = <String, Map<String, List<Map<String, Object?>>>>{};
+  void add(String parser, String category, Map<String, Object?> record) {
+    (groups.putIfAbsent(parser, () => {}).putIfAbsent(category, () => [])).add(
+      record,
+    );
+  }
+
+  for (final event in session.events) {
+    final data = event.data;
+    if (event.type == 'parser_record' &&
+        data['parserId'] is String &&
+        data['fieldCategory'] is String) {
+      add(data['parserId'] as String, data['fieldCategory'] as String, {
+        'eventSequence': event.sequence,
+        'fields': data['fields'],
+      });
+    } else if (event.type == 'response_fields') {
+      final parser = data['parserId'];
+      if (parser is! String || parser.isEmpty) continue;
+      final command = data['command'];
+      final coordinate =
+          command is List &&
+              command.every((b) => b is int && b >= 0 && b <= 255)
+          ? classifyRawCommand(
+              command.cast<int>(),
+              felica: parser.startsWith('felica.'),
+            )
+          : null;
+      add(parser, 'response.${coordinate?.category.name ?? 'other'}', {
+        'eventSequence': event.sequence,
+        'index': data['index'],
+        'command': command,
+        'raw': data['raw'],
+        'state': data['state'],
+        'statusWord': data['statusWord'],
+        'fields': data['fields'],
+      });
+    } else if (event.type == 'process_record') {
+      final parser = data['parserId'];
+      if (parser is! String || parser.isEmpty) continue;
+      add(parser, 'process.${data['category'] ?? 'other'}', {
+        'eventSequence': event.sequence,
+        ...data,
+      });
+    } else if (event.type == 'qr_source' || event.type == 'parse_failure') {
+      final parser = data['parserId'];
+      if (parser is! String || parser.isEmpty) continue;
+      add(parser, event.type == 'qr_source' ? 'source' : 'issues', {
+        'eventSequence': event.sequence,
+        ...data,
+      });
+    }
+  }
+  // A session may identify a parser but have no decodable frame or records.
+  // Keep that identity visible without attributing unparsed bytes to it.
+  final card = session.cardInfo;
+  if (card?['parserId'] case final String id when id.isNotEmpty) {
+    groups.putIfAbsent(id, () => {});
+  }
+  if (card?['applications'] case final List applications) {
+    for (final application in applications) {
+      if (application is Map) {
+        final id = application['parserId'];
+        if (id is String && id.isNotEmpty) groups.putIfAbsent(id, () => {});
+      }
+    }
+  }
+  if (card?['productType'] case final String product) {
+    groups.putIfAbsent('felica.$product', () => {});
+  }
+  return [
+    for (final entry in groups.entries)
+      {
+        'parserId': entry.key,
+        'fieldGroups': [
+          for (final category in entry.value.entries)
+            {'category': category.key, 'records': category.value},
+        ],
+      },
+  ];
 }
 
 Map<String, Object?> _exportFrame(
@@ -134,7 +220,7 @@ String _encodeExport(
   List<Map<String, Object?>> sessions,
   DateTime exportedAt,
 ) =>
-    '${_encodeReadableJson({'format': 'trafarch.diagnostic_export', 'version': 3, 'appName': 'TrafArch', 'kind': kind, 'exportedAt': exportedAt.toUtc().toIso8601String(), 'sessions': sessions})}\n';
+    '${_encodeReadableJson({'format': 'trafarch.diagnostic_export', 'version': 4, 'appName': 'TrafArch', 'kind': kind, 'exportedAt': exportedAt.toUtc().toIso8601String(), 'sessions': sessions})}\n';
 
 /// Preserve byte arrays as JSON arrays, but keep command/response/raw on one
 /// physical line. Encoding values directly avoids rewriting text inside strings.

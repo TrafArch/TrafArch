@@ -344,7 +344,7 @@ void main() {
     final sessions = await logger.readSessions();
     final document =
         jsonDecode(buildFullDiagnostics(sessions, DateTime.utc(2026))) as Map;
-    expect(document['version'], 3);
+    expect(document['version'], 4);
     expect(document['kind'], 'full');
     final exported = (document['sessions'] as List).cast<Map>();
     expect(exported, hasLength(3));

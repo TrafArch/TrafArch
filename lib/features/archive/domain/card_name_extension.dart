@@ -8,10 +8,14 @@ import 'archive_balance.dart';
 ///   通用名称（不猜测具体卡名）；
 /// - 卡号 / 余额 / 交易条数 / 最近读取时间：按存档快照生成展示文本。
 extension SavedCardDisplayName on SavedCard {
-  /// 主名称：自定义名称 > 正式卡名 > 卡型兜底名称。
+  /// 主名称：自定义名称 > 解析器确认的单标岭南通名称 > 正式卡名 > 卡型兜底名称。
   String get displayName {
     final custom = customName?.trim();
     if (custom != null && custom.isNotEmpty) return custom;
+
+    // Legacy single-application Lingnan captures used the narrower YCT label.
+    // Resolve it for display without rewriting any saved profile record.
+    if (cardType == CardTypes.lingnanTong) return '岭南通';
 
     final official = officialName?.trim();
     if (official != null && official.isNotEmpty) return official;
@@ -25,11 +29,12 @@ extension SavedCardDisplayName on SavedCard {
     final parts = <String>[];
     final custom = customName?.trim();
     final official = officialName?.trim();
-    if (custom != null &&
-        custom.isNotEmpty &&
-        official != null &&
-        official.isNotEmpty) {
-      parts.add(official);
+    if (custom != null && custom.isNotEmpty) {
+      if (cardType == CardTypes.lingnanTong) {
+        parts.add('岭南通');
+      } else if (official != null && official.isNotEmpty) {
+        parts.add(official);
+      }
     }
 
     final issuer = issuerName?.trim();

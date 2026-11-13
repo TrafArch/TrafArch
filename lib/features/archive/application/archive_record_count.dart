@@ -41,7 +41,11 @@ class ArchiveRecordCount {
           latestTransactionCount: history.card?.transactionCount,
         );
       }
-      rows = projectArchiveRecords([history]).length;
+      rows =
+          projectArchiveRecords([history]).length +
+          history.localCardRecords
+              .where((record) => record.cardType == 'macauPass')
+              .length;
     } on FormatException {
       return ArchiveRecordCount.unavailable(
         latestTransactionCount: history.card?.transactionCount,
