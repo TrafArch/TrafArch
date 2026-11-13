@@ -45,7 +45,7 @@ python -X utf8 -m tools.reference_data validate  # 校验发布包与 manifest
 ## 文档与变更约定
 
 - `docs/` 下带日期的文件（如 `*_20261021.md`）是历史证据与交接记录，不随代码现状更新；描述当前架构的只有 `ARCHITECTURE.md`、`NATIVE_SESSION_CONTRACT.md`、`MIGRATION.md`、`REFERENCE_DATA_TOOLING.md`，代码与这些文档冲突时以代码为准并回写文档。
-- CHANGELOG 按日期分节、中文书写；新改动并入最新条目，不自行开新日期节。用户已要求每次构建自动递增构建号，见下方版本约束。
+- CHANGELOG 按日期分节、中文书写。用户于 2026-11-13 明确要求：changelog 不定死在单一日期，每条改动按实际更新当天的日期写入对应日期节（什么时候更新就写哪条的时间），不同日期的改动不得并入同一日期节。用户已要求每次构建自动递增构建号，见下方版本约束。
 
 ## Android 应用身份
 
