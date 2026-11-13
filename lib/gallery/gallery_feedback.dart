@@ -53,15 +53,20 @@ typedef _Message = ({
 
 class _GalleryFeedbackHostState extends State<GalleryFeedbackHost>
     with SingleTickerProviderStateMixin {
-  static const _motion = Duration(milliseconds: 180);
-  late final _animation = AnimationController(vsync: this, duration: _motion);
+  static const _motion = Duration(milliseconds: 240);
+  static const _exitMotion = Duration(milliseconds: 180);
+  late final _animation = AnimationController(
+    vsync: this,
+    duration: _motion,
+    reverseDuration: _exitMotion,
+  );
   late final _curve = CurvedAnimation(
     parent: _animation,
     curve: Curves.easeOutCubic,
     reverseCurve: Curves.easeInCubic,
   );
   late final _position = Tween(
-    begin: const Offset(0, .08),
+    begin: const Offset(1.08, 0),
     end: Offset.zero,
   ).animate(_curve);
   final _pending = <_Message>[];
@@ -122,7 +127,7 @@ class _GalleryFeedbackHostState extends State<GalleryFeedbackHost>
     if (_current == null || _dismissing) return;
     _dismissing = true;
     _timer?.cancel();
-    _animation.reverseDuration = _reduceMotion ? Duration.zero : _motion;
+    _animation.reverseDuration = _reduceMotion ? Duration.zero : _exitMotion;
     _animation.reverse().whenCompleteOrCancel(() {
       if (!mounted) return;
       setState(() => _current = null);
@@ -148,6 +153,7 @@ class _GalleryFeedbackHostState extends State<GalleryFeedbackHost>
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
     final navigation = GalleryNavigationLayout(media, docked: widget.docked);
+    final top = math.max(media.padding.top, media.viewPadding.top) + 12;
     final bottom =
         media.viewInsets.bottom +
         (widget.mainPage ? navigation.toastBottom : 16 + navigation.safeBottom);
@@ -159,9 +165,9 @@ class _GalleryFeedbackHostState extends State<GalleryFeedbackHost>
           Positioned(
             left: math.max(16, media.padding.left + 16),
             right: math.max(16, media.padding.right + 16),
-            bottom: bottom,
+            top: top,
             child: Align(
-              alignment: Alignment.bottomCenter,
+              alignment: Alignment.topRight,
               child: FadeTransition(
                 opacity: _reduceMotion
                     ? const AlwaysStoppedAnimation(1)
@@ -173,10 +179,7 @@ class _GalleryFeedbackHostState extends State<GalleryFeedbackHost>
                   child: ConstrainedBox(
                     constraints: BoxConstraints(
                       maxWidth: 560,
-                      maxHeight: math.max(
-                        0,
-                        media.size.height - media.padding.top - bottom - 16,
-                      ),
+                      maxHeight: math.max(0, media.size.height - top - bottom),
                     ),
                     child: _FeedbackSurface(
                       message: message,
@@ -244,26 +247,26 @@ class _FeedbackSurface extends StatelessWidget {
             ),
             child: SingleChildScrollView(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 48),
+                constraints: const BoxConstraints(minHeight: 44),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: message.actionLabel == null ? 6 : 2,
                   ),
                   child: Row(
                     children: [
                       ExcludeSemantics(
                         child: Container(
-                          width: 30,
-                          height: 30,
+                          width: 26,
+                          height: 26,
                           decoration: BoxDecoration(
                             color: background,
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(8),
                           ),
                           child: Icon(icon, color: foreground, size: 18),
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 8),
                       Flexible(
                         child: ExcludeSemantics(
                           child: Column(
@@ -294,14 +297,15 @@ class _FeedbackSurface extends StatelessWidget {
                         ),
                       ),
                       if (message.actionLabel != null) ...[
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 4),
                         TextButton(
                           key: const ValueKey('gallery-feedback-action'),
                           onPressed: onAction,
                           style: TextButton.styleFrom(
                             foregroundColor: tokens.action,
                             minimumSize: const Size(48, 44),
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
                             shape: GalleryGeometry.buttonShape,
                             textStyle: GalleryTypography.feedback,
                           ),

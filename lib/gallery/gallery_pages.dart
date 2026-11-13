@@ -653,10 +653,6 @@ extension _GalleryPages on _GalleryViewState {
       color: faceText.foreground,
       fontFeatures: const [FontFeature.tabularFigures()],
     );
-    final currencyStyle = GalleryTypography.caption.copyWith(
-      inherit: false,
-      color: faceText.secondaryForeground,
-    );
     final parts = {
       for (final card in cards) card.id: _balancePresentation(card),
     };
@@ -677,18 +673,11 @@ extension _GalleryPages on _GalleryViewState {
       return width;
     }
 
-    var numberWidth = 0.0, unitWidth = 0.0;
+    var numberWidth = 0.0;
     for (final value in parts.values) {
       if (!value.known) continue;
       numberWidth = math.max(numberWidth, measure(value.number, numberStyle));
-      unitWidth = math.max(
-        unitWidth,
-        measure(value.currencyLabel, currencyStyle),
-      );
     }
-    numberWidth = math.max(64, numberWidth);
-    final unitSpace = unitWidth > 0 ? unitWidth + 8 : 0.0;
-    final amountWidth = numberWidth + unitSpace;
     Widget amount(GalleryCard card) {
       final numberStyle = GalleryTypography.lead.copyWith(
         inherit: false,
@@ -700,6 +689,10 @@ extension _GalleryPages on _GalleryViewState {
         color: foreground(card, secondary: true),
       );
       final value = parts[card.id]!;
+      final unitWidth = value.currencyLabel.isEmpty
+          ? 0.0
+          : measure(value.currencyLabel, currencyStyle);
+      final amountWidth = numberWidth + (unitWidth > 0 ? unitWidth + 4 : 0);
       return Semantics(
         label: '余额，${value.displayText}',
         excludeSemantics: true,
@@ -730,7 +723,7 @@ extension _GalleryPages on _GalleryViewState {
                             style: currencyStyle,
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 4),
                       ],
                       SizedBox(
                         width: numberWidth,
@@ -739,7 +732,7 @@ extension _GalleryPages on _GalleryViewState {
                           key: ValueKey('wallet-number-${card.id}'),
                           maxLines: 1,
                           softWrap: false,
-                          textAlign: TextAlign.center,
+                          textAlign: TextAlign.left,
                           style: numberStyle,
                         ),
                       ),
