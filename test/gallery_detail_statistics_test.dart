@@ -249,6 +249,12 @@ void main() {
       }
 
       await mount(tester);
+      final sample = c.trips.first;
+      c.trips.addAll(
+        List.generate(30, (index) => {...sample, 'entryStation': '站点 $index'}),
+      );
+      c.update(() {});
+      await tester.pumpAndSettle();
       await setImage(Colors.red);
       final scroll = tester.state<ScrollableState>(galleryVerticalScroll());
       scroll.position.jumpTo(350);

@@ -154,6 +154,28 @@ void main() {
     },
   );
 
+  testWidgets('short ledger keeps the face expanded instead of half-contracted', (
+    tester,
+  ) async {
+    c.openCard(c.cards.firstWhere((card) => card.id == 'suica'));
+    await mount(tester);
+    final face = find.byKey(const ValueKey('card-face-suica'));
+    final scroll = tester.state<ScrollableState>(galleryVerticalScroll());
+    scroll.position.jumpTo(scroll.position.maxScrollExtent);
+    await tester.pumpAndSettle();
+    expect(tester.getSize(face).height, greaterThan(150));
+    final sample = c.trips.first;
+    c.data.ledger('suica').addAll(
+      List.generate(30, (index) => {...sample, 'entryStation': '站点 $index'}),
+    );
+    c.update(() {});
+    await tester.pumpAndSettle();
+    scroll.position.jumpTo(scroll.position.maxScrollExtent);
+    await tester.pumpAndSettle();
+    expect(tester.getSize(face).height, lessThan(80));
+    expect(tester.takeException(), isNull);
+  });
+
   for (final reduceMotion in [false, true]) {
     for (final autoSave in [false, true]) {
       testWidgets(
