@@ -186,12 +186,12 @@ void main() {
 
   test('filters operate on trip source and mode without mutating data', () {
     c.applyScene(c.data.scenes.firstWhere((s) => s.id == 'main-trips'));
-    expect(c.filteredTrips.length, 4);
+    expect(c.filteredTrips.length, 5);
     c.source = '0x1E 过程';
     expect(c.filteredTrips.length, 2);
     c.mode = '公共汽电车';
     expect(c.filteredTrips, isEmpty);
-    expect(c.trips.length, 5);
+    expect(c.trips.length, 6);
   });
 
   test('weekly samples keep explicit CNY, JPY and HKD currencies', () {
@@ -230,7 +230,7 @@ void main() {
 
   test('weekly snapshot does not invent dates or an unknown currency', () {
     final original = jsonEncode(c.data.json);
-    expect(weeklySummary(c.current.currency, c.ledger(c.current)).total, 1000);
+    expect(weeklySummary(c.current.currency, c.ledger(c.current)).total, 1200);
     for (final card in c.cards.where(
       (card) => card.id == 'suica' || card.id == 'octopus',
     )) {

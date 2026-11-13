@@ -146,7 +146,7 @@ void main() {
         expect(number.top, greaterThan(title.bottom));
         expect(
           find.descendant(of: face, matching: find.byType(SvgPicture)),
-          findsOneWidget,
+          findsNWidgets(2),
         );
         expect(tester.takeException(), isNull);
       }

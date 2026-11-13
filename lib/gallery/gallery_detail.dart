@@ -722,7 +722,7 @@ class _DetailCardLayout {
       context,
       card.name,
       GalleryTypography.card.copyWith(fontSize: 20, height: 26 / 20),
-      math.max(24, width - 40 - (card.type == '交通联合卡' ? 80 : 0)),
+      math.max(24, width - 40 - (_faceBrands(card).isEmpty ? 0 : 80)),
     ).height;
     tailWidth = _measureDetailText(
       context,
@@ -906,7 +906,7 @@ class _GalleryDetailFaceState extends State<_GalleryDetailFace> {
           layout.width - 40 - (layout.stacked ? 0 : layout.tailWidth + 16),
         );
         final nameWidth = _detailLerp(
-          math.max(24.0, layout.width - 40 - (card.type == '交通联合卡' ? 80 : 0)),
+          math.max(24.0, layout.width - 40 - (_faceBrands(card).isEmpty ? 0 : 80)),
           layout.compactTitleWidth,
           p,
         );
@@ -951,18 +951,13 @@ class _GalleryDetailFaceState extends State<_GalleryDetailFace> {
                   style: nameStyle,
                 ),
               ),
-              if (card.type == '交通联合卡')
+              if (_faceBrands(card).isNotEmpty)
                 Positioned(
                   top: 20,
                   right: 20,
                   child: Opacity(
                     opacity: (1 - p * 3).clamp(0.0, 1.0),
-                    child: SvgPicture.asset(
-                      'assets/gallery/tunion-logo.svg',
-                      width: 68,
-                      height: 68 * 49 / 78,
-                      semanticsLabel: '交通联合 CHINA T-UNION',
-                    ),
+                    child: _FaceBrandMark(card: card, id: 'detail-face'),
                   ),
                 ),
               Positioned(

@@ -123,6 +123,23 @@
     {
       "date": "昨天",
       "isoDate": "2026-10-26",
+      "time": "07:52",
+      "entryTime": "07:52",
+      "entryLine": "49 路",
+      "entryStation": "汉口路江西中路",
+      "oneWay": true,
+      "title": "公交 49 路",
+      "sub": "汉口路江西中路 → 未记录",
+      "amount": "−¥2.00",
+      "kind": "bus",
+      "source": "0x18 交易",
+      "mode": "公共汽电车",
+      "city": "上海",
+      "foreign": false
+    },
+    {
+      "date": "昨天",
+      "isoDate": "2026-10-26",
       "time": "08:31",
       "entryTime": "08:06",
       "entryLine": "1 号线",

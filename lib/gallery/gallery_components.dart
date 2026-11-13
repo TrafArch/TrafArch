@@ -617,15 +617,8 @@ extension _GalleryComponents on _GalleryViewState {
     },
   );
 
-  Color _faceForeground(GalleryCard card, {bool secondary = false}) {
-    if (card.image != null) {
-      return secondary
-          ? GalleryCardFace.imageSecondaryForeground
-          : GalleryCardFace.imageForeground;
-    }
-    final face = GalleryCardFace.byId(card.face);
-    return secondary ? face.secondaryForeground : face.foreground;
-  }
+  Color _faceForeground(GalleryCard card, {bool secondary = false}) =>
+      _faceForegroundOf(card, secondary: secondary);
 
   List<Color> _faceColors(String face) {
     final palette = GalleryCardFace.byId(face);
@@ -671,31 +664,8 @@ extension _GalleryComponents on _GalleryViewState {
   }
 
   Widget _cardBadge(GalleryCard card, {required String id}) {
-    final brands = [
-      for (final application in ['tu', 'cu', 'suica', 'octopus'])
-        if (card.applications.contains(application)) application,
-    ];
-    Widget logo(String brand) => SvgPicture.asset(
-      'assets/gallery/${switch (brand) {
-        'tu' => 'tunion',
-        'cu' => 'city-union',
-        _ => brand,
-      }}-logo.svg',
-      key: ValueKey('$id-${brand == 'tu' ? 'tunion' : brand}-${card.id}'),
-      colorFilter: brand == 'suica' && (t.dark || card.image != null)
-          ? ColorFilter.mode(
-              card.image == null ? t.text : _faceForeground(card),
-              BlendMode.srcIn,
-            )
-          : null,
-      fit: BoxFit.contain,
-      semanticsLabel: switch (brand) {
-        'tu' => '交通联合 CHINA T-UNION',
-        'cu' => '城市一卡通 CITY UNION',
-        'suica' => 'Suica',
-        _ => '八达通 Octopus',
-      },
-    );
+    final brands = _faceBrands(card);
+    Widget logo(String brand) => _brandLogo(card, brand, id: id, t: t);
     return SizedBox(
       key: ValueKey('$id-badge-${card.id}'),
       width: 48,
@@ -865,14 +835,9 @@ extension _GalleryComponents on _GalleryViewState {
                       ),
                     ),
                   ),
-                  if (card.type == '交通联合卡') ...[
+                  if (_faceBrands(card).isNotEmpty) ...[
                     const SizedBox(width: 12),
-                    SvgPicture.asset(
-                      'assets/gallery/tunion-logo.svg',
-                      width: 68,
-                      height: 68 * 49 / 78,
-                      semanticsLabel: '交通联合 CHINA T-UNION',
-                    ),
+                    _FaceBrandMark(card: card, id: 'face'),
                   ],
                 ],
               ),
@@ -1317,4 +1282,69 @@ class _GalleryTabbedListState extends State<_GalleryTabbedList> {
     padding: widget.padding,
     children: widget.children,
   );
+}
+
+List<String> _faceBrands(GalleryCard card) => [
+  for (final application in ['tu', 'cu', 'suica', 'octopus'])
+    if (card.applications.contains(application)) application,
+];
+
+Color _faceForegroundOf(GalleryCard card, {bool secondary = false}) {
+  if (card.image != null) {
+    return secondary
+        ? GalleryCardFace.imageSecondaryForeground
+        : GalleryCardFace.imageForeground;
+  }
+  final face = GalleryCardFace.byId(card.face);
+  return secondary ? face.secondaryForeground : face.foreground;
+}
+
+Widget _brandLogo(
+  GalleryCard card,
+  String brand, {
+  required String id,
+  required GalleryTokens t,
+}) => SvgPicture.asset(
+  'assets/gallery/${switch (brand) {
+    'tu' => 'tunion',
+    'cu' => 'city-union',
+    _ => brand,
+  }}-logo.svg',
+  key: ValueKey('$id-${brand == 'tu' ? 'tunion' : brand}-${card.id}'),
+  colorFilter: brand == 'suica' && (t.dark || card.image != null)
+      ? ColorFilter.mode(
+          card.image == null ? t.text : _faceForegroundOf(card),
+          BlendMode.srcIn,
+        )
+      : null,
+  fit: BoxFit.contain,
+  semanticsLabel: switch (brand) {
+    'tu' => '交通联合 CHINA T-UNION',
+    'cu' => '城市一卡通 CITY UNION',
+    'suica' => 'Suica',
+    _ => '八达通 Octopus',
+  },
+);
+
+class _FaceBrandMark extends StatelessWidget {
+  const _FaceBrandMark({required this.card, required this.id});
+  final GalleryCard card;
+  final String id;
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).extension<GalleryTokens>()!;
+    return SizedBox(
+      key: ValueKey('$id-brand-${card.id}'),
+      width: 68,
+      height: 44,
+      child: Column(
+        children: [
+          for (final (index, brand) in _faceBrands(card).indexed) ...[
+            if (index > 0) const SizedBox(height: 2),
+            Expanded(child: _brandLogo(card, brand, id: id, t: t)),
+          ],
+        ],
+      ),
+    );
+  }
 }

@@ -426,6 +426,8 @@ extension _GalleryPages on _GalleryViewState {
   Widget _trip(GalleryRecord trip, {bool interactive = true}) {
     final rail = trip['kind'] == 'rail';
     final event = trip['kind'] == 'event';
+    final oneWay = trip['oneWay'] == true;
+    final boarding = trip['entryTime'] as String? ?? '未记录';
     final sub = (trip['sub'] as String? ?? '未记录 → 未记录').split(' → ');
     final entry = trip['entryStation'] as String? ?? sub.first;
     final exit =
@@ -479,7 +481,9 @@ extension _GalleryPages on _GalleryViewState {
             child: _text(
               time,
               role: GalleryJourneyTypography.time,
-              weight: departure ? FontWeight.w600 : FontWeight.w400,
+              weight: departure && time != '未记录'
+                  ? FontWeight.w600
+                  : FontWeight.w400,
               lines: 1,
             ),
           ),
@@ -539,7 +543,9 @@ extension _GalleryPages on _GalleryViewState {
                           width: 34,
                           height: 34,
                           decoration: BoxDecoration(
-                            color: rail ? t.tone : t.secondaryContainer,
+                            color: rail
+                                ? Colors.transparent
+                                : t.secondaryContainer,
                             borderRadius: BorderRadius.circular(11),
                           ),
                           child: Center(
@@ -555,7 +561,7 @@ extension _GalleryPages on _GalleryViewState {
                                   ? Icons.train_outlined
                                   : Icons.directions_bus_outlined,
                               fallbackColor: rail
-                                  ? t.onTone
+                                  ? t.text
                                   : t.onSecondaryContainer,
                             ),
                           ),
@@ -588,48 +594,70 @@ extension _GalleryPages on _GalleryViewState {
                   ],
                 ),
                 _gap(12),
-                Row(
-                  key: const ValueKey('trip-endpoints'),
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: endpoint(
-                        rail ? '进站' : '上车',
-                        entryLine,
-                        trip['entryTime'] as String? ?? '未记录',
-                        entry,
-                        departure: true,
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Center(
-                        child: Container(
-                          key: const ValueKey('trip-direction-arrow'),
-                          padding: const EdgeInsets.all(5),
-                          decoration: BoxDecoration(
-                            color: t.tone.withValues(alpha: .5),
-                            shape: BoxShape.circle,
+                oneWay
+                    ? Wrap(
+                        key: const ValueKey('trip-one-way'),
+                        spacing: 10,
+                        runSpacing: 6,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: _text(
+                              boarding,
+                              role: GalleryJourneyTypography.time,
+                              weight: boarding != '未记录'
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
+                              lines: 1,
+                            ),
                           ),
-                          child: Icon(
-                            Icons.arrow_forward_rounded,
-                            size: 20,
-                            color: t.muted,
+                          if (entryLine.isNotEmpty) lineBadge(entryLine),
+                          _text(entry, role: GalleryJourneyTypography.station),
+                        ],
+                      )
+                    : Row(
+                        key: const ValueKey('trip-endpoints'),
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: endpoint(
+                              rail ? '进站' : '上车',
+                              entryLine,
+                              boarding,
+                              entry,
+                              departure: true,
+                            ),
                           ),
-                        ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Center(
+                              child: Container(
+                                key: const ValueKey('trip-direction-arrow'),
+                                padding: const EdgeInsets.all(5),
+                                decoration: BoxDecoration(
+                                  color: t.tone.withValues(alpha: .5),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.arrow_forward_rounded,
+                                  size: 20,
+                                  color: t.muted,
+                                ),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: endpoint(
+                              rail ? '出站' : '下车',
+                              exitLine,
+                              trip['time'] as String? ?? '未记录',
+                              exit,
+                              departure: false,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                    Expanded(
-                      child: endpoint(
-                        rail ? '出站' : '下车',
-                        exitLine,
-                        trip['time'] as String? ?? '未记录',
-                        exit,
-                        departure: false,
-                      ),
-                    ),
-                  ],
-                ),
                 if (rail && trip['transferKnown'] == false && !interactive) ...[
                   _gap(10),
                   _text(

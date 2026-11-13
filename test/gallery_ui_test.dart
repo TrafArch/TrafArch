@@ -462,7 +462,7 @@ void main() {
   );
 
   for (final sample in [
-    ('shanghai', '¥10.00', '周一，¥6.00'),
+    ('shanghai', '¥12.00', '周一，¥8.00'),
     ('suica', '337 JPY', '周一，337 JPY'),
     ('octopus', 'HK\$10.60', '周一，HK\$10.60'),
   ]) {

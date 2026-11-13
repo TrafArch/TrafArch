@@ -92,11 +92,11 @@ void main() {
       );
       final overview = find.byKey(const ValueKey('spending-overview'));
       expect(
-        find.descendant(of: overview, matching: find.text('¥12.00')),
+        find.descendant(of: overview, matching: find.text('¥14.00')),
         findsOneWidget,
       );
       expect(
-        find.descendant(of: overview, matching: find.text('4 次')),
+        find.descendant(of: overview, matching: find.text('5 次')),
         findsOneWidget,
       );
       await tester.tap(find.widgetWithText(ChoiceChip, '本月'));
@@ -156,11 +156,11 @@ void main() {
       expect(find.text('2026-10-26 ～ 2026-10-27'), findsOneWidget);
       final overview = find.byKey(const ValueKey('spending-overview'));
       expect(
-        find.descendant(of: overview, matching: find.text('¥10.00')),
+        find.descendant(of: overview, matching: find.text('¥12.00')),
         findsOneWidget,
       );
       expect(
-        find.descendant(of: overview, matching: find.text('3 次')),
+        find.descendant(of: overview, matching: find.text('4 次')),
         findsOneWidget,
       );
       expect(jsonEncode(c.trips), original);

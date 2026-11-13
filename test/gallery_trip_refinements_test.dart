@@ -63,6 +63,7 @@ void main() {
       ('今天', 26.0, 32.0, FontWeight.w600),
       ('08:07', 22.0, 28.0, FontWeight.w600),
       ('08:42', 22.0, 28.0, FontWeight.w400),
+      ('未记录', 22.0, 28.0, FontWeight.w400),
       ('徐家汇', 18.0, 26.0, FontWeight.w600),
       ('轨道交通', 16.0, 22.0, FontWeight.w400),
       ('上海', 14.0, 20.0, FontWeight.w400),
@@ -132,9 +133,7 @@ void main() {
       expect(badge, findsOneWidget);
       final decoration =
           tester.widget<Container>(badge).decoration! as BoxDecoration;
-      final tokens = Theme.of(tester.element(badge))
-          .extension<GalleryTokens>()!;
-      expect(decoration.color, tokens.tone);
+      expect(decoration.color, Colors.transparent);
       expect(decoration.borderRadius, BorderRadius.circular(11));
       expect(find.text('异地用卡'), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -183,12 +182,38 @@ void main() {
         expect(widget.size, 23);
         expect(
           widget.color,
-          kind == 'rail' ? tokens.onTone : tokens.onSecondaryContainer,
+          kind == 'rail' ? tokens.text : tokens.onSecondaryContainer,
         );
         expect(tester.takeException(), isNull);
       }
     },
   );
+
+  testWidgets('one-way bus ticket shows a single boarding row without arrow', (
+    tester,
+  ) async {
+    await mount(tester);
+    final row = find.byKey(const ValueKey('trip-one-way'));
+    expect(row, findsOneWidget);
+    expect(
+      find.descendant(
+        of: row,
+        matching: find.byKey(const ValueKey('trip-direction-arrow')),
+      ),
+      findsNothing,
+    );
+    for (final value in ['07:52', '49 路', '汉口路江西中路']) {
+      expect(find.descendant(of: row, matching: find.text(value)), findsOneWidget);
+    }
+    final time = tester.widget<Text>(
+      find.descendant(of: row, matching: find.text('07:52')),
+    );
+    expect(time.style!.fontSize, 22);
+    expect(time.style!.fontWeight, FontWeight.w600);
+    expect(find.text('公交'), findsWidgets);
+    expect(find.text('上海'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'summary remains a single surface through scrolling, reversal and restoration',
