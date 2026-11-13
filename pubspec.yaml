@@ -1,7 +1,7 @@
 name: transit_card_analyzer
 description: "TrafArch - NFC 交通卡读取与分析"
 publish_to: 'none'
-version: 1.0.5-beta.2+2164
+version: 1.0.5-beta.2+2165
 
 environment:
   sdk: ^3.13.5
@@ -35,6 +35,8 @@ dependencies:
   sqlite3: ^3.5.2
   # 卡片档案 ID 生成
   uuid: ^4.4.0
+  # 本地城市地铁标志（SVG，保留原色和渐变）
+  flutter_svg: 2.3.4
 
 dev_dependencies:
   flutter_test:
@@ -54,3 +56,4 @@ flutter:
     - assets/data/reference_manifest.json
     - assets/dictionaries/
     - assets/icon/
+    - assets/metro/

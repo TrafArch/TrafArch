@@ -4,11 +4,14 @@ import 'package:transit_card_analyzer/features/archive/domain/card_types.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/tunion_knowledge_base.dart';
 import 'package:transit_card_analyzer/features/scan/application/bank_card_probe.dart';
 import 'package:transit_card_analyzer/features/scan/application/local_card_reader.dart';
+import 'package:transit_card_analyzer/features/scan/application/response_diagnostic_capture.dart';
+import 'package:transit_card_analyzer/features/scan/domain/card_read_outcome.dart';
 import 'package:transit_card_analyzer/protocols/bank/domain/models/bank_card_result.dart';
 import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/local/apdu_exchange.dart';
 import 'package:transit_card_analyzer/protocols/transit/local/cards/shenzhentong.dart';
 import 'package:transit_card_analyzer/protocols/transit/local/local_card_models.dart';
+import 'package:transit_card_analyzer/protocols/transit/local/local_hex.dart';
 import 'package:transit_card_analyzer/protocols/transport/transport_failure.dart';
 
 void main() {
@@ -149,6 +152,120 @@ void main() {
       '00B202C400',
       '00B203C400',
     ]);
+  });
+
+  // Boundary vectors follow PAY.SZT's 31-bit binary compatibility decoding.
+  // 80000000 is also confirmed by physical frame 30 in the user's
+  // transit_card_log_20261112_081207(1).json (official balance: zero).
+  for (final (hex, fen, bcdFen) in <(String, int, int?)>[
+    ('00000000', 0, 0),
+    ('80000000', 0, 80000000),
+    ('00000001', 1, 1),
+    ('80000001', 1, 80000001),
+    ('00003039', 12345, 3039),
+    ('80003039', 12345, 80003039),
+    ('00001234', 4660, 1234),
+    ('0000007B', 123, null),
+    ('8000007B', 123, null),
+    ('7FFFFFFF', -1, null),
+    ('FFFFFFFF', -1, null),
+    ('7FFFFF9C', -100, null),
+    ('FFFFFF9C', -100, null),
+  ]) {
+    test('PAY.SZT 余额 $hex 解码为 $fen 分，BCD 仅作对照且保留原文', () async {
+      final body = LocalHex.hexToBytes(hex);
+      final result = (await LocalCardReader((command) async {
+        return _hex(command) == '805C000204' ? _ok(body) : _respond(command);
+      }).read())!;
+      final local = result.readResult!;
+      expect(local.info.observedBalance, fen);
+      expect(result.parsedCard!.info.balanceFen, fen);
+      expect(local.extras.slots['szt.balanceRaw'], body);
+      expect(local.extras.slots['szt.balanceBcdFen'], bcdFen);
+      expect(local.extras.slots['szt.balanceEncoding'], 'binary-be-signed31');
+      final record = local.records.singleWhere(
+        (r) => r.commandHex == '805C000204',
+      );
+      expect(record.response, [...body, 0x90, 0x00]);
+    });
+  }
+
+  for (final body in <List<int>>[
+    [],
+    [0, 0, 1],
+    [0, 0, 0, 0, 1],
+  ]) {
+    test('PAY.SZT 余额长度 ${body.length} 无效时保留未知与原文', () async {
+      final result = (await LocalCardReader((command) async {
+        return _hex(command) == '805C000204' ? _ok(body) : _respond(command);
+      }).read())!;
+      expect(result.readResult!.info.observedBalance, isNull);
+      expect(result.parsedCard!.info.balanceFen, isNull);
+      expect(result.readResult!.info.isSZT, isTrue);
+      expect(result.readResult!.extras.slots['szt.balanceRaw'], body);
+    });
+  }
+
+  test('PAY.SZT 余额拒绝不伪造零余额且仍保留卡片身份', () async {
+    final result = (await LocalCardReader((command) async {
+      return _hex(command) == '805C000204' ? [0x69, 0x85] : _respond(command);
+    }).read())!;
+    expect(result.readResult!.info.observedBalance, isNull);
+    expect(result.parsedCard!.info.balanceFen, isNull);
+    expect(result.readResult!.info.isSZT, isTrue);
+    expect(result.readResult!.extras.slots['szt.balanceRaw'], isNull);
+  });
+
+  test('TU 主钱包与 PAY.SZT 高位余额独立，不能对 TU 套深圳本地编码', () async {
+    final link = _TuLink();
+    final result = (await LocalCardReader((command) async {
+      if (link.selected == 'SZT' && _hex(command) == '805C000204') {
+        return _ok([0x80, 0, 0x30, 0x39]);
+      }
+      return link.call(command);
+    }).read())!;
+    expect(result.parsedCard!.parserId, CardParserIds.shenzhenTunion);
+    expect(result.parsedCard!.info.balanceFen, 500);
+    expect(result.readResult!.info.observedBalance, 500);
+    final local = result.parsedCard!.localCard!;
+    expect(local.info.observedBalance, 12345);
+    expect(local.extras.slots['szt.balanceHexFen'], 2147495993);
+    expect(local.extras.slots['szt.balanceBcdFen'], 80003039);
+  });
+
+  test('实卡零余额日志冻结 HEX、BCD 对照和采用编码，不借用其他应用响应', () async {
+    final result = (await LocalCardReader((command) async {
+      return _hex(command) == '805C000204'
+          ? _ok([0x80, 0, 0, 0])
+          : _respond(command);
+    }).read())!;
+    Map<String, Object?> frame(int index, String aid, String stage) => {
+      'index': index,
+      'selectedApplication': aid,
+      'protocolStage': stage,
+      'transport': 'iso-dep',
+      'command': [0x80, 0x5C, 0, 2, 4],
+      'response': [0x80, 0, 0, 0, 0x90, 0],
+    };
+    final fields = captureResponseFields(
+      TransitReadOutcome(result.parsedCard!),
+      [
+        frame(0, '5041592E535A54', Shenzhentong.moduleName),
+        frame(1, '5041592E5449434C', '岭南通'),
+        frame(2, '5041592E5449434C', Shenzhentong.moduleName),
+      ],
+    ).toList();
+    expect(fields[0]['state'], 'decoded');
+    expect(fields[0]['fields'], {
+      'balanceFen': 0,
+      'encoding': 'binary-be-signed31',
+      'rawHex': '80000000',
+      'unsignedHexFen': 2147483648,
+      'bcdCandidateFen': 80000000,
+      'bit31': 1,
+    });
+    expect(fields[1]['state'], 'unparsed');
+    expect(fields[2]['state'], 'unparsed');
   });
 
   test('未知交易类型不猜收支，非法 BCD 和日历日期保留原文', () async {

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'trip_entry_presenter.dart';
 import 'journey_presentation.dart';
 import 'trip_filters.dart';
+import 'journey_transport_icon.dart';
 
 class TripEntryCard extends StatelessWidget {
   final TripEntryInfo info;
@@ -179,10 +180,10 @@ class _JourneyTicket extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Icon(
-                    bus ? Icons.directions_bus_outlined : Icons.subway_outlined,
-                    color: scheme.primary,
-                    size: 21,
+                  JourneyTransportIcon(
+                    mode: journey.mode,
+                    cityLabel: journey.cityLabel,
+                    isCrossCity: journey.isCrossCity,
                   ),
                   const SizedBox(width: 8),
                   Expanded(

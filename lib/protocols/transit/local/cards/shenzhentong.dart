@@ -25,7 +25,11 @@ class Shenzhentong {
         digits.replaceFirst(RegExp(r'^0+'), '').startsWith(tuCardNumberPrefix);
   }
 
-  Future<void> read(CardInfo info, List<ApduRecord> records) async {
+  Future<void> read(
+    CardInfo info,
+    List<ApduRecord> records, [
+    CardExtras? extras,
+  ]) async {
     final basic = await _apdu(
       const [0x00, 0xB0, 0x95, 0x00, 0x20],
       '深圳通基本信息 SFI 15',
@@ -54,8 +58,18 @@ class Shenzhentong {
       records: records,
       verbose: true,
     );
-    if (balance != null && balance.length == 4) {
-      info.balance = LocalHex.readBEInt(balance);
+    if (balance != null) {
+      extras?.slots['szt.balanceRaw'] = List<int>.unmodifiable(balance);
+      if (balance.length == 4) {
+        final raw = LocalHex.readBEInt(balance);
+        info.balance = _balanceFen(raw);
+        extras?.slots['szt.balanceHexFen'] = raw;
+        extras?.slots['szt.balanceBcdFen'] = balance.every(_isBcd)
+            ? balance.fold<int>(0, (v, b) => v * 100 + LocalHex.bcdToInt(b))
+            : null;
+        extras?.slots['szt.balanceBit31'] = raw >> 31;
+        extras?.slots['szt.balanceEncoding'] = 'binary-be-signed31';
+      }
     }
 
     for (var number = 1; number <= 20; number++) {
@@ -94,6 +108,16 @@ class Shenzhentong {
           ..balanceDelta = kind == 0x09 ? -amount : amount;
       }
     }
+  }
+
+  /// PAY.SZT compatibility: exclude bit 31, then read signed 31-bit binary fen.
+  /// Metrodroid b910c1806fd86aa545223baf1d21fc5afe68eee2:
+  /// NewShenzhenTransitData -> ChinaTransitData.parseBalance -> signed bits 1..31.
+  /// This is an implementation reference, not a current Shenzhen standard.
+  /// BCD is retained only as a diagnostic candidate, never auto-selected.
+  static int _balanceFen(int raw) {
+    final value = raw & 0x7FFFFFFF;
+    return (value & 0x40000000) == 0 ? value : value - 0x80000000;
   }
 
   static DateTime? _date(List<int> bytes) {
