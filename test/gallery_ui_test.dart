@@ -488,7 +488,7 @@ void main() {
       c.update(() => c.detailTab = 1);
       await tester.pumpWidget(GalleryApp(controller: c));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(ChoiceChip, '本周'));
+      await tester.tap(find.byKey(const ValueKey('spending-period-week')));
       await tester.pumpAndSettle();
       expect(find.text(sample.$2), findsWidgets);
       expect(

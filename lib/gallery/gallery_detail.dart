@@ -298,14 +298,13 @@ extension _GalleryDetail on _GalleryViewState {
     final first =
         _spendingSelection.start ?? galleryCalendarDay(GalleryController.clock);
     final last = _spendingSelection.end ?? first;
-    final selected = await showDateRangePicker(
+    final selected = await showDialog<DateTimeRange>(
       context: context,
-      firstDate: DateTime(1900),
-      lastDate: DateTime(2100, 12, 31),
-      currentDate: GalleryController.clock,
-      initialDateRange: DateTimeRange(start: first, end: last),
-      helpText: '选择消费日期',
-      saveText: '确定',
+      builder: (_) => _GalleryRangePickerDialog(
+        initialStart: first,
+        initialEnd: last,
+        today: GalleryController.clock,
+      ),
     );
     if (!mounted || selected == null) return;
     _updateDetail(
@@ -319,6 +318,47 @@ extension _GalleryDetail on _GalleryViewState {
   String _spendingDate(DateTime date) =>
       '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
+  Widget _spendingPeriodButton(GallerySpendingPeriod period, String label) {
+    final selected = _spendingSelection.period == period;
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Container(
+        key: ValueKey('spending-period-${period.name}'),
+        decoration: BoxDecoration(
+          color: selected ? t.tone : t.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: selected ? t.tone : t.line),
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: () => _selectSpendingPeriod(period),
+            child: SizedBox(
+              height: 40,
+              child: Center(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: Text(
+                      label,
+                      style: GalleryTypography.label.copyWith(
+                        fontWeight: FontWeight.w500,
+                        color: selected ? t.onTone : t.muted,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   List<Widget> _spendingChildren(GalleryCard card) {
     final summary = GallerySpendingSummary(
       card.currency,
@@ -329,23 +369,19 @@ extension _GalleryDetail on _GalleryViewState {
         ? '全部已保留记录'
         : '${_spendingDate(_spendingSelection.start!)} ～ ${_spendingDate(_spendingSelection.end!)}';
     final widgets = <Widget>[
-      Wrap(
+      Row(
         key: const ValueKey('spending-periods'),
-        spacing: 8,
-        runSpacing: 8,
         children: [
-          for (final (period, label) in [
+          for (final (index, (period, label)) in [
             (GallerySpendingPeriod.all, '全部'),
             (GallerySpendingPeriod.week, '本周'),
             (GallerySpendingPeriod.month, '本月'),
             (GallerySpendingPeriod.year, '本年'),
             (GallerySpendingPeriod.custom, '自定义'),
-          ])
-            ChoiceChip(
-              label: Text(label),
-              selected: _spendingSelection.period == period,
-              onSelected: (_) => _selectSpendingPeriod(period),
-            ),
+          ].indexed) ...[
+            if (index > 0) const SizedBox(width: 8),
+            Expanded(child: _spendingPeriodButton(period, label)),
+          ],
         ],
       ),
       Padding(
@@ -1107,4 +1143,194 @@ class _SpendingRingPainter extends CustomPainter {
       !listEquals(values, old.values) ||
       !listEquals(colors, old.colors) ||
       track != old.track;
+}
+
+bool _sameCalendarDay(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month && a.day == b.day;
+
+String _rangeDayKey(DateTime day) =>
+    'range-day-${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
+
+class _GalleryRangePickerDialog extends StatefulWidget {
+  const _GalleryRangePickerDialog({
+    required this.initialStart,
+    required this.initialEnd,
+    required this.today,
+  });
+  final DateTime initialStart, initialEnd, today;
+  @override
+  State<_GalleryRangePickerDialog> createState() =>
+      _GalleryRangePickerDialogState();
+}
+
+class _GalleryRangePickerDialogState extends State<_GalleryRangePickerDialog> {
+  late DateTime? _start = widget.initialStart;
+  late DateTime? _end = widget.initialEnd;
+  late DateTime _month = DateTime(
+    widget.initialStart.year,
+    widget.initialStart.month,
+  );
+
+  void _pick(DateTime day) {
+    setState(() {
+      if (_start == null || _end != null) {
+        _start = day;
+        _end = null;
+      } else if (day.isBefore(_start!)) {
+        _start = day;
+      } else {
+        _end = day;
+      }
+    });
+  }
+
+  Widget _dayCell(DateTime day, GalleryTokens t) {
+    final endpoint =
+        (_start != null && _sameCalendarDay(day, _start!)) ||
+        (_end != null && _sameCalendarDay(day, _end!));
+    final inRange =
+        _start != null &&
+        _end != null &&
+        !day.isBefore(_start!) &&
+        !day.isAfter(_end!);
+    final isToday = _sameCalendarDay(day, widget.today);
+    return Padding(
+      padding: const EdgeInsets.all(2),
+      child: InkWell(
+        key: ValueKey(_rangeDayKey(day)),
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => _pick(day),
+        child: Container(
+          decoration: BoxDecoration(
+            color: endpoint
+                ? t.tone
+                : inRange
+                ? t.tone.withValues(alpha: .25)
+                : null,
+            borderRadius: BorderRadius.circular(10),
+            border: isToday && !endpoint ? Border.all(color: t.line) : null,
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            '${day.day}',
+            style: GalleryTypography.label.copyWith(
+              color: endpoint ? t.onTone : t.text,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).extension<GalleryTokens>()!;
+    final daysInMonth = DateTime(_month.year, _month.month + 1, 0).day;
+    final leading = DateTime(_month.year, _month.month, 1).weekday - 1;
+    return Dialog(
+      key: const ValueKey('spending-range-dialog'),
+      backgroundColor: t.surface,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: BorderSide(color: t.line),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 400),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '选择消费日期',
+                      style: GalleryTypography.section.copyWith(color: t.text),
+                    ),
+                  ),
+                  IconButton(
+                    key: const ValueKey('range-prev-month'),
+                    tooltip: '上一月',
+                    onPressed: () => setState(
+                      () => _month = DateTime(_month.year, _month.month - 1),
+                    ),
+                    icon: Icon(Icons.chevron_left_rounded, color: t.text),
+                  ),
+                  Text(
+                    '${_month.year}年${_month.month}月',
+                    key: const ValueKey('range-month-label'),
+                    style: GalleryTypography.label.copyWith(color: t.text),
+                  ),
+                  IconButton(
+                    key: const ValueKey('range-next-month'),
+                    tooltip: '下一月',
+                    onPressed: () => setState(
+                      () => _month = DateTime(_month.year, _month.month + 1),
+                    ),
+                    icon: Icon(Icons.chevron_right_rounded, color: t.text),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  for (final weekday in ['一', '二', '三', '四', '五', '六', '日'])
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          weekday,
+                          style: GalleryTypography.caption.copyWith(
+                            color: t.muted,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: 7,
+                children: [
+                  for (var i = 0; i < leading; i++) const SizedBox.shrink(),
+                  for (var day = 1; day <= daysInMonth; day++)
+                    _dayCell(DateTime(_month.year, _month.month, day), t),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    key: const ValueKey('range-cancel'),
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(
+                      '取消',
+                      style: GalleryTypography.button.copyWith(color: t.muted),
+                    ),
+                  ),
+                  TextButton(
+                    key: const ValueKey('range-confirm'),
+                    onPressed: _start == null
+                        ? null
+                        : () => Navigator.of(context).pop(
+                            DateTimeRange(start: _start!, end: _end ?? _start!),
+                          ),
+                    child: Text(
+                      '确定',
+                      style: GalleryTypography.button.copyWith(color: t.text),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/gallery/gallery_app.dart';
 import 'package:transit_card_analyzer/gallery/gallery_controller.dart';
 import 'package:transit_card_analyzer/gallery/gallery_data.dart';
+import 'package:transit_card_analyzer/gallery/gallery_theme.dart';
 
 import 'support/gallery_scroll.dart';
 
@@ -84,11 +85,30 @@ void main() {
       await mount(tester);
       expect(find.text('消费统计'), findsOneWidget);
       expect(find.text('本周消费'), findsNothing);
+      Color periodColor(String name) =>
+          (tester
+                      .widget<Container>(
+                        find.byKey(ValueKey('spending-period-$name')),
+                      )
+                      .decoration!
+                  as BoxDecoration)
+              .color!;
+      final tokens = Theme.of(
+        tester.element(find.byKey(const ValueKey('spending-periods'))),
+      ).extension<GalleryTokens>()!;
+      expect(periodColor('all'), tokens.tone);
+      expect(periodColor('week'), isNot(tokens.tone));
+      final tops = [
+        for (final name in ['all', 'week', 'month', 'year', 'custom'])
+          tester.getRect(find.byKey(ValueKey('spending-period-$name'))).top,
+      ];
+      expect(tops.every((top) => (top - tops.first).abs() < .1), isTrue);
       expect(
-        tester
-            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '全部'))
-            .selected,
-        isTrue,
+        find.descendant(
+          of: find.byKey(const ValueKey('spending-periods')),
+          matching: find.byIcon(Icons.check),
+        ),
+        findsNothing,
       );
       final overview = find.byKey(const ValueKey('spending-overview'));
       expect(
@@ -99,7 +119,7 @@ void main() {
         find.descendant(of: overview, matching: find.text('5 次')),
         findsOneWidget,
       );
-      await tester.tap(find.widgetWithText(ChoiceChip, '本月'));
+      await tester.tap(find.byKey(const ValueKey('spending-period-month')));
       await tester.pumpAndSettle();
       expect(find.text('2026-10-01 ～ 2026-10-31'), findsOneWidget);
       await tester.tap(find.byTooltip('上一时段'));
@@ -120,37 +140,20 @@ void main() {
       c.detailTab = 1;
       final original = jsonEncode(c.trips);
       await mount(tester);
-      await tester.tap(find.widgetWithText(ChoiceChip, '自定义'));
+      await tester.tap(find.byKey(const ValueKey('spending-period-custom')));
       await tester.pumpAndSettle();
-      final picker = find.byType(DateRangePickerDialog);
+      final picker = find.byKey(const ValueKey('spending-range-dialog'));
       expect(picker, findsOneWidget);
-      Navigator.of(tester.element(picker)).pop();
+      await tester.tap(find.byKey(const ValueKey('range-cancel')));
       await tester.pumpAndSettle();
-      expect(
-        tester
-            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '全部'))
-            .selected,
-        isTrue,
-      );
-      await tester.tap(find.widgetWithText(ChoiceChip, '自定义'));
+      expect(find.text('全部已保留记录'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('spending-period-custom')));
       await tester.pumpAndSettle();
-      final labels = MaterialLocalizations.of(tester.element(picker));
-      await tester.tap(find.byTooltip(labels.inputDateModeButtonLabel));
-      await tester.pumpAndSettle();
-      final inputs = find.descendant(
-        of: picker,
-        matching: find.byType(TextField),
-      );
-      expect(inputs, findsNWidgets(2));
-      await tester.enterText(
-        inputs.at(0),
-        labels.formatCompactDate(DateTime(2026, 10, 26)),
-      );
-      await tester.enterText(
-        inputs.at(1),
-        labels.formatCompactDate(DateTime(2026, 10, 27)),
-      );
-      await tester.tap(find.text(labels.okButtonLabel));
+      await tester.tap(find.byKey(const ValueKey('range-day-2026-10-26')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('range-day-2026-10-27')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('range-confirm')));
       await tester.pumpAndSettle();
       expect(picker, findsNothing);
       expect(find.text('2026-10-26 ～ 2026-10-27'), findsOneWidget);
