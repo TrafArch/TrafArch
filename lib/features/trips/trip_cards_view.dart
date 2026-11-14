@@ -110,23 +110,25 @@ class _TripCardsViewState<S extends Enum> extends State<TripCardsView<S>> {
               (_modes.isEmpty || _modes.contains(journey.mode)),
         )
         .toList();
-    final pending = visible
-        .where((journey) => journey.state == JourneyState.inProgress)
-        .toList();
-    final history = visible
-        .where(
-          (journey) =>
-              journey.state != JourneyState.inProgress &&
-              journey.mode != TripModeFilter.other,
-        )
-        .toList();
-    final other = visible
-        .where(
-          (journey) =>
-              journey.state != JourneyState.inProgress &&
-              journey.mode == TripModeFilter.other,
-        )
-        .toList();
+    final pending = <JourneyPresentation<TripCardPresentation<S>>>[];
+    final history = <JourneyPresentation<TripCardPresentation<S>>>[];
+    final other = <JourneyPresentation<TripCardPresentation<S>>>[];
+    for (final journey in visible) {
+      if (journey.state == JourneyState.inProgress) {
+        pending.add(journey);
+      } else if (journey.mode != TripModeFilter.other ||
+          journey.events.any(
+            (event) =>
+                event.evidenceSource == JourneyEvidenceSource.transaction &&
+                event.payload.info.isConsume,
+          )) {
+        // A confirmed TU debit stays in date order even if it has no
+        // process evidence for mode, city, or entry/exit.
+        history.add(journey);
+      } else {
+        other.add(journey);
+      }
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
