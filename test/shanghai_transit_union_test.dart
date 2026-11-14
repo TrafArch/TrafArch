@@ -78,6 +78,107 @@ ShanghaiTransitApplication _application({
 );
 
 void main() {
+  for (final unified in [false, true]) {
+    for (final serial in [
+      '03104970200000000001',
+      '00310497020000000001',
+      '03104970300000000001',
+    ]) {
+      test('哈尔滨前缀门控 TU/CU serial=$serial unified=$unified', () async {
+        final link = _GateLink(serial: serial);
+        final isHarbin = serial
+            .replaceFirst(RegExp(r'^0+'), '')
+            .startsWith(HarbinTransitUnionIds.cardNumberPrefix);
+        if (unified) {
+          final outcome = (await LocalCardReader(link.call).read())!;
+          expect(
+            outcome.parsedCard!.parserId,
+            isHarbin ? CardParserIds.harbinTunion : CardParserIds.tunion,
+          );
+          if (isHarbin) {
+            expect(
+              outcome.parsedCard!.parserName,
+              HarbinTransitUnionIds.moduleName,
+            );
+            expect(outcome.parsedCard!.dualApplication, isTrue);
+            expect(outcome.parsedCard!.info.applicationSerial, serial);
+            expect(outcome.parsedCard!.info.balanceFen, 500);
+            expect(outcome.parsedCard!.cityUnionBalanceFen, 500);
+            expect(outcome.parsedCard!.cityUnionFiles, isNotEmpty);
+            expect(
+              outcome.shanghai!.matchedPrefix,
+              HarbinTransitUnionIds.cardNumberPrefix,
+            );
+            expect(outcome.shanghai!.isShanghaiTransitUnion, isFalse);
+            expect(outcome.shanghai!.isHarbinTransitUnion, isTrue);
+          } else {
+            expect(outcome.shanghai, isNull);
+          }
+        } else {
+          final result = await ShanghaiTransitUnionCardParser(link.call).read();
+          expect(result.isHarbinTransitUnion, isHarbin);
+          expect(result.cu.probed, isHarbin);
+        }
+        expect(link.cuSelects, isHarbin ? 1 : 0);
+        expect(link.cuReads, isHarbin ? 1 : 0);
+      });
+    }
+  }
+
+  test('哈尔滨 CU 拒绝时保留 TU 身份和单侧余额', () async {
+    final link = _GateLink(serial: '03104970200000000001', failCu: true);
+    final outcome = (await LocalCardReader(link.call).read())!;
+    expect(outcome.parsedCard!.parserId, CardParserIds.harbinTunion);
+    expect(outcome.parsedCard!.dualApplication, isFalse);
+    expect(outcome.parsedCard!.cityUnionBalanceFen, isNull);
+    expect(outcome.shanghai!.cu.errors, isNotEmpty);
+    expect(
+      outcome.shanghai!.status,
+      ShanghaiTransitUnionStatus.tuOnlyAvailable,
+    );
+  });
+
+  test('哈尔滨 CU 读取非上海城市配置的 1A 异地记录', () async {
+    final link = _GateLink(serial: '03104970200000000001');
+    final commands = <String>[];
+    final result = (await LocalCardReader((apdu) async {
+      final command = apdu
+          .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
+          .join()
+          .toUpperCase();
+      if (link.selected == 'CU') {
+        commands.add(command);
+        if (command == '00B095001E') {
+          return _hexReply(
+            '869823000126000001022000112233445566778820240101203012310000',
+          );
+        }
+        if (command == '00B201D417') {
+          return _hexReply('00040000000000006406A1B2C3D4E5F620240504113000');
+        }
+      }
+      return link.call(apdu);
+    }).read())!;
+    expect(result.parsedCard!.parserId, CardParserIds.harbinTunion);
+    expect(result.parsedCard!.dualApplication, isTrue);
+    expect(result.shanghai!.cu.cityUnionPublicInfo!.cityCode, '2300');
+    expect(result.shanghai!.cu.records.single.label, 'CU 0x1A#1');
+    expect(commands, contains('00B201D417'));
+    expect(commands, isNot(contains('00B2013417')));
+  });
+
+  test('哈尔滨 TU 终止传输失败后不再探测 CU', () async {
+    final link = _GateLink(
+      serial: '03104970200000000001',
+      failureCommand: '805C000204',
+    );
+    final result = (await LocalCardReader(link.call).read())!.shanghai!;
+    expect(result.mergedCard!.parserId, CardParserIds.harbinTunion);
+    expect(result.cu.probed, isFalse);
+    expect(result.readResult.transportFailure, same(_tagLost));
+    expect(link.callsAfterFailure, 0);
+  });
+
   for (final serial in [
     '03104770000000000001',
     '00310477000000000001',
@@ -885,6 +986,13 @@ class _RecordingBankProbe implements BankCardProbe {
 const _tuWalletAid = <int>[0xA0, 0x00, 0x00, 0x06, 0x32, 0x01, 0x01, 0x05];
 
 const _cuAid = <int>[0xA0, 0x00, 0x00, 0x00, 0x03, 0x86, 0x98, 0x07, 0x01];
+
+List<int> _hexReply(String hex) => [
+  for (var i = 0; i < hex.length; i += 2)
+    int.parse(hex.substring(i, i + 2), radix: 16),
+  0x90,
+  0x00,
+];
 
 bool _contains(List<int> apdu, List<int> pattern) {
   if (pattern.isEmpty || apdu.length < pattern.length) return false;

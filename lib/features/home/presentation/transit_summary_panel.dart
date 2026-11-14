@@ -36,7 +36,9 @@ class TransitSummaryPanel extends StatelessWidget {
     final identified = app.lastIdentified;
     final isTUnion = CardParserIds.isTUnionFamily(parsed?.parserId);
     final isCityUnion = parsed?.parserId == CardParserIds.cityUnion;
-    final isShanghai = parsed?.parserId == CardParserIds.shanghaiTunion;
+    final isDualCity =
+        parsed?.parserId == CardParserIds.shanghaiTunion ||
+        parsed?.parserId == CardParserIds.harbinTunion;
     final isLingnan =
         parsed?.parserId == CardParserIds.lingnanTong ||
         parsed?.parserId == CardParserIds.lingnanTunion;
@@ -111,7 +113,7 @@ class TransitSummaryPanel extends StatelessWidget {
       if (cityName != null && cityName.isNotEmpty)
         summaryField(context, '发卡地', cityName),
       if (cityName == null && isLingnan) summaryField(context, '发卡地', '未识别'),
-      if (isShanghai)
+      if (isDualCity)
         summaryField(
           context,
           '识别状态',
@@ -152,7 +154,7 @@ class TransitSummaryPanel extends StatelessWidget {
         summaryField(context, '余额', balanceText),
       // 上海卡 CU 单侧可用时，TU 钱包不可读，单独展示住建部钱包余额
       // （双应用卡统一在下方的双应用区块中展示，避免重复）。
-      if (isShanghai &&
+      if (isDualCity &&
           balanceFen == null &&
           parsed?.dualApplication != true &&
           app.cityUnionBalanceFen != null)
