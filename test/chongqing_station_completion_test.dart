@@ -80,6 +80,53 @@ void main() {
     });
   }
 
+  const line15Stations = [
+    '曾家',
+    '重庆城市管理职业大学',
+    '重庆科技大学',
+    '陈家桥',
+    '大学城北一路',
+    '张家湾',
+    '五云新城',
+    '井口',
+    '礼学路',
+    '金山寺',
+    '欢乐谷',
+    '重光立交',
+    '重光',
+    '金福路',
+    '金童路',
+    '果塘路',
+    '西南政法大学',
+    '宝圣湖',
+    '双龙湖',
+    '江北机场T3航站楼',
+    '天堡',
+    '龙港大道',
+    '复盛',
+    '福惠大道',
+    '两江影视城',
+  ];
+
+  test('published Chongqing line 15 resolves all user supplied codes', () {
+    for (var index = 0; index < line15Stations.length; index++) {
+      final number = (index + 1).toString().padLeft(2, '0');
+      final code = '690015$number';
+      final station = line15Stations[index];
+      final match = controller.resolveCycleStationMatch(
+        '6900',
+        '15${number}0000000000',
+        appType: 1,
+      );
+      expect(match.confidence, StationMatchConfidence.exact, reason: code);
+      expect(match.lineName, '15号线', reason: code);
+      expect(match.stationName, station, reason: code);
+      expect(match.entry?.sourceKey, code);
+      expect(match.entry?.sourceField, 'M0.e0.a');
+      expect(match.entry?.rawValueJson, '["","15号线","$station"]');
+    }
+  });
+
   test('unknown and absent stations retain only the proven line prefix', () {
     for (final field in ['1800FF00000000', '18000000000000']) {
       final match = controller.resolveCycleStationMatch(

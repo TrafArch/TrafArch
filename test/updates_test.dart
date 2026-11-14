@@ -305,7 +305,7 @@ void main() {
         );
         expect(
           controller.knowledge!.packageHashes['TU'],
-          '0d8cbdf9153e138cbabec341e494225a735b2cdaab37ecc312b8f7f776f11403',
+          '517c59f3596c06a6ccff40752e7cf39db1bc2b2a76bd74d13d2381ab7ada6c53',
         );
         expect(
           controller.knowledge!.cityUnionCards

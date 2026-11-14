@@ -117,7 +117,7 @@ void main() {
     () {
       expect(
         tu.select('SELECT COUNT(*) AS c FROM all_records').single['c'],
-        8044,
+        8069,
       );
       final xiamen = repository.findStations(
         regionCode: '3930',
