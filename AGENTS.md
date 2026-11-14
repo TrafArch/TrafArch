@@ -65,3 +65,4 @@ python -X utf8 -m tools.reference_data validate  # 校验发布包与 manifest
 - 验收最终 APK 的清单，而非仅检查 Gradle 源码；在交付说明中记录显示名称、包名、Android 版本码和签名状态。
 
 `docs/UPGRADE_HANDOFF_20261021.md` 记录旧 `com.kajolno.TrafArch` 升级包的 versionCode 与证书指纹，可用于当前包的升级与签名比对；其中未签名 APK 与 Debug 签名结论仍需按本文约束区分。
+- 禁止编译apk

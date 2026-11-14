@@ -189,12 +189,13 @@ class LocalCardReader {
         );
       }
 
-      if (LingnanTong.matchesTuIdentity(
-        confirmed: shanghai.tu.confirmed,
-        cardNumber:
-            shanghai.tu.identity?.displayCardNumber ??
-            tuCard?.info.displayCardNumber,
-      )) {
+      if (appyConfirmed &&
+          LingnanTong.matchesTuIdentity(
+            confirmed: shanghai.tu.confirmed,
+            cardNumber:
+                shanghai.tu.identity?.displayCardNumber ??
+                tuCard?.info.displayCardNumber,
+          )) {
         final tuInfo = tuCard?.info ?? shanghai.tu.identity;
         if (tuInfo != null) {
           callback.onProgress(95);

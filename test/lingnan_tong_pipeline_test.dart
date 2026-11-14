@@ -253,7 +253,7 @@ void main() {
     );
   }
 
-  for (final prefix in ['31048703', '31048709', '31048724']) {
+  for (final prefix in ['31048703', '31048709', '31048710', '31048724']) {
     test(
       'confirmed TU $prefix probes APP Y once and isolates both applications',
       () async {
@@ -313,32 +313,32 @@ void main() {
   );
 
   for (final transportError in [false, true]) {
-    test('APP Y failure retains TU (transport=$transportError)', () async {
-      final replay = _Replay([
-        if (transportError) _Step.lost(_appy) else ..._rejectAppy(),
-        if (!transportError) ..._tu(),
-      ]);
-      if (transportError) {
-        await expectLater(
-          LocalCardReader(replay.call).read(),
-          throwsA(isA<ApduTransportException>()),
+    test(
+      'APPY rejection leaves TU as a single application (transport=$transportError)',
+      () async {
+        final replay = _Replay([
+          if (transportError) _Step.lost(_appy) else ..._rejectAppy(),
+          if (!transportError) ..._tu(),
+        ]);
+        if (transportError) {
+          await expectLater(
+            LocalCardReader(replay.call).read(),
+            throwsA(isA<ApduTransportException>()),
+          );
+          replay.verify();
+          return;
+        }
+        final result = (await LocalCardReader(replay.call).read())!;
+        _expectTu(result, _serial);
+        expect(result.parsedCard!.parserId, CardParserIds.tunion);
+        expect(result.parsedCard!.localCard, isNull);
+        expect(
+          result.readResult!.transportFailure,
+          transportError ? same(_tagLost) : isNull,
         );
         replay.verify();
-        return;
-      }
-      final result = (await LocalCardReader(replay.call).read())!;
-      _expectTu(result, _serial);
-      expect(result.parsedCard!.parserId, CardParserIds.lingnanTunion);
-      final local = result.parsedCard!.localCard!;
-      expect(local.extras.slots['lnt.appyConfirmed'], isFalse);
-      expect(local.info.observedBalance, isNull);
-      expect(_trips(local), isEmpty);
-      expect(
-        result.readResult!.transportFailure,
-        transportError ? same(_tagLost) : isNull,
-      );
-      replay.verify();
-    });
+      },
+    );
   }
 
   test(
@@ -405,7 +405,8 @@ void main() {
       final baselineIdentity = service.identify(baseline)!;
       baselineReplay.verify();
       final fingerprints = <String>[];
-      for (final suffix in [_rejectAppy(), _lnt()]) {
+      for (final appyConfirmed in [false, true]) {
+        final suffix = appyConfirmed ? _lnt() : _rejectAppy();
         final replay = _Replay([...suffix, ..._tu()]);
         final card = (await LocalCardReader(replay.call).read())!.parsedCard!;
         expect(
@@ -413,7 +414,10 @@ void main() {
           baselineIdentity.fingerprint,
         );
         final identified = service.identify(card)!;
-        expect(identified.identity.cardType, CardTypes.lingnanTunion);
+        expect(
+          identified.identity.cardType,
+          appyConfirmed ? CardTypes.lingnanTunion : CardTypes.chinaTunion,
+        );
         expect(identified.cardNumber, '310487039534635882');
         fingerprints.add(identified.fingerprint);
         replay.verify();
