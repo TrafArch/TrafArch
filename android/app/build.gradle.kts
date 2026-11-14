@@ -1,5 +1,7 @@
 import java.io.File
+import java.security.MessageDigest
 import java.util.Properties
+import groovy.json.JsonSlurper
 
 plugins {
     id("com.android.application")
@@ -49,6 +51,32 @@ val isApplicationBuild = !gradle.startParameter.isDryRun &&
         (taskProject.isEmpty() || taskProject.removePrefix(":") == project.path.removePrefix(":")) &&
             taskName in buildEntryTaskNames
     }
+if (isApplicationBuild) {
+    val assetDir = rootProject.file("../assets/data")
+    val manifest = JsonSlurper().parse(assetDir.resolve("reference_manifest.json")) as Map<*, *>
+    val packages = manifest["packages"] as Map<*, *>
+    for (protocol in listOf("TU", "CU")) {
+        val spec = packages[protocol] as Map<*, *>
+        val expectedFile = "TrafArch_Database_${protocol}.sqlite"
+        require(spec["file"] == expectedFile) { "$protocol reference package filename mismatch" }
+        val asset = assetDir.resolve(expectedFile)
+        val digest = MessageDigest.getInstance("SHA-256")
+        asset.inputStream().use { stream ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val size = stream.read(buffer)
+                if (size < 0) break
+                digest.update(buffer, 0, size)
+            }
+        }
+        val hash = digest.digest().joinToString("") { "%02x".format(it) }
+        val declaredHash = spec["sha256"] as String
+        val declaredBytes = (spec["bytes"] as Number).toLong()
+        require(asset.length() == declaredBytes && hash == declaredHash) {
+            "$protocol reference asset differs from reference_manifest.json; review the package before building"
+        }
+    }
+}
 if (isApplicationBuild) {
     // 每次打包必须重新读取源码版本并同步 Dart 信息，不复用配置缓存中的旧版本。
     tasks.matching { it.name in artifactTaskNames }.configureEach {

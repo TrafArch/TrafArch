@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
+import 'package:transit_card_analyzer/app/app_info.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/reference_package.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/reference_updates.dart';
 import 'package:transit_card_analyzer/features/settings/presentation/about_page.dart';
@@ -101,6 +102,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('检查更新'), findsNothing);
+    expect(find.text('版本 ${AppInfo.version} (${AppInfo.androidVersionCode})'), findsOneWidget);
     expect(await service.checkNow(), isNull);
     expect(await service.checkOnce(), isNull);
     expect(calls, 0);
@@ -303,7 +305,7 @@ void main() {
         );
         expect(
           controller.knowledge!.packageHashes['TU'],
-          'a014ac848957adb3a70574b8aaad6948bfc5b920143d21329e20c3bcec216848',
+          '0d8cbdf9153e138cbabec341e494225a735b2cdaab37ecc312b8f7f776f11403',
         );
         expect(
           controller.knowledge!.cityUnionCards

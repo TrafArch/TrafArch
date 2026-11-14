@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/reference_package.dart';
@@ -15,6 +17,7 @@ import 'package:transit_card_analyzer/platform/nfc/nfc_service.dart';
 import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
 
 import 'support/test_database.dart';
+import 'support/published_reference_fixture.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -39,7 +42,7 @@ void main() {
       expect(kb.cities.lookup('1210')!.name, contains('石家庄'));
       expect(kb.cuCities!.lookup('1210')!.name, contains('锦州'));
       expect(kb.cuRepository!.busRouteCount, 13852);
-      expect(kb.tuStations!.stationCount, 8021);
+      expect(kb.tuStations!.stationCount, 8044);
       expect(kb.cities.lookup('5210')!.name, '武汉');
       expect(kb.cities.lookup('5840')!.name, '深圳');
       final package = await ReferencePackage.open('CU', bundle: rootBundle);
@@ -207,13 +210,13 @@ void main() {
       try {
         expect(
           package.hash,
-          'a014ac848957adb3a70574b8aaad6948bfc5b920143d21329e20c3bcec216848',
+          '0d8cbdf9153e138cbabec341e494225a735b2cdaab37ecc312b8f7f776f11403',
         );
         expect(
           package.db
               .select('SELECT COUNT(*) AS c FROM all_records')
               .single['c'],
-          8021,
+          8044,
         );
         expect(
           File('${cache.path}/tu-${package.hash}.sqlite').existsSync(),
@@ -234,6 +237,34 @@ void main() {
     expect(
       Directory('${directory.path}/trafarch_reference').existsSync(),
       isFalse,
+    );
+  });
+
+  test('TU table count mismatch rejects a correctly hashed asset', () async {
+    final files = publishTuFixture(null, {});
+    final manifest = jsonDecode(
+      utf8.decode(files['assets/data/reference_manifest.json']!),
+    ) as Map<String, dynamic>;
+    final spec = (manifest['packages'] as Map)['TU'] as Map;
+    (spec['tables'] as Map)['regions'] = 1;
+    files['assets/data/reference_manifest.json'] = Uint8List.fromList(
+      utf8.encode(jsonEncode(manifest)),
+    );
+    expect(
+      sha256
+          .convert(files['assets/data/TrafArch_Database_TU.sqlite']!)
+          .toString(),
+      spec['sha256'],
+    );
+    await expectLater(
+      ReferencePackage.open('TU', bundle: _FixtureAssets(files)),
+      throwsA(
+        isA<FormatException>().having(
+          (error) => error.message,
+          'message',
+          contains('table count mismatch: regions'),
+        ),
+      ),
     );
   });
 
@@ -408,4 +439,12 @@ class _TamperedAssets extends CachingAssetBundle {
     corrupt[0] ^= 1;
     return ByteData.sublistView(corrupt);
   }
+}
+
+class _FixtureAssets extends CachingAssetBundle {
+  _FixtureAssets(this.files);
+  final Map<String, Uint8List> files;
+
+  @override
+  Future<ByteData> load(String key) async => ByteData.sublistView(files[key]!);
 }

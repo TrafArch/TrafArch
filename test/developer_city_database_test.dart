@@ -113,11 +113,24 @@ void main() {
   });
 
   test(
-    'developer city counts and deliberate Nanjing removals are retained',
+    'developer city counts, Xiamen Line 6 additions and deliberate Nanjing removals are retained',
     () {
       expect(
         tu.select('SELECT COUNT(*) AS c FROM all_records').single['c'],
-        8021,
+        8044,
+      );
+      final xiamen = repository.findStations(
+        regionCode: '3930',
+        sourceField: 'M0.W.a',
+        sourceKey: '39300618',
+      );
+      expect(xiamen, hasLength(1));
+      expect(xiamen.single.stationName, '官任');
+      expect(xiamen.single.lineName, '6号线');
+      expect(
+        tu.select('SELECT COUNT(*) AS c FROM all_records '
+          'WHERE region_code=? AND station_id>=124', ['3930']).single['c'],
+        23,
       );
       expect(
         tu.select('SELECT COUNT(*) AS c FROM "region_南京_3010"').single['c'],

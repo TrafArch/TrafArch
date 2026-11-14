@@ -52,9 +52,6 @@ class ReferencePackage {
       throw const FormatException('Unsupported reference manifest');
     }
     var spec = (manifest['packages'] as Map)[protocol] as Map;
-    if (identical(assets, rootBundle)) {
-      spec = bundledSpec(protocol, spec);
-    }
     final name = spec['file'] as String;
     final hash = spec['sha256'] as String;
     if (!RegExp(r'^[A-Za-z0-9_.-]+\.sqlite$').hasMatch(name) ||
@@ -71,27 +68,6 @@ class ReferencePackage {
       throw FormatException('$protocol asset digest mismatch');
     }
     return _install(protocol, spec, hash, bytes);
-  }
-
-  static Map bundledSpec(String protocol, Map spec) {
-    if (protocol == 'TU' &&
-        spec['sha256'] ==
-            'fa585d815b8f29ec52183e71f783ffa3acd7eacf1ca74907c44f5150e7529deb') {
-      // The bundled Nantong revision retains the frozen release manifest.
-      spec = {
-        ...spec,
-        'bytes': 6266880,
-        'sha256':
-            'a014ac848957adb3a70574b8aaad6948bfc5b920143d21329e20c3bcec216848',
-        'tables': {
-          ...spec['tables'] as Map,
-          'record_provenance': 8021,
-          'region_南通_3060': 45,
-          'source_metadata': 130,
-        },
-      };
-    }
-    return spec;
   }
 
   static Future<ReferencePackage> _install(
@@ -142,6 +118,26 @@ class ReferencePackage {
           metadata['format_version'] != '1' ||
           metadata['content_version'] != spec['content_version']) {
         throw FormatException('$protocol package metadata mismatch');
+      }
+      final declaredCounts = spec['tables'] as Map;
+      for (final item in declaredCounts.entries) {
+        final name = item.key as String;
+        final expected = item.value as int;
+        if (name.isEmpty ||
+            expected < 0 ||
+            db.select(
+              "SELECT 1 FROM sqlite_master WHERE type IN ('table', 'view') AND name = ?",
+              [name],
+            ).isEmpty) {
+          throw FormatException('$protocol invalid table count: $name');
+        }
+        final quoted = name.replaceAll('"', '""');
+        final actual = db
+            .select('SELECT COUNT(*) AS n FROM "$quoted"')
+            .single['n'];
+        if (actual != expected) {
+          throw FormatException('$protocol table count mismatch: $name');
+        }
       }
       final required = protocol == 'TU'
           ? <String, List<String>>{
@@ -326,8 +322,8 @@ class ReferencePackage {
         }
       }
       final counts = <String, int>{
-        for (final item in (spec['tables'] as Map).entries)
-          item.key as String: (item.value as num).toInt(),
+        for (final item in declaredCounts.entries)
+          item.key as String: item.value as int,
       };
       return ReferencePackage._(
         db,
