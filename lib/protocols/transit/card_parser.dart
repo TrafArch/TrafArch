@@ -16,6 +16,9 @@ abstract final class CardParserIds {
   /// 不归入普通交通联合解析器（[tunion]）。
   static const String shanghaiTunion = 'shanghai_tunion';
 
+  /// 哈尔滨城市通：已确认 TU 身份后探测独立 CU 应用。
+  static const String harbinTunion = 'harbin_tunion';
+
   static const String lingnanTong = 'lingnan_tong';
   static const String lingnanTunion = 'lingnan_tunion';
   static const String shenzhenTunion = 'shenzhen_tunion';
@@ -27,11 +30,11 @@ abstract final class CardParserIds {
   /// 地方交通卡（北京 / 羊城通 / 深圳通 / 苏州 / 天府通等城市探测卡种）。
   static const String localCard = 'local_card';
 
-  /// 是否属于交通联合（JT/T 978.2）家族：普通交通联合卡或上海交通卡
-  /// （交通联合版）。分析链路与展示层按族级分派时使用。
+  /// 是否属于交通联合（JT/T 978.2）家族，供分析链路与展示层分派。
   static bool isTUnionFamily(String? parserId) =>
       parserId == tunion ||
       parserId == shanghaiTunion ||
+      parserId == harbinTunion ||
       parserId == lingnanTunion ||
       parserId == shenzhenTunion;
 }
@@ -84,7 +87,7 @@ class ParsedCard {
   /// 城市一卡通（CU，CJ/T 331-2016）两个应用。为 true 时，[info] /
   /// [transactions] / [transitProcessRecords] 承载交通部互联互通应用数据，
   /// [cityUnionFiles] 与 [cityUnionBalanceFen] 承载住建部城市一卡通应用数据；
-  /// [parserId] 为 [CardParserIds.tunion] 或 [CardParserIds.shanghaiTunion]
+  /// [parserId] 属于交通联合家族
   /// （以互联互通应用驱动分析链路）。
   final bool dualApplication;
 

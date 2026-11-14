@@ -76,7 +76,7 @@ class LocalReadOutcome {
 /// 0) 首次 APDU 只读选择 PAY.APPY（带 Le，状态拒绝可一次无 Le 兼容），
 ///    确认后先读完 LNT 信息/统计/TICL/余额/交易，再探 TU，绝不切回 LNT；
 ///    LNT 已确认时 TU 目标前缀合并双侧，否则保留地方结果，不再 CU/银行；
-/// 1) 非 LNT 由 [ShanghaiTransitUnionCardParser] 读 TU，仅上海 TU 才读 CU；
+/// 1) 非 LNT 由 [ShanghaiTransitUnionCardParser] 读 TU，上海及哈尔滨城市通 TU 再探 CU；
 /// 1) 普通 TU 复用已读结果直接返回，不探测 CU；
 /// 2) TU 无可返回结果时独立回退普通 CU，不冒认上海 TU、不重复探测；
 /// 3) 地方交通卡逐城市探测（武汉通 / 北京 / 羊城通 / 深圳通 /
@@ -168,7 +168,7 @@ class LocalCardReader {
         throw lntError!;
       }
 
-      // 1) LNT 已确认时只探 TU，不混入上海 CU 或其他地方/银行读法。
+      // 1) LNT 已确认时只探 TU，不混入城市 CU 或其他地方/银行读法。
       callback.onProgress(10);
       final shanghai = await ShanghaiTransitUnionCardParser(
         _transceive,
@@ -179,7 +179,7 @@ class LocalCardReader {
       final cuCard = shanghai.cu.card;
 
       if (!appyConfirmed &&
-          shanghai.isShanghaiTransitUnion &&
+          (shanghai.isShanghaiTransitUnion || shanghai.isHarbinTransitUnion) &&
           shanghai.mergedCard != null) {
         callback.onProgress(95);
         return LocalReadOutcome.transit(
@@ -189,12 +189,13 @@ class LocalCardReader {
         );
       }
 
-      if (LingnanTong.matchesTuIdentity(
-        confirmed: shanghai.tu.confirmed,
-        cardNumber:
-            shanghai.tu.identity?.displayCardNumber ??
-            tuCard?.info.displayCardNumber,
-      )) {
+      if (appyConfirmed &&
+          LingnanTong.matchesTuIdentity(
+            confirmed: shanghai.tu.confirmed,
+            cardNumber:
+                shanghai.tu.identity?.displayCardNumber ??
+                tuCard?.info.displayCardNumber,
+          )) {
         final tuInfo = tuCard?.info ?? shanghai.tu.identity;
         if (tuInfo != null) {
           callback.onProgress(95);

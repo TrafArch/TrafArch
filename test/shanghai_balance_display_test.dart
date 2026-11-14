@@ -58,6 +58,16 @@ void main() {
       expect(display.balanceFen(2580), 2580);
     });
 
+    test('哈尔滨双应用的 TU 余额不套用上海额度', () {
+      final display = ShanghaiBalanceDisplay.forCard(
+        includeShanghaiOverdraft: false,
+        parserId: CardParserIds.harbinTunion,
+        cardType: CardTypes.harbinTransitUnion,
+        currencyCode: 'CNY',
+      );
+      expect(display.balanceFen(2580), 2580);
+    });
+
     test('非上海CU不扣除上海额度', () {
       final display = ShanghaiBalanceDisplay.forCard(
         includeShanghaiOverdraft: false,

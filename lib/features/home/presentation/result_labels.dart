@@ -13,6 +13,7 @@ String bankFamilyText(String family) => switch (family) {
 
 String transitTypeLabel(String? parserId) => cardTypeLabel(switch (parserId) {
   CardParserIds.shanghaiTunion => CardTypes.shanghaiTransitUnion,
+  CardParserIds.harbinTunion => CardTypes.harbinTransitUnion,
   CardParserIds.lingnanTong => CardTypes.lingnanTong,
   CardParserIds.beijingBmac => CardTypes.beijingBmac,
   CardParserIds.lingnanTunion => CardTypes.lingnanTunion,

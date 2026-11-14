@@ -1,5 +1,19 @@
 {
   "baseline_sha256": "9f5d16b0e86ca026b6890f16a8fa2c57d853d2250170aa5f8ef51f97b713a904",
+  "chongqing_line15_update": {
+    "city_code": "6900",
+    "cu_sha256_preserved": "77ba3ad4310782f7625f7b1b1f87a7bc99fee2420cf9060477b614f1580c6ed3",
+    "first_code": "69001501",
+    "last_code": "69001525",
+    "line": "15号线",
+    "physical_card_verified": false,
+    "previous_manifest_sha256": "110ddca2cef5c6098978fd2bb323b2bfaf7fa2b70edd8d81499125a919f070dc",
+    "previous_tu_sha256": "0d8cbdf9153e138cbabec341e494225a735b2cdaab37ecc312b8f7f776f11403",
+    "publisher_sha256": "e35877084ac25e19c8a91cc8fb4a4045cd6e6c2d50c49f687d002a6019c618e2",
+    "rows_added": 25,
+    "source": "User supplied station names/order and 690015xx code rule",
+    "table": "region_重庆_6900"
+  },
   "city_database_update": {
     "baseline_manifest_sha256": "ecf13ce39d816c43c09ac60df3afe1dff51ae03811bd5da066794baa4a9e546b",
     "city_business_rows_preserved": true,
@@ -81607,15 +81621,15 @@
       }
     },
     "TU": {
-      "bytes": 6279168,
-      "content_version": "54f0cdf46bb04e9114fbc5048011f7b05d1b2e4ad191444a75b30fe2848ffce5",
+      "bytes": 6295552,
+      "content_version": "838947772b3821697a37fd46728504b35f960d2ff5cf3c1d3d1d4c4fb820c41f",
       "file": "TrafArch_Database_TU.sqlite",
-      "sha256": "0d8cbdf9153e138cbabec341e494225a735b2cdaab37ecc312b8f7f776f11403",
+      "sha256": "517c59f3596c06a6ccff40752e7cf39db1bc2b2a76bd74d13d2381ab7ada6c53",
       "tables": {
         "card_prefixes": 429,
         "issuer_city_codes": 347,
         "protocol_region_codes": 3224,
-        "record_provenance": 8044,
+        "record_provenance": 8069,
         "reference_documents": 6,
         "reference_package": 4,
         "region_10_transport_summary": 4,
@@ -81700,7 +81714,7 @@
         "region_苏州_3050": 277,
         "region_西安_7910": 306,
         "region_贵阳_7010": 99,
-        "region_重庆_6900": 334,
+        "region_重庆_6900": 359,
         "region_金华_3380": 28,
         "region_长沙_5510": 217,
         "region_青岛_4520": 220,
@@ -81860,12 +81874,12 @@
   "tool_sha256": "5cbe962a2227602fbc3b668c885f4bb00edb9219dcc5358c637a14c22dcd0302",
   "tool_version": "1.0.0",
   "tu_manifest_sync": {
-    "city_records": 8044,
+    "city_records": 8069,
     "database_bytes_preserved": true,
     "origin": "User-updated TU asset; existing provenance retained; no physical-card verification",
-    "package_sha256": "0d8cbdf9153e138cbabec341e494225a735b2cdaab37ecc312b8f7f776f11403",
-    "previous_manifest_sha256": "ee63a70e93c92812f889ff5dad150582f3cd9dbebfa0cbd59353ed62ce153379",
-    "previous_package_sha256": "fa585d815b8f29ec52183e71f783ffa3acd7eacf1ca74907c44f5150e7529deb",
+    "package_sha256": "517c59f3596c06a6ccff40752e7cf39db1bc2b2a76bd74d13d2381ab7ada6c53",
+    "previous_manifest_sha256": "840b42efe03f55494959468be360aeaa60dca7822ee0129f6f22b09fb532a0ea",
+    "previous_package_sha256": "0d8cbdf9153e138cbabec341e494225a735b2cdaab37ecc312b8f7f776f11403",
     "publisher_sha256": "56a76d0e50a13535064f804544df73d89edd663bac418517ffccfe642d70f384"
   }
 }

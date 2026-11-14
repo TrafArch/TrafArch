@@ -73,7 +73,7 @@ class Fixture {
 
 void main() {
   test('TU gate requires confirmation, decimal identity, and explicit product prefix', () {
-    for (final prefix in ['31048703', '31048709', '31048724']) {
+    for (final prefix in ['31048703', '31048709', '31048710', '31048724']) {
       expect(
         LingnanTong.matchesTuIdentity(
           confirmed: true,

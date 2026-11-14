@@ -71,6 +71,30 @@ void main() {
   group('交通联合卡识别', () {
     final service = CardIdentificationService(_knowledge());
 
+    test('哈尔滨双应用沿用 TU 指纹，卡名从目录读取', () {
+      final info = const TUnionCardInfo(
+        issuerId: '0159261000000000',
+        applicationSerial: '03104970200000000001',
+        cityCode: '2610',
+        balanceFen: 1200,
+      );
+      final original = service.identify(_tunionCard(info))!;
+      final dual = service.identify(
+        ParsedCard(
+          parserId: CardParserIds.harbinTunion,
+          parserName: '哈尔滨城市通（交通联合版）',
+          info: info,
+          transactions: const [],
+          dualApplication: true,
+          selectedAidHex: 'A000000632010105',
+        ),
+      )!;
+      expect(dual.identity.cardType, CardTypes.harbinTransitUnion);
+      expect(dual.identity.officialName, '哈尔滨城市通');
+      expect(dual.identity.cityName, '哈尔滨');
+      expect(dual.fingerprint, original.fingerprint);
+    });
+
     test('卡种目录命中：正式卡名 / 发卡地 / 指纹 / 卡号', () {
       final identified = service.identify(
         _tunionCard(_tunionInfo()),
@@ -208,7 +232,10 @@ void main() {
         extras: CardExtras(),
       ),
     );
-    expect(CardIdentificationService(KnowledgeBase.empty()).identify(card), isNull);
+    expect(
+      CardIdentificationService(KnowledgeBase.empty()).identify(card),
+      isNull,
+    );
   });
 
   group('城市一卡通卡识别', () {
@@ -677,6 +704,12 @@ KnowledgeBase _knowledge() => KnowledgeBase.fromJsonStrings(
         'city': '福州市',
       },
       {'prefix': '31048500', 'cardName': '八达通-全国通卡', 'city': '香港'},
+      {
+        'prefix': '31049702',
+        'issuer': '01592610',
+        'cardName': '哈尔滨城市通',
+        'city': '哈尔滨',
+      },
     ],
   }),
   issuerFingerprints: jsonEncode({

@@ -9,6 +9,16 @@ import 'package:transit_card_analyzer/protocols/transit/city_union/city_union_mo
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_models.dart';
 
 void main() {
+  test('哈尔滨双应用仅将原文完全匹配的 CU 记录折叠展示', () {
+    final view = _cu(_bytes());
+    final result = partitionShanghaiMirroredRecords(
+      parserId: CardParserIds.harbinTunion,
+      tunionTransactions: [_tu(view)],
+      cityUnionTransactions: [view],
+    );
+    expect(result.mirrored, [view]);
+    expect(result.independent, isEmpty);
+  });
   test(
     'Shanghai matching exit, zero-fare entry and recharge remain available',
     () {
