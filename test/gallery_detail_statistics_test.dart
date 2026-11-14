@@ -67,10 +67,11 @@ void main() {
         expect(tester.takeException(), isNull);
       }
       expect(tester.getSize(face).height, lessThan(80));
-      final tail = find.byKey(const ValueKey('face-tail-shanghai'));
-      final number = find.byKey(const ValueKey('face-number-shanghai'));
-      expect(tester.getRect(face).contains(tester.getCenter(tail)), isTrue);
-      expect(tester.getRect(face).contains(tester.getCenter(number)), isTrue);
+      // 收缩后卡面完全收起，身份信息（卡名 · 尾号）融入顶部导航。
+      expect(
+        find.text('${c.current.name} · ${c.current.tail}'),
+        findsOneWidget,
+      );
       scroll.position.jumpTo(60);
       await tester.pump();
       expect(tester.getSize(face).height, greaterThan(previousHeight));
@@ -224,7 +225,7 @@ void main() {
   );
 
   testWidgets(
-    'custom image produces a colored capsule and replacing it refreshes the palette',
+    'custom image fills the expanded face and collapse keeps a neutral identity nav',
     (tester) async {
       Future<ui.Image> image(Color color) async {
         final recorder = ui.PictureRecorder();
@@ -258,28 +259,32 @@ void main() {
       );
       c.update(() {});
       await tester.pumpAndSettle();
-      await setImage(Colors.red);
-      final scroll = tester.state<ScrollableState>(galleryVerticalScroll());
-      scroll.position.jumpTo(350);
-      await tester.pumpAndSettle();
-      Color capsuleColor() =>
+      DecorationImage? faceImage() =>
           (tester
                       .widget<Container>(
                         find.byKey(const ValueKey('card-face-shanghai')),
                       )
                       .decoration!
                   as BoxDecoration)
-              .gradient!
-              .colors
-              .first;
-      final red = capsuleColor();
+              .image;
+      expect(faceImage(), isNull);
+      await setImage(Colors.red);
+      final red = faceImage();
+      expect(red, isNotNull);
       await setImage(Colors.green);
-      expect(capsuleColor(), isNot(red));
-      c.update(() => c.themeMode = ThemeMode.dark);
+      expect(faceImage(), isNot(red));
+      final scroll = tester.state<ScrollableState>(galleryVerticalScroll());
+      scroll.position.jumpTo(350);
       await tester.pumpAndSettle();
-      await tester.runAsync(
-        () async => Future<void>.delayed(const Duration(milliseconds: 250)),
+      expect(
+        tester.getSize(find.byKey(const ValueKey('card-face-shanghai'))).height,
+        lessThan(80),
       );
+      expect(
+        find.text('${c.current.name} · ${c.current.tail}'),
+        findsOneWidget,
+      );
+      c.update(() => c.themeMode = ThemeMode.dark);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
     },

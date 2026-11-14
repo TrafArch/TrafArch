@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'gallery_color_engine.dart';
 import 'gallery_data.dart';
 import 'gallery_design.dart';
 
@@ -53,19 +54,56 @@ class GalleryTokens extends ThemeExtension<GalleryTokens> {
   Color get danger => scheme.error;
   Color get dangerContainer => scheme.errorContainer;
   Color get onDangerContainer => scheme.onErrorContainer;
+  Color get _textSurface => dark ? raised : surface2;
   Color get ok =>
-      success ?? (dark ? const Color(0xff90dab0) : const Color(0xff176b43));
+      success ?? GalleryColorEngine.readable(GallerySemantic.success, _textSurface);
   Color get warn =>
-      warning ?? (dark ? const Color(0xffefc078) : const Color(0xff875409));
+      warning ?? GalleryColorEngine.readable(GallerySemantic.warning, _textSurface);
+  Color get info => GalleryColorEngine.readable(GallerySemantic.info, _textSurface);
+
+  /// Data visualization palette, separate from the UI theme colors (spec 2.2
+  /// §5). Category mapping is stable: rail -> data-1, bus -> data-2, other ->
+  /// data-3, regardless of the active theme.
+  List<Color> get dataPalette =>
+      GalleryColorEngine.dataPalette(scheme.primary, dark: dark);
+  Color get data1 => dataPalette[0];
+  Color get data2 => dataPalette[1];
+  Color get data3 => dataPalette[2];
+  Color get data4 => dataPalette[3];
+  Color get data5 => dataPalette[4];
+  Color get chartTrack =>
+      GalleryColorEngine.chartTrack(scheme.primary, dark: dark);
+  Color get chartSurface => surface;
+
+  /// Trip line badges keep their pre-2.2 colors and do not follow the new
+  /// color engine (user exception). Shanghai line 1 keeps its own red below.
+  Color get tripBadgeRail =>
+      dark ? const Color(0xff2b3658) : const Color(0xffe3e8ff);
+  Color get tripBadgeOnRail =>
+      dark ? const Color(0xffdce3ff) : const Color(0xff101d50);
+  Color get tripBadgeBus =>
+      dark ? const Color(0xffbcc8f0) : const Color(0xff101d50);
+  Color get tripBadgeOnBus =>
+      dark ? const Color(0xff102c4d) : Colors.white;
 
   /// Keep scene callers compatible; runtime design data is independent of fixtures.
+  /// Monet seeds share the preset engine for surfaces, tint and the data
+  /// palette. The OS core palette is already UI-safe upstream, so its primary
+  /// label pair is preserved as the action color rather than re-clamped.
   static GalleryTokens from(
     GalleryData data,
     bool dark,
     String palette, {
     ColorScheme? dynamicScheme,
   }) => GalleryTokens(
-    scheme: dynamicScheme ?? GalleryPalette.byId(palette).scheme(dark),
+    scheme: dynamicScheme != null
+        ? buildGalleryScheme(
+            dynamicScheme.primary,
+            dark: dark,
+            actionOverride: dynamicScheme.primary,
+            onActionOverride: dynamicScheme.onPrimary,
+          )
+        : GalleryPalette.byId(palette).scheme(dark),
     dynamic: dynamicScheme != null,
   );
 

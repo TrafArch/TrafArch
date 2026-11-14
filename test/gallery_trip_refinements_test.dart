@@ -53,18 +53,18 @@ void main() {
     }
     expect(
       tester.widget<Text>(find.text('08:07')).style!.fontWeight,
-      FontWeight.w600,
+      FontWeight.w400,
     );
     expect(
       tester.widget<Text>(find.text('徐家汇').first).style!.fontWeight,
-      FontWeight.w600,
+      FontWeight.w400,
     );
     for (final (value, size, lineHeight, weight) in [
       ('今天', 26.0, 32.0, FontWeight.w600),
-      ('08:07', 22.0, 28.0, FontWeight.w600),
-      ('08:42', 22.0, 28.0, FontWeight.w400),
-      ('未记录', 22.0, 28.0, FontWeight.w400),
-      ('徐家汇', 18.0, 26.0, FontWeight.w600),
+      ('08:07', 16.0, 22.0, FontWeight.w400),
+      ('08:42', 16.0, 22.0, FontWeight.w400),
+      ('未记录', 16.0, 22.0, FontWeight.w400),
+      ('徐家汇', 18.0, 26.0, FontWeight.w400),
       ('轨道交通', 16.0, 22.0, FontWeight.w400),
       ('上海', 14.0, 20.0, FontWeight.w400),
       ('−¥4.00', 18.0, 24.0, FontWeight.w400),
@@ -83,7 +83,7 @@ void main() {
     await tester.tap(find.text('陆家嘴'));
     await tester.pumpAndSettle();
     for (final text in tester.widgetList<Text>(find.text('08:42'))) {
-      expect(text.style!.fontSize, 22);
+      expect(text.style!.fontSize, 16);
       expect(text.style!.fontWeight, FontWeight.w400);
     }
     controller.back();
@@ -208,7 +208,7 @@ void main() {
     final time = tester.widget<Text>(
       find.descendant(of: row, matching: find.text('07:52')),
     );
-    // 单向公交仅记录上车，时间比常规小两号（22 → 16）且不加粗。
+    // 单向公交仅记录上车，时间与常规时间同为 16dp 且不加粗。
     expect(time.style!.fontSize, 16);
     expect(time.style!.fontWeight, FontWeight.w400);
     expect(find.text('公交'), findsWidgets);

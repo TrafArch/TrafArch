@@ -45,193 +45,229 @@ extension _GalleryDetail on _GalleryViewState {
         ),
       ],
     };
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: _header(
-            '卡片详情',
-            back: true,
-            actions: [
-              _menuAnchor(
-                'detail-card-${card.id}',
-                _icon(
-                  Icons.more_horiz_rounded,
-                  '${card.name} 管理',
-                  () => _openDropdown(
-                    GalleryOverlay.cardMenu,
-                    'detail-card-${card.id}',
-                    card: card,
-                  ),
-                  outlined: false,
-                  grouped: true,
-                ),
-              ),
-              _icon(
-                Icons.download_outlined,
-                '导出本卡记录',
-                () => c.export(),
-                outlined: false,
-                grouped: true,
-                color: t.text,
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: NotificationListener<ScrollMetricsNotification>(
-            onNotification: (notification) {
-              // Short ledgers still contract to the capsule: pad the scroll
-              // range up to the shrink distance so the content can ride up.
-              // Adjust by the measured shortfall so a clamped (zero) extent
-              // converges instead of subtracting a stale deficit.
-              _detailMaxExtent = notification.metrics.maxScrollExtent;
-              final target = math.max(
-                0.0,
-                _detailScrollDeficit +
-                    (_detailShrinkDistance - _detailMaxExtent),
-              );
-              if ((target - _detailScrollDeficit).abs() > .5) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (!mounted) return;
-                  final next = math.max(
-                    0.0,
-                    _detailScrollDeficit +
-                        (_detailShrinkDistance - _detailMaxExtent),
-                  );
-                  if ((next - _detailScrollDeficit).abs() > .5) {
-                    _updateDetail(() => _detailScrollDeficit = next);
-                  }
-                });
-              }
-              return false;
-            },
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final width = math.max(1.0, constraints.maxWidth - 32);
-                final layout = _DetailCardLayout(
-                  context,
-                  card,
-                  _balancePresentation(card),
-                  width,
-                );
-                final tabsHeight = math.max(
-                  54.0,
-                  MediaQuery.textScalerOf(context).scale(18) + 26,
-                );
-                final metadata =
-                    '${card.city} · 尾号 ${card.tail}   上次读取 ${card.when}';
-                final metadataHeight =
-                    _measureDetailText(
-                      context,
-                      metadata,
-                      GalleryTypography.caption,
-                      width,
-                    ).height +
-                    16;
-                _detailShrinkDistance =
-                    layout.expandedHeight +
-                    metadataHeight -
-                    layout.compactHeight;
-                return CustomScrollView(
-                  key: PageStorageKey(
-                    'gallery-${c.generation}-detail-${card.id}',
-                  ),
-                  slivers: [
-                    SliverPadding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      sliver: SliverPersistentHeader(
-                        pinned: true,
-                        delegate: _TripsSummaryDelegate(
-                          expandedHeight:
-                              layout.expandedHeight +
-                              metadataHeight +
-                              tabsHeight +
-                              24,
-                          compactHeight: layout.compactHeight + tabsHeight + 24,
-                          builder: (progress) => ColoredBox(
-                            key: const ValueKey('detail-pinned-header'),
-                            color: t.bg,
-                            child: Column(
-                              children: [
-                                SizedBox(
-                                  height: _detailLerp(
-                                    layout.expandedHeight,
-                                    layout.compactHeight,
-                                    progress,
-                                  ),
-                                  child: _GalleryDetailFace(
-                                    key: ValueKey('detail-face-${card.id}'),
-                                    card: card,
-                                    balance: _balancePresentation(card),
-                                    layout: layout,
-                                    progress: progress,
-                                  ),
+    const navHeight = 56.0;
+    return NotificationListener<ScrollMetricsNotification>(
+      onNotification: (notification) {
+        // Short ledgers still collapse the face fully: pad the scroll range up
+        // to the shrink distance so the content can ride up. Adjust by the
+        // measured shortfall so a clamped (zero) extent converges instead of
+        // subtracting a stale deficit.
+        _detailMaxExtent = notification.metrics.maxScrollExtent;
+        final target = math.max(
+          0.0,
+          _detailScrollDeficit + (_detailShrinkDistance - _detailMaxExtent),
+        );
+        if ((target - _detailScrollDeficit).abs() > .5) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            final next = math.max(
+              0.0,
+              _detailScrollDeficit +
+                  (_detailShrinkDistance - _detailMaxExtent),
+            );
+            if ((next - _detailScrollDeficit).abs() > .5) {
+              _updateDetail(() => _detailScrollDeficit = next);
+            }
+          });
+        }
+        return false;
+      },
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = math.max(1.0, constraints.maxWidth - 32);
+          final layout = _DetailCardLayout(
+            context,
+            card,
+            _balancePresentation(card),
+            width,
+          );
+          final tabsHeight = math.max(
+            54.0,
+            MediaQuery.textScalerOf(context).scale(18) + 26,
+          );
+          final metadata =
+              '${card.city} · 尾号 ${card.tail}   上次读取 ${card.when}';
+          final metadataHeight =
+              _measureDetailText(
+                context,
+                metadata,
+                GalleryTypography.caption,
+                width,
+              ).height +
+              16;
+          _detailShrinkDistance = layout.expandedHeight + metadataHeight;
+          return CustomScrollView(
+            key: PageStorageKey(
+              'gallery-${c.generation}-detail-${card.id}',
+            ),
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                sliver: SliverPersistentHeader(
+                  pinned: true,
+                  delegate: _TripsSummaryDelegate(
+                    expandedHeight:
+                        navHeight +
+                        layout.expandedHeight +
+                        metadataHeight +
+                        tabsHeight +
+                        24,
+                    compactHeight: navHeight + tabsHeight + 24,
+                    builder: (progress) => ColoredBox(
+                      key: const ValueKey('detail-pinned-header'),
+                      color: t.bg,
+                      child: Column(
+                        children: [
+                          _detailNav(progress, card, navHeight),
+                          SizedBox(
+                            height: _detailLerp(
+                              layout.expandedHeight,
+                              0,
+                              progress,
+                            ),
+                            child: ClipRect(
+                              child: Opacity(
+                                opacity: (1 - progress).clamp(0.0, 1.0),
+                                child: _GalleryDetailFace(
+                                  key: ValueKey('detail-face-${card.id}'),
+                                  card: card,
+                                  balance: _balancePresentation(card),
+                                  layout: layout,
                                 ),
-                                ClipRect(
-                                  child: SizedBox(
-                                    height:
-                                        metadataHeight *
-                                        (1 - progress),
-                                    child: OverflowBox(
-                                      alignment: Alignment.topLeft,
-                                      minHeight: metadataHeight,
-                                      maxHeight: metadataHeight,
-                                      child: Opacity(
-                                        opacity:
-                                            (1 - progress * 3)
-                                                .clamp(0.0, 1.0),
-                                        child: Align(
-                                          alignment: Alignment.centerLeft,
-                                          child: _text(
-                                            metadata,
-                                            role: GalleryTypography.caption,
-                                            color: t.muted,
-                                          ),
-                                        ),
-                                      ),
+                              ),
+                            ),
+                          ),
+                          ClipRect(
+                            child: SizedBox(
+                              height: metadataHeight * (1 - progress),
+                              child: OverflowBox(
+                                alignment: Alignment.topLeft,
+                                minHeight: metadataHeight,
+                                maxHeight: metadataHeight,
+                                child: Opacity(
+                                  opacity: (1 - progress * 3).clamp(0.0, 1.0),
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: _text(
+                                      metadata,
+                                      role: GalleryTypography.caption,
+                                      color: t.muted,
                                     ),
                                   ),
                                 ),
-                                _gap(12),
-                                SizedBox(
-                                  height: tabsHeight,
-                                  child: _tabs(
-                                    ['最近交易', '消费统计', '卡片信息'],
-                                    c.detailTab,
-                                    (index) =>
-                                        c.update(() => c.detailTab = index),
-                                    id: 'detail-tabs',
-                                  ),
-                                ),
-                                _gap(12),
-                              ],
+                              ),
                             ),
                           ),
+                          _gap(12),
+                          SizedBox(
+                            height: tabsHeight,
+                            child: _tabs(
+                              ['最近交易', '消费统计', '卡片信息'],
+                              c.detailTab,
+                              (index) => c.update(() => c.detailTab = index),
+                              id: 'detail-tabs',
+                            ),
+                          ),
+                          _gap(12),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  4,
+                  16,
+                  30 +
+                      MediaQuery.paddingOf(context).bottom +
+                      _detailScrollDeficit,
+                ),
+                sliver: SliverList.builder(
+                  itemCount: body.length,
+                  itemBuilder: (_, index) => _detailSwipe(body[index]),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  /// Top navigation whose title crossfades from the page name to the card
+  /// identity (name · tail) as the face collapses (spec 2.2 §13, user mock).
+  Widget _detailNav(double progress, GalleryCard card, double height) {
+    final titleHeight = MediaQuery.textScalerOf(context).scale(32);
+    return Container(
+      height: height,
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: t.line.withValues(alpha: progress)),
+        ),
+      ),
+      child: Row(
+        children: [
+          _icon(Icons.arrow_back_rounded, '返回', c.back),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SizedBox(
+              height: titleHeight,
+              child: Stack(
+                alignment: Alignment.centerLeft,
+                children: [
+                  Opacity(
+                    opacity: (1 - progress * 1.6).clamp(0.0, 1.0),
+                    child: Semantics(
+                      header: true,
+                      child: _text('卡片详情', role: GalleryTypography.page),
+                    ),
+                  ),
+                  Opacity(
+                    opacity: ((progress - .25) / .75).clamp(0.0, 1.0),
+                    child: Semantics(
+                      header: true,
+                      child: _text(
+                        '${card.name} · ${card.tail}',
+                        role: GalleryTypography.card.copyWith(
+                          fontSize: 18,
+                          height: 26 / 18,
                         ),
+                        lines: 1,
                       ),
                     ),
-                    SliverPadding(
-                      padding: EdgeInsets.fromLTRB(
-                        16,
-                        4,
-                        16,
-                        30 +
-                            MediaQuery.paddingOf(context).bottom +
-                            _detailScrollDeficit,
-                      ),
-                      sliver: SliverList.builder(
-                        itemCount: body.length,
-                        itemBuilder: (_, index) => _detailSwipe(body[index]),
-                      ),
-                    ),
-                  ],
-                );
-              },
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-      ],
+          _actionGroup('page', [
+            _menuAnchor(
+              'detail-card-${card.id}',
+              _icon(
+                Icons.more_horiz_rounded,
+                '${card.name} 管理',
+                () => _openDropdown(
+                  GalleryOverlay.cardMenu,
+                  'detail-card-${card.id}',
+                  card: card,
+                ),
+                outlined: false,
+                grouped: true,
+              ),
+            ),
+            _icon(
+              Icons.download_outlined,
+              '导出本卡记录',
+              () => c.export(),
+              outlined: false,
+              grouped: true,
+              color: t.text,
+            ),
+          ]),
+        ],
+      ),
     );
   }
 
@@ -699,7 +735,7 @@ extension _GalleryDetail on _GalleryViewState {
                                             builder: (_, value, _) => Container(
                                               height: math.max(2, value * barHeight),
                                               decoration: BoxDecoration(
-                                                color: t.secondary,
+                                                color: t.data1,
                                                 borderRadius:
                                                     BorderRadius.circular(6),
                                               ),
@@ -734,7 +770,7 @@ extension _GalleryDetail on _GalleryViewState {
 
   Widget _spendingCategories(GallerySpendingSummary summary) {
     const names = ['轨道交通', '公共汽电车', '其他'];
-    final colors = [t.action, t.secondary, t.accent];
+    final colors = [t.data1, t.data2, t.data3];
     final fractions = [
       for (final name in names)
         summary.total == 0
@@ -754,7 +790,7 @@ extension _GalleryDetail on _GalleryViewState {
             : const Duration(milliseconds: 260),
         curve: Curves.easeInOutCubic,
         builder: (_, values, child) => CustomPaint(
-          painter: _SpendingRingPainter(values, colors, t.surface2),
+          painter: _SpendingRingPainter(values, colors, t.chartTrack),
           child: child,
         ),
         child: Center(
@@ -877,29 +913,10 @@ class _DetailCardLayout {
     this.width,
   ) {
     scaler = MediaQuery.textScalerOf(context);
-    final compactAmount = _measureDetailText(
-      context,
-      balance.displayText,
-      GalleryTypography.amount,
-      double.infinity,
-    ).width;
-    amountWidth = math.min(width * .46, math.max(80.0, compactAmount));
-    compactTitleWidth = math.max(24.0, width - 44 - amountWidth);
-    compactTitleHeight = _measureDetailText(
-      context,
-      card.name,
-      GalleryTypography.label.copyWith(
-        fontSize: 14,
-        height: 20 / 14,
-        fontWeight: FontWeight.w600,
-      ),
-      compactTitleWidth,
-    ).height;
-    compactHeight = math.max(56.0, compactTitleHeight + scaler.scale(18) + 18);
     expandedTitleHeight = _measureDetailText(
       context,
       card.name,
-      GalleryTypography.card.copyWith(fontSize: 20, height: 26 / 20),
+      GalleryTypography.card.copyWith(fontSize: 18, height: 24 / 18),
       math.max(24, width - 40 - (_faceBrands(card).isEmpty ? 0 : 80)),
     ).height;
     tailWidth = _measureDetailText(
@@ -914,7 +931,7 @@ class _DetailCardLayout {
     final numberWidth = _measureDetailText(
       context,
       balance.number,
-      GalleryTypography.hero,
+      GalleryTypography.balance,
       double.infinity,
     ).width;
     final unitWidth =
@@ -929,295 +946,169 @@ class _DetailCardLayout {
         numberWidth + unitWidth + tailWidth + 16 > width - 40 ||
         scaler.scale(14) / 14 >= 1.5;
     expandedHeight = math.max(
-      204.0 + math.max(0, scaler.scale(14) / 14 - 1) * 80,
+      180.0 + math.max(0, scaler.scale(14) / 14 - 1) * 80,
       40 +
           expandedTitleHeight +
-          32 +
-          scaler.scale(44) +
+          28 +
+          scaler.scale(38) +
           (stacked ? scaler.scale(18) + 12 : 0),
     );
   }
   final double width;
   late final TextScaler scaler;
-  late final double amountWidth,
-      compactTitleWidth,
-      compactTitleHeight,
-      compactHeight,
-      expandedHeight,
-      expandedTitleHeight,
-      tailWidth;
+  late final double expandedHeight, expandedTitleHeight, tailWidth;
   late final bool stacked;
 }
 
-/// One surface and one set of fields move with scroll position; no duplicate card.
-class _GalleryDetailFace extends StatefulWidget {
+/// The expanded identity card. On scroll the parent shrinks and fades this
+/// surface to nothing while the top navigation takes over the card identity
+/// (spec 2.2 §13–14, user mock); there is no separate compact capsule.
+class _GalleryDetailFace extends StatelessWidget {
   const _GalleryDetailFace({
     super.key,
     required this.card,
     required this.balance,
     required this.layout,
-    required this.progress,
   });
   final GalleryCard card;
   final GalleryBalancePresentation balance;
   final _DetailCardLayout layout;
-  final double progress;
-  @override
-  State<_GalleryDetailFace> createState() => _GalleryDetailFaceState();
-}
-
-class _GalleryDetailFaceState extends State<_GalleryDetailFace> {
-  static final _palettes = Expando<Map<Brightness, Future<ColorScheme>>>();
-  Uint8List? _image;
-  Brightness? _brightness;
-  ColorScheme? _scheme;
-  int _request = 0;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _loadPalette();
-  }
-
-  @override
-  void didUpdateWidget(_GalleryDetailFace oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _loadPalette();
-  }
-
-  void _loadPalette() {
-    final bytes = widget.card.image;
-    final brightness = Theme.of(context).brightness;
-    if (identical(bytes, _image) && _brightness == brightness) return;
-    _image = bytes;
-    _brightness = brightness;
-    _scheme = null;
-    final request = ++_request;
-    if (bytes == null) return;
-    final cache = _palettes[bytes] ??= {};
-    final future = cache[brightness] ??= ColorScheme.fromImageProvider(
-      provider: ResizeImage(MemoryImage(bytes), width: 96),
-      brightness: brightness,
-    );
-    future.then(
-      (scheme) {
-        if (mounted && request == _request) setState(() => _scheme = scheme);
-      },
-      onError: (Object _, StackTrace _) {
-        /* Keep the theme fallback. */
-      },
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
     final tokens = Theme.of(context).extension<GalleryTokens>()!;
-    final face = GalleryCardFace.byId(widget.card.face);
-    final target = widget.card.image == null
-        ? face.end
-        : _scheme?.primaryContainer ?? tokens.tone;
-    return TweenAnimationBuilder<Color?>(
-      tween: ColorTween(end: target),
-      duration: MediaQuery.disableAnimationsOf(context)
-          ? Duration.zero
-          : const Duration(milliseconds: 240),
-      curve: Curves.easeInOutCubic,
-      builder: (context, capsuleColor, _) {
-        final p = widget.progress;
-        final card = widget.card;
-        final layout = widget.layout;
-        final balance = widget.balance;
-        final foreground = Color.lerp(
-          card.image == null
-              ? face.foreground
-              : GalleryCardFace.imageForeground,
-          card.image == null
-              ? face.foreground
-              : _scheme?.onPrimaryContainer ?? tokens.onTone,
-          p,
-        )!;
-        final secondary = Color.lerp(
-          card.image == null
-              ? face.secondaryForeground
-              : GalleryCardFace.imageSecondaryForeground,
-          foreground,
-          p,
-        )!;
-        final nameStyle = TextStyle.lerp(
-          GalleryTypography.card.copyWith(fontSize: 20, height: 26 / 20),
-          GalleryTypography.label.copyWith(
-            fontSize: 14,
-            height: 20 / 14,
-            fontWeight: FontWeight.w600,
-          ),
-          p,
-        )!.copyWith(color: foreground);
-        final numberStyle =
-            TextStyle.lerp(
-              GalleryTypography.hero,
-              GalleryTypography.amount,
-              p,
-            )!.copyWith(
-              color: foreground,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            );
-        final unitStyle = GalleryTypography.caption.copyWith(color: secondary);
-        final height = _detailLerp(
-          layout.expandedHeight,
-          layout.compactHeight,
-          p,
-        );
-        final expandedNumberTop =
-            layout.expandedHeight -
-            20 -
-            layout.scaler.scale(44) -
-            (layout.stacked ? layout.scaler.scale(18) + 12 : 0);
-        final compactNumberTop =
-            (layout.compactHeight - layout.scaler.scale(26)) / 2;
-        final numberLeft = _detailLerp(
-          20,
-          layout.width - 16 - layout.amountWidth,
-          p,
-        );
-        final expandedAmountWidth = math.max(
-          1.0,
-          layout.width - 40 - (layout.stacked ? 0 : layout.tailWidth + 16),
-        );
-        final nameWidth = _detailLerp(
-          math.max(
-            24.0,
-            layout.width - 40 - (_faceBrands(card).isEmpty ? 0 : 80),
-          ),
-          layout.compactTitleWidth,
-          p,
-        );
-        final tailCompact = p >= .5;
-        return Container(
-          key: ValueKey('card-face-${card.id}'),
-          width: double.infinity,
-          height: height,
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(_detailLerp(22, 28, p)),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color.lerp(face.start, capsuleColor, p)!,
-                Color.lerp(face.end, capsuleColor, p)!,
-              ],
+    final face = GalleryCardFace.byId(card.face);
+    final foreground = card.image == null
+        ? face.foreground
+        : GalleryCardFace.imageForeground;
+    final secondary = card.image == null
+        ? face.secondaryForeground
+        : GalleryCardFace.imageSecondaryForeground;
+    final nameStyle = GalleryTypography.card.copyWith(
+      fontSize: 18,
+      height: 24 / 18,
+      color: foreground,
+    );
+    final numberStyle = GalleryTypography.balance.copyWith(
+      color: foreground,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
+    final unitStyle = GalleryTypography.caption.copyWith(color: secondary);
+    final numberTop =
+        layout.expandedHeight -
+        20 -
+        layout.scaler.scale(38) -
+        (layout.stacked ? layout.scaler.scale(18) + 12 : 0);
+    final amountWidth = math.max(
+      1.0,
+      layout.width - 40 - (layout.stacked ? 0 : layout.tailWidth + 16),
+    );
+    final nameWidth = math.max(
+      24.0,
+      layout.width - 40 - (_faceBrands(card).isEmpty ? 0 : 80),
+    );
+    return Container(
+      key: ValueKey('card-face-${card.id}'),
+      width: double.infinity,
+      height: layout.expandedHeight,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [face.start, face.end],
+        ),
+        image: card.image == null
+            ? null
+            : DecorationImage(
+                image: MemoryImage(card.image!),
+                fit: BoxFit.cover,
+                colorFilter: const ColorFilter.mode(
+                  Color(0x99070c16),
+                  BlendMode.darken,
+                ),
+              ),
+        border: Border.all(color: tokens.line.withValues(alpha: .3)),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            left: 20,
+            top: 20,
+            width: nameWidth,
+            child: Text(
+              card.name,
+              key: ValueKey('face-title-${card.id}'),
+              style: nameStyle,
             ),
-            image: card.image == null
-                ? null
-                : DecorationImage(
-                    image: MemoryImage(card.image!),
-                    fit: BoxFit.cover,
-                    opacity: 1 - p,
-                    colorFilter: const ColorFilter.mode(
-                      Color(0x99070c16),
-                      BlendMode.darken,
-                    ),
-                  ),
-            border: Border.all(color: tokens.line.withValues(alpha: .3)),
           ),
-          child: Stack(
-            children: [
-              Positioned(
-                left: _detailLerp(20, 16, p),
-                top: _detailLerp(20, 9, p),
-                width: nameWidth,
-                child: Text(
-                  card.name,
-                  key: ValueKey('face-title-${card.id}'),
-                  style: nameStyle,
-                ),
-              ),
-              if (_faceBrands(card).isNotEmpty)
-                Positioned(
-                  top: 20,
-                  right: 20,
-                  child: Opacity(
-                    opacity: (1 - p * 3).clamp(0.0, 1.0),
-                    child: _FaceBrandMark(card: card, id: 'detail-face'),
-                  ),
-                ),
-              Positioned(
-                left: numberLeft,
-                top: _detailLerp(expandedNumberTop, compactNumberTop, p),
-                width: _detailLerp(expandedAmountWidth, layout.amountWidth, p),
-                child: Semantics(
-                  label: '余额，${balance.displayText}',
-                  excludeSemantics: true,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.lerp(
-                      Alignment.centerLeft,
-                      Alignment.centerRight,
-                      p,
-                    )!,
-                    child: balance.known
-                        ? Row(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.baseline,
-                            textBaseline: TextBaseline.alphabetic,
-                            children: [
-                              if (balance.currencyLabel.isNotEmpty) ...[
-                                Text(
-                                  balance.currencyLabel,
-                                  key: ValueKey('face-currency-${card.id}'),
-                                  style: unitStyle,
-                                ),
-                                const SizedBox(width: 8),
-                              ],
-                              Text(
-                                balance.number,
-                                key: ValueKey('face-number-${card.id}'),
-                                style: numberStyle,
-                              ),
-                            ],
-                          )
-                        : Text(
-                            balance.displayText,
-                            key: ValueKey('face-unknown-${card.id}'),
-                            style: unitStyle,
+          if (_faceBrands(card).isNotEmpty)
+            Positioned(
+              top: 20,
+              right: 20,
+              child: _FaceBrandMark(card: card, id: 'detail-face'),
+            ),
+          Positioned(
+            left: 20,
+            top: numberTop,
+            width: amountWidth,
+            child: Semantics(
+              label: '余额，${balance.displayText}',
+              excludeSemantics: true,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: balance.known
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          if (balance.currencyLabel.isNotEmpty) ...[
+                            Text(
+                              balance.currencyLabel,
+                              key: ValueKey('face-currency-${card.id}'),
+                              style: unitStyle,
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          Text(
+                            balance.number,
+                            key: ValueKey('face-number-${card.id}'),
+                            style: numberStyle,
                           ),
-                  ),
-                ),
-              ),
-              Positioned(
-                left: tailCompact ? 16 : null,
-                right: tailCompact ? null : 20,
-                top: tailCompact ? 9 + layout.compactTitleHeight : null,
-                bottom: tailCompact ? null : 20,
-                width: tailCompact
-                    ? layout.compactTitleWidth
-                    : layout.tailWidth + 2,
-                child: Opacity(
-                  opacity: tailCompact
-                      ? ((p - .65) / .35).clamp(0.0, 1.0)
-                      : (1 - p / .35).clamp(0.0, 1.0),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: tailCompact
-                        ? Alignment.centerLeft
-                        : Alignment.centerRight,
-                    child: Text(
-                      '**** ${card.tail}',
-                      key: ValueKey('face-tail-${card.id}'),
-                      maxLines: 1,
-                      softWrap: false,
-                      style: GalleryTypography.caption.copyWith(
-                        fontFamily: 'monospace',
-                        color: secondary,
+                        ],
+                      )
+                    : Text(
+                        balance.displayText,
+                        key: ValueKey('face-unknown-${card.id}'),
+                        style: unitStyle,
                       ),
-                    ),
-                  ),
+              ),
+            ),
+          ),
+          Positioned(
+            right: 20,
+            bottom: 20,
+            width: layout.tailWidth + 2,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(
+                '**** ${card.tail}',
+                key: ValueKey('face-tail-${card.id}'),
+                maxLines: 1,
+                softWrap: false,
+                style: GalleryTypography.caption.copyWith(
+                  fontFamily: 'monospace',
+                  color: secondary,
                 ),
               ),
-            ],
+            ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 }

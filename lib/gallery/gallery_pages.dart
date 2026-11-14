@@ -448,8 +448,8 @@ extension _GalleryPages on _GalleryViewState {
           color: redLine
               ? t.shanghaiLineOne
               : rail
-              ? t.tone
-              : t.action,
+              ? t.tripBadgeRail
+              : t.tripBadgeBus,
           borderRadius: BorderRadius.circular(8),
         ),
         child: _text(
@@ -458,8 +458,8 @@ extension _GalleryPages on _GalleryViewState {
           color: redLine
               ? t.onShanghaiLineOne
               : rail
-              ? t.onTone
-              : t.onAction,
+              ? t.tripBadgeOnRail
+              : t.tripBadgeOnBus,
         ),
       );
     }
@@ -468,9 +468,8 @@ extension _GalleryPages on _GalleryViewState {
       String phase,
       String line,
       String time,
-      String station, {
-      required bool departure,
-    }) => Semantics(
+      String station,
+    ) => Semantics(
       label: phase,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -484,9 +483,6 @@ extension _GalleryPages on _GalleryViewState {
                 _text(
                   time,
                   role: GalleryJourneyTypography.time,
-                  weight: departure && time != '未记录'
-                      ? FontWeight.w600
-                      : FontWeight.w400,
                   lines: 1,
                 ),
                 if (line.isNotEmpty) ...[
@@ -624,7 +620,6 @@ extension _GalleryPages on _GalleryViewState {
                               entryLine,
                               boarding,
                               entry,
-                              departure: true,
                             ),
                           ),
                           Padding(
@@ -651,7 +646,6 @@ extension _GalleryPages on _GalleryViewState {
                               exitLine,
                               trip['time'] as String? ?? '未记录',
                               exit,
-                              departure: false,
                             ),
                           ),
                         ],

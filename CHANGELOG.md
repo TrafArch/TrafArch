@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-14 — 按 spec 2.2 重写颜色管理体系与卡片详情
+
+- 构建开发者原签名 arm64-v8a Release APK `1.0.5-beta.2+4167`（33.8 MiB，2.x gallery 入口），实拆 Android versionCode `4167`、显示名称 `TrafArch`、包名 `com.kajolno.TrafArch`、native-code `arm64-v8a`、targetSdk 37；原签名证书 SHA-256 `3b86c431…12b5` 与历次交付一致，APK Signature Scheme v2 校验通过。AppInfo 保留本次号 `4167`，pubspec 自动预留 `4168`。源码 TU／CU 数据库及配套 manifest 的 SHA256 与修改前相同，未修改数据库、表结构、记录或历史快照；未连接设备进行覆盖安装验收。
+
+- 按 `TrafArch_spec_2.2` 重写 2.x 颜色管理体系：新增 OKLCH 颜色引擎 `lib/gallery/gallery_color_engine.dart`，五套预设主题改用规范 Primary／Tint／Dark（靛蓝 #4E7098／#D5E4F1／#344B68、青绿 #4F8F87／#DCEFEA／#315F5A、藤紫 #8275A8／#E9E3F2／#51466F、蔷薇 #B87583／#F4E3E7／#794653、麦金 #B58A4A／#F4EBD8／#72562E），靛蓝保留 App Icon 锚点；亮色共享中性色（canvas #F7F8FA／card #FFFFFF／secondary #F0F2F5／tertiary #E9EDF2／border #E3E7EC、#CDD4DD／text #29313D、#66717F），暗色用独立表面阶梯不反转亮色。交互主色按白字（亮）／深字（暗）≥4.5 对比自动校正；语义色 success #4E9A75／warning #D5A04E／error #C66C72／info #6288BB 独立于主题。数据色 data-1..5 与 chart-track 由种子 hue 旋转生成、与 UI 主题分离，分类映射固定（轨道→data-1／公交→data-2／其他→data-3），消费统计环形图与柱状图改用数据色。莫奈与预设共用引擎，系统核心调色板保留其 primary／onPrimary 作为 action。
+- 卡片详情按 spec 2.2 与用户界面稿改造：展开态余额 30dp Semibold、卡名 18dp Semibold；上滑卡面淡出并完全收起（不再保留彩色胶囊），身份信息（卡名 · 尾号）融入顶部导航栏，导航下细线随收缩淡入，三段 Tab 直接吸顶在导航下方；单一纵向滚动容器，短内容补足滚动距离仍可完整收起，回顶恢复完整卡面。自定义图片仍铺满展开卡面，收缩后导航为中性表面。
+- 行程卡片按用户要求调整：时间字号减小两号 22→16dp；进站／出站端所有文字（时间、站名）一律常规字重，不再加粗出发时间；线路徽章不跟随新颜色引擎，冻结改造前配色（轨道浅靛蓝底深字、公交深靛蓝底白字、上海 1 号线红，含暗色变体）。日期分组标题仍 26dp／600。
+- 同步 design.md、docs/DESIGN_MEMORY.md、docs/GALLERY.md；更新设计对比度、行程排版、详情收缩与图片卡面回归断言，逐文件通过并渲图复核亮暗展开／收缩／统计与行程徽章。TU／CU 数据库及配套 manifest 的 SHA256 保持不变。
+
 ## 2026-11-13 — 许可性能、轨道图标与深圳通余额修复
 
 - 构建开发者原签名 arm64-v8a Release APK `1.0.5-beta.2+4166`（33.8 MiB，2.x gallery 入口），实拆 Android versionCode `4166`、显示名称 `TrafArch`、包名 `com.kajolno.TrafArch`、native-code `arm64-v8a`；原签名证书 SHA-256 `3b86c431…12b5` 与历次交付一致，ZIP CRC 校验通过。AppInfo 保留本次号 `4166`，pubspec 自动预留 `4167`。源码 TU／CU 数据库及配套 manifest 的 SHA256 与修改前相同，未修改数据库、表结构、记录或历史快照；未连接设备进行覆盖安装验收。
