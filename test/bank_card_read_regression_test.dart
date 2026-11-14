@@ -138,6 +138,35 @@ void main() {
         expect(app.summary.pan, isNull);
       },
     );
+
+    test(
+      'valid later PAN and expiry are recovered from public records',
+      () async {
+        final malformed =
+            _tlv('5A', '4111A11111111111') + _tlv('5F24', '271332');
+        final firstValid =
+            _tlv('5A', '4111111111111111') + _tlv('5F24', '271231');
+        final alternate =
+            _tlv('5A', '4012888888881881') + _tlv('5F24', '281231');
+        final replay = ReplayCardTransport([
+          _fci(_visa),
+          _atcResponse,
+          for (final tags in [malformed, firstValid, alternate])
+            '${_tlv('70', tags)}9000',
+          ..._recordEnd,
+        ]);
+        final app = await (await EmvParser.load((_) async => _emptyDictionary))
+            .parse(const CardApplication(aidHex: _visa), replay);
+        expect(app.summary.pan, '4111111111111111');
+        expect(app.summary.panSourceTag, '5A');
+        expect(app.summary.expiry, '2027-12-31');
+        expect(app.summary.expirySourceTag, '5F24');
+        expect(app.summary.byTag('5A')?.rawValueHex, '4111111111111111');
+        expect(app.summary.byTag('5F24')?.rawValueHex, '271231');
+        expect(app.records.first.rawHex, _tlv('70', malformed));
+        expect(app.records.last.rawHex, _tlv('70', alternate));
+      },
+    );
   });
 
   group('read-only APDU replay', () {
@@ -439,7 +468,9 @@ void main() {
         expect(result.status, BankCardStatus.partial);
         expect(
           result.issues.any(
-            (i) => i.stage == 'enumeration' && i.code == 'select_rejected',
+            (i) =>
+                i.stage == 'enumeration' &&
+                i.code == 'directory_select_rejected',
           ),
           isTrue,
         );
@@ -528,6 +559,46 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(ApplicationDetailPage), findsOneWidget);
   });
+
+  testWidgets(
+    'selected Visa with two public certificate records shows missing fields',
+    (tester) async {
+      final fci =
+          '${_tlv('6F', _tlv('84', _visa) + _tlv('A5', _tlv('50', '56495341204445424954') + _tlv('9F38', '9F6604')))}9000';
+      final replay = _CheckedReplay([
+        (_ppseSelect, _directory([_visa])),
+        (_select(_visa), fci),
+        for (final aid in kPbocSupplementalAids) (_select(aid), '6A82'),
+        (_select(_visa), fci),
+        (_getAtc, '9F360200069000'),
+        ('00B2010C00', '6A83'),
+        ('00B2011400', '6A83'),
+        ('00B2011C00', '${_tlv('70', _tlv('90', '0102'))}9000'),
+        ('00B2021C00', '70078F01019F3201039000'),
+        ('00B2031C00', '6A83'),
+        for (var sfi = 4; sfi <= 30; sfi++)
+          (HexCodec.encode(ApduCommand.readRecord(sfi, 1)), '6A83'),
+      ]);
+      final result = await (await _analyzer()).analyze(replay);
+      final app = result.applications.single;
+      expect(result.identifiedProtocolFamily, 'emv');
+      expect(result.status, BankCardStatus.partial);
+      expect(app.application.selected, isTrue);
+      expect(app.records.map((r) => (r.sfi, r.recordNumber)), [(3, 1), (3, 2)]);
+      expect(app.summary.pan, isNull);
+      expect(app.summary.expiry, isNull);
+      expect(app.dataTags.single.rawValueHex, '0006');
+      replay.verifyComplete();
+
+      await tester.pumpWidget(
+        MaterialApp(home: ApplicationDetailPage(application: app)),
+      );
+      expect(find.text('卡号 (PAN)'), findsOneWidget);
+      expect(find.text('有效期'), findsOneWidget);
+      expect(find.text('未读到'), findsNWidgets(2));
+      expect(find.text('卡号来源'), findsNothing);
+    },
+  );
 
   testWidgets(
     'track-only application shows extracted PAN separately in details',
