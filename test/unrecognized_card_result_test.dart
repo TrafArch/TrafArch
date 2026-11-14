@@ -27,6 +27,7 @@ import 'support/test_database.dart';
 
 const _unknownLabel = '暂无可识别卡种';
 const _ppse = '00A404000E325041592E5359532E444446303100';
+const _mastercard = 'A0000000041010';
 const _tagLost = TransportFailure(
   kind: TransportFailureKind.tagLost,
   code: 'TAG_LOST',
@@ -78,6 +79,46 @@ void main() {
     );
   });
 
+  test('a static candidate refusal is not directory evidence', () async {
+    final result = await BankCardProbeImpl(_analyzer).probe((command) async {
+      return HexCodec.encode(command) == _select(_mastercard)
+          ? [0x69, 0x85]
+          : [0x6A, 0x82];
+    });
+    expect(result, isNull);
+  });
+
+  test(
+    'advertised application refusal is preserved without identifying the card',
+    () async {
+      final result = await BankCardProbeImpl(_analyzer).probe((command) async {
+        final hex = HexCodec.encode(command);
+        if (hex == _ppse) return _directoryResponse(_mastercard);
+        if (hex == _select(_mastercard)) return [0x69, 0x85];
+        return [0x6A, 0x82];
+      });
+
+      expect(result, isNotNull);
+      final bank = result!;
+      expect(bank.status, BankCardStatus.enumerationFailed);
+      expect(bank.identifiedProtocolFamily, 'unknown');
+      expect(bank.applications, isEmpty);
+      expect(bank.discoveredApplications, isEmpty);
+      expect(bank.transportFailure, isNull);
+      expect(bank.issues.single.code, 'directory_select_rejected');
+      expect(bank.issues.single.message, contains('6985'));
+      expect(bank.issues.single.message, contains('使用条件不满足'));
+      expect(
+        bank.traces.every((trace) => trace.commandHex.startsWith('00A4')),
+        isTrue,
+      );
+      expect(bankStatusText(bank, detailed: true), contains('6985'));
+      final info = captureCardInfo(BankReadOutcome(bank));
+      expect(info['identificationState'], 'unknown');
+      expect(info['cardType'], isNull);
+    },
+  );
+
   test('invalid directory AID does not block a later valid application', () async {
     const validAid = 'A0000000041010';
     final link = _Transport((hex) {
@@ -100,6 +141,69 @@ void main() {
     expect(result.failures.single.reason, 'invalid_aid');
     expect(link.commands, isNot(contains(_select('01020304'))));
   });
+
+  test('PPSE with only invalid AIDs falls back to known applications', () async {
+    const visaAid = 'A0000000031010';
+    const shortAid = '01020304';
+    final link = _Transport((hex) {
+      if (hex == _ppse) {
+        return HexCodec.decode(
+          '${_tlv('6F', _tlv('61', _tlv('4F', shortAid)) + _tlv('61', _tlv('4F', '')))}9000',
+        );
+      }
+      if (hex == _select(visaAid)) {
+        return HexCodec.decode('${_tlv('6F', _tlv('84', visaAid))}9000');
+      }
+      return [0x6A, 0x82];
+    });
+    final result = await EmvApplicationEnumerator(
+      (command) => link.transceive(Uint8List.fromList(command)),
+    ).enumerate();
+    expect(result.usedFallback, isTrue);
+    expect(result.applications.single.aidHex, visaAid);
+    expect(result.transportFailure, isNull);
+    expect(
+      result.failures
+          .where((failure) => failure.reason == 'invalid_aid')
+          .map((failure) => failure.aidHex),
+      containsAllInOrder([shortAid, '']),
+    );
+    expect(link.commands, isNot(contains(_select(shortAid))));
+    expect(link.commands, isNot(contains(_select(''))));
+  });
+
+  test(
+    'invalid PBOC-like AID keeps valid PBOC supplemental discovery',
+    () async {
+      const visaAid = 'A0000000031010';
+      const pbocAid = 'A000000333010101';
+      const oversizedAid = 'A000000333010101112233445566778899';
+      final link = _Transport((hex) {
+        if (hex == _ppse) {
+          final entries =
+              _tlv('61', _tlv('4F', oversizedAid)) +
+              _tlv('61', _tlv('4F', visaAid));
+          return HexCodec.decode('${_tlv('6F', entries)}9000');
+        }
+        if (hex == _select(visaAid)) {
+          return HexCodec.decode('${_tlv('6F', _tlv('84', visaAid))}9000');
+        }
+        if (hex == _select(pbocAid)) {
+          return HexCodec.decode('${_tlv('6F', _tlv('84', pbocAid))}9000');
+        }
+        return [0x6A, 0x82];
+      });
+      final result = await EmvApplicationEnumerator(
+        (command) => link.transceive(Uint8List.fromList(command)),
+      ).enumerate();
+      expect(result.usedFallback, isFalse);
+      expect(result.applications.map((app) => app.aidHex), [visaAid, pbocAid]);
+      expect(result.transportFailure, isNull);
+      expect(result.failures.single.aidHex, oversizedAid);
+      expect(result.failures.single.reason, 'invalid_aid');
+      expect(link.commands, isNot(contains(_select(oversizedAid))));
+    },
+  );
 
   test('unknown protocol and unsupported transit use the requested label', () {
     expect(bankFamilyText('unknown'), _unknownLabel);
@@ -233,7 +337,13 @@ void main() {
     );
   }
 
-  for (final scenario in ['metadata', 'unsupported', 'bank-io', 'transit-io']) {
+  for (final scenario in [
+    'metadata',
+    'unsupported',
+    'bank-io',
+    'transit-io',
+    'directory-refusal',
+  ]) {
     testWidgets('homepage $scenario result shows an unrecognized card', (
       tester,
     ) async {
@@ -268,6 +378,10 @@ void main() {
       expect(find.text(_unknownLabel), findsOneWidget);
       expect(find.textContaining('EMV'), findsNothing);
       expect(find.textContaining('银行卡'), findsNothing);
+      if (scenario == 'directory-refusal') {
+        expect(find.textContaining('6985'), findsOneWidget);
+        expect(find.textContaining('使用条件不满足'), findsOneWidget);
+      }
       await tester.pumpWidget(const SizedBox());
     });
   }
@@ -280,6 +394,9 @@ Future<BankCardAnalyzer> _analyzer() async => BankCardAnalyzer([
 
 String _tlv(String tag, String data) =>
     '$tag${(data.length ~/ 2).toRadixString(16).padLeft(2, '0')}$data';
+List<int> _directoryResponse(String aid) => HexCodec.decode(
+  '${_tlv('6F', _tlv('A5', _tlv('BF0C', _tlv('61', _tlv('4F', aid)))))}9000',
+);
 String _select(String aid) =>
     '00A40400${(aid.length ~/ 2).toRadixString(16).padLeft(2, '0')}${aid}00'
         .toUpperCase();
@@ -313,7 +430,12 @@ class _UnknownChannel implements NfcChannel {
 
   @override
   Future<List<int>> transceive(List<int> apdu) async {
-    if (HexCodec.encode(apdu) == _ppse) {
+    final hex = HexCodec.encode(apdu);
+    if (scenario == 'directory-refusal') {
+      if (hex == _ppse) return _directoryResponse(_mastercard);
+      if (hex == _select(_mastercard)) return [0x69, 0x85];
+    }
+    if (hex == _ppse) {
       _ppseCount++;
       // Transit detection probes PPSE first. Fail only in the dedicated bank
       // phase for bank-io; transit-io models failure before that phase.

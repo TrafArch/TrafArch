@@ -7,6 +7,7 @@ import '../../../platform/nfc/felica_channel.dart';
 import '../../../platform/nfc/nfc_models.dart';
 import '../../../platform/nfc/nfc_service.dart';
 import '../../../platform/nfc/transport_failure_mapper.dart';
+import '../../../protocols/bank/domain/models/bank_card_result.dart';
 import '../../../protocols/transport/transport_failure.dart';
 import '../domain/card_read_outcome.dart';
 import '../domain/captured_frame.dart';
@@ -199,9 +200,14 @@ class ScanController extends OwnedNotifier {
           );
         }
       }
-      recording.result = result is UnsupportedReadOutcome
-          ? DiagnosticOutcome.unsupported
-          : DiagnosticOutcome.success;
+      recording.result = switch (result) {
+        UnsupportedReadOutcome() => DiagnosticOutcome.unsupported,
+        BankReadOutcome(
+          card: BankCardResult(status: BankCardStatus.enumerationFailed),
+        ) =>
+          DiagnosticOutcome.partial,
+        _ => DiagnosticOutcome.success,
+      };
       recording.sink?.event(
         'read_result',
         phase: DiagnosticPhase.processing,

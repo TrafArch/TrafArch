@@ -1,6 +1,9 @@
 /// PPSE 目录名称：2PAY.SYS.DDF01。
 const String kEmvPpseName = '2PAY.SYS.DDF01';
 
+/// PSE 目录名称；目录 SFI 由选择响应提供。
+const String kEmvPseName = '1PAY.SYS.DDF01';
+
 /// 境内 PBOC 应用 AID：部分一芯双应用卡的 PPSE 只列出境外 EMV 应用，
 /// 需要额外直接探测这些 AID 才能进入境内 PBOC 应用。
 ///
@@ -36,7 +39,7 @@ bool isPbocAid(String aidHex) {
   return kPbocAidPrefixes.any(aid.startsWith);
 }
 
-/// PPSE 不可用时按序尝试的候选 AID 回退表。
+/// PPSE 和 PSE 均未提供有效候选时按序尝试的 AID 回退表。
 /// 说明：并非完整清单，发卡方可能使用其它 AID；本表合并了国际支付网络
 /// 与境内 PBOC 常见 AID，命中任一即视为枚举成功。
 const List<String> kEmvCandidateAids = [

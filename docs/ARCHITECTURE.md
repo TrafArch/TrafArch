@@ -93,7 +93,9 @@ android/app/src/main/kotlin/com/kajolno/TrafArch/
 
 ### 银行卡严格只读边界
 
-EMV／PBOC 共享 `ContactlessReadParser`，银行卡解析版本为 0.3.0。读取仅选择应用、以 `80 CA 9F 36 Le` 直接取得 ATC，再用绝对记录号 READ RECORD 枚举 SFI 1..30 的公开记录。每文件从记录 1 开始，拒绝后停止该文件；成功与失败读取共用单应用 254 次预算，通信失败即停止。没有 GPO 提供的 AFL，因此无法保证记录完整性；受访问条件保护的字段保持缺失，结果为部分读取。
+EMV／PBOC 共享 `ContactlessReadParser`，银行卡解析版本为 0.3.2。应用发现优先使用 PPSE 中有效的 AID。PPSE 无有效候选时尝试 `1PAY.SYS.DDF01`，仅在 FCI 的 `6F/A5/88` 指定目录 SFI（1..10）时顺序读取目录记录，从 `70/61/4F` 提取 AID。PSE 路径未选中应用且通信仍正常时，继续探测尚未尝试的内置候选 AID。目录明示应用的 SELECT 被拒时保留状态字及诊断，卡种以成功选择的应用为准。
+
+应用选择成功后，以 `80 CA 9F 36 Le` 直接取得 ATC，再用绝对记录号 READ RECORD 枚举 SFI 1..30 的公开记录。每文件从记录 1 开始，拒绝后停止该文件；成功与失败读取共用单应用 254 次预算，通信失败即停止。没有 GPO 提供的 AFL，因此无法保证记录完整性。卡号和有效期分别优先取首条有效的 `5A` 和 `5F24`，并沿用二磁道标签回退；未取得的字段在已选应用详情中显示“未读到”。
 
 GPO 在部分非接触卡上会生成应用密文或递增 ATC，零金额与空 PDOL 均不能保证无副作用。当前流程移除 GPO 及 PDOL 组包，不提供交易模式或回退。`BankReadOnlyPolicy` 对 CLA、INS、参数和 APDU 结构实行封闭白名单，既用于 `exchangeReadOnly` 的初始及续传指令，也用于最接近实际通道的 `RecordingCardTransport`，禁止 GPO、GENERATE AC、PIN、认证、写入及未知指令。只允许 SELECT by name、绝对 READ RECORD、读取 9F36 的 GET DATA 和 GET RESPONSE，保留有界 61XX／6CXX 处理。`ParsedApplication.dataTags` 保留直接读取结果并进入界面、恢复捕获及诊断；旧 `gpoTags/gpoHex` 仅兼容已有捕获，不重读或改写历史数据。原生通道冻结契约不变。
 
