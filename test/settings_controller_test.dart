@@ -2,8 +2,48 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/features/settings/application/settings_controller.dart';
 import 'package:transit_card_analyzer/platform/storage/app_logger.dart';
 import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
+import 'package:transit_card_analyzer/shared/domain/archive_conflict_policy.dart';
 
 void main() {
+  group('SettingsController 已存在记录策略', () {
+    test('默认覆盖，并持久化跳过与每次询问', () async {
+      final store = MemorySettingsStore();
+      final controller = SettingsController(
+        store,
+        AppLogger(store: MemoryLogStore()),
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      expect(controller.archiveConflictPolicy, ArchiveConflictPolicy.overwrite);
+
+      await controller.setArchiveConflictPolicy(ArchiveConflictPolicy.skip);
+      expect(store.values[SettingsKeys.archiveConflictPolicy], 'skip');
+
+      await controller.setArchiveConflictPolicy(ArchiveConflictPolicy.ask);
+      expect(store.values[SettingsKeys.archiveConflictPolicy], 'ask');
+
+      final reloaded = SettingsController(
+        store,
+        AppLogger(store: MemoryLogStore()),
+      );
+      addTearDown(reloaded.dispose);
+      await reloaded.initialize();
+      expect(reloaded.archiveConflictPolicy, ArchiveConflictPolicy.ask);
+    });
+
+    test('未知持久化值回退覆盖', () async {
+      final controller = SettingsController(
+        MemorySettingsStore({
+          SettingsKeys.archiveConflictPolicy: 'not-a-policy',
+        }),
+        AppLogger(store: MemoryLogStore()),
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      expect(controller.archiveConflictPolicy, ArchiveConflictPolicy.overwrite);
+    });
+  });
+
   group('SettingsController 上海交通卡可透支余额', () {
     test('未保存过设置时默认关闭，初始化不会开启', () async {
       final controller = SettingsController(

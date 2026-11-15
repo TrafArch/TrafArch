@@ -9,6 +9,8 @@ class TftLocalCard {
   TftLocalCard(this._apdu);
   final ApduExchange _apdu;
 
+  static const String moduleName = '天府通';
+
   Future<bool> select(CardInfo info, List<ApduRecord> records) async {
     final r = await _apdu(CardAid.tft, 'SELECT TFT', records: records);
     if (r == null) return false;

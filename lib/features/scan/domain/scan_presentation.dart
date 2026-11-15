@@ -3,6 +3,7 @@ import '../../transit_analysis/cu_transaction_analysis.dart';
 import '../../transit_analysis/tunion_analysis_models.dart';
 import '../../transit_analysis/balance_interpretation.dart';
 import '../../../protocols/transit/card_parser.dart';
+import '../../../protocols/transit/multiapp/application_evidence.dart';
 import '../../reference_data/data/tunion_knowledge_base.dart';
 import '../../reference_data/domain/city_union_knowledge_base.dart';
 import '../../../protocols/felica/felica.dart';
@@ -66,6 +67,12 @@ class ScanPresentation {
   ShanghaiTransitUnionResult? get shanghaiTransitUnion => switch (outcome) {
     TransitReadOutcome(:final shanghai) => shanghai,
     _ => null,
+  };
+
+  /// 本次会话逐应用探测证据（一芯多应用卡各应用并列保留）。
+  List<ApplicationEvidence> get applications => switch (outcome) {
+    TransitReadOutcome(:final applications) => applications,
+    _ => const [],
   };
   CjT331PublicInfo? get cityUnionPublicInfo {
     for (final file in cityUnionFiles) {

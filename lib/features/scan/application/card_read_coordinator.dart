@@ -42,6 +42,7 @@ class CardReadCoordinator {
         return TransitReadOutcome(
           result!.parsedCard!,
           shanghai: result.shanghai,
+          applications: result.applications,
         );
       }
     } else if (tag.felicaConnected) {
