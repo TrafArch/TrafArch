@@ -13,7 +13,7 @@
 - 贡献者林天仪的描述追加"为我们提供大量的token用于开发！"。
 - 新增 `gallery_face_crop_test` 裁切器专项回归（同路由转换、双区域独立性、覆盖约束、单区域/全部重置、暂存与提交、关闭丢弃、预测性返回两级退出、取消选图）与卡包胶囊滚动回归；既有卡面选图、设置、首页、动效与钱包回归适配新入口与新流程。
 - 回归：180 个测试文件逐文件跑，178 个整文件通过；`gallery_visual_review` 为 opt-in 截图 harness（未设 `GALLERY_CAPTURE_DIR` 时跳过）；`gallery_wallet_refinements` 仅"卡面字段长余额/未知余额"一项 `pumpAndSettle` 超时失败，该失败在本轮之前的干净 HEAD 工作树同样复现，与本次改动无关，文件内其余断言（含新胶囊与选图流程）全部通过。裁切器与卡包胶囊另以真字体 golden 渲图复核：双区域真实卡面预览、导航栏、提示与底部完成区、胶囊完全收拢态均符合 spec。`flutter analyze` 无新增告警（保留既有 info 与 Material 弃用提示）。
-- 构建开发者原签名 armeabi-v7a Release APK `1.0.5-beta.2+4171`（30.8 MiB，`build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk`，入口 `lib/main_gallery.dart`），AppInfo 保留 `4171`、pubspec 自动预留 `4172`；按用户本轮指示跳过安装包拆包核验（未再比对包名、versionCode 与证书）。构建期间官方引擎存储源下载新版 armeabi-v7a 引擎包挂起，改用 `FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn` 后正常完成。TU/CU 数据库与 manifest 的 SHA256 前后一致（`517c59f3…` / `77ba3ad4…` / `37cfdbdc…`）。未连接设备安装。
+- 构建开发者原签名 arm64-v8a Release APK `1.0.5-beta.2+4172`（33.7 MiB，`build/app/outputs/flutter-apk/app-arm64-v8a-release.apk`，入口 `lib/main_gallery.dart`），AppInfo 保留 `4172`、pubspec 自动预留 `4173`；按用户本轮指示跳过安装包拆包核验（未再比对包名、versionCode 与证书）。此前先误按 armeabi-v7a 构建 `4171`（`app-armeabi-v7a-release.apk`，30.8 MiB）并消耗该构建号，用户指出 ABI 歧义后改按 arm64-v8a 重新构建。构建期间官方引擎存储源下载新版 ABI 引擎包挂起，改用 `FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn` 后正常完成。TU/CU 数据库与 manifest 的 SHA256 前后一致（`517c59f3…` / `77ba3ad4…` / `37cfdbdc…`）。未连接设备安装。
 
 ## 2026-11-15 — 设置页与半模态弹窗改版（spec 2.3）
 
