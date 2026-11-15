@@ -23,8 +23,9 @@ class CardRepository {
   /// 读取快照（余额 / 货币 / 交易条数）与最近读取时间（不触碰
   /// [SavedCards.customName]）；未命中时新建档案。
   /// [sessionDataJson] 为本次读取的原始记录快照（CardSessionSnapshot v3）；
-  /// 同时作为**读取批次**累积写入 [CardReadBatches]（同卡同内容去重，
-  /// 历史不覆盖），[parseVersion] 记录产出批次的解析口径版本。
+  /// 默认作为**读取批次**累积写入 [CardReadBatches]（同卡同内容去重）。
+  /// [replaceBatches] 为 true 时先删除该卡旧批次，使显式“覆盖”只保留本次
+  /// 读取的可展示历史；[parseVersion] 记录产出批次的解析口径版本。
   Future<void> saveIdentity({
     required String fingerprint,
     required CardArchiveIdentity identity,
@@ -36,6 +37,7 @@ class CardRepository {
     int? parseVersion,
     DateTime? readAt,
     ArchiveContext? readContext,
+    bool replaceBatches = false,
   }) async {
     final at = (readAt ?? DateTime.now()).millisecondsSinceEpoch;
     final hasIdentityObservation =
@@ -85,9 +87,22 @@ class CardRepository {
             );
       } else {
         cardId = existing.id;
-        // Preserve the scalar BEFORE replacement, even when unrelated batches
-        // already exist or the legacy payload cannot be decoded.
-        await db.backfillLegacySnapshots(cardId: cardId);
+        if (replaceBatches) {
+          // Explicit "overwrite" means the newly accepted read replaces the
+          // prior displayed history for this card. Skip legacy backfill so a
+          // stale scalar cannot resurrect an older record.
+          await (db.delete(
+            db.cardReadBatches,
+          )..where((t) => t.cardId.equals(cardId))).go();
+          await db.customStatement(
+            'DELETE FROM archive_field_observation_times WHERE card_id=?',
+            [cardId],
+          );
+        } else {
+          // Preserve the scalar BEFORE replacement, even when unrelated
+          // batches already exist or the legacy payload cannot be decoded.
+          await db.backfillLegacySnapshots(cardId: cardId);
+        }
         // Retained summary fields are ordered by their own observation times.
         // A newer partial capture does not erase the last known observation;
         // a delayed intermediate capture may improve it without replacing the
@@ -158,8 +173,8 @@ class CardRepository {
         if (identity.cityName != null) 'cityName': at,
         if (hasIdentityObservation) 'identity': at,
       });
-      // 读取批次累积：本次有记录快照时追加一行；同卡内容完全一致
-      // （同一记录集重复读取）时去重跳过，历史批次绝不覆盖。
+      // 读取批次默认累积：本次有记录快照时追加一行；同卡内容完全一致
+      // （同一记录集重复读取）时去重跳过。显式覆盖已在上面移除旧批次。
       {
         final duplicate =
             await (db.select(db.cardReadBatches)

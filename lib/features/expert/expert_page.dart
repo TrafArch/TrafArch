@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../protocols/transit/card_parser.dart';
+import '../../shared/presentation/application_evidence_panel.dart';
 import '../qr/presentation/qr_action_button.dart';
 import '../../app/app_dependencies.dart';
 import '../home/presentation/bank_summary_panel.dart';
@@ -185,6 +186,10 @@ class _ExpertPageState extends State<ExpertPage> {
               : IdentityPanel(app: app),
         RecentResultKind.bank => BankSummaryPanel(bank: bank!, detailed: true),
       },
+      if (app.applications.isNotEmpty) ...[
+        const Divider(height: 32),
+        ApplicationEvidencePanel(applications: app.applications),
+      ],
     ], showReadHint: false);
   }
 

@@ -2,25 +2,141 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:transit_card_analyzer/features/archive/application/archive_controller.dart';
 import 'package:transit_card_analyzer/features/archive/application/archive_history.dart';
 import 'package:transit_card_analyzer/features/archive/data/app_database.dart';
 import 'package:transit_card_analyzer/features/archive/data/card_repository.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_session_snapshot.dart';
 import 'package:transit_card_analyzer/features/archive/presentation/archive_trip_presenter.dart';
+import 'package:transit_card_analyzer/features/reference_data/data/tunion_knowledge_base.dart';
+import 'package:transit_card_analyzer/features/scan/domain/card_read_outcome.dart';
+import 'package:transit_card_analyzer/features/scan/domain/scan_presentation.dart';
 import 'package:transit_card_analyzer/features/transit_analysis/balance_interpretation.dart';
 import 'package:transit_card_analyzer/features/transit_analysis/tunion_analysis_models.dart';
 import 'package:transit_card_analyzer/features/trips/journey_presentation.dart';
 import 'package:transit_card_analyzer/features/trips/trip_cards_view.dart';
 import 'package:transit_card_analyzer/features/trips/trip_entry_card.dart';
 import 'package:transit_card_analyzer/features/trips/trip_entry_details.dart';
+import 'package:transit_card_analyzer/platform/storage/log_exporter.dart';
 import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_models.dart';
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_process_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_trip_matcher.dart';
+import 'package:transit_card_analyzer/shared/domain/archive_conflict_policy.dart';
+
+import 'support/test_database.dart';
 
 typedef _Journey = JourneyPresentation<TripCardPresentation<ArchiveRecordKind>>;
 
 void main() {
+  test('同一张卡覆盖保存两次只保留第二次批次和一组行程详情', () async {
+    final database = testDatabase();
+    final repository = CardRepository(database);
+    final controller = ArchiveController(
+      repository,
+      const MethodChannelLogExporter(),
+      (_) {},
+    );
+    addTearDown(controller.dispose);
+
+    final application = _rail();
+    final process = TUnionProcessRecord(
+      sfi: 0x1A,
+      recordNumber: 1,
+      recordName: '城市轨道应用信息记录',
+      raw: _hexBytes(application.rawHex!),
+      railTransit: application,
+    );
+
+    void stage(String attempt, DateTime readAt) {
+      controller.stage(
+        ScanPresentation(
+          TransitReadOutcome(
+            ParsedCard(
+              parserId: CardParserIds.tunion,
+              parserName: '交通联合',
+              info: TUnionCardInfo(
+                applicationSerial: '03100000000000000001',
+                issuerId: '1122334455667788',
+                balanceFen: 9700,
+              ),
+              transactions: const [],
+              transitProcessRecords: [process],
+              selectedAidHex: 'A000000632010105',
+            ),
+          ),
+          KnowledgeBase.empty(),
+        ),
+        attempt,
+        readAt,
+        const [],
+      );
+    }
+
+    stage('overwrite-read-1', DateTime(2026, 11, 15, 12));
+    expect(
+      await controller.accept(
+        'overwrite-read-1',
+        conflictPolicy: ArchiveConflictPolicy.overwrite,
+        replaceExistingHistory: true,
+      ),
+      isTrue,
+    );
+
+    stage('overwrite-read-2', DateTime(2026, 11, 15, 12, 1));
+    expect(
+      await controller.accept(
+        'overwrite-read-2',
+        conflictPolicy: ArchiveConflictPolicy.overwrite,
+        replaceExistingHistory: true,
+      ),
+      isTrue,
+    );
+
+    final card = (await repository.getAllCards()).single;
+    final history = await ArchiveHistory(repository).load(card.id);
+    final journeys = _journeys(history);
+
+    expect(history.batches, hasLength(1));
+    expect(history.records, hasLength(1));
+    expect(history.records.single.sources, hasLength(1));
+    expect(journeys, hasLength(1));
+    expect(journeys.single.events, hasLength(2));
+    expect(journeys.single.events.expand((event) => event.sourceIds).toSet(), {
+      history.batches.single.id,
+    });
+    expect(
+      history.batches.single.decoded.snapshot?.extensions['captureAttemptId'],
+      'overwrite-read-2',
+    );
+  });
+
+  test('同一笔0x18交易读取两次只呈现一段行程', () {
+    final payloads = [
+      _snapshot(
+        trips: [_trip(entry: true), _trip(entry: false)],
+        marker: 'same-transaction-read-0',
+      ),
+      _snapshot(
+        trips: [_trip(entry: true), _trip(entry: false)],
+        marker: 'same-transaction-read-1',
+      ),
+    ];
+    final history = _history(payloads);
+    final before = _savedFields(history);
+
+    final journeys = _journeys(history);
+
+    expect(history.records, hasLength(2));
+    expect(
+      history.records.every((record) => record.sources.length == 2),
+      isTrue,
+    );
+    expect(journeys, hasLength(1));
+    expect(journeys.single.state, JourneyState.completed);
+    _expectUnchanged(history, payloads, before);
+  });
+
   test('同一原始1A进站由进行中更新为完成后只呈现完成行程并保留两批证据', () {
     final payloads = [
       _snapshot(rails: [_rail(status: 1, withExit: false)], marker: 'entry'),
@@ -834,6 +950,15 @@ void _putInt(List<int> target, int start, int value) {
 String _hex(List<int> raw) => raw
     .map((byte) => byte.toRadixString(16).padLeft(2, '0').toUpperCase())
     .join();
+
+List<int> _hexBytes(String hex) {
+  final normalized = hex.replaceAll(RegExp(r'\s+'), '');
+  expect(normalized.length.isEven, isTrue);
+  return [
+    for (var i = 0; i < normalized.length; i += 2)
+      int.parse(normalized.substring(i, i + 2), radix: 16),
+  ];
+}
 
 String _savedFields(ArchiveHistoryResult history) =>
     jsonEncode([for (final record in history.records) record.fields]);

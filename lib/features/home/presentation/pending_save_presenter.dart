@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../app/app_dependencies.dart';
 import '../../archive/domain/pending_card_save.dart';
+import '../../../shared/domain/archive_conflict_policy.dart';
 
 /// One modal at a time, bound to the captured save ID and AppDependencies owner.
 /// A new scan invalidates both queued effects and an already visible dialog.
@@ -53,7 +56,7 @@ class _PendingSavePresenterState extends State<PendingSavePresenter> {
     _scheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scheduled = false;
-      if (mounted) _presentNext();
+      if (mounted) unawaited(_presentNext());
     });
     WidgetsBinding.instance.ensureVisualUpdate();
   }
@@ -62,7 +65,8 @@ class _PendingSavePresenterState extends State<PendingSavePresenter> {
       mounted &&
       identical(widget.app, owner) &&
       widget.active &&
-      !owner.autoSaveEnabled &&
+      (!owner.autoSaveEnabled ||
+          owner.archiveConflictPolicy == ArchiveConflictPolicy.ask) &&
       !owner.scanning &&
       owner.pendingCardSave?.pendingSaveId == id;
 
@@ -76,7 +80,7 @@ class _PendingSavePresenterState extends State<PendingSavePresenter> {
     }
   }
 
-  void _presentNext() {
+  Future<void> _presentNext() async {
     if (_inFlight) {
       final owner = _dialogOwner;
       final id = _dialogId;
@@ -94,18 +98,36 @@ class _PendingSavePresenterState extends State<PendingSavePresenter> {
         ScaffoldMessenger.maybeOf(context)
             ?.showSnackBar(SnackBar(content: Text(notice)));
       }
-      return;
+      if (app.archiveConflictPolicy != ArchiveConflictPolicy.ask) return;
     }
     final pending = app.pendingCardSave;
-    if (pending == null ||
-        pending.pendingSaveId == _shownId ||
+    if (pending == null) return;
+    final exists = await app.archiveCardExists(pending.fingerprint);
+    if (!mounted ||
+        app.pendingCardSave?.pendingSaveId != pending.pendingSaveId ||
+        !widget.active) {
+      return;
+    }
+    if (app.autoSaveEnabled && !exists) return;
+    if (exists && app.archiveConflictPolicy == ArchiveConflictPolicy.skip) {
+      app.declinePendingSave(pending.pendingSaveId);
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(content: Text('已跳过已存在的记录：${pending.displayName}')),
+      );
+      return;
+    }
+    if (pending.pendingSaveId == _shownId ||
         !_isCurrent(app, pending.pendingSaveId)) {
       return;
     }
-    _show(app, pending);
+    await _show(app, pending, exists: exists);
   }
 
-  Future<void> _show(AppDependencies owner, PendingCardSave pending) async {
+  Future<void> _show(
+    AppDependencies owner,
+    PendingCardSave pending, {
+    required bool exists,
+  }) async {
     final id = pending.pendingSaveId;
     _inFlight = true;
     _shownId = id;
@@ -115,7 +137,12 @@ class _PendingSavePresenterState extends State<PendingSavePresenter> {
     final route = DialogRoute<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => SaveCardDialog(pending: pending),
+      builder: (_) => SaveCardDialog(
+        pending: pending,
+        conflict: exists,
+        askEachTime:
+            owner.archiveConflictPolicy == ArchiveConflictPolicy.ask,
+      ),
     );
     _navigator = navigator;
     _route = route;
@@ -125,7 +152,12 @@ class _PendingSavePresenterState extends State<PendingSavePresenter> {
       await route.completed;
       if (!_isCurrent(owner, id)) return;
       if (save == true) {
-        final ok = await owner.acceptPendingSave(id);
+        final ok = await owner.acceptPendingSave(
+          id,
+          conflictPolicy: exists
+              ? ArchiveConflictPolicy.overwrite
+              : null,
+        );
         if (!ok && mounted && _isCurrent(owner, id)) {
           _shownId =
               null; // The restored pending capture can be confirmed again.
@@ -164,18 +196,31 @@ class _PendingSavePresenterState extends State<PendingSavePresenter> {
 }
 
 class SaveCardDialog extends StatelessWidget {
-  const SaveCardDialog({super.key, required this.pending});
+  const SaveCardDialog({
+    super.key,
+    required this.pending,
+    this.conflict = false,
+    this.askEachTime = false,
+  });
   final PendingCardSave pending;
+  final bool conflict;
+  final bool askEachTime;
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('保存卡片'),
+    title: Text(conflict ? '记录已存在' : '保存卡片'),
     scrollable: true,
     content: Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('是否将本次读取的卡片保存到卡片列表？'),
+        Text(
+          conflict
+              ? askEachTime
+                    ? '这张卡已有记录，请选择跳过或覆盖本次保存。'
+                    : '这张卡已有记录，是否覆盖本次保存？'
+              : '是否将本次读取的卡片保存到卡片列表？',
+        ),
         const SizedBox(height: 12),
         _row(context, '卡片名称', pending.displayName),
         _row(context, '卡号', pending.cardNumberText),
@@ -184,11 +229,17 @@ class SaveCardDialog extends StatelessWidget {
     actions: [
       TextButton(
         onPressed: () => Navigator.pop(context, false),
-        child: const Text('不保存'),
+        child: Text(
+          conflict && askEachTime
+              ? '跳过'
+              : conflict
+              ? '取消'
+              : '不保存',
+        ),
       ),
       FilledButton(
         onPressed: () => Navigator.pop(context, true),
-        child: const Text('保存'),
+        child: Text(conflict ? '覆盖' : '保存'),
       ),
     ],
   );

@@ -119,8 +119,8 @@ void main() {
           expect(result.isHarbinTransitUnion, isHarbin);
           expect(result.cu.probed, isHarbin);
         }
-        expect(link.cuSelects, isHarbin ? 1 : 0);
-        expect(link.cuReads, isHarbin ? 1 : 0);
+        expect(link.cuSelects, (isHarbin || unified) ? 1 : 0);
+        expect(link.cuReads, (isHarbin || unified) ? 1 : 0);
       });
     }
   }
@@ -215,11 +215,15 @@ void main() {
             expect(result.cu.records, isEmpty);
           }
         }
-        final shouldCu = isShanghai || (unified && !ordinaryTu);
+        final shouldCu = isShanghai || unified;
         expect(link.cuSelects, shouldCu ? 1 : 0);
         expect(link.cuReads, shouldCu ? 1 : 0);
         expect(link.tuReads, serial == null ? 0 : 1);
-        expect(link.mfCount, shouldCu ? 2 : 1);
+        expect(
+          link.mfCount,
+          unified && ordinaryTu ? 1 : (shouldCu ? 2 : 1),
+          reason: 'TU 已确认后的快速 CU 探测不重置 MF',
+        );
       });
     }
   }

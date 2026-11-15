@@ -50,7 +50,7 @@ void main() {
       );
       expect(CardParserIds.isTUnionFamily(card.parserId), isTrue);
       expect(link.sztSelects, isShenzhen ? 1 : 0);
-      expect(link.cuSelects, 0);
+      expect(link.cuSelects, isShenzhen ? 0 : 2);
       expect(link.tuReads, 1);
       expect(bank.calls, 0);
       expect(card.info.balanceFen, 500);

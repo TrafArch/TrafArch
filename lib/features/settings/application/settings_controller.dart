@@ -4,6 +4,7 @@ import '../../../platform/browser/feedback_browser.dart';
 import '../../../platform/storage/settings_store.dart';
 import '../../../platform/storage/app_logger.dart';
 import '../../../shared/application/owned_notifier.dart';
+import '../../../shared/domain/archive_conflict_policy.dart';
 
 class SettingsController extends OwnedNotifier {
   SettingsController(
@@ -16,6 +17,8 @@ class SettingsController extends OwnedNotifier {
   final FeedbackBrowser _browser;
   final Map<String, bool> _values = {};
   final Map<String, int> _revisions = {};
+  ArchiveConflictPolicy _archiveConflictPolicy =
+      ArchiveConflictPolicy.overwrite;
   Future<void>? _initialization;
   bool _initialized = false;
   bool get initialized => _initialized;
@@ -31,6 +34,7 @@ class SettingsController extends OwnedNotifier {
 
   bool get loggingEnabled => _values[SettingsKeys.loggingEnabled] ?? false;
   bool get autoSaveEnabled => _values[SettingsKeys.autoSaveEnabled] ?? false;
+  ArchiveConflictPolicy get archiveConflictPolicy => _archiveConflictPolicy;
   bool get includeShanghaiOverdraft =>
       _values[SettingsKeys.includeShanghaiOverdraft] ?? false;
   bool get monetEnabled => _values[SettingsKeys.monetEnabled] ?? true;
@@ -121,6 +125,14 @@ class SettingsController extends OwnedNotifier {
         if (!disposed) persistenceError = '$e';
       }
     }
+    try {
+      final raw = await store.read(SettingsKeys.archiveConflictPolicy);
+      if (!disposed && raw != null) {
+        _archiveConflictPolicy = ArchiveConflictPolicy.parse(raw);
+      }
+    } catch (e) {
+      if (!disposed) persistenceError = '$e';
+    }
     if (disposed) return;
     logger.enabled = loggingEnabled;
     _initialized = true;
@@ -136,6 +148,20 @@ class SettingsController extends OwnedNotifier {
 
   Future<void> setAutoSaveEnabled(bool value) =>
       _set(SettingsKeys.autoSaveEnabled, value);
+  Future<void> setArchiveConflictPolicy(ArchiveConflictPolicy value) {
+    if (disposed || value == _archiveConflictPolicy) return Future.value();
+    _archiveConflictPolicy = value;
+    notifyListeners();
+    return _writes = _writes.then((_) async {
+      try {
+        await store.write(SettingsKeys.archiveConflictPolicy, value.name);
+        if (!disposed) persistenceError = null;
+      } catch (e) {
+        if (!disposed) persistenceError = '$e';
+      }
+      notifyListeners();
+    });
+  }
   Future<void> setIncludeShanghaiOverdraft(bool value) =>
       _set(SettingsKeys.includeShanghaiOverdraft, value);
   Future<void> setMonetEnabled(bool value) =>
