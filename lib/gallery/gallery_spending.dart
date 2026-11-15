@@ -214,15 +214,17 @@ class GallerySpendingSummary {
           GallerySpendingBucketUnit.month => '${date.year}/${date.month}',
           GallerySpendingBucketUnit.day =>
             selection.period == GallerySpendingPeriod.week
-                ? ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][date.weekday -
-                      1]
+                ? ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][date.weekday - 1]
                 : '${date.month}/${date.day}',
         },
         amount: amounts[date] ?? 0,
       ));
       date = switch (unit) {
         GallerySpendingBucketUnit.year => DateTime.utc(date.year + 1),
-        GallerySpendingBucketUnit.month => DateTime.utc(date.year, date.month + 1),
+        GallerySpendingBucketUnit.month => DateTime.utc(
+          date.year,
+          date.month + 1,
+        ),
         GallerySpendingBucketUnit.day => date.add(const Duration(days: 1)),
       };
     }

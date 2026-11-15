@@ -88,7 +88,8 @@ class GalleryNavigationLayout {
       _safeTop = math.max(media.padding.top, media.viewPadding.top),
       _titleRow = math.max(44.0, media.textScaler.scale(32)),
       _compactTitle =
-          media.size.height - math.max(media.padding.top, media.viewPadding.top) <
+          media.size.height -
+              math.max(media.padding.top, media.viewPadding.top) <
           480;
   final bool docked;
   final double safeBottom, extraHeight;

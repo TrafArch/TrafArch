@@ -62,8 +62,7 @@ extension _GalleryDetail on _GalleryViewState {
             if (!mounted) return;
             final next = math.max(
               0.0,
-              _detailScrollDeficit +
-                  (_detailShrinkDistance - _detailMaxExtent),
+              _detailScrollDeficit + (_detailShrinkDistance - _detailMaxExtent),
             );
             if ((next - _detailScrollDeficit).abs() > .5) {
               _updateDetail(() => _detailScrollDeficit = next);
@@ -85,8 +84,7 @@ extension _GalleryDetail on _GalleryViewState {
             54.0,
             MediaQuery.textScalerOf(context).scale(18) + 26,
           );
-          final metadata =
-              '${card.city} · 尾号 ${card.tail}   上次读取 ${card.when}';
+          final metadata = '${card.city} · 尾号 ${card.tail}   上次读取 ${card.when}';
           final metadataHeight =
               _measureDetailText(
                 context,
@@ -97,9 +95,7 @@ extension _GalleryDetail on _GalleryViewState {
               16;
           _detailShrinkDistance = layout.expandedHeight + metadataHeight;
           return CustomScrollView(
-            key: PageStorageKey(
-              'gallery-${c.generation}-detail-${card.id}',
-            ),
+            key: PageStorageKey('gallery-${c.generation}-detail-${card.id}'),
             slivers: [
               SliverPadding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -721,7 +717,9 @@ extension _GalleryDetail on _GalleryViewState {
                                           height: barHeight,
                                           alignment: Alignment.bottomCenter,
                                           child: TweenAnimationBuilder<double>(
-                                            key: ValueKey('spending-bar-$index'),
+                                            key: ValueKey(
+                                              'spending-bar-$index',
+                                            ),
                                             tween: Tween(
                                               begin: 0,
                                               end: bucket.amount / axis.max,
@@ -733,7 +731,10 @@ extension _GalleryDetail on _GalleryViewState {
                                                   ),
                                             curve: Curves.easeInOutCubic,
                                             builder: (_, value, _) => Container(
-                                              height: math.max(2, value * barHeight),
+                                              height: math.max(
+                                                2,
+                                                value * barHeight,
+                                              ),
                                               decoration: BoxDecoration(
                                                 color: t.data1,
                                                 borderRadius:

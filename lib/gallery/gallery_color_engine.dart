@@ -15,7 +15,9 @@ abstract final class GalleryColorEngine {
       c <= 0.0031308 ? 12.92 * c : 1.055 * math.pow(c, 1 / 2.4) - 0.055;
 
   static ({double l, double c, double h}) oklch(Color color) {
-    final r = _toLinear(color.r), g = _toLinear(color.g), b = _toLinear(color.b);
+    final r = _toLinear(color.r),
+        g = _toLinear(color.g),
+        b = _toLinear(color.b);
     final l = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b;
     final m = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b;
     final s = 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b;
@@ -78,7 +80,9 @@ abstract final class GalleryColorEngine {
   }
 
   static double _luminance(Color color) {
-    final r = _toLinear(color.r), g = _toLinear(color.g), b = _toLinear(color.b);
+    final r = _toLinear(color.r),
+        g = _toLinear(color.g),
+        b = _toLinear(color.b);
     return 0.2126 * r + 0.7152 * g + 0.0722 * b;
   }
 
@@ -107,7 +111,11 @@ abstract final class GalleryColorEngine {
   static Color readable(Color base, Color background, {double target = 4.5}) {
     if (contrast(base, background) >= target) return base;
     final darken = _luminance(background) > 0.4;
-    return _adjust(base, (c) => contrast(c, background) >= target, increase: !darken);
+    return _adjust(
+      base,
+      (c) => contrast(c, background) >= target,
+      increase: !darken,
+    );
   }
 
   /// A theme fill that carries white (light) or near-black (dark) label text.
@@ -115,20 +123,14 @@ abstract final class GalleryColorEngine {
     final seedOklch = oklch(seed);
     if (dark) {
       final label = color(0.20, seedOklch.c * 0.4, seedOklch.h);
-      return _adjust(
-        seed,
-        (c) => contrast(label, c) >= 4.5,
-        increase: true,
-      );
+      return _adjust(seed, (c) => contrast(label, c) >= 4.5, increase: true);
     }
     return _adjust(seed, (c) => contrast(_white, c) >= 4.5, increase: false);
   }
 
   static Color actionLabel(Color fill, {required bool dark}) {
     final seed = oklch(fill);
-    return dark
-        ? readable(color(0.20, seed.c * 0.4, seed.h), fill)
-        : _white;
+    return dark ? readable(color(0.20, seed.c * 0.4, seed.h), fill) : _white;
   }
 
   /// A pale container tinted by [base], paired with readable text in the spec.
@@ -164,9 +166,7 @@ abstract final class GalleryColorEngine {
     return [
       for (var i = 0; i < _dataOffsets.length; i++)
         color(
-          dark
-              ? math.min(0.80, _dataTargets[i].$1 + 0.13)
-              : _dataTargets[i].$1,
+          dark ? math.min(0.80, _dataTargets[i].$1 + 0.13) : _dataTargets[i].$1,
           dark ? _dataTargets[i].$2 * 0.85 : _dataTargets[i].$2,
           (hue + _dataOffsets[i] + 360) % 360,
         ),
@@ -182,7 +182,13 @@ abstract final class GalleryColorEngine {
 /// The five preset themes (spec 2.2 §2). Indigo keeps the app-icon anchor.
 @immutable
 class GalleryThemeSpec {
-  const GalleryThemeSpec(this.id, this.name, this.primary, this.tint, this.dark);
+  const GalleryThemeSpec(
+    this.id,
+    this.name,
+    this.primary,
+    this.tint,
+    this.dark,
+  );
   final String id, name;
   final Color primary, tint, dark;
 
@@ -195,10 +201,34 @@ class GalleryThemeSpec {
   );
   static const values = [
     indigo,
-    GalleryThemeSpec('teal', '青绿', Color(0xff4F8F87), Color(0xffDCEFEA), Color(0xff315F5A)),
-    GalleryThemeSpec('violet', '藤紫', Color(0xff8275A8), Color(0xffE9E3F2), Color(0xff51466F)),
-    GalleryThemeSpec('rose', '蔷薇', Color(0xffB87583), Color(0xffF4E3E7), Color(0xff794653)),
-    GalleryThemeSpec('amber', '麦金', Color(0xffB58A4A), Color(0xffF4EBD8), Color(0xff72562E)),
+    GalleryThemeSpec(
+      'teal',
+      '青绿',
+      Color(0xff4F8F87),
+      Color(0xffDCEFEA),
+      Color(0xff315F5A),
+    ),
+    GalleryThemeSpec(
+      'violet',
+      '藤紫',
+      Color(0xff8275A8),
+      Color(0xffE9E3F2),
+      Color(0xff51466F),
+    ),
+    GalleryThemeSpec(
+      'rose',
+      '蔷薇',
+      Color(0xffB87583),
+      Color(0xffF4E3E7),
+      Color(0xff794653),
+    ),
+    GalleryThemeSpec(
+      'amber',
+      '麦金',
+      Color(0xffB58A4A),
+      Color(0xffF4EBD8),
+      Color(0xff72562E),
+    ),
   ];
 
   static GalleryThemeSpec byId(String id) =>
@@ -250,8 +280,13 @@ ColorScheme buildGalleryScheme(
       actionOverride ?? GalleryColorEngine.actionFill(seed, dark: dark);
   final tone = dark
       ? GalleryColorEngine.container(seed, dark: true)
-      : (container: tint ?? GalleryColorEngine.container(seed, dark: false).container,
-         onContainer: darkAnchor ?? GalleryColorEngine.container(seed, dark: false).onContainer);
+      : (
+          container:
+              tint ?? GalleryColorEngine.container(seed, dark: false).container,
+          onContainer:
+              darkAnchor ??
+              GalleryColorEngine.container(seed, dark: false).onContainer,
+        );
   final surface2 = dark
       ? GalleryNeutrals.darkTertiary
       : GalleryNeutrals.lightTertiary;
@@ -261,7 +296,10 @@ ColorScheme buildGalleryScheme(
       ? GalleryNeutrals.darkRaised
       : GalleryNeutrals.lightTertiary;
   final error = GalleryColorEngine.readable(GallerySemantic.error, textSurface);
-  final errorPair = GalleryColorEngine.container(GallerySemantic.error, dark: dark);
+  final errorPair = GalleryColorEngine.container(
+    GallerySemantic.error,
+    dark: dark,
+  );
   return ColorScheme(
     brightness: dark ? Brightness.dark : Brightness.light,
     primary: primary,

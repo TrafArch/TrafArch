@@ -56,10 +56,13 @@ class GalleryTokens extends ThemeExtension<GalleryTokens> {
   Color get onDangerContainer => scheme.onErrorContainer;
   Color get _textSurface => dark ? raised : surface2;
   Color get ok =>
-      success ?? GalleryColorEngine.readable(GallerySemantic.success, _textSurface);
+      success ??
+      GalleryColorEngine.readable(GallerySemantic.success, _textSurface);
   Color get warn =>
-      warning ?? GalleryColorEngine.readable(GallerySemantic.warning, _textSurface);
-  Color get info => GalleryColorEngine.readable(GallerySemantic.info, _textSurface);
+      warning ??
+      GalleryColorEngine.readable(GallerySemantic.warning, _textSurface);
+  Color get info =>
+      GalleryColorEngine.readable(GallerySemantic.info, _textSurface);
 
   /// Data visualization palette, separate from the UI theme colors (spec 2.2
   /// §5). Category mapping is stable: rail -> data-1, bus -> data-2, other ->
@@ -83,8 +86,7 @@ class GalleryTokens extends ThemeExtension<GalleryTokens> {
       dark ? const Color(0xffdce3ff) : const Color(0xff101d50);
   Color get tripBadgeBus =>
       dark ? const Color(0xffbcc8f0) : const Color(0xff101d50);
-  Color get tripBadgeOnBus =>
-      dark ? const Color(0xff102c4d) : Colors.white;
+  Color get tripBadgeOnBus => dark ? const Color(0xff102c4d) : Colors.white;
 
   /// Keep scene callers compatible; runtime design data is independent of fixtures.
   /// Monet seeds share the preset engine for surfaces, tint and the data

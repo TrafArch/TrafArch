@@ -1341,7 +1341,9 @@ class _FaceBrandMark extends StatelessWidget {
         children: [
           for (final (index, brand) in _faceBrands(card).indexed) ...[
             if (index > 0) const SizedBox(height: 2),
-            Expanded(child: _brandLogo(card, brand, id: id, t: t)),
+            Expanded(
+              child: _brandLogo(card, brand, id: id, t: t),
+            ),
           ],
         ],
       ),
