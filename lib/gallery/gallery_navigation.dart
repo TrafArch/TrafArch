@@ -247,7 +247,16 @@ class _GalleryNavigatorState extends State<_GalleryNavigator>
         });
       }
       return NavigatorPopHandler<void>(
-        onPopWithResult: (_) => _navigator.currentState?.maybePop(),
+        onPopWithResult: (_) {
+          final controller = widget.controller;
+          final top = controller.navigationStack.last;
+          if (top.overlay == GalleryOverlay.face &&
+              controller.faceCrop?.editing == true) {
+            controller.exitFaceCrop();
+            return;
+          }
+          _navigator.currentState?.maybePop();
+        },
         child: Navigator(
           key: _navigator,
           onDidRemovePage: (page) => widget.controller.didPopRoute(
@@ -257,6 +266,7 @@ class _GalleryNavigatorState extends State<_GalleryNavigator>
             for (final entry in widget.controller.navigationStack)
               _GalleryRoutePage(
                 entry: entry,
+                controller: widget.controller,
                 reduceMotion: _reduceMotion,
                 onCreated: (route) => _routes[entry.id] = route,
                 onDisposed: () => _routes.remove(entry.id),
@@ -288,6 +298,7 @@ class _GalleryNavigatorState extends State<_GalleryNavigator>
 class _GalleryRoutePage extends Page<void> {
   _GalleryRoutePage({
     required this.entry,
+    required this.controller,
     required this.child,
     required this.reduceMotion,
     required this.onCreated,
@@ -298,6 +309,7 @@ class _GalleryRoutePage extends Page<void> {
        );
 
   final GalleryRouteEntry entry;
+  final GalleryController controller;
   final Widget child;
   final bool reduceMotion;
   final ValueChanged<ModalRoute<void>> onCreated;
@@ -495,7 +507,13 @@ class _GalleryPopupRoute extends PopupRoute<void> with _GalleryPredictiveRoute {
         configuration.reduceMotion ? 1 : motionProgress(animation!),
       ),
       dismissible: barrierDismissible,
-      onDismiss: () => navigator?.maybePop(),
+      onDismiss: () {
+        if (_faceCropping) {
+          configuration.controller.exitFaceCrop();
+        } else {
+          navigator?.maybePop();
+        }
+      },
       semanticsLabel: barrierLabel,
       barrierSemanticsDismissible: true,
     ),
@@ -532,6 +550,9 @@ class _GalleryPopupRoute extends PopupRoute<void> with _GalleryPredictiveRoute {
     final value = configuration.reduceMotion ? 1.0 : motionProgress(animation);
     final content = interactive(child);
     if (_sheet) {
+      // While the cropper is open the route stays put: the predictive gesture
+      // crossfades cropper → face sheet inside the page instead of sliding.
+      if (_cropGesture || _faceCropping) return content;
       return FractionalTranslation(
         translation: Offset(0, 1 - value),
         child: content,
@@ -542,6 +563,55 @@ class _GalleryPopupRoute extends PopupRoute<void> with _GalleryPredictiveRoute {
       opacity: value,
       child: Transform.scale(scale: .96 + .04 * value, child: content),
     );
+  }
+
+  bool get _faceCropping =>
+      configuration.entry.overlay == GalleryOverlay.face &&
+      configuration.controller.faceCrop?.editing == true;
+
+  /// True from the start of a predictive gesture that began in crop mode
+  /// until the route animation settles, so committing the gesture (which
+  /// exits crop mode) never switches mid-flight to the sheet slide.
+  bool _cropGesture = false;
+
+  void _cropGestureSettled(AnimationStatus status) {
+    if (status == AnimationStatus.completed ||
+        status == AnimationStatus.dismissed) {
+      _cropGesture = false;
+      controller?.removeStatusListener(_cropGestureSettled);
+    }
+  }
+
+  @override
+  void handleStartBackGesture({double progress = 1}) {
+    if (_faceCropping) {
+      _cropGesture = true;
+      controller?.addStatusListener(_cropGestureSettled);
+    }
+    super.handleStartBackGesture(progress: progress);
+  }
+
+  @override
+  void handleCommitBackGesture() {
+    if (_cropGesture && _faceCropping) {
+      configuration.controller.exitFaceCrop();
+      if (isCurrent) {
+        controller?.animateTo(
+          1,
+          duration: transitionDuration * (1 - controller!.value),
+          curve: _GalleryMotion.curve,
+        );
+      }
+      _settleGesture();
+      return;
+    }
+    super.handleCommitBackGesture();
+  }
+
+  @override
+  void dispose() {
+    controller?.removeStatusListener(_cropGestureSettled);
+    super.dispose();
   }
 }
 

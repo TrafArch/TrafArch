@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart'
-    show LicenseEntry, LicenseParagraph;
+    show LicenseEntry, LicenseParagraph, Uint8List;
 import 'package:flutter/material.dart';
 
 import 'gallery_data.dart';
@@ -80,6 +80,27 @@ class GalleryCardRemoval {
   final int generation;
 }
 
+/// Temporary face-image editing session (spec 2.4). It lives only while the
+/// face overlay is open; the outer sheet's 完成 commits it onto the card,
+/// while closing the sheet discards it.
+class GalleryFaceCropSession {
+  GalleryFaceCropSession({
+    required this.cardId,
+    required this.image,
+    required this.sourceSize,
+    this.detail = const GalleryFaceCrop(),
+    this.list = const GalleryFaceCrop(),
+    this.editing = true,
+  });
+
+  final String cardId;
+  final Uint8List image;
+  final Size sourceSize;
+  GalleryFaceCrop detail;
+  GalleryFaceCrop list;
+  bool editing;
+}
+
 /// UI-only session. No repositories, platform channels, IO or real card models.
 class GalleryController extends ChangeNotifier {
   GalleryController(this.data) {
@@ -136,6 +157,7 @@ class GalleryController extends ChangeNotifier {
       Map.identity();
   String exportText = '';
   String exportTitle = '导出预览';
+  GalleryFaceCropSession? faceCrop;
   String? sceneId;
   int generation = 0;
   Timer? _readTimer;
@@ -244,8 +266,43 @@ class GalleryController extends ChangeNotifier {
   @override
   void notifyListeners() {
     if (_disposed) return;
+    // The crop session belongs to the face overlay alone; leaving the overlay
+    // by any path cancels the uncommitted edit.
+    if (overlay != GalleryOverlay.face) faceCrop = null;
     _syncNavigation();
     super.notifyListeners();
+  }
+
+  void beginFaceCrop(String cardId, Uint8List image, Size sourceSize) {
+    faceCrop = GalleryFaceCropSession(
+      cardId: cardId,
+      image: image,
+      sourceSize: sourceSize,
+    );
+    record('选择卡面图片');
+    notifyListeners();
+  }
+
+  void updateFaceCrop({GalleryFaceCrop? detail, GalleryFaceCrop? list}) {
+    final session = faceCrop;
+    if (session == null) return;
+    if (detail != null) session.detail = detail;
+    if (list != null) session.list = list;
+    notifyListeners();
+  }
+
+  void exitFaceCrop() {
+    final session = faceCrop;
+    if (session == null || !session.editing) return;
+    session.editing = false;
+    notifyListeners();
+  }
+
+  void resumeFaceCrop() {
+    final session = faceCrop;
+    if (session == null || session.editing) return;
+    session.editing = true;
+    notifyListeners();
   }
 
   void _qrChanged() {
@@ -318,6 +375,10 @@ class GalleryController extends ChangeNotifier {
   }
 
   void back() {
+    if (overlay == GalleryOverlay.face && faceCrop?.editing == true) {
+      exitFaceCrop();
+      return;
+    }
     if (overlay != null) {
       overlay = null;
     } else if (page == GalleryPage.qr && qr.view != 'inspect') {

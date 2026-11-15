@@ -633,16 +633,6 @@ extension _GalleryComponents on _GalleryViewState {
           end: Alignment.bottomRight,
           colors: _faceColors(card.face),
         ),
-        image: card.image == null
-            ? null
-            : DecorationImage(
-                image: MemoryImage(card.image!),
-                fit: BoxFit.cover,
-                colorFilter: const ColorFilter.mode(
-                  Color(0x99070c16),
-                  BlendMode.darken,
-                ),
-              ),
         border: Border.all(color: const Color(0x29ffffff)),
       );
 
@@ -739,157 +729,172 @@ extension _GalleryComponents on _GalleryViewState {
     width: double.infinity,
     clipBehavior: Clip.antiAlias,
     decoration: _faceDecoration(card),
-    child: Padding(
-      padding: const EdgeInsets.all(20),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final balance = _balancePresentation(card);
-          final numberStyle = GalleryTypography.hero.copyWith(
-            inherit: false,
-            color: _faceForeground(card),
-            fontFeatures: const [FontFeature.tabularFigures()],
-          );
-          final unitStyle = GalleryTypography.caption.copyWith(
-            inherit: false,
-            color: _faceForeground(card, secondary: true),
-          );
-          final tailStyle = GalleryTypography.label.copyWith(
-            inherit: false,
-            fontFamily: 'monospace',
-            letterSpacing: .6,
-            color: _faceForeground(card, secondary: true),
-          );
-          final tailText = '**** ${card.tail}';
-          final amountWidth = balance.known
-              ? _measureText(balance.number, numberStyle).width +
-                    (balance.currencyLabel.isEmpty
-                        ? 0
-                        : _measureText(balance.currencyLabel, unitStyle).width +
-                              8)
-              : _measureText(balance.displayText, unitStyle).width;
-          final stacked =
-              _extraTextScale >= .5 ||
-              amountWidth + 16 + _measureText(tailText, tailStyle).width >
-                  constraints.maxWidth;
-          final amount = Semantics(
-            label: '余额，${balance.displayText}',
-            excludeSemantics: true,
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: balance.known
-                  ? Row(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        if (balance.currencyLabel.isNotEmpty) ...[
-                          Text(
-                            balance.currencyLabel,
-                            key: ValueKey('face-currency-${card.id}'),
-                            maxLines: 1,
-                            softWrap: false,
-                            style: unitStyle,
+    child: Stack(
+      children: [
+        if (card.image != null)
+          Positioned.fill(child: _FaceCropImage(card: card)),
+        Padding(
+          padding: const EdgeInsets.all(20),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final balance = _balancePresentation(card);
+              final numberStyle = GalleryTypography.hero.copyWith(
+                inherit: false,
+                color: _faceForeground(card),
+                fontFeatures: const [FontFeature.tabularFigures()],
+              );
+              final unitStyle = GalleryTypography.caption.copyWith(
+                inherit: false,
+                color: _faceForeground(card, secondary: true),
+              );
+              final tailStyle = GalleryTypography.label.copyWith(
+                inherit: false,
+                fontFamily: 'monospace',
+                letterSpacing: .6,
+                color: _faceForeground(card, secondary: true),
+              );
+              final tailText = '**** ${card.tail}';
+              final amountWidth = balance.known
+                  ? _measureText(balance.number, numberStyle).width +
+                        (balance.currencyLabel.isEmpty
+                            ? 0
+                            : _measureText(
+                                    balance.currencyLabel,
+                                    unitStyle,
+                                  ).width +
+                                  8)
+                  : _measureText(balance.displayText, unitStyle).width;
+              final stacked =
+                  _extraTextScale >= .5 ||
+                  amountWidth + 16 + _measureText(tailText, tailStyle).width >
+                      constraints.maxWidth;
+              final amount = Semantics(
+                label: '余额，${balance.displayText}',
+                excludeSemantics: true,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: balance.known
+                      ? Row(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            if (balance.currencyLabel.isNotEmpty) ...[
+                              Text(
+                                balance.currencyLabel,
+                                key: ValueKey('face-currency-${card.id}'),
+                                maxLines: 1,
+                                softWrap: false,
+                                style: unitStyle,
+                              ),
+                              const SizedBox(width: 8),
+                            ],
+                            Text(
+                              balance.number,
+                              key: ValueKey('face-number-${card.id}'),
+                              maxLines: 1,
+                              softWrap: false,
+                              style: numberStyle,
+                            ),
+                          ],
+                        )
+                      : Text(
+                          balance.displayText,
+                          key: ValueKey('face-unknown-${card.id}'),
+                          style: GalleryTypography.section.copyWith(
+                            color: _faceForeground(card, secondary: true),
                           ),
-                          const SizedBox(width: 8),
-                        ],
-                        Text(
-                          balance.number,
-                          key: ValueKey('face-number-${card.id}'),
-                          maxLines: 1,
-                          softWrap: false,
-                          style: numberStyle,
                         ),
-                      ],
-                    )
-                  : Text(
-                      balance.displayText,
-                      key: ValueKey('face-unknown-${card.id}'),
-                      style: GalleryTypography.section.copyWith(
-                        color: _faceForeground(card, secondary: true),
-                      ),
-                    ),
-            ),
-          );
-          final tail = Text(
-            tailText,
-            key: ValueKey('face-tail-${card.id}'),
-            style: tailStyle,
-          );
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Text(
-                      card.name,
-                      key: ValueKey('face-title-${card.id}'),
-                      style: GalleryTypography.card.copyWith(
-                        fontSize: 20,
-                        height: 26 / 20,
-                        color: _faceForeground(card),
-                      ),
-                    ),
-                  ),
-                  if (_faceBrands(card).isNotEmpty) ...[
-                    const SizedBox(width: 12),
-                    _FaceBrandMark(card: card, id: 'face'),
-                  ],
-                ],
-              ),
-              const SizedBox(height: 32),
-              Column(
+                ),
+              );
+              final tail = Text(
+                tailText,
+                key: ValueKey('face-tail-${card.id}'),
+                style: tailStyle,
+              );
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (!minimal) ...[
-                    Wrap(
-                      alignment: WrapAlignment.spaceBetween,
-                      spacing: 12,
-                      runSpacing: 4,
-                      children: [
-                        Text(
-                          '当前余额',
-                          key: ValueKey('face-balance-label-${card.id}'),
-                          style: unitStyle,
-                        ),
-                        Text('最近读取 ${card.when}', style: unitStyle),
-                      ],
-                    ),
-                    _gap(4),
-                  ],
-                  if (stacked)
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Align(alignment: Alignment.centerLeft, child: amount),
-                        _gap(12),
-                        Align(alignment: Alignment.centerRight, child: tail),
-                      ],
-                    )
-                  else
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Expanded(
-                          child: Align(
-                            alignment: Alignment.bottomLeft,
-                            child: amount,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          card.name,
+                          key: ValueKey('face-title-${card.id}'),
+                          style: GalleryTypography.card.copyWith(
+                            fontSize: 20,
+                            height: 26 / 20,
+                            color: _faceForeground(card),
                           ),
                         ),
-                        const SizedBox(width: 16),
-                        tail,
+                      ),
+                      if (_faceBrands(card).isNotEmpty) ...[
+                        const SizedBox(width: 12),
+                        _FaceBrandMark(card: card, id: 'face'),
                       ],
-                    ),
+                    ],
+                  ),
+                  const SizedBox(height: 32),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (!minimal) ...[
+                        Wrap(
+                          alignment: WrapAlignment.spaceBetween,
+                          spacing: 12,
+                          runSpacing: 4,
+                          children: [
+                            Text(
+                              '当前余额',
+                              key: ValueKey('face-balance-label-${card.id}'),
+                              style: unitStyle,
+                            ),
+                            Text('最近读取 ${card.when}', style: unitStyle),
+                          ],
+                        ),
+                        _gap(4),
+                      ],
+                      if (stacked)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: amount,
+                            ),
+                            _gap(12),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: tail,
+                            ),
+                          ],
+                        )
+                      else
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Expanded(
+                              child: Align(
+                                alignment: Alignment.bottomLeft,
+                                child: amount,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            tail,
+                          ],
+                        ),
+                    ],
+                  ),
                 ],
-              ),
-            ],
-          );
-        },
-      ),
+              );
+            },
+          ),
+        ),
+      ],
     ),
   );
 

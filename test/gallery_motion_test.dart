@@ -715,9 +715,7 @@ void main() {
       await tester.ensureVisible(tabs);
       await tester.pumpAndSettle();
       final selectorElement = tester.element(tabs);
-      scroll.position.jumpTo(
-        math.min(120, scroll.position.maxScrollExtent),
-      );
+      scroll.position.jumpTo(math.min(120, scroll.position.maxScrollExtent));
       await tester.pump();
       final originalOffset = scroll.position.pixels;
       await tester.tap(find.text('卡片信息'));

@@ -1020,20 +1020,12 @@ class _GalleryDetailFace extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: [face.start, face.end],
         ),
-        image: card.image == null
-            ? null
-            : DecorationImage(
-                image: MemoryImage(card.image!),
-                fit: BoxFit.cover,
-                colorFilter: const ColorFilter.mode(
-                  Color(0x99070c16),
-                  BlendMode.darken,
-                ),
-              ),
         border: Border.all(color: tokens.line.withValues(alpha: .3)),
       ),
       child: Stack(
         children: [
+          if (card.image != null)
+            Positioned.fill(child: _FaceCropImage(card: card)),
           Positioned(
             left: 20,
             top: 20,

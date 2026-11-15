@@ -713,91 +713,6 @@ extension _GalleryPages on _GalleryViewState {
       if (!value.known) continue;
       numberWidth = math.max(numberWidth, measure(value.number, numberStyle));
     }
-    Widget amount(GalleryCard card) {
-      final numberStyle = GalleryTypography.lead.copyWith(
-        inherit: false,
-        color: foreground(card),
-        fontFeatures: const [FontFeature.tabularFigures()],
-      );
-      final currencyStyle = GalleryTypography.caption.copyWith(
-        inherit: false,
-        color: foreground(card, secondary: true),
-      );
-      final value = parts[card.id]!;
-      final unitWidth = value.currencyLabel.isEmpty
-          ? 0.0
-          : measure(value.currencyLabel, currencyStyle);
-      final amountWidth = numberWidth + (unitWidth > 0 ? unitWidth + 4 : 0);
-      return Semantics(
-        label: '余额，${value.displayText}',
-        excludeSemantics: true,
-        child: !value.known
-            ? _text(
-                value.displayText,
-                role: GalleryTypography.label,
-                color: foreground(card, secondary: true),
-              )
-            : FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: SizedBox(
-                  width: amountWidth,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      if (unitWidth > 0) ...[
-                        SizedBox(
-                          width: unitWidth,
-                          child: Text(
-                            value.currencyLabel,
-                            key: ValueKey('wallet-currency-${card.id}'),
-                            maxLines: 1,
-                            softWrap: false,
-                            textAlign: TextAlign.left,
-                            style: currencyStyle,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                      ],
-                      SizedBox(
-                        width: numberWidth,
-                        child: Text(
-                          value.number,
-                          key: ValueKey('wallet-number-${card.id}'),
-                          maxLines: 1,
-                          softWrap: false,
-                          textAlign: TextAlign.left,
-                          style: numberStyle,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-      );
-    }
-
-    Widget identity(GalleryCard card) => Row(
-      children: [
-        _cardBadge(card, id: 'wallet'),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _text(
-                card.name,
-                role: GalleryTypography.card,
-                color: foreground(card),
-              ),
-              _gap(4),
-              amount(card),
-            ],
-          ),
-        ),
-      ],
-    );
     Widget handle(GalleryCard card, int index) => Semantics(
       container: true,
       excludeSemantics: true,
@@ -831,126 +746,193 @@ extension _GalleryPages on _GalleryViewState {
         ),
       ),
     );
-    return ReorderableListView.builder(
-      key: PageStorageKey('gallery-${c.generation}-cards'),
-      padding: EdgeInsets.fromLTRB(16, 6, 16, _navLayout.listBottom),
-      buildDefaultDragHandles: false,
-      onReorderItem: c.reorderSavedCards,
-      proxyDecorator: (child, index, animation) => AnimatedBuilder(
-        animation: animation,
-        child: child,
-        builder: (context, child) => Transform.scale(
-          scale: _reduceMotion
-              ? 1
-              : 1 + .02 * Curves.easeOutCubic.transform(animation.value),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: t.shadows(GalleryElevation.floating),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth - 32;
+        double titleHeight(TextStyle style, double available) {
+          final painter = TextPainter(
+            text: TextSpan(
+              text: '我的卡片',
+              style: style.copyWith(fontWeight: FontWeight.w400),
             ),
-            child: child,
-          ),
-        ),
-      ),
-      header: Column(
-        children: [
-          if (cards.isNotEmpty) ...[
-            Container(
-              key: const ValueKey('wallet-summary'),
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-              decoration: BoxDecoration(
-                color: t.tone,
-                borderRadius: BorderRadius.circular(24),
+            textDirection: Directionality.of(context),
+            textScaler: MediaQuery.textScalerOf(context),
+          )..layout(maxWidth: math.max(1, available));
+          final height = painter.height;
+          painter.dispose();
+          return height;
+        }
+
+        final scaler = MediaQuery.textScalerOf(context);
+        final expandedHeight =
+            32.0 +
+            math.max(
+              26,
+              math.max(
+                titleHeight(GalleryTypography.card, (width - 97) * .6),
+                math.max(
+                  titleHeight(GalleryTypography.section, (width - 97) * .4),
+                  scaler.scale(24) * 1.2,
+                ),
               ),
-              child: Row(
-                children: [
-                  Icon(Icons.wallet_outlined, color: t.onTone, size: 26),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _text(
-                      '我的卡片',
-                      role: GalleryTypography.card,
-                      color: t.onTone,
-                    ),
-                  ),
-                  _text(
-                    '${cards.length} 张',
-                    role: GalleryTypography.section,
-                    color: t.onTone,
-                  ),
-                ],
-              ),
-            ),
-            _gap(20),
-          ],
-          if (cards.isEmpty)
-            _empty(
-              '还没有保存的卡片',
-              '读取一张交通卡并保存到卡包',
-              action: _button(
-                '前往首页',
-                () => c.navigate(GalleryPage.home),
-                primary: true,
-              ),
-            ),
-        ],
-      ),
-      itemCount: cards.length,
-      itemBuilder: (context, index) {
-        final card = cards[index];
-        return _GalleryWalletItem(
-          key: ValueKey('wallet-item-${card.id}'),
-          id: card.id,
-          name: card.name,
-          reduceMotion: _reduceMotion,
-          inserted: _walletArrivals.contains(card.id),
-          onDelete: () => _deleteWalletCard(card),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: t.shadows(GalleryElevation.card),
-            ),
-            child: Container(
-              key: ValueKey('wallet-card-${card.id}'),
-              decoration: card.image != null
-                  ? _faceDecoration(card, radius: 24)
-                  : BoxDecoration(
-                      color: t.surface,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: t.line.withValues(alpha: .65)),
-                    ),
-              child: Material(
-                type: MaterialType.transparency,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(24),
-                  onTap: () => c.openCard(card),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 16,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(child: identity(card)),
-                            const SizedBox(width: 8),
-                            handle(card, index),
-                          ],
-                        ),
-                        _cardMetadata(card, id: 'wallet'),
-                      ],
-                    ),
+            );
+        final compactHeight =
+            18.0 +
+            math.max(
+              titleHeight(GalleryTypography.caption, (width - 44) * .6),
+              scaler.scale(18) * 1.2,
+            );
+        return CustomScrollView(
+          key: PageStorageKey('gallery-${c.generation}-cards'),
+          slivers: [
+            if (cards.isNotEmpty)
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                sliver: SliverPersistentHeader(
+                  pinned: true,
+                  delegate: _TripsSummaryDelegate(
+                    expandedHeight: _reduceMotion
+                        ? compactHeight
+                        : math.max(expandedHeight, compactHeight),
+                    compactHeight: compactHeight,
+                    builder: (progress) =>
+                        _walletSummary(progress, cards.length),
                   ),
                 ),
               ),
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                16,
+                cards.isEmpty ? 6 : 20,
+                16,
+                _navLayout.listBottom,
+              ),
+              sliver: cards.isEmpty
+                  ? SliverToBoxAdapter(
+                      child: _empty(
+                        '还没有保存的卡片',
+                        '读取一张交通卡并保存到卡包',
+                        action: _button(
+                          '前往首页',
+                          () => c.navigate(GalleryPage.home),
+                          primary: true,
+                        ),
+                      ),
+                    )
+                  : SliverReorderableList(
+                      itemCount: cards.length,
+                      onReorderItem: c.reorderSavedCards,
+                      proxyDecorator: (child, index, animation) =>
+                          AnimatedBuilder(
+                            animation: animation,
+                            child: child,
+                            builder: (context, child) => Transform.scale(
+                              scale: _reduceMotion
+                                  ? 1
+                                  : 1 +
+                                        .02 *
+                                            Curves.easeOutCubic.transform(
+                                              animation.value,
+                                            ),
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(24),
+                                  boxShadow: t.shadows(
+                                    GalleryElevation.floating,
+                                  ),
+                                ),
+                                child: child,
+                              ),
+                            ),
+                          ),
+                      itemBuilder: (context, index) {
+                        final card = cards[index];
+                        return _GalleryWalletItem(
+                          key: ValueKey('wallet-item-${card.id}'),
+                          id: card.id,
+                          name: card.name,
+                          reduceMotion: _reduceMotion,
+                          inserted: _walletArrivals.contains(card.id),
+                          onDelete: () => _deleteWalletCard(card),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(24),
+                              boxShadow: t.shadows(GalleryElevation.card),
+                            ),
+                            child: _walletCardSurface(
+                              card,
+                              id: 'wallet',
+                              numberWidth: numberWidth,
+                              trailing: handle(card, index),
+                              onTap: () => c.openCard(card),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
             ),
-          ),
+          ],
         );
       },
     );
   }
+
+  /// The wallet summary contracts into a pinned capsule while scrolling,
+  /// mirroring the trips summary animation.
+  Widget _walletSummary(double progress, int count) => Container(
+    key: const ValueKey('wallet-summary'),
+    padding: EdgeInsets.symmetric(
+      horizontal: 16 + 2 * progress,
+      vertical: 16 - 7 * progress,
+    ),
+    decoration: BoxDecoration(
+      color: t.tone,
+      borderRadius: BorderRadius.circular(24),
+    ),
+    child: Row(
+      children: [
+        SizedBox(
+          width: 26 * (1 - progress),
+          child: Opacity(
+            opacity: 1 - progress,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: SizedBox(
+                width: 26,
+                height: 26,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Icon(Icons.wallet_outlined, size: 26, color: t.onTone),
+                ),
+              ),
+            ),
+          ),
+        ),
+        SizedBox(width: 12 * (1 - progress)),
+        Expanded(
+          child: _text(
+            '我的卡片',
+            role: TextStyle.lerp(
+              GalleryTypography.card,
+              GalleryTypography.caption,
+              progress,
+            )!,
+            color: t.onTone,
+          ),
+        ),
+        _text(
+          '$count 张',
+          role: TextStyle.lerp(
+            GalleryTypography.section,
+            GalleryTypography.caption,
+            progress,
+          )!,
+          color: t.onTone,
+        ),
+      ],
+    ),
+  );
 
   void _deleteWalletCard(GalleryCard card) {
     final removal = c.deleteCard(card);

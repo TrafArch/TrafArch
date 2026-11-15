@@ -1,8 +1,38 @@
 import 'dart:convert';
+import 'dart:ui' show Size;
 
 import 'package:flutter/services.dart';
 
 typedef GalleryRecord = Map<String, dynamic>;
+
+/// Normalized crop parameters relative to the centered-cover baseline.
+/// [scale] multiplies the cover fit (>= 1); offsets are fractions of the
+/// overflow margin, so the same values render identically at any window size.
+class GalleryFaceCrop {
+  const GalleryFaceCrop({
+    this.scale = 1,
+    this.offsetX = 0,
+    this.offsetY = 0,
+    this.rotation = 0,
+  });
+
+  final double scale;
+  final double offsetX;
+  final double offsetY;
+  final double rotation;
+
+  GalleryFaceCrop copyWith({
+    double? scale,
+    double? offsetX,
+    double? offsetY,
+    double? rotation,
+  }) => GalleryFaceCrop(
+    scale: scale ?? this.scale,
+    offsetX: offsetX ?? this.offsetX,
+    offsetY: offsetY ?? this.offsetY,
+    rotation: rotation ?? this.rotation,
+  );
+}
 
 /// A frozen design snapshot. This loader never opens production reference DBs.
 class GalleryData {
@@ -84,6 +114,8 @@ class GalleryCard {
       when = json['when'] as String,
       count = json['count'] as String,
       face = json['face'] as String,
+      detailCrop = const GalleryFaceCrop(),
+      listCrop = const GalleryFaceCrop(),
       // Explicit applications win over the frozen sample's known identity.
       // A user-editable name is never evidence of a card's brand or protocol.
       applications = List.unmodifiable(
@@ -114,6 +146,35 @@ class GalleryCard {
   final List<String> applications;
   String face;
   Uint8List? image;
+  Size? imageSize;
+  GalleryFaceCrop detailCrop;
+  GalleryFaceCrop listCrop;
+
+  /// A session preview copy: shares the frozen identity fields while the
+  /// cropper's temporary image and crop parameters stay uncommitted.
+  GalleryCard.preview(
+    GalleryCard other, {
+    Uint8List? image,
+    Size? imageSize,
+    GalleryFaceCrop? detailCrop,
+    GalleryFaceCrop? listCrop,
+  }) : id = other.id,
+       saved = other.saved,
+       name = other.name,
+       tail = other.tail,
+       pan = other.pan,
+       rawBalance = other.rawBalance,
+       city = other.city,
+       type = other.type,
+       valid = other.valid,
+       when = other.when,
+       count = other.count,
+       face = other.face,
+       applications = other.applications,
+       image = image ?? other.image,
+       imageSize = imageSize ?? other.imageSize,
+       detailCrop = detailCrop ?? other.detailCrop,
+       listCrop = listCrop ?? other.listCrop;
 
   /// Display precision only; the original captured label remains unchanged.
   String get readDateLabel {

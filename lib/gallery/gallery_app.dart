@@ -2,10 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show File;
 import 'dart:math' as math;
-import 'dart:ui' show ImageFilter, ImageByteFormat, instantiateImageCodec;
+import 'dart:ui' show ImageFilter, ImageByteFormat, Size, instantiateImageCodec;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -42,6 +43,7 @@ part 'gallery_navigation_item.dart';
 part 'gallery_read_prompt.dart';
 part 'gallery_wallet_item.dart';
 part 'gallery_detail.dart';
+part 'gallery_face_crop.dart';
 
 class GalleryApp extends StatefulWidget {
   const GalleryApp({
@@ -305,11 +307,12 @@ class _GalleryViewState extends State<_GalleryView> {
           );
           if (data != null && active()) {
             // The native picker clears its previous cache on each selection.
-            c.update(
-              () => card.image = data.buffer.asUint8List(
-                data.offsetInBytes,
-                data.lengthInBytes,
-              ),
+            // The bytes stay in a crop session until the sheet's 完成 commits
+            // them (spec 2.4 §8.2).
+            c.beginFaceCrop(
+              card.id,
+              data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+              Size(frame.image.width.toDouble(), frame.image.height.toDouble()),
             );
           }
         } finally {
@@ -348,9 +351,7 @@ class _GalleryViewState extends State<_GalleryView> {
       try {
         final decoded = jsonDecode(document.content);
         final cards = decoded is Map ? decoded['cards'] : null;
-        summary = cards is List
-            ? '识别到 ${cards.length} 张卡片记录'
-            : '未识别到卡片记录字段';
+        summary = cards is List ? '识别到 ${cards.length} 张卡片记录' : '未识别到卡片记录字段';
       } catch (_) {
         summary = '文件不是有效的 JSON';
       }
@@ -360,15 +361,9 @@ class _GalleryViewState extends State<_GalleryView> {
       }, '预览导入文件');
       c.showOverlay(GalleryOverlay.importPreview);
     } on MissingPluginException {
-      _toast(
-        '当前平台不支持文件选择，请在 Android 上导入',
-        type: GalleryFeedbackType.error,
-      );
+      _toast('当前平台不支持文件选择，请在 Android 上导入', type: GalleryFeedbackType.error);
     } on PlatformException catch (error) {
-      _toast(
-        error.message ?? '无法读取所选文件，请重试',
-        type: GalleryFeedbackType.error,
-      );
+      _toast(error.message ?? '无法读取所选文件，请重试', type: GalleryFeedbackType.error);
     } catch (_) {
       _toast('无法读取所选文件，请重试', type: GalleryFeedbackType.error);
     } finally {

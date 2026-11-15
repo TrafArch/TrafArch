@@ -9,6 +9,9 @@ extension _GalleryOverlays on _GalleryViewState {
         type == GalleryOverlay.licenseDetail) {
       return [_gallerySheet(type)];
     }
+    if (type == GalleryOverlay.face) {
+      return [_faceOverlay()];
+    }
     if (type == GalleryOverlay.cardMenu ||
         type == GalleryOverlay.source ||
         type == GalleryOverlay.mode) {
@@ -469,96 +472,122 @@ extension _GalleryOverlays on _GalleryViewState {
     );
   }
 
-  Widget _faceSheet() => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      _face(_selectedCard),
-      _gap(18),
-      _text('卡面预设', role: GalleryTypography.label, weight: FontWeight.w600),
-      _gap(12),
-      Row(
-        children:
-            [
-                  ('blue', '海蓝'),
-                  ('teal', '青玉'),
-                  ('graphite', '鸢紫'),
-                  ('amber', '暖铜'),
-                ]
-                .map(
-                  (pair) => Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 3),
-                      child: TextButton(
-                        onPressed: () => c.update(() {
-                          _selectedCard.face = pair.$1;
-                          _selectedCard.image = null;
-                        }),
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.all(4),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            side: BorderSide(
-                              color:
-                                  _selectedCard.face == pair.$1 &&
-                                      _selectedCard.image == null
-                                  ? t.onTone
-                                  : Colors.transparent,
-                              width: 2,
-                            ),
-                          ),
-                        ),
-                        child: Column(
-                          children: [
-                            Container(
-                              height: 42,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: _faceColors(pair.$1),
-                                ),
-                                borderRadius: BorderRadius.circular(8),
+  Widget _faceSheet() {
+    final session = c.faceCrop;
+    final card = _selectedCard;
+    final preview = session == null
+        ? card
+        : GalleryCard.preview(
+            card,
+            image: session.image,
+            imageSize: session.sourceSize,
+            detailCrop: session.detail,
+            listCrop: session.list,
+          );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _face(preview),
+        if (preview.image != null) ...[
+          _gap(12),
+          _walletCardSurface(preview, id: 'face-list'),
+        ],
+        _gap(18),
+        _text('卡面预设', role: GalleryTypography.label, weight: FontWeight.w600),
+        _gap(12),
+        Row(
+          children:
+              [
+                    ('blue', '海蓝'),
+                    ('teal', '青玉'),
+                    ('graphite', '鸢紫'),
+                    ('amber', '暖铜'),
+                  ]
+                  .map(
+                    (pair) => Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 3),
+                        child: TextButton(
+                          onPressed: () => c.update(() {
+                            _selectedCard.face = pair.$1;
+                            _selectedCard.image = null;
+                            _selectedCard.imageSize = null;
+                            _selectedCard.detailCrop = const GalleryFaceCrop();
+                            _selectedCard.listCrop = const GalleryFaceCrop();
+                            c.faceCrop = null;
+                          }),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.all(4),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: BorderSide(
+                                color:
+                                    _selectedCard.face == pair.$1 &&
+                                        _selectedCard.image == null &&
+                                        session == null
+                                    ? t.onTone
+                                    : Colors.transparent,
+                                width: 2,
                               ),
                             ),
-                            _gap(8),
-                            _text(
-                              pair.$2,
-                              role: GalleryTypography.caption,
-                              color: t.muted,
-                            ),
-                          ],
+                          ),
+                          child: Column(
+                            children: [
+                              Container(
+                                height: 42,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: _faceColors(pair.$1),
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              _gap(8),
+                              _text(
+                                pair.$2,
+                                role: GalleryTypography.caption,
+                                color: t.muted,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                )
-                .toList(),
-      ),
-      _gap(16),
-      _button(
-        _pickingFaceImage ? '正在打开相册…' : '从相册选择图片',
-        _pickingFaceImage ? null : _pickFaceImage,
-        icon: Icons.photo_library_outlined,
-      ),
-      _gap(8),
-      _text(
-        '仅在本次界面会话中使用，不上传图片',
-        role: GalleryTypography.caption,
-        color: t.muted,
-      ),
-      if (_faceImageError != null) ...[
-        _gap(8),
-        Semantics(
-          liveRegion: true,
-          child: _text(
-            _faceImageError!,
-            role: GalleryTypography.caption,
-            color: t.danger,
-          ),
+                  )
+                  .toList(),
         ),
+        _gap(16),
+        _button(
+          _pickingFaceImage ? '正在打开相册…' : '从相册选择图片',
+          _pickingFaceImage ? null : _pickFaceImage,
+          icon: Icons.photo_library_outlined,
+        ),
+        if (session != null) ...[
+          _gap(8),
+          _button('调整图片', c.resumeFaceCrop, icon: Icons.crop_outlined),
+        ],
+        _gap(8),
+        _text(
+          '仅在本次界面会话中使用，不上传图片',
+          role: GalleryTypography.caption,
+          color: t.muted,
+        ),
+        if (_faceImageError != null) ...[
+          _gap(8),
+          Semantics(
+            liveRegion: true,
+            child: _text(
+              _faceImageError!,
+              role: GalleryTypography.caption,
+              color: t.danger,
+            ),
+          ),
+        ],
+        _gap(10),
+        _button('完成', () => _commitFaceSheet(session), primary: true),
       ],
-      _gap(10),
-      _button('完成', c.back, primary: true),
-    ],
-  );
+    );
+  }
 }
 
 /// Shared modal sheet used by the settings contributor list and license detail.

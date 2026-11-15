@@ -88,11 +88,24 @@ void main() {
     Uint8List seedImage(GalleryCard card) =>
         card.image = File(imagePath).readAsBytesSync();
 
-    BoxDecoration faceDecoration(WidgetTester tester, GalleryCard card) =>
-        tester
-                .widget<Container>(find.byKey(ValueKey('card-face-${card.id}')))
-                .decoration!
-            as BoxDecoration;
+    Uint8List? faceImageBytes(WidgetTester tester, GalleryCard card) {
+      final images = find.descendant(
+        of: find.byKey(ValueKey('card-face-${card.id}')),
+        matching: find.byType(Image),
+      );
+      if (images.evaluate().isEmpty) return null;
+      return (tester.widget<Image>(images.first).image as MemoryImage).bytes;
+    }
+
+    // 选图后先完成裁切，再由更换卡面 sheet 的完成提交。
+    Future<void> commitCrop(WidgetTester tester) async {
+      await tester.tap(find.text('完成'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('完成'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('完成'));
+      await tester.pumpAndSettle();
+    }
 
     testWidgets(
       'selection stores PNG bytes and renders white text from memory',
@@ -111,11 +124,11 @@ void main() {
         );
         await pickAndFinish(tester);
         expect(calls, hasLength(1));
-        expect(card.image, isA<Uint8List>());
-        expect(card.image!.take(8), [137, 80, 78, 71, 13, 10, 26, 10]);
-        final image = faceDecoration(tester, card).image!.image;
-        expect(image, isA<MemoryImage>());
-        expect((image as MemoryImage).bytes, same(card.image));
+        // 选图后同一半模态转为裁切器，图片尚未提交到卡片。
+        expect(find.text('调整图片'), findsOneWidget);
+        expect(find.text('卡片详情页'), findsOneWidget);
+        expect(find.text('卡包列表页'), findsOneWidget);
+        expect(card.image, isNull);
         expect(
           tester
               .widget<Text>(find.byKey(ValueKey('face-title-${card.id}')))
@@ -123,16 +136,19 @@ void main() {
               .color,
           Colors.white,
         );
-        await tester.tap(find.text('完成'));
-        await tester.pumpAndSettle();
-        final wallet = tester.widget<Container>(
-          find.byKey(ValueKey('wallet-card-${card.id}')),
+        expect(faceImageBytes(tester, card), same(c.faceCrop!.image));
+        await commitCrop(tester);
+        expect(card.image, isA<Uint8List>());
+        expect(card.image!.take(8), [137, 80, 78, 71, 13, 10, 26, 10]);
+        final walletImage = tester.widget<Image>(
+          find
+              .descendant(
+                of: find.byKey(ValueKey('wallet-card-${card.id}')),
+                matching: find.byType(Image),
+              )
+              .first,
         );
-        expect(
-          ((wallet.decoration as BoxDecoration).image!.image as MemoryImage)
-              .bytes,
-          same(card.image),
-        );
+        expect((walletImage.image as MemoryImage).bytes, same(card.image));
       },
     );
 
@@ -143,14 +159,14 @@ void main() {
       await mountFace(tester);
       final first = c.current;
       await pickAndFinish(tester);
+      await commitCrop(tester);
       final firstImage = first.image!;
       final snapshot = Uint8List.fromList(firstImage);
-      await tester.tap(find.text('完成'));
-      await tester.pumpAndSettle();
       final second = c.cards.firstWhere((card) => card.id != first.id);
       await openFace(tester, second);
       // Even if the native picker reuses the same cache path, each card owns bytes.
       await pickAndFinish(tester);
+      await commitCrop(tester);
       expect(calls, hasLength(2));
       expect(second.image, isNotNull);
       expect(identical(second.image, firstImage), isFalse);
@@ -159,13 +175,8 @@ void main() {
       second.image![0] ^= 0xff;
       expect(first.image, orderedEquals(snapshot));
       second.image![0] ^= 0xff;
-      await tester.tap(find.text('完成'));
-      await tester.pumpAndSettle();
       await openFace(tester, first);
-      expect(
-        (faceDecoration(tester, first).image!.image as MemoryImage).bytes,
-        same(firstImage),
-      );
+      expect(faceImageBytes(tester, first), same(firstImage));
     });
 
     testWidgets(
@@ -180,6 +191,7 @@ void main() {
         mockPicker(() async => imagePath);
         await pickAndFinish(tester);
         expect(calls, hasLength(2));
+        await commitCrop(tester);
         expect(identical(c.current.image, previous), isFalse);
       },
     );
@@ -210,6 +222,7 @@ void main() {
         mockPicker(() async => imagePath);
         await pickAndFinish(tester);
         expect(calls, hasLength(2));
+        await commitCrop(tester);
         expect(identical(c.current.image, previous), isFalse);
         expect(find.textContaining('请在 Android'), findsNothing);
         expect(find.textContaining('无法读取所选图片'), findsNothing);
@@ -260,6 +273,7 @@ void main() {
       mockPicker(() async => imagePath);
       await pickAndFinish(tester);
       expect(calls, hasLength(2));
+      await commitCrop(tester);
       expect(identical(c.current.image, previous), isFalse);
       expect(find.text('相册选择超时，请重试'), findsNothing);
     });
@@ -303,6 +317,9 @@ void main() {
       mockPicker(() async => imagePath);
       await mountFace(tester);
       await pickAndFinish(tester);
+      // 回到更换卡面界面后，预设仍可清除未提交的图片会话。
+      await tester.tap(find.text('完成'));
+      await tester.pumpAndSettle();
       c.update(() => c.current.face = 'amber');
       await tester.pumpAndSettle();
       // 独立“恢复默认卡面”按钮已移除，改由卡面预设回到默认。
@@ -311,7 +328,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(c.current.image, isNull);
       expect(c.current.face, 'blue');
-      expect(faceDecoration(tester, c.current).image, isNull);
+      expect(faceImageBytes(tester, c.current), isNull);
       expect(
         tester
             .widget<Text>(find.byKey(const ValueKey('face-title-shanghai')))
@@ -322,6 +339,38 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   });
+
+  testWidgets(
+    'wallet summary contracts into a pinned capsule while scrolling',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 520);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      c.navigate(GalleryPage.cards);
+      await tester.pumpWidget(GalleryApp(controller: c));
+      await tester.pumpAndSettle();
+      final summary = find.byKey(const ValueKey('wallet-summary'));
+      expect(summary, findsOneWidget);
+      final expanded = tester.getSize(summary).height;
+      expect(find.text('我的卡片'), findsOneWidget);
+      await tester.drag(
+        find.byType(CustomScrollView).last,
+        const Offset(0, -500),
+      );
+      await tester.pumpAndSettle();
+      final compact = tester.getSize(summary).height;
+      expect(compact, lessThan(expanded));
+      expect(summary, findsOneWidget);
+      expect(find.text('我的卡片'), findsOneWidget);
+      await tester.drag(
+        find.byType(CustomScrollView).last,
+        const Offset(0, 500),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.getSize(summary).height, closeTo(expanded, .1));
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('wallet text stays readable in every light and dark palette', (
     tester,
