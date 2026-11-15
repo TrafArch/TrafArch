@@ -34,7 +34,7 @@ const galleryContributors = <GalleryContributor>[
   ),
   GalleryContributor(
     name: '林天仪',
-    role: '钻石级赞助商',
+    role: '钻石级赞助商，为我们提供大量的token用于开发！',
     initial: '林',
     asset: 'assets/contributors/lintianyi.jpg',
   ),
