@@ -5,6 +5,10 @@ extension _GalleryOverlays on _GalleryViewState {
     final type = _entry.overlay!;
     final nameForm =
         type == GalleryOverlay.save || type == GalleryOverlay.rename;
+    if (type == GalleryOverlay.contributors ||
+        type == GalleryOverlay.licenseDetail) {
+      return [_gallerySheet(type)];
+    }
     if (type == GalleryOverlay.cardMenu ||
         type == GalleryOverlay.source ||
         type == GalleryOverlay.mode) {
@@ -41,7 +45,7 @@ extension _GalleryOverlays on _GalleryViewState {
                     maxHeight: math.max(
                       0.0,
                       math.min(
-                        available * .86,
+                        available * .9,
                         available - gap * (sheet ? 1 : 2),
                       ),
                     ),
@@ -70,7 +74,7 @@ extension _GalleryOverlays on _GalleryViewState {
                           child: DecoratedBox(
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.vertical(
-                                top: Radius.circular(sheet ? 26 : 24),
+                                top: const Radius.circular(24),
                                 bottom: Radius.circular(sheet ? 0 : 24),
                               ),
                               boxShadow: t.shadows(GalleryElevation.modal),
@@ -80,7 +84,7 @@ extension _GalleryOverlays on _GalleryViewState {
                               shape: RoundedRectangleBorder(
                                 side: BorderSide(color: t.line),
                                 borderRadius: BorderRadius.vertical(
-                                  top: Radius.circular(sheet ? 26 : 24),
+                                  top: const Radius.circular(24),
                                   bottom: Radius.circular(sheet ? 0 : 24),
                                 ),
                               ),
@@ -145,9 +149,14 @@ extension _GalleryOverlays on _GalleryViewState {
     GalleryOverlay.mode => '交通方式',
     GalleryOverlay.export => _entry.exportTitle,
     GalleryOverlay.rawFeedback => '反馈内容预览',
+    GalleryOverlay.contributors => '贡献者',
+    GalleryOverlay.licenseDetail => '许可证详情',
   };
 
-  Widget _overlayBody(GalleryOverlay type) => switch (type) {
+  Widget _overlayBody(
+    GalleryOverlay type, {
+    ScrollController? scrollController,
+  }) => switch (type) {
     GalleryOverlay.save => _GalleryNameForm(
       key: ValueKey('save-${c.generation}'),
       initialName: c.current.name,
@@ -217,7 +226,19 @@ extension _GalleryOverlays on _GalleryViewState {
         _button('关闭预览', c.back, primary: true),
       ],
     ),
+    GalleryOverlay.contributors => _contributorSheetBody(scrollController!),
+    GalleryOverlay.licenseDetail => _licenseDetailSheetBody(scrollController!),
   };
+
+  Widget _gallerySheet(GalleryOverlay type) => _GallerySheet(
+    key: ValueKey('gallery-sheet-${_entry.id}'),
+    title: _overlayTitle(type),
+    tokens: t,
+    reduceMotion: _reduceMotion,
+    onClose: c.back,
+    onCollapse: c.back,
+    content: (controller) => _overlayBody(type, scrollController: controller),
+  );
 
   List<Widget> _dropdownOverlay(GalleryOverlay type) {
     final cardMenu = type == GalleryOverlay.cardMenu;
@@ -522,6 +543,124 @@ extension _GalleryOverlays on _GalleryViewState {
       _button('完成', c.back, primary: true),
     ],
   );
+}
+
+/// Shared modal sheet used by the settings contributor list and license detail.
+/// Medium ~57%, expanded ~90%, 24dp top corners, centred drag handle and an
+/// independent scrollable body. Dragging to the minimum extent dismisses the
+/// sheet through the controller's normal back path, so predictive back, the
+/// barrier and the route animation stay in sync.
+class _GallerySheet extends StatefulWidget {
+  const _GallerySheet({
+    super.key,
+    required this.title,
+    required this.content,
+    required this.tokens,
+    required this.reduceMotion,
+    required this.onClose,
+    required this.onCollapse,
+  });
+
+  final String title;
+  final Widget Function(ScrollController) content;
+  final GalleryTokens tokens;
+  final bool reduceMotion;
+  final VoidCallback onClose;
+  final VoidCallback onCollapse;
+
+  @override
+  State<_GallerySheet> createState() => _GallerySheetState();
+}
+
+class _GallerySheetState extends State<_GallerySheet> {
+  static const medium = .57;
+  static const minimum = .42;
+  static const expanded = .9;
+
+  bool _closing = false;
+
+  bool _onExtent(DraggableScrollableNotification notification) {
+    if (_closing || notification.extent > notification.minExtent + .001) {
+      return false;
+    }
+    _closing = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.onCollapse();
+    });
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = widget.tokens;
+    const radius = Radius.circular(24);
+    return NotificationListener<DraggableScrollableNotification>(
+      onNotification: _onExtent,
+      child: DraggableScrollableSheet(
+        key: const ValueKey('gallery-sheet'),
+        expand: false,
+        initialChildSize: medium,
+        minChildSize: minimum,
+        maxChildSize: expanded,
+        snap: !widget.reduceMotion,
+        snapSizes: const [medium, expanded],
+        builder: (context, scrollController) => DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: const BorderRadius.vertical(top: radius),
+            boxShadow: t.shadows(GalleryElevation.modal),
+          ),
+          child: Material(
+            color: t.raised,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(top: radius),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 10, bottom: 8),
+                  child: Center(
+                    child: Container(
+                      key: const ValueKey('gallery-sheet-handle'),
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: t.muted.withValues(alpha: .4),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 0, 8, 6),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          widget.title,
+                          style: GalleryTypography.section.copyWith(
+                            color: t.text,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: '关闭',
+                        onPressed: widget.onClose,
+                        icon: const Icon(Icons.close_rounded, size: 21),
+                      ),
+                    ],
+                  ),
+                ),
+                Divider(height: 1, color: t.line),
+                Expanded(child: widget.content(scrollController)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _GalleryMenuLayout extends SingleChildLayoutDelegate {

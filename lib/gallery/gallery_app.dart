@@ -20,6 +20,8 @@ import '../platform/qr/qr_image_picker.dart';
 import '../shared/app_support.dart';
 import 'gallery_controller.dart';
 import 'gallery_balance_presentation.dart';
+import 'gallery_color_engine.dart';
+import 'gallery_contributors.dart';
 import 'gallery_data.dart';
 import 'gallery_theme.dart';
 import 'gallery_design.dart';
@@ -328,8 +330,6 @@ class _GalleryViewState extends State<_GalleryView> {
   }
 
   Future<List<LicenseEntry>>? _licenses;
-  final _licenseParagraphs =
-      Map<LicenseEntry, List<LicenseParagraph>>.identity();
   Future<void> _openContact(String value, {bool email = false}) async {
     if (_openingLink != null) return;
     final page = c.page;
@@ -401,7 +401,7 @@ class _GalleryViewState extends State<_GalleryView> {
 
   void _reloadLicenses() => setState(() {
     _licenses = null;
-    _licenseParagraphs.clear();
+    c.licenseParagraphs.clear();
   });
 
   bool get _reduceMotion => MediaQuery.disableAnimationsOf(context);
@@ -583,8 +583,6 @@ class _GalleryViewState extends State<_GalleryView> {
     GalleryPage.settings => _settings(),
     GalleryPage.knowledge => _knowledge(),
     GalleryPage.qr => _qr(),
-    GalleryPage.scenes => _scenes(),
-    GalleryPage.about => _about(),
     GalleryPage.feedback => _feedback(),
     GalleryPage.acknowledgements => _acknowledgements(),
     GalleryPage.licenses => _licensePage(),

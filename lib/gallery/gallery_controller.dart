@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart'
+    show LicenseEntry, LicenseParagraph;
 import 'package:flutter/material.dart';
 
 import 'gallery_data.dart';
@@ -15,8 +17,6 @@ enum GalleryPage {
   settings,
   knowledge,
   qr,
-  scenes,
-  about,
   feedback,
   acknowledgements,
   licenses,
@@ -33,6 +33,8 @@ enum GalleryOverlay {
   mode,
   export,
   rawFeedback,
+  contributors,
+  licenseDetail,
 }
 
 enum GalleryReadState { unread, reading, success, failed }
@@ -51,6 +53,7 @@ class GalleryRouteEntry {
     this.qrView = 'inspect',
     this.overlay,
     this.trip,
+    this.license,
     this.exportText = '',
     this.exportTitle = '',
     this.anchor,
@@ -63,6 +66,7 @@ class GalleryRouteEntry {
   final String qrView;
   final GalleryOverlay? overlay;
   final GalleryRecord? trip;
+  final LicenseEntry? license;
   final String exportText, exportTitle;
   final Rect? anchor;
   final String? anchorId;
@@ -123,6 +127,12 @@ class GalleryController extends ChangeNotifier {
   final Set<String> expanded = {};
   final List<String> logs = [];
   GalleryRecord? selectedTrip;
+  LicenseEntry? selectedLicense;
+
+  /// Parsed license text is cached per session: LicenseEntryWithLineBreaks
+  /// reparses on every paragraphs access, and a reopened sheet must reuse it.
+  final Map<LicenseEntry, List<LicenseParagraph>> licenseParagraphs =
+      Map.identity();
   String exportText = '';
   String exportTitle = '导出预览';
   String? sceneId;
@@ -213,6 +223,9 @@ class GalleryController extends ChangeNotifier {
             qrView: d.qrView,
             overlay: d.overlay,
             trip: selectedTrip == null ? null : Map.unmodifiable(selectedTrip!),
+            license: d.overlay == GalleryOverlay.licenseDetail
+                ? selectedLicense
+                : null,
             exportText: exportText,
             exportTitle: exportTitle,
             anchor: _overlayAnchor,
@@ -265,6 +278,8 @@ class GalleryController extends ChangeNotifier {
     expanded.clear();
     logs.clear();
     selectedTrip = null;
+    selectedLicense = null;
+    licenseParagraphs.clear();
     _removedCards.clear();
     sceneId = null;
     generation++;
@@ -328,6 +343,11 @@ class GalleryController extends ChangeNotifier {
     _overlayAnchorId = anchorId;
     record('打开 ${value.name}');
     notifyListeners();
+  }
+
+  void showLicense(LicenseEntry entry) {
+    selectedLicense = entry;
+    showOverlay(GalleryOverlay.licenseDetail);
   }
 
   void openCard(GalleryCard card) {
@@ -539,10 +559,6 @@ class GalleryController extends ChangeNotifier {
       cards[2].rawBalance = '—';
     } else if (q['edge'] == 'empty') {
       trips.clear();
-    }
-    if (q['modal'] == 'about') {
-      _history.add(page);
-      page = GalleryPage.about;
     }
     overlay = switch (q['modal']) {
       'face' => GalleryOverlay.face,

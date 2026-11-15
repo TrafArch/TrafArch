@@ -79,70 +79,6 @@ extension _GalleryInformation on _GalleryViewState {
     ],
   ];
 
-  Widget _about() => _list([
-    _header('关于', back: true),
-    _informationHero(
-      ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: Image.asset('assets/icon/app_icon.png', width: 96, height: 96),
-      ),
-      AppInfo.appName,
-      '版本 ${AppInfo.version} (${AppInfo.buildNumber})',
-    ),
-    _text(
-      '只读交通卡读取与分析工具',
-      role: GalleryTypography.body,
-      color: t.muted,
-      align: TextAlign.center,
-    ),
-    _gap(24),
-    _panel(
-      Column(
-        children: [
-          ListTile(
-            leading: Icon(Icons.person_outline, color: t.onTone),
-            title: _text('作者', size: 14),
-            subtitle: _text(
-              AppInfo.author,
-              role: GalleryTypography.caption,
-              color: t.muted,
-            ),
-          ),
-          const Divider(),
-          _settingRow(
-            '致谢',
-            () => _openInformationPage(GalleryPage.acknowledgements),
-            subtitle: '感谢读卡识途及数据贡献者',
-            icon: Icons.volunteer_activism_outlined,
-          ),
-          const Divider(),
-          _settingRow(
-            '开放源代码许可',
-            () => _openInformationPage(GalleryPage.licenses),
-            subtitle: '查看本应用使用的开源软件与许可',
-            icon: Icons.code_rounded,
-          ),
-          const Divider(),
-          _contactRow(
-            '隐私政策',
-            '了解数据与隐私保护',
-            Icons.privacy_tip_outlined,
-            link: AppSupport.privacy,
-          ),
-        ],
-      ),
-      padding: EdgeInsets.zero,
-    ),
-    ..._contactError(),
-    _gap(28),
-    _text(
-      AppInfo.copyright,
-      role: GalleryTypography.caption,
-      color: t.muted,
-      align: TextAlign.center,
-    ),
-  ]);
-
   Widget _feedback() => _list([
     _header('问题反馈', back: true),
     _informationHero(
@@ -286,44 +222,40 @@ extension _GalleryInformation on _GalleryViewState {
                     role: GalleryTypography.body,
                     color: t.muted,
                   ),
+                  _gap(6),
+                  _text(
+                    '点击软件条目查看许可证类型与完整正文',
+                    role: GalleryTypography.caption,
+                    color: t.muted,
+                  ),
                   _gap(16),
                   if (snapshot.hasError)
                     _button('重新加载许可', _reloadLicenses)
                   else if (!snapshot.hasData)
-                    const Center(child: CircularProgressIndicator()),
+                    const Center(child: CircularProgressIndicator())
+                  else if (snapshot.data!.isEmpty)
+                    _text(
+                      '未找到许可记录',
+                      role: GalleryTypography.label,
+                      color: t.muted,
+                    ),
                 ],
               );
             }
             final license = snapshot.data![index - 1];
-            return KeyedSubtree(
+            // Each registry entry stays a separate row: different versions or
+            // dependency instances must never be merged into one license.
+            return Padding(
               key: ValueKey('license-row-${index - 1}'),
-              child: _expand(
-                'license:${index - 1}',
-                license.packages.join(', '),
-                const [],
-                bodyBuilder: (_) {
-                  // LicenseEntryWithLineBreaks parses its entire text each time
-                  // paragraphs is accessed. Closed entries must never do that.
-                  final paragraphs = _licenseParagraphs.putIfAbsent(
-                    license,
-                    () => license.paragraphs.toList(growable: false),
-                  );
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (final paragraph in paragraphs)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: SelectableText(
-                            paragraph.text,
-                            style: GalleryTypography.caption.copyWith(
-                              color: t.muted,
-                            ),
-                          ),
-                        ),
-                    ],
-                  );
-                },
+              padding: const EdgeInsets.only(bottom: 14),
+              child: _panel(
+                _settingRow(
+                  license.packages.join(', '),
+                  () => c.showLicense(license),
+                  subtitle: '查看许可证类型与完整正文',
+                  icon: Icons.description_outlined,
+                ),
+                padding: EdgeInsets.zero,
               ),
             );
           },
@@ -331,4 +263,210 @@ extension _GalleryInformation on _GalleryViewState {
       },
     );
   }
+
+  List<LicenseParagraph> _paragraphsFor(LicenseEntry entry) =>
+      c.licenseParagraphs.putIfAbsent(
+        entry,
+        () => entry.paragraphs.toList(growable: false),
+      );
+
+  Widget _contributorSheetBody(ScrollController controller) {
+    return ListView(
+      controller: controller,
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        2,
+        16,
+        24 + MediaQuery.paddingOf(context).bottom,
+      ),
+      children: [
+        _text(
+          '感谢所有参与 TrafArch 建设的人',
+          role: GalleryTypography.label,
+          color: t.muted,
+        ),
+        _gap(10),
+        for (final (index, contributor) in galleryContributors.indexed)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              children: [
+                _contributorAvatar(contributor, index, size: 40),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _text(
+                        contributor.name,
+                        role: GalleryTypography.body,
+                        weight: FontWeight.w600,
+                      ),
+                      _gap(2),
+                      _text(
+                        contributor.role,
+                        role: GalleryTypography.caption,
+                        color: t.muted,
+                      ),
+                    ],
+                  ),
+                ),
+                if (contributor.url case final String url)
+                  TextButton(
+                    onPressed: () => _openContact(url),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _text(
+                          '主页',
+                          role: GalleryTypography.label,
+                          color: t.control,
+                        ),
+                        const SizedBox(width: 4),
+                        Icon(
+                          Icons.open_in_new_rounded,
+                          size: 15,
+                          color: t.control,
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _licenseDetailSheetBody(ScrollController controller) {
+    final license = _entry.license;
+    if (license == null) {
+      return ListView(
+        controller: controller,
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        children: [
+          _text('许可信息不可用', role: GalleryTypography.label, color: t.muted),
+        ],
+      );
+    }
+    final paragraphs = _paragraphsFor(license);
+    final info = _detectLicense(
+      paragraphs.map((paragraph) => paragraph.text).join('\n'),
+    );
+    return ListView(
+      controller: controller,
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        2,
+        16,
+        24 + MediaQuery.paddingOf(context).bottom,
+      ),
+      children: [
+        _text('软件名称', role: GalleryTypography.caption, color: t.muted),
+        _gap(4),
+        SelectableText(
+          license.packages.join(', '),
+          style: GalleryTypography.body.copyWith(color: t.text),
+        ),
+        _gap(14),
+        _kv('许可证类型', info.type),
+        if (info.url case final String url)
+          _settingRow(
+            '许可证原文链接',
+            () => _openContact(url),
+            subtitle: url,
+            icon: Icons.open_in_new_rounded,
+          ),
+        _gap(14),
+        _text('许可证正文', role: GalleryTypography.label, weight: FontWeight.w600),
+        _gap(8),
+        for (final paragraph in paragraphs)
+          Padding(
+            padding: EdgeInsets.only(
+              left: paragraph.indent < 0 ? 0 : paragraph.indent * 14.0,
+              bottom: 8,
+            ),
+            child: SelectableText(
+              paragraph.text,
+              textAlign: paragraph.indent < 0
+                  ? TextAlign.center
+                  : TextAlign.start,
+              style: GalleryTypography.caption.copyWith(
+                color: t.muted,
+                height: 1.55,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+typedef _LicenseInfo = ({String type, String? url});
+
+/// Best-effort licence recognition from the bundled text. The registry has no
+/// SPDX metadata, so unknown texts stay explicitly generic instead of guessing.
+_LicenseInfo _detectLicense(String text) {
+  final normalized = text.toLowerCase();
+  if (normalized.contains('apache license') &&
+      normalized.contains('version 2.0')) {
+    return (
+      type: 'Apache License 2.0',
+      url: 'https://www.apache.org/licenses/LICENSE-2.0',
+    );
+  }
+  if (normalized.contains('mozilla public license') &&
+      normalized.contains('2.0')) {
+    return (
+      type: 'Mozilla Public License 2.0',
+      url: 'https://mozilla.org/MPL/2.0/',
+    );
+  }
+  if (normalized.contains('gnu lesser general public license')) {
+    return (
+      type: 'GNU LGPL',
+      url: 'https://www.gnu.org/licenses/lgpl-3.0.html',
+    );
+  }
+  if (normalized.contains('gnu general public license')) {
+    return (type: 'GNU GPL', url: 'https://www.gnu.org/licenses/gpl-3.0.html');
+  }
+  if (normalized.contains(
+        'redistribution and use in source and binary forms',
+      ) &&
+      normalized.contains('neither the name')) {
+    return (
+      type: 'BSD 3-Clause',
+      url: 'https://opensource.org/license/bsd-3-clause',
+    );
+  }
+  if (normalized.contains(
+    'redistribution and use in source and binary forms',
+  )) {
+    return (
+      type: 'BSD 2-Clause',
+      url: 'https://opensource.org/license/bsd-2-clause',
+    );
+  }
+  if (normalized.contains('permission is hereby granted, free of charge')) {
+    return (type: 'MIT', url: 'https://opensource.org/license/mit');
+  }
+  if (normalized.contains(
+    'permission to use, copy, modify, and/or distribute',
+  )) {
+    return (type: 'ISC', url: 'https://opensource.org/license/isc-license-txt');
+  }
+  if (normalized.contains('unlicense')) {
+    return (type: 'The Unlicense', url: 'https://unlicense.org/');
+  }
+  if (normalized.contains('creative commons')) {
+    return (
+      type: 'Creative Commons',
+      url: 'https://creativecommons.org/licenses/',
+    );
+  }
+  return (type: '其他许可证', url: null);
 }

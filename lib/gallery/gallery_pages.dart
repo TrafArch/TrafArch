@@ -464,39 +464,31 @@ extension _GalleryPages on _GalleryViewState {
       );
     }
 
-    Widget endpoint(
-      String phase,
-      String line,
-      String time,
-      String station,
-    ) => Semantics(
-      label: phase,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _text(
-                  time,
-                  role: GalleryJourneyTypography.time,
-                  lines: 1,
+    Widget endpoint(String phase, String line, String time, String station) =>
+        Semantics(
+          label: phase,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _text(time, role: GalleryJourneyTypography.time, lines: 1),
+                    if (line.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      lineBadge(line),
+                    ],
+                  ],
                 ),
-                if (line.isNotEmpty) ...[
-                  const SizedBox(width: 8),
-                  lineBadge(line),
-                ],
-              ],
-            ),
+              ),
+              _gap(6),
+              _text(station, role: GalleryJourneyTypography.station),
+            ],
           ),
-          _gap(6),
-          _text(station, role: GalleryJourneyTypography.station),
-        ],
-      ),
-    );
+        );
     final body = Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: event
@@ -1324,29 +1316,57 @@ extension _GalleryPages on _GalleryViewState {
       ),
       padding: EdgeInsets.zero,
     ),
-    _sectionTitle('样例管理'),
+    _sectionTitle('帮助与支持'),
+    _panel(
+      _settingRow(
+        '问题反馈',
+        () => _openInformationPage(GalleryPage.feedback),
+        subtitle: 'QQ 群、邮箱与问卷反馈渠道',
+        icon: Icons.feedback_outlined,
+      ),
+      padding: EdgeInsets.zero,
+    ),
+    _sectionTitle('关于 TrafArch'),
     _panel(
       Column(
         children: [
+          _aboutHero(),
+          const Divider(),
           _settingRow(
-            '内置场景',
-            () => c.navigate(GalleryPage.scenes),
-            subtitle: '${c.visibleScenes.length} 个预置场景 · 切换后载入固定样例',
-            icon: Icons.dashboard_customize_outlined,
+            '致谢',
+            () => _openInformationPage(GalleryPage.acknowledgements),
+            subtitle: '感谢读卡识途及数据贡献者',
+            icon: Icons.volunteer_activism_outlined,
           ),
           const Divider(),
           _settingRow(
-            '恢复初始样例',
-            c.reset,
-            subtitle: '恢复内置卡片与行程，回到未读卡首页',
-            icon: Icons.restart_alt_rounded,
+            '开放源代码许可',
+            () => _openInformationPage(GalleryPage.licenses),
+            subtitle: '查看本应用使用的开源软件与许可',
+            icon: Icons.code_rounded,
           ),
+          const Divider(),
+          _contactRow(
+            '隐私政策',
+            '了解数据与隐私保护',
+            Icons.privacy_tip_outlined,
+            link: AppSupport.privacy,
+          ),
+          const Divider(),
+          _contributorRow(),
         ],
       ),
       padding: EdgeInsets.zero,
     ),
+    _gap(24),
+    _text(
+      AppInfo.copyright,
+      role: GalleryTypography.caption,
+      color: t.muted,
+      align: TextAlign.center,
+    ),
     if (widget.onDisableBeta != null) ...[
-      _gap(12),
+      _sectionTitle('预览'),
       _panel(
         _switch(
           '启用新界面（beta）',
@@ -1357,34 +1377,6 @@ extension _GalleryPages on _GalleryViewState {
         padding: EdgeInsets.zero,
       ),
     ],
-    _sectionTitle('关于'),
-    _panel(
-      Column(
-        children: [
-          _settingRow(
-            '问题反馈',
-            () => _openInformationPage(GalleryPage.feedback),
-            subtitle: 'QQ 群、邮箱与问卷反馈渠道',
-            icon: Icons.feedback_outlined,
-          ),
-          const Divider(),
-          _settingRow(
-            '关于',
-            () => _openInformationPage(GalleryPage.about),
-            subtitle: '版本 ${AppInfo.version}',
-            icon: Icons.info_outline,
-          ),
-        ],
-      ),
-      padding: EdgeInsets.zero,
-    ),
-    _gap(20),
-    _text(
-      '当前卡片和行程来自内置样例\n重启后恢复初始样例',
-      role: GalleryTypography.caption,
-      color: t.muted,
-      align: TextAlign.center,
-    ),
   ]);
 
   Widget _switch(
@@ -1417,40 +1409,127 @@ extension _GalleryPages on _GalleryViewState {
     onTap: onTap,
   );
 
-  Widget _scenes() {
-    final grouped = <String, List<GalleryScene>>{};
-    for (final s in c.visibleScenes) {
-      grouped.putIfAbsent(s.group, () => []).add(s);
-    }
-    return _list([
-      _header('内置场景', back: true),
-      _text(
-        '切换场景将载入独立的固定样例。所有操作仅在本次运行中保留。',
-        role: GalleryTypography.caption,
-        color: t.muted,
+  Widget _aboutHero() => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 22, 16, 18),
+    child: Column(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(22),
+          child: Image.asset('assets/icon/app_icon.png', width: 72, height: 72),
+        ),
+        _gap(12),
+        _text(
+          AppInfo.appName,
+          role: GalleryTypography.section,
+          weight: FontWeight.w600,
+        ),
+        _gap(4),
+        _text(
+          '版本 ${AppInfo.version} (${AppInfo.buildNumber})',
+          role: GalleryTypography.caption,
+          color: t.muted,
+        ),
+      ],
+    ),
+  );
+
+  Widget _contributorAvatar(
+    GalleryContributor contributor,
+    int index, {
+    double size = 34,
+    bool ring = true,
+  }) {
+    final background = t.dataPalette[index % t.dataPalette.length];
+    Widget fallback() => Container(
+      color: background,
+      alignment: Alignment.center,
+      child: _text(
+        contributor.initial,
+        size: size * .42,
+        weight: FontWeight.w600,
+        color: GalleryColorEngine.readable(Colors.white, background),
       ),
-      _gap(12),
-      _button('恢复初始样例', c.reset, icon: Icons.restart_alt_rounded),
-      ...grouped.entries.expand(
-        (entry) => [
-          _sectionTitle(entry.key),
-          _panel(
-            Column(
-              children: entry.value
-                  .map(
-                    (s) => _settingRow(
-                      s.name,
-                      () => c.applyScene(s),
-                      subtitle: s.width == null ? null : '设计参考宽度 ${s.width}dp',
+    );
+    final asset = contributor.asset;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: ring ? Border.all(color: t.surface, width: 2) : null,
+      ),
+      child: ClipOval(
+        child: asset == null
+            ? fallback()
+            : Image.asset(
+                asset,
+                fit: BoxFit.cover,
+                filterQuality: FilterQuality.medium,
+                errorBuilder: (_, _, _) => fallback(),
+              ),
+      ),
+    );
+  }
+
+  Widget _contributorRow() {
+    const size = 34.0;
+    const overlap = 8.0;
+    final shown = galleryContributors.take(3).toList();
+    final extra = galleryContributors.length - shown.length;
+    final avatarWidth = size + math.max(0, shown.length - 1) * (size - overlap);
+    return InkWell(
+      key: const ValueKey('settings-contributors'),
+      onTap: () => c.showOverlay(GalleryOverlay.contributors),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: Row(
+          children: [
+            Expanded(child: _text('贡献者', size: 14)),
+            SizedBox(
+              width: avatarWidth + (extra > 0 ? size - overlap : 0),
+              height: size,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  for (var i = 0; i < shown.length; i++)
+                    Positioned(
+                      left: i * (size - overlap),
+                      child: _contributorAvatar(shown[i], i),
                     ),
-                  )
-                  .toList(),
+                  if (extra > 0)
+                    Positioned(
+                      left: shown.length * (size - overlap),
+                      child: Container(
+                        width: size,
+                        height: size,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: t.surface2,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: t.surface, width: 2),
+                        ),
+                        child: _text(
+                          '+$extra',
+                          role: GalleryTypography.caption,
+                          color: t.muted,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
-            padding: EdgeInsets.zero,
-          ),
-        ],
+            const SizedBox(width: 8),
+            _text(
+              '${galleryContributors.length} 位',
+              role: GalleryTypography.caption,
+              color: t.muted,
+            ),
+            const SizedBox(width: 2),
+            const Icon(Icons.chevron_right_rounded, size: 18),
+          ],
+        ),
       ),
-    ]);
+    );
   }
 }
 

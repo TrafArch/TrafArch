@@ -112,8 +112,8 @@ abstract final class _GalleryMotion {
   static const main = Duration(milliseconds: 240);
   static const page = Duration(milliseconds: 280);
   static const back = Duration(milliseconds: 220);
-  static const sheet = Duration(milliseconds: 380);
-  static const sheetBack = Duration(milliseconds: 300);
+  static const sheet = Duration(milliseconds: 300);
+  static const sheetBack = Duration(milliseconds: 240);
   static const dialog = Duration(milliseconds: 180);
   static const dialogBack = Duration(milliseconds: 140);
   static const menu = Duration(milliseconds: 180);
@@ -472,6 +472,8 @@ class _GalleryPopupRoute extends PopupRoute<void> with _GalleryPredictiveRoute {
     GalleryOverlay.trip,
     GalleryOverlay.export,
     GalleryOverlay.rawFeedback,
+    GalleryOverlay.contributors,
+    GalleryOverlay.licenseDetail,
   ].contains(configuration.entry.overlay);
   @override
   bool get barrierDismissible => true;
