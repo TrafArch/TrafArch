@@ -109,6 +109,9 @@ void main() {
       '读取后自动保存',
       '上海交通卡可透支余额',
       '知识库',
+      '数据与备份',
+      '导出卡片记录',
+      '导入卡片记录',
       '外观',
       '外观主题',
       '莫奈取色',
@@ -129,6 +132,51 @@ void main() {
     }
     await reveal(AppInfo.copyright);
     await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('data and backup rows export and preview imported files', (
+    tester,
+  ) async {
+    const channel = MethodChannel('transit_card_analyzer/archive_documents');
+    final export = jsonEncode({
+      'cards': [
+        {'name': '上海公共交通卡', 'number': '1234'},
+      ],
+    });
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+      call,
+    ) async {
+      if (call.method == 'openJson') {
+        return {'name': 'backup.json', 'content': export};
+      }
+      return null;
+    });
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        channel,
+        null,
+      ),
+    );
+    await mount(tester);
+    await openSettingsRow(tester, '导出卡片记录');
+    expect(c.overlay, GalleryOverlay.export);
+    expect(find.text('内容预览 · 尚未保存文件'), findsOneWidget);
+    await tester.ensureVisible(find.text('关闭预览'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('关闭预览'));
+    await tester.pumpAndSettle();
+    expect(c.overlay, isNull);
+    await openSettingsRow(tester, '导入卡片记录');
+    expect(c.overlay, GalleryOverlay.importPreview);
+    expect(find.text('文件内容预览 · 不会修改当前样例'), findsOneWidget);
+    expect(find.textContaining('识别到 1 张卡片记录'), findsOneWidget);
+    expect(find.textContaining('backup.json'), findsOneWidget);
+    await tester.ensureVisible(find.text('关闭预览'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('关闭预览'));
+    await tester.pumpAndSettle();
+    expect(c.overlay, isNull);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('contributor entry stacks avatars and opens the shared sheet', (

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' show File;
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter, ImageByteFormat, instantiateImageCodec;
@@ -17,6 +18,7 @@ import '../features/trips/journey_transport_icon.dart';
 import '../features/trips/trip_filters.dart';
 import '../platform/browser/feedback_browser.dart';
 import '../platform/qr/qr_image_picker.dart';
+import '../platform/storage/archive_document_store.dart';
 import '../shared/app_support.dart';
 import 'gallery_controller.dart';
 import 'gallery_balance_presentation.dart';
@@ -330,6 +332,50 @@ class _GalleryViewState extends State<_GalleryView> {
   }
 
   Future<List<LicenseEntry>>? _licenses;
+
+  bool _importingRecords = false;
+
+  /// 导入与导出一样停留在预览层：读取用户选择的备份文件并展示内容，
+  /// 不覆盖当前内置样例。
+  Future<void> _importCardRecords() async {
+    if (_importingRecords) return;
+    setState(() => _importingRecords = true);
+    try {
+      final document = await const MethodChannelArchiveDocumentStore()
+          .openJson();
+      if (document == null || !mounted) return;
+      String summary;
+      try {
+        final decoded = jsonDecode(document.content);
+        final cards = decoded is Map ? decoded['cards'] : null;
+        summary = cards is List
+            ? '识别到 ${cards.length} 张卡片记录'
+            : '未识别到卡片记录字段';
+      } catch (_) {
+        summary = '文件不是有效的 JSON';
+      }
+      c.update(() {
+        c.exportTitle = '导入预览';
+        c.exportText = '${document.name}\n$summary\n\n${document.content}';
+      }, '预览导入文件');
+      c.showOverlay(GalleryOverlay.importPreview);
+    } on MissingPluginException {
+      _toast(
+        '当前平台不支持文件选择，请在 Android 上导入',
+        type: GalleryFeedbackType.error,
+      );
+    } on PlatformException catch (error) {
+      _toast(
+        error.message ?? '无法读取所选文件，请重试',
+        type: GalleryFeedbackType.error,
+      );
+    } catch (_) {
+      _toast('无法读取所选文件，请重试', type: GalleryFeedbackType.error);
+    } finally {
+      if (mounted) setState(() => _importingRecords = false);
+    }
+  }
+
   Future<void> _openContact(String value, {bool email = false}) async {
     if (_openingLink != null) return;
     final page = c.page;

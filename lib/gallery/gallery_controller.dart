@@ -32,6 +32,7 @@ enum GalleryOverlay {
   source,
   mode,
   export,
+  importPreview,
   rawFeedback,
   contributors,
   licenseDetail,

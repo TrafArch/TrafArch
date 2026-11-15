@@ -1140,6 +1140,27 @@ extension _GalleryPages on _GalleryViewState {
       ),
       padding: EdgeInsets.zero,
     ),
+    _sectionTitle('数据与备份'),
+    _panel(
+      Column(
+        children: [
+          _settingRow(
+            '导出卡片记录',
+            () => c.export(all: true),
+            subtitle: '预览全部已保存卡片的记录，不保存文件',
+            icon: Icons.download_outlined,
+          ),
+          const Divider(),
+          _settingRow(
+            '导入卡片记录',
+            _importCardRecords,
+            subtitle: '选择备份文件预览内容，不修改当前样例',
+            icon: Icons.upload_outlined,
+          ),
+        ],
+      ),
+      padding: EdgeInsets.zero,
+    ),
     _sectionTitle('外观'),
     _panel(
       Column(

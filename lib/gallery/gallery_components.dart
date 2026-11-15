@@ -100,10 +100,10 @@ extension _GalleryComponents on _GalleryViewState {
         grouped: true,
         color: t.text,
       ),
-      GalleryPage.cards => _icon(
+      GalleryPage.expert => _icon(
         Icons.download_outlined,
         '导出卡片记录',
-        () => c.export(all: true),
+        () => c.export(),
         outlined: false,
         grouped: true,
         color: t.text,

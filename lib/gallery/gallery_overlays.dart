@@ -18,6 +18,7 @@ extension _GalleryOverlays on _GalleryViewState {
       GalleryOverlay.face,
       GalleryOverlay.trip,
       GalleryOverlay.export,
+      GalleryOverlay.importPreview,
       GalleryOverlay.rawFeedback,
     ].contains(type);
     return [
@@ -148,6 +149,7 @@ extension _GalleryOverlays on _GalleryViewState {
     GalleryOverlay.source => '记录来源',
     GalleryOverlay.mode => '交通方式',
     GalleryOverlay.export => _entry.exportTitle,
+    GalleryOverlay.importPreview => _entry.exportTitle,
     GalleryOverlay.rawFeedback => '反馈内容预览',
     GalleryOverlay.contributors => '贡献者',
     GalleryOverlay.licenseDetail => '许可证详情',
@@ -204,6 +206,20 @@ extension _GalleryOverlays on _GalleryViewState {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _text('内容预览 · 尚未保存文件', role: GalleryTypography.caption, color: t.warn),
+        _gap(14),
+        _hexBox(_entry.exportText),
+        _gap(14),
+        _button('关闭预览', c.back, primary: true),
+      ],
+    ),
+    GalleryOverlay.importPreview => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _text(
+          '文件内容预览 · 不会修改当前样例',
+          role: GalleryTypography.caption,
+          color: t.warn,
+        ),
         _gap(14),
         _hexBox(_entry.exportText),
         _gap(14),

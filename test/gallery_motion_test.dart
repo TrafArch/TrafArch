@@ -149,7 +149,7 @@ void main() {
   );
 
   testWidgets(
-    'sheets contract inward then slide down, and canceling back keeps the parent',
+    'sheets slide straight from below, and canceling back keeps the parent',
     (tester) async {
       await mount(tester);
       c.showOverlay(GalleryOverlay.face, card: c.current);
@@ -159,6 +159,7 @@ void main() {
           tester.getBottomRight(title).dx - tester.getTopLeft(title).dx;
       await tester.pump(const Duration(milliseconds: 65));
       final partialY = tester.getTopLeft(title).dy;
+      final partialWidth = titleWidth();
       await tester.pump(const Duration(milliseconds: 220));
       expect(
         ModalRoute.of(tester.element(title))!.animation!.isCompleted,
@@ -168,11 +169,12 @@ void main() {
       final restingY = tester.getTopLeft(title).dy;
       final restingWidth = titleWidth();
       expect(partialY, greaterThan(restingY));
-      // 手势前期先向内收缩（宽度变小），尚未下移。
+      // 打开动画只做下方平移，不再向内收缩。
+      expect(partialWidth, closeTo(restingWidth, .1));
       await gestureEvent(tester, 'startBackGesture');
       await gestureEvent(tester, 'updateBackGestureProgress', .3);
-      expect(titleWidth(), lessThan(restingWidth));
-      // 手势后期才向下滑出。
+      expect(titleWidth(), closeTo(restingWidth, .1));
+      expect(tester.getTopLeft(title).dy, greaterThan(restingY));
       await gestureEvent(tester, 'updateBackGestureProgress', .8);
       expect(tester.getTopLeft(title).dy, greaterThan(restingY));
       await gestureEvent(tester, 'cancelBackGesture');
@@ -183,7 +185,8 @@ void main() {
       c.back();
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
-      expect(titleWidth(), lessThan(restingWidth));
+      expect(titleWidth(), closeTo(restingWidth, .1));
+      expect(tester.getTopLeft(title).dy, greaterThan(restingY));
       expect(title.hitTestable(), findsNothing);
       await tester.pump(const Duration(milliseconds: 150));
       expect(tester.getTopLeft(title).dy, greaterThan(restingY));
@@ -823,6 +826,11 @@ void main() {
       c.navigate(GalleryPage.settings);
       await mount(tester);
       final logs = find.widgetWithText(SwitchListTile, '启用运行日志');
+      await tester.scrollUntilVisible(
+        logs,
+        300,
+        scrollable: galleryVerticalScroll(),
+      );
       await tester.ensureVisible(logs);
       await tester.pumpAndSettle();
       final tile = tester.getRect(logs);

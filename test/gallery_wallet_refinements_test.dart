@@ -504,8 +504,16 @@ void main() {
       );
       expect(
         find.descendant(of: group, matching: find.byType(VerticalDivider)),
+        findsNothing,
+      );
+      c.navigate(GalleryPage.expert);
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(of: group, matching: find.byType(VerticalDivider)),
         findsOneWidget,
       );
+      c.navigate(GalleryPage.cards);
+      await tester.pumpAndSettle();
       for (final card in c.savedCards) {
         final item = tester.widget<Container>(
           find.byKey(ValueKey('wallet-card-${card.id}')),
@@ -552,6 +560,9 @@ void main() {
       c.back();
       await tester.pumpAndSettle();
       c.back();
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('导出卡片记录'), findsNothing);
+      c.navigate(GalleryPage.expert);
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('导出卡片记录'));
       await tester.pumpAndSettle();

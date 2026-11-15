@@ -322,7 +322,7 @@ void main() {
           tester.element(find.byKey(const ValueKey('main-action-group'))),
           same(groupElement),
         );
-        if (page == GalleryPage.cards || page == GalleryPage.home) {
+        if (page == GalleryPage.expert || page == GalleryPage.home) {
           final fade = tester.widget<FadeTransition>(
             find
                 .ancestor(
