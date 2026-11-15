@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-11-15 — 设置页与半模态弹窗改版（spec 2.3）
+
+- 新版设置页按 spec 2.3 重组信息架构：读卡与数据、外观、日志、帮助与支持、关于 TrafArch，末尾保留“预览”分区承载新界面 beta 开关。About 信息内联展示应用 Logo、名称、版本与 Build Number、致谢、开放源代码许可、隐私政策与贡献者，不再保留独立关于二级页；“问题反馈”仍进入原独立页面；移除样例管理与恢复初始样例入口，冻结场景数据保留供内部使用。
+- 新增贡献者入口与半模态弹层：收起态最多叠放 3 个 34dp 头像并显示 +N 与人数，整行可点击；弹层展示头像、姓名、角色与仅对可验证主页提供的链接，不生成无效外链，名单按动态数量布局并独立滚动。按设计目录 `comttributors` 收录 7 位贡献者（kajolno、Nightingale0504、林天仪、mitkimi、Makitoid、鳄鱼宝宝、DearVa），头像裁剪为 256px 并压缩到 10–17 KB，位于 `assets/contributors/`；`lib/gallery/gallery_contributors.dart` 为唯一数据源。
+- 开源许可改为列表整行打开详情弹层：展示软件名称、按正文识别的许可证类型、可用的许可证原文链接与完整正文，保留段落缩进与换行；不同版本或不同依赖实例的记录不合并。许可见正文首次打开时解析，并在会话内按条目缓存，重复打开与主题切换不重复解析。
+- 新增设置页共用的半模态弹层：默认约屏高 57%、最大 90%，顶部圆角 24dp，居中拖拽条，内容独立滚动；可上滑扩展、下滑到底关闭。弹层上浮由 380ms 调整为 300ms、下沉由 300ms 调整为 240ms，遮罩同步渐变；下滑、叉号、遮罩与预测性返回共用同一关闭路径，手势取消不重建内容，并保留展开高度与滚动位置。
+- 更新设置页、许可弹层、贡献者、半模态几何与预测性返回回归；移除样例管理相关断言。`flutter analyze` 无新增告警。
+- 回归：Flutter 3.50.0 下标准 `flutter test` 全量 2971 项通过、2 项跳过；唯一失败为本轮之前即存在的 `gallery_wallet_refinements_test` 卡面字段 `pumpAndSettle` 超时（在干净 HEAD 工作树同样复现，与本次改动无关）。设置页专项、许可、致谢、反馈、底栏、beta 开关与视觉复核共 34 项全部通过。`flutter analyze` 保留 3 条既有 info 及 Material 弃用提示；渲图复核亮／暗设置页、贡献者弹层与许可详情弹层，7 位贡献者头像按 256px 裁剪、单张 10–17 KB。
+- Flutter SDK 检查与升级：由 `3.47.7`（Dart 3.13.5）升级到 `3.50.0` stable（Dart 3.14.0，2026-11-11）。`flutter upgrade` 因 `github.com:443` 不可达失败，改用本地已有的 `3.50.0` 标签切换并补拉引擎产物（Google 存储可达）；旧版 `flutter_tester` 启动崩溃未再复现，标准测试入口恢复，`docs/GALLERY.md` 中 3.47.x 临时脚本标记为历史对照。升级后 `package:flutter/material.dart` 出现弃用提示，内置 Material 仍可用；正式迁移 `material_ui` 仍是后续独立工作。
+- 构建开发者原签名 arm64-v8a Release APK `1.0.5-beta.2+4170`（33.7 MiB）：显示名称 `TrafArch`、包名 `com.kajolno.TrafArch`、实际 Android versionCode `4170`、ABI 仅 `arm64-v8a`，证书 SHA-256 `3b86c431…12b5` 与历次交付一致；版本名／构建号一致、原签名、Release 不可调试、ZIP CRC、16 KiB 对齐与 ELF LOAD 对齐全部通过，APK 内包含 7 个贡献者头像资源。SHA256 以 `build/gallery-delivery-verification-4170/apk-verification.json` 为准。AppInfo 保留 `4170`，pubspec 自动预留 `4171`。未连接设备安装；TU／CU 数据库与 manifest 未改动。
+
 ## 2026-11-15 — 合并 main（PR #37）
 
 - 将 main（`70cf1bc`）合入 `2.x-preview`，解决 9 处冲突。TU 参考数据包采用 main 的 `517c59f3…`（含厦门 6 号线、重庆 15 号线，`all_records` 8069 行），配套 manifest 同步为 `37cfdbdc…`，CU 保持 `77ba3ad4…`；该包与清单均由既有离线流程发布且互相自洽，未手工改写数据。版本文件保留 preview 构建号（AppInfo `4167`、pubspec 预留 `4168`）与版本名 `1.0.5-beta.2`，同时引入 main 的 `AppInfo.androidVersionCode`。逐应用证据、存档冲突策略、识别逻辑重构与对应测试整体合入；`reference_package.dart` 采用 main 的声明行数校验版本，测试取 main 的 8069/`517c59f3` 断言，`updates_test` 保留 preview 的 manifest 驱动哈希。CHANGELOG 保留双方条目。
