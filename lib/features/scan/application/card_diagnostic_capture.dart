@@ -7,7 +7,7 @@ import 'response_diagnostic_capture.dart';
 /// Uses already-read fields only. NFC UID/IDm never masquerades as a card number.
 Map<String, Object?> captureCardInfo(CardReadOutcome result) =>
     switch (result) {
-      TransitReadOutcome(:final card) => {
+      TransitReadOutcome(:final card, :final applications) => {
         'cardNumber': card.localCard?.info.cardNumber.isNotEmpty == true
             ? card.localCard!.info.cardNumber
             : card.info.displayCardNumber,
@@ -20,6 +20,9 @@ Map<String, Object?> captureCardInfo(CardReadOutcome result) =>
         'parserName': card.parserName,
         'selectedAid': card.selectedAidHex,
         'dualApplication': card.dualApplication,
+        'applications': [
+          for (final application in applications) application.toJson(),
+        ],
         'identificationState': 'parser',
       },
       BankReadOutcome(:final card) => {

@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_dependencies.dart';
 import '../../shared/presentation/adaptive_layout.dart';
+import '../../shared/presentation/application_evidence_panel.dart';
 import '../archive/application/archive_history.dart';
 import '../archive/application/cu_archive_projection.dart';
 import '../archive/domain/card_session_snapshot.dart';
 import '../archive/domain/card_types.dart';
 import '../../protocols/transit/card_parser.dart';
+import '../../protocols/transit/multiapp/application_evidence.dart';
 import '../archive/presentation/archive_trip_presenter.dart';
 import '../archive/presentation/local_card_history_records.dart';
 import '../trips/trip_cards_view.dart';
@@ -50,6 +52,13 @@ class RecoveryResultPanel extends StatelessWidget {
     final cu = batch == null
         ? null
         : projectCuArchive(ArchiveHistoryResult(card: null, batches: [batch]));
+    final applicationRows =
+        snapshot?.snapshot?.extensions['applicationEvidence'];
+    final applications = <ApplicationEvidence>[
+      if (applicationRows is List)
+        for (final row in applicationRows)
+          ?ApplicationEvidence.tryParse(row),
+    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -117,6 +126,13 @@ class RecoveryResultPanel extends StatelessWidget {
             ),
           ),
         ),
+        if (applications.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          ApplicationEvidencePanel(
+            applications: applications,
+            title: '逐应用探测 · 捕获时快照',
+          ),
+        ],
         if (trips != null && trips.entries.isNotEmpty)
           TripCardsView(
             entries: trips.entries,

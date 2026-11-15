@@ -30,7 +30,8 @@ ShanghaiMirroredRecords partitionShanghaiArchiveMirroredRecords({
     final snapshot = batches[entry.key]?.decoded.snapshot;
     if (ambiguousBatches.contains(entry.key) ||
         snapshot == null ||
-        snapshot.context.systemId != CardParserIds.shanghaiTunion) {
+        (snapshot.context.systemId != CardParserIds.shanghaiTunion &&
+            snapshot.context.systemId != CardParserIds.harbinTunion)) {
       continue;
     }
     final matched = partitionShanghaiMirroredRecords(

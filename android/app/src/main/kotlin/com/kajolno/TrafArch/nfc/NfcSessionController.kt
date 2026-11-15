@@ -89,6 +89,14 @@ internal class NfcSessionController(private val activity: Activity) {
         }
     }
 
+    private fun enableIdleReaderMode() {
+        if (disposed || !foreground || active != null) return
+        // Keep tag dispatch inside this foreground Activity between scans. Without
+        // reader mode Android handles an accidental tap and shows its tag prompt.
+        adapter?.enableReaderMode(activity, { _ -> }, READER_FLAGS or
+            NfcAdapter.FLAG_READER_NO_PLATFORM_SOUNDS, null)
+    }
+
     private fun discovered(session: Session, tag: Tag) {
         if (disposed || !foreground || active !== session || session.state != State.WAITING) return
         session.state = State.DISCOVERING
@@ -217,8 +225,11 @@ internal class NfcSessionController(private val activity: Activity) {
         session.connection = null
         val controlErrors = mutableListOf<String>()
         if (active === session) {
-            active = null // Detach BEFORE disabling discovery or scheduling blocking closes.
-            try { adapter?.disableReaderMode(activity) } catch (error: Exception) {
+            active = null // Detach BEFORE switching discovery or scheduling blocking closes.
+            try {
+                if (foreground && !disposed) enableIdleReaderMode()
+                else adapter?.disableReaderMode(activity)
+            } catch (error: Exception) {
                 controlErrors.add(error.message ?: error.javaClass.simpleName)
             }
         }
@@ -273,13 +284,19 @@ internal class NfcSessionController(private val activity: Activity) {
 
     fun onResume() {
         foreground = true
-        active?.let { if (it.state == State.WAITING) enableDiscovery(it) }
+        val session = active
+        if (session?.state == State.WAITING) enableDiscovery(session)
+        else if (session == null) {
+            try { enableIdleReaderMode() } catch (error: Exception) {
+                Log.w("NFC", "Failed to enable idle reader mode: ${error.message}")
+            }
+        }
     }
 
     fun onPause() {
         foreground = false
-        // Keep DISCOVERING / CONNECTED reads alive as before; only suspend waiting discovery.
-        if (active?.state == State.WAITING) {
+        // Keep DISCOVERING / CONNECTED reads alive as before; suspend idle and waiting discovery.
+        if (active == null || active?.state == State.WAITING) {
             try { adapter?.disableReaderMode(activity) } catch (error: Exception) {
                 Log.w("NFC", "Failed to pause reader mode: ${error.message}")
             }
@@ -289,7 +306,13 @@ internal class NfcSessionController(private val activity: Activity) {
     fun dispose() {
         if (disposed) return
         disposed = true
+        val hadActiveSession = active != null
         active?.let { retire(it) }
+        if (!hadActiveSession && foreground) {
+            try { adapter?.disableReaderMode(activity) } catch (error: Exception) {
+                Log.w("NFC", "Failed to dispose idle reader mode: ${error.message}")
+            }
+        }
         // Finish channel replies before the messenger is detached. Physical
         // retirement still owns the barrier and must not be reported as success.
         retirements.forEach { (id, retirement) ->

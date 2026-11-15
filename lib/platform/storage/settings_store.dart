@@ -13,6 +13,9 @@ abstract final class SettingsKeys {
   /// 「读取后自动保存」开关（'true' / 'false'；缺省视为关闭）。
   static const autoSaveEnabled = 'auto_save_enabled';
 
+  /// 已存在卡片的保存策略（skip / overwrite / ask；缺省覆盖）。
+  static const archiveConflictPolicy = 'archive_conflict_policy';
+
   /// 「上海交通卡可透支余额」开关（'true' / 'false'；缺省视为关闭）。
   /// 开启显示包含固定 8 元可透支额度的余额，关闭时从余额中扣除该额度。
   static const includeShanghaiOverdraft = 'include_shanghai_overdraft';

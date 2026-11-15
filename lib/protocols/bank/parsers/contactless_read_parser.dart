@@ -12,6 +12,7 @@ import '../domain/interfaces/tag_dictionary.dart';
 import '../domain/models/card_application.dart';
 import '../domain/models/card_field_summary.dart';
 import '../domain/models/card_record.dart';
+import '../domain/models/emv_date_codec.dart';
 import '../domain/models/parse_issue.dart';
 import '../domain/models/tlv_node.dart';
 
@@ -281,7 +282,23 @@ abstract class ContactlessReadParser implements CardParser {
   CardFieldSummary _buildSummary(List<TlvNode> trees) {
     final fields = <CardField>[];
     for (final tag in _summaryTags) {
-      final node = findTag(trees, tag);
+      final node =
+          switch (tag) {
+            '5A' => findTag(
+              trees,
+              tag,
+              accepts: (node) =>
+                  CardFieldSummary.extractPan(tag, node.rawValueHex) != null,
+            ),
+            '5F24' => findTag(
+              trees,
+              tag,
+              accepts: (node) =>
+                  EmvDateCodec.decodeHex(node.rawValueHex) != null,
+            ),
+            _ => null,
+          } ??
+          findTag(trees, tag);
       if (node == null) continue;
       final decoded = dictionary.decodeValue(tag, node.rawValue);
       final value = tag == '5A'

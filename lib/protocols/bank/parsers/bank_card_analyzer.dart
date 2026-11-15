@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import '../emv/discovery/application_enumerator.dart';
 import '../emv/models/emv_application.dart';
+import '../data/apdu/status_word.dart';
 import '../data/tlv/ber_tlv_decoder.dart';
 import '../data/tlv/hex_codec.dart';
 import '../data/transport/recording_card_transport.dart';
@@ -26,7 +27,7 @@ class BankCardAnalyzer {
   final List<CardParser> parsers;
   final String parserVersion;
 
-  BankCardAnalyzer(this.parsers, {this.parserVersion = '0.3.0'});
+  BankCardAnalyzer(this.parsers, {this.parserVersion = '0.3.2'});
 
   Future<BankCardResult> analyze(CardTransport transport) async {
     final recording = RecordingCardTransport(transport);
@@ -38,6 +39,7 @@ class BankCardAnalyzer {
     final List<String> discoveryDiagnostics;
     final bool discoveryStopped;
     final TransportFailure? discoveryFailure;
+    var directorySelectRejected = false;
     try {
       Future<List<int>> emvTransceive(List<int> cmd) async =>
           recording.transceive(Uint8List.fromList(cmd));
@@ -48,11 +50,31 @@ class BankCardAnalyzer {
       discoveryStopped = result.transportFailure != null;
       discoveryFailure = result.transportFailure;
       for (final failure in result.failures) {
-        // An absent AID in the fallback list is expected, unlike a failed AID
-        // explicitly advertised by PPSE. Retain all other failure evidence.
+        // 内置候选不存在是预期结果，保留卡片目录内候选的全部拒绝证据。
         if (usedFallback &&
+            !failure.advertisedByDirectory &&
             failure.reason == 'select_rejected' &&
             failure.statusHex == '6A82') {
+          continue;
+        }
+        if (failure.reason == 'select_rejected' &&
+            failure.advertisedByDirectory) {
+          final status = int.tryParse(failure.statusHex ?? '', radix: 16);
+          final description = status == null
+              ? null
+              : StatusWord.describe(status);
+          issues.add(
+            ParseIssue(
+              stage: 'enumeration',
+              code: 'directory_select_rejected',
+              message:
+                  description == null ||
+                      description == 'SW=${failure.statusHex}'
+                  ? failure.message
+                  : '目录应用 ${failure.aidHex} 选择失败（${failure.statusHex}，$description）',
+            ),
+          );
+          directorySelectRejected = true;
           continue;
         }
         issues.add(
@@ -88,14 +110,14 @@ class BankCardAnalyzer {
         const ParseIssue(
           stage: 'ppse',
           code: 'fallback_used',
-          message: 'PPSE 不可用，已回退到候选 AID 枚举',
+          message: 'PPSE／PSE 未取得有效应用，已回退到内置候选 AID 枚举',
         ),
       );
     }
 
     final applications = discovered.map(_toCardApplication).toList();
     final selected = applications.isNotEmpty;
-    if (!selected) {
+    if (!selected && (discoveryStopped || !directorySelectRejected)) {
       issues.add(
         ParseIssue(
           stage: 'enumeration',
@@ -104,7 +126,7 @@ class BankCardAnalyzer {
               : 'no_candidate_aid',
           message: discoveryStopped
               ? '通信中断，未能完成应用枚举'
-              : 'PPSE 与候选 AID 均未匹配到任何应用',
+              : '应用目录与内置候选 AID 均未匹配到任何应用',
         ),
       );
     }

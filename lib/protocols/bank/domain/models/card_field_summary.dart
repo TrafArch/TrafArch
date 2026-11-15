@@ -149,11 +149,19 @@ class _Track2 {
   const _Track2({required this.expiry, required this.serviceCode});
 }
 
-/// 深度优先查找首个匹配 tag（5A 等常嵌在 70 模板内）。
-TlvNode? findTag(List<TlvNode> nodes, String tag) {
+/// 深度优先查找首个符合条件的非空标签（如嵌在 70 模板内的 5A）。
+TlvNode? findTag(
+  List<TlvNode> nodes,
+  String tag, {
+  bool Function(TlvNode)? accepts,
+}) {
   for (final n in nodes) {
-    if (n.tagHex == tag && n.rawValue.isNotEmpty) return n;
-    final c = findTag(n.children, tag);
+    if (n.tagHex == tag &&
+        n.rawValue.isNotEmpty &&
+        (accepts?.call(n) ?? true)) {
+      return n;
+    }
+    final c = findTag(n.children, tag, accepts: accepts);
     if (c != null) return c;
   }
   return null;

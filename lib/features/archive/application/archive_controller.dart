@@ -3,6 +3,7 @@ import 'package:drift/drift.dart' show Value;
 import '../../../protocols/transit/card_parser.dart';
 import '../../transit_analysis/balance_interpretation.dart';
 import '../../transit_analysis/tunion_analysis_models.dart';
+import '../../../shared/domain/archive_conflict_policy.dart';
 import '../../transit_analysis/process_journey_positions.dart';
 import '../../../platform/storage/log_exporter.dart';
 import '../../../platform/nfc/nfc_models.dart';
@@ -152,6 +153,11 @@ class ArchiveController extends OwnedNotifier {
         context: context,
         extensions: {
           'captureAttemptId': attemptId,
+          if (view.applications.isNotEmpty)
+            'applicationEvidence': [
+              for (final application in view.applications)
+                application.toJson(),
+            ],
           if (parsed.localCard?.info.isBmac == true)
             'beijingBmac': {
               'cardNumber': parsed.localCard!.info.cardNumber,
@@ -395,13 +401,43 @@ class ArchiveController extends OwnedNotifier {
     }
   }
 
-  Future<bool> accept(String id, {int? capturedParseVersion}) async {
+  Future<bool> accept(
+    String id, {
+    int? capturedParseVersion,
+    ArchiveConflictPolicy conflictPolicy = ArchiveConflictPolicy.overwrite,
+    bool replaceExistingHistory = false,
+  }) async {
     final item = pending;
     if (disposed || item == null || item.pendingSaveId != id) return false;
     final generation = _generation;
+    final exists = await cardExists(item.fingerprint);
+    if (disposed ||
+        generation != _generation ||
+        pending?.pendingSaveId != id) {
+      return false;
+    }
+    if (exists) {
+      if (conflictPolicy == ArchiveConflictPolicy.skip) {
+        pending = null;
+        autoSaveNotice = '已跳过：${item.displayName}（记录已存在）';
+        notifyListeners();
+        return true;
+      }
+      if (conflictPolicy == ArchiveConflictPolicy.ask) {
+        // The UI must resolve the conflict before storing.
+        return false;
+      }
+    }
     pending = null;
     notifyListeners();
-    final operation = _save(item, parseVersion: capturedParseVersion);
+    final operation = _save(
+      item,
+      parseVersion: capturedParseVersion,
+      replaceBatches:
+          exists &&
+          conflictPolicy == ArchiveConflictPolicy.overwrite &&
+          replaceExistingHistory,
+    );
     _writes.add(operation);
     final ok = await operation;
     _writes.remove(operation);
@@ -412,7 +448,24 @@ class ArchiveController extends OwnedNotifier {
     return ok;
   }
 
-  Future<bool> _save(PendingCardSave item, {int? parseVersion}) async {
+  Future<bool> cardExists(String fingerprint) async {
+    try {
+      final existing =
+          await (repository.db.select(repository.db.savedCards)
+                ..where((t) => t.cardFingerprint.equals(fingerprint)))
+              .getSingleOrNull();
+      return existing != null;
+    } catch (e) {
+      log('卡片档案存在性检查失败：$e');
+      return false;
+    }
+  }
+
+  Future<bool> _save(
+    PendingCardSave item, {
+    int? parseVersion,
+    bool replaceBatches = false,
+  }) async {
     try {
       await repository.db.transaction(() async {
         final existing =
@@ -439,6 +492,7 @@ class ArchiveController extends OwnedNotifier {
           sessionDataJson: payload,
           parseVersion: parseVersion ?? kTripParseVersion,
           readAt: item.readAt,
+          replaceBatches: replaceBatches,
         );
         // A late full observation may update the retained balance while the
         // newest envelope remains partial. Refresh only its source extension;
@@ -501,14 +555,41 @@ class ArchiveController extends OwnedNotifier {
     notifyListeners();
   }
 
-  Future<void> autoSave() async {
+  Future<void> autoSave({
+    ArchiveConflictPolicy policy = ArchiveConflictPolicy.overwrite,
+  }) async {
     final item = pending;
     if (item == null) return;
     final generation = _generation;
-    final ok = await accept(item.pendingSaveId);
+    final exists = await cardExists(item.fingerprint);
+    if (disposed ||
+        generation != _generation ||
+        pending?.pendingSaveId != item.pendingSaveId) {
+      return;
+    }
+    if (exists) {
+      if (policy == ArchiveConflictPolicy.ask) {
+        // Leave the pending capture in place; the home presenter will ask.
+        notifyListeners();
+        return;
+      }
+      if (policy == ArchiveConflictPolicy.skip) {
+        decline(item.pendingSaveId);
+        autoSaveNotice = '已跳过：${item.displayName}（记录已存在）';
+        notifyListeners();
+        return;
+      }
+    }
+    final ok = await accept(
+      item.pendingSaveId,
+      conflictPolicy: ArchiveConflictPolicy.overwrite,
+      replaceExistingHistory: exists,
+    );
     if (disposed || generation != _generation) return;
     autoSaveNotice = ok
-        ? '已自动保存：${item.displayName}'
+        ? exists
+              ? '已覆盖保存：${item.displayName}'
+              : '已自动保存：${item.displayName}'
         : '自动保存失败：${item.displayName}';
     notifyListeners();
   }

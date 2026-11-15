@@ -21,7 +21,8 @@ ShanghaiMirroredRecords partitionShanghaiMirroredRecords({
   required Iterable<TUnionTransaction> tunionTransactions,
   required Iterable<CuTransactionView> cityUnionTransactions,
 }) {
-  if (parserId != CardParserIds.shanghaiTunion) {
+  if (parserId != CardParserIds.shanghaiTunion &&
+      parserId != CardParserIds.harbinTunion) {
     return ShanghaiMirroredRecords(
       independent: cityUnionTransactions,
       mirrored: const [],

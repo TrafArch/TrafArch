@@ -1,5 +1,7 @@
 import '../../../app/app_info.dart';
 import '../../../platform/storage/app_logger.dart';
+import '../../../shared/presentation/application_evidence_panel.dart';
+import '../../../protocols/transit/multiapp/application_evidence.dart';
 import '../data/app_database.dart';
 import '../domain/card_name_extension.dart';
 import '../domain/card_types.dart';
@@ -78,6 +80,30 @@ String buildArchiveHistoryExport(
       buffer.writeln(
         '${history.balanceObservationLabel}：$observed（非已验证港币账户余额）',
       );
+    }
+    final applicationRows =
+        history.latestCapture?.snapshot?.extensions['applicationEvidence'];
+    if (applicationRows is List && applicationRows.isNotEmpty) {
+      buffer.writeln('逐应用探测（捕获时快照）：');
+      for (final row in applicationRows) {
+        final application = ApplicationEvidence.tryParse(row);
+        if (application == null) {
+          buffer.writeln('  · （损坏的应用探测条目已保留在原始快照）');
+          continue;
+        }
+        final details = <String>[
+          if (application.cardNumber case final cardNumber?) '卡号 $cardNumber',
+          if (application.balanceFen case final balance?)
+            '余额 $balance 分',
+          if (application.recordCount > 0)
+            '${application.recordCount} 条记录',
+        ];
+        buffer.writeln(
+          '  · ${application.displayName}：'
+          '${applicationProbeStateLabel(application.state)}'
+          '${details.isEmpty ? '' : ' · ${details.join(' · ')}'}',
+        );
+      }
     }
     for (final entry in history.latestObservedFields.entries) {
       if (!entry.value) buffer.writeln('本次未观察到：${entry.key}；摘要保留既往已观察值');

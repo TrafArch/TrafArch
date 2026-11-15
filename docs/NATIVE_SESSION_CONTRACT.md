@@ -141,6 +141,14 @@ Destroy/engine cleanup disposes every handler idempotently and cancels its pendi
 replies. NFC retirement barriers drain on the shared scheduler; its idle threads
 expire without shutting down another controller's scheduler.
 
+While the Activity is foreground and no scan session is active, reader mode stays
+enabled with an empty callback and no platform sounds. Accidental tags on other
+pages are ignored by the app instead of being dispatched to Android's tag prompt.
+Starting a scan replaces that callback with the session-bound discovery callback;
+retirement returns to the empty callback. Pausing or disposing the Activity removes
+idle reader mode, so the system handles tags normally outside the app. Discovery
+and connected reads keep the pause behavior described above.
+
 ## Tag metadata compatibility
 
 Existing response keys and meanings are retained:

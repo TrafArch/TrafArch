@@ -30,7 +30,14 @@ abstract final class ShanghaiTransitUnionIds {
   static const String cuSystem = '城市一卡通（CU）';
 }
 
-/// 上海交通卡（交通联合版）识别结果。
+abstract final class HarbinTransitUnionIds {
+  static const String moduleName = '哈尔滨城市通（交通联合版）';
+
+  /// 已发布 TU 卡种目录中的哈尔滨城市通卡号前缀。
+  static const String cardNumberPrefix = '31049702';
+}
+
+/// 上海交通卡与哈尔滨城市通双应用识别结果。
 ///
 /// `Available` 表示**实际读取并解析后确认可用**（应用已确认 + 读取成功 +
 /// 数据完整），不代表卡片理论上一定只具有某一种应用。
@@ -54,7 +61,7 @@ extension ShanghaiTransitUnionStatusLabel on ShanghaiTransitUnionStatus {
     ShanghaiTransitUnionStatus.tuOnlyAvailable => '仅交通联合（TU）可用',
     ShanghaiTransitUnionStatus.cuOnlyAvailable => '仅城市一卡通（CU）可用',
     ShanghaiTransitUnionStatus.recognizedButUnreadable => '应用已确认，数据不可读',
-    ShanghaiTransitUnionStatus.unknown => '未确认上海交通卡应用',
+    ShanghaiTransitUnionStatus.unknown => '未确认双应用卡结构',
   };
 }
 
@@ -107,6 +114,23 @@ class ShanghaiTransitApplication {
                 .replaceFirst(RegExp(r'^0+'), '')
                 .startsWith(ShanghaiTransitUnionIds.cardNumberPrefix);
       });
+
+  bool get isHarbinTu =>
+      system == ShanghaiTransitUnionIds.tuSystem &&
+      confirmed &&
+      [
+        identity?.displayCardNumber,
+        card?.info.displayCardNumber,
+        cardInfo.cardNumber,
+      ].any((value) {
+        final digits = value?.trim() ?? '';
+        return RegExp(r'^[0-9]+$').hasMatch(digits) &&
+            digits
+                .replaceFirst(RegExp(r'^0+'), '')
+                .startsWith(HarbinTransitUnionIds.cardNumberPrefix);
+      });
+
+  bool get isDualCityTu => isShanghaiTu || isHarbinTu;
 
   /// 读取是否成功（TU：完整识读返回结果；CU：读到非空标准文件）。
   final bool readSucceeded;
@@ -299,14 +323,13 @@ abstract final class ShanghaiTransitTripMerger {
       a == _TripKind.unknown || b == _TripKind.unknown || a == b;
 }
 
-/// 上海交通卡（交通联合版）双路识读的合并结果。
+/// 上海交通卡与哈尔滨城市通双路识读的合并结果。
 ///
 /// - [tu] / [cu]：两套数据分别保留（含各自的原始记录与解析错误）；
 /// - [status]：由两侧实际读取结果判定；
 /// - [isShanghaiTransitUnion]：已确认 TU + TU 来源上海卡号前缀；
 /// - [mergedRecords]：去重后的行程流水；
-/// - [mergedCard]：仅在本卡种成立时产出的统一 [ParsedCard]
-///   （parserId = [CardParserIds.shanghaiTunion]）。
+/// - [mergedCard]：城市 TU 身份成立时产出的统一 [ParsedCard]。
 class ShanghaiTransitUnionResult {
   const ShanghaiTransitUnionResult({
     required this.tu,
@@ -315,6 +338,7 @@ class ShanghaiTransitUnionResult {
     required this.matchedPrefix,
     required this.structureConfirmed,
     required this.isShanghaiTransitUnion,
+    required this.isHarbinTransitUnion,
     required this.mergedRecords,
     required this.duplicateTripCount,
     required this.mergedCardInfo,
@@ -337,6 +361,7 @@ class ShanghaiTransitUnionResult {
 
   /// 是否为上海交通卡（交通联合版）：只依赖 [tu] 的上海 TU 证据。
   final bool isShanghaiTransitUnion;
+  final bool isHarbinTransitUnion;
 
   /// 合并后的行程流水（TU 在前，CU 独有记录在后，已去重）。
   final List<ApduRecord> mergedRecords;
@@ -372,6 +397,7 @@ class ShanghaiTransitUnionResult {
     final structureConfirmed = tu.confirmed || cu.confirmed;
     final matchedPrefix = _matchPrefix(tu, cu);
     final isShanghaiTransitUnion = tu.isShanghaiTu;
+    final isHarbinTransitUnion = tu.isHarbinTu;
 
     final status = switch ((tu.available, cu.available)) {
       (true, true) => ShanghaiTransitUnionStatus.bothAvailable,
@@ -395,10 +421,11 @@ class ShanghaiTransitUnionResult {
       matchedPrefix: matchedPrefix,
       structureConfirmed: structureConfirmed,
       isShanghaiTransitUnion: isShanghaiTransitUnion,
+      isHarbinTransitUnion: isHarbinTransitUnion,
       mergedRecords: merge.records,
       duplicateTripCount: merge.duplicateCount,
       mergedCardInfo:
-          (tu.isShanghaiTu ||
+          (tu.isDualCityTu ||
                       tu.available ||
                       (!cu.available && tu.readSucceeded)
                   ? tu.cardInfo
@@ -406,9 +433,7 @@ class ShanghaiTransitUnionResult {
               .copy()
             ..isTU = tu.available
             ..isCU = cu.available,
-      mergedCard: isShanghaiTransitUnion
-          ? _buildMergedCard(tu: tu, cu: cu)
-          : null,
+      mergedCard: tu.isDualCityTu ? _buildMergedCard(tu: tu, cu: cu) : null,
       errors: <String>[...tu.errors, ...cu.errors],
       warnings: <String>[...tu.warnings, ...cu.warnings],
     );
@@ -421,6 +446,7 @@ class ShanghaiTransitUnionResult {
     ShanghaiTransitApplication cu,
   ) {
     if (tu.isShanghaiTu) return ShanghaiTransitUnionIds.cardNumberPrefix;
+    if (tu.isHarbinTu) return HarbinTransitUnionIds.cardNumberPrefix;
     if (cu.confirmed) {
       // CjT331PublicInfo 保留完整原始文件的 HEX；按 TripReader subList(0, 4)
       // 取四字节，不拼接解码字段，也不使用 TU 发行方作为 CU 证据。
@@ -449,8 +475,12 @@ class ShanghaiTransitUnionResult {
     if (info == null) return null;
     final tuAid = tuCard?.selectedAidHex ?? '';
     return ParsedCard(
-      parserId: CardParserIds.shanghaiTunion,
-      parserName: ShanghaiTransitUnionIds.moduleName,
+      parserId: tu.isHarbinTu
+          ? CardParserIds.harbinTunion
+          : CardParserIds.shanghaiTunion,
+      parserName: tu.isHarbinTu
+          ? HarbinTransitUnionIds.moduleName
+          : ShanghaiTransitUnionIds.moduleName,
       info: info,
       transactions: tuCard?.transactions ?? const [],
       transactionFileObserved: tuCard?.transactionFileObserved ?? false,

@@ -36,7 +36,9 @@ class TransitSummaryPanel extends StatelessWidget {
     final identified = app.lastIdentified;
     final isTUnion = CardParserIds.isTUnionFamily(parsed?.parserId);
     final isCityUnion = parsed?.parserId == CardParserIds.cityUnion;
-    final isShanghai = parsed?.parserId == CardParserIds.shanghaiTunion;
+    final isDualCity =
+        parsed?.parserId == CardParserIds.shanghaiTunion ||
+        parsed?.parserId == CardParserIds.harbinTunion;
     final isLingnan =
         parsed?.parserId == CardParserIds.lingnanTong ||
         parsed?.parserId == CardParserIds.lingnanTunion;
@@ -71,13 +73,12 @@ class TransitSummaryPanel extends StatelessWidget {
       localName: local?.info.cardKindLabel,
     );
     // 发卡地：识别城市优先，回退城市码表（与识别引擎链路一致）。
-    final cityName =
-        local?.info.isMacauPass == true
-            ? '澳门'
-            : identified?.identity.cityName ??
-                  (isCityUnion
-                      ? app.cuCityNameOf(app.cardCityCode)
-                      : app.cityNameOf(app.cardCityCode));
+    final cityName = local?.info.isMacauPass == true
+        ? '澳门'
+        : identified?.identity.cityName ??
+              (isCityUnion
+                  ? app.cuCityNameOf(app.cardCityCode)
+                  : app.cityNameOf(app.cardCityCode));
     // 卡号（完整，不脱敏）：识别结果优先，回退解析字段，最后回退 UID。
     final String? parsedCardNumber;
     if (isLocal) {
@@ -111,9 +112,8 @@ class TransitSummaryPanel extends StatelessWidget {
         summaryField(context, '卡型', result!.cardType!),
       if (cityName != null && cityName.isNotEmpty)
         summaryField(context, '发卡地', cityName),
-      if (cityName == null && isLingnan)
-        summaryField(context, '发卡地', '未识别'),
-      if (isShanghai)
+      if (cityName == null && isLingnan) summaryField(context, '发卡地', '未识别'),
+      if (isDualCity)
         summaryField(
           context,
           '识别状态',
@@ -129,11 +129,7 @@ class TransitSummaryPanel extends StatelessWidget {
         summaryField(context, '应用状态', '澳门通钱包应用已确认'),
       if (local?.info.isLNT == true) ...[
         if (local?.info.expiryDate != null)
-          summaryField(
-            context,
-            '有效期至',
-            summaryDate(local!.info.expiryDate!),
-          ),
+          summaryField(context, '有效期至', summaryDate(local!.info.expiryDate!)),
       ],
       if (isLocal && local?.info.observedBalance != null)
         summaryField(
@@ -158,7 +154,7 @@ class TransitSummaryPanel extends StatelessWidget {
         summaryField(context, '余额', balanceText),
       // 上海卡 CU 单侧可用时，TU 钱包不可读，单独展示住建部钱包余额
       // （双应用卡统一在下方的双应用区块中展示，避免重复）。
-      if (isShanghai &&
+      if (isDualCity &&
           balanceFen == null &&
           parsed?.dualApplication != true &&
           app.cityUnionBalanceFen != null)
@@ -170,19 +166,16 @@ class TransitSummaryPanel extends StatelessWidget {
       if (parsed?.parserId == CardParserIds.lingnanTunion) ...[
         if (local?.info.cardNumber.isNotEmpty == true)
           summaryField(context, '岭南通卡号', local!.info.cardNumber),
-        summaryField(
-          context,
-          '岭南通余额',
-          '${(local!.info.observedBalance! / 100).toStringAsFixed(2)} 元',
-        ),
+        if (local?.info.observedBalance case final localBalance?)
+          summaryField(
+            context,
+            '岭南通余额',
+            '${(localBalance / 100).toStringAsFixed(2)} 元',
+          ),
       ],
       if (parsed?.parserId == CardParserIds.lingnanTong) ...[
         if (local?.extras.slots['lnt.tuConfirmed'] == true)
-          summaryField(
-            context,
-            '全国互联互通',
-            '交通联合应用已确认，互通状态未解析',
-          ),
+          summaryField(context, '全国互联互通', '交通联合应用已确认，互通状态未解析'),
       ],
       if (local?.info.isMacauPass == true) ...[
         summaryField(context, '交易记录', '${macauRecords.length} 条'),
@@ -214,9 +207,7 @@ class TransitSummaryPanel extends StatelessWidget {
         summaryField(
           context,
           '全国互联互通',
-          publicInfo.isInterconnectionEnabled
-              ? '已启用（城市一卡通）'
-              : '未启用',
+          publicInfo.isInterconnectionEnabled ? '已启用（城市一卡通）' : '未启用',
         ),
       // 双应用卡：在同一张物理卡上另有城市一卡通（住建部）钱包，与上面的
       // 交通联合余额分属两套独立网络，逐一列出避免混淆。
@@ -235,9 +226,7 @@ class TransitSummaryPanel extends StatelessWidget {
           summaryField(
             context,
             '城市一卡通互联互通',
-            publicInfo.isInterconnectionEnabled
-              ? '已启用（城市一卡通）'
-              : '未启用',
+            publicInfo.isInterconnectionEnabled ? '已启用（城市一卡通）' : '未启用',
           ),
       ],
     ];

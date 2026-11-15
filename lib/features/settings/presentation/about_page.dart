@@ -102,7 +102,7 @@ class _AboutPageState extends State<AboutPage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '版本 ${AppInfo.version}',
+                  '版本 ${AppInfo.version} (${AppInfo.androidVersionCode})',
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.outline,

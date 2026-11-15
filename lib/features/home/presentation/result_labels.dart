@@ -13,6 +13,7 @@ String bankFamilyText(String family) => switch (family) {
 
 String transitTypeLabel(String? parserId) => cardTypeLabel(switch (parserId) {
   CardParserIds.shanghaiTunion => CardTypes.shanghaiTransitUnion,
+  CardParserIds.harbinTunion => CardTypes.harbinTransitUnion,
   CardParserIds.lingnanTong => CardTypes.lingnanTong,
   CardParserIds.beijingBmac => CardTypes.beijingBmac,
   CardParserIds.lingnanTunion => CardTypes.lingnanTunion,
@@ -45,6 +46,11 @@ String bankStatusText(BankCardResult bank, {bool detailed = false}) =>
 
 /// 银行卡枚举失败文案：优先展示具体原因码，避免统一盖成「PPSE 不支持」。
 String bankEnumerationText(BankCardResult bank, {bool detailed = false}) {
+  if (bank.transportFailure == null) {
+    for (final issue in bank.issues) {
+      if (issue.code == 'directory_select_rejected') return issue.message;
+    }
+  }
   for (final issue in bank.issues) {
     if (issue.stage == 'enumeration' || issue.stage == 'ppse') {
       return '应用枚举未完成（${issue.code}）${detailed ? '：${issue.message}' : ''}';
@@ -58,6 +64,6 @@ String bankEmptyReason(BankCardResult bank) {
     if (issue.stage == 'ppse') return issue.message;
   }
   return bank.status == BankCardStatus.enumerationFailed
-      ? '卡片未返回应用目录（PPSE），或读取被访问条件拒绝'
+      ? '本次未成功选择任何应用'
       : '未读到可展示的应用数据';
 }

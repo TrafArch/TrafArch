@@ -13,6 +13,8 @@ class MacauPassCard {
   MacauPassCard(this._apdu);
   final ApduExchange _apdu;
 
+  static const String moduleName = '澳门通（钱包应用）';
+
   static const List<int> walletName = [
     0xB0,
     0xC4,

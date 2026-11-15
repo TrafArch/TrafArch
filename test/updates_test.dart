@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
+import 'package:transit_card_analyzer/app/app_info.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/reference_package.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/reference_updates.dart';
 import 'package:transit_card_analyzer/features/settings/presentation/about_page.dart';
@@ -101,6 +102,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('检查更新'), findsNothing);
+    expect(find.text('版本 ${AppInfo.version} (${AppInfo.androidVersionCode})'), findsOneWidget);
     expect(await service.checkNow(), isNull);
     expect(await service.checkOnce(), isNull);
     expect(calls, 0);

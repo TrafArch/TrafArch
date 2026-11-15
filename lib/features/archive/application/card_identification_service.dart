@@ -26,6 +26,15 @@ class CardIdentificationService {
         return _identifyTUnion(card, analysisIdentity);
       case CardParserIds.shanghaiTunion:
         return _identifyShanghaiTransitUnion(card, analysisIdentity);
+      case CardParserIds.harbinTunion:
+        return card.selectedAidHex.replaceAll(' ', '').toUpperCase() ==
+                'A00000000386980701'
+            ? _identifyCityUnion(card, cardType: CardTypes.harbinTransitUnion)
+            : _identifyTUnion(
+                card,
+                analysisIdentity,
+                cardType: CardTypes.harbinTransitUnion,
+              );
       case CardParserIds.shenzhenTunion:
         return _identifyTUnion(
           card,

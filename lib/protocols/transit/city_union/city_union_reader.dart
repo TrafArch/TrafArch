@@ -70,6 +70,22 @@ class CommonUnitCu {
     return true;
   }
 
+  /// 快速二次探测（TU 已确认后的 CU 存在性）：不重置 MF、不尝试无 Le
+  /// 兼容分支，只按 CLA 00 / 80 带 Le 选择一次。TU 未命中时仍走 [select]
+  /// 的完整兼容路径，避免影响独立 CU 卡。
+  Future<bool> selectPrimary(CardInfo info) async {
+    _selectedAid = null;
+    for (final cla in const [0x00, 0x80]) {
+      final resp = await _exchange(TUnionApdu.select(walletAid, cla: cla));
+      if (_isSuccess(resp)) {
+        _selectedAid = walletAid;
+        info.isCU = true;
+        return true;
+      }
+    }
+    return false;
+  }
+
   /// 完整识读：读取标准文件并生成统一视图列表。
   ///
   /// [readBalance] 为 true 时额外读取电子钱包余额（GET BALANCE，相对当前

@@ -25,7 +25,13 @@ class LingnanTong {
       return false;
     }
     final number = cardNumber.replaceFirst(RegExp(r'^0+'), '');
-    return const ['31048703', '31048709', '31048724'].any(number.startsWith);
+    // Wuyi Tong (31048710) has been observed with both PAY.APPY/TICL and TU.
+    return const [
+      '31048703',
+      '31048709',
+      '31048710',
+      '31048724',
+    ].any(number.startsWith);
   }
 
   Future<bool> selectAppy(List<ApduRecord> records, [CardExtras? extras]) =>

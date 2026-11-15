@@ -24,6 +24,7 @@ import '../platform/nfc/nfc_service.dart';
 import '../protocols/transit/city_union/city_union_models.dart';
 import '../protocols/transit/local/cards/shanghai_transit_union_models.dart';
 import '../protocols/transit/local/local_card_models.dart';
+import '../protocols/transit/multiapp/application_evidence.dart';
 import '../protocols/transit/qr/jt_t1179_qr_parser.dart';
 import '../protocols/transit/tunion/tunion_models.dart';
 import '../features/archive/data/app_database.dart';
@@ -34,6 +35,7 @@ import '../features/archive/data/card_repository.dart';
 import '../features/archive/application/card_identification_service.dart';
 
 import '../shared/application/owned_notifier.dart';
+import '../shared/domain/archive_conflict_policy.dart';
 import '../features/scan/application/scan_controller.dart';
 import '../features/scan/application/card_read_coordinator.dart';
 import '../features/scan/domain/card_read_outcome.dart';
@@ -390,7 +392,9 @@ class AppDependencies extends OwnedNotifier {
       );
     }
     notifyListeners();
-    if (settings.autoSaveEnabled && isCurrent()) await archive.autoSave();
+    if (settings.autoSaveEnabled && isCurrent()) {
+      await archive.autoSave(policy: settings.archiveConflictPolicy);
+    }
   }
 
   CardRepository get cardRepository => archive.repository;
@@ -404,6 +408,8 @@ class AppDependencies extends OwnedNotifier {
   bool get autoScanConsumed => scan.autoScanConsumed;
   String? get error => scan.error ?? scan.releaseError;
   ParsedCard? get parsedCard => _view?.parsedCard;
+  List<ApplicationEvidence> get applications =>
+      _view?.applications ?? const [];
   ShanghaiTransitUnionResult? get shanghaiTransitUnion =>
       _view?.shanghaiTransitUnion;
   ReadResult? get localReadResult => _view?.localReadResult;
@@ -450,6 +456,8 @@ class AppDependencies extends OwnedNotifier {
   String? get logExportMessage => diagnostics.logExportMessage;
   bool get logExportFailed => diagnostics.logExportFailed;
   bool get autoSaveEnabled => settings.autoSaveEnabled;
+  ArchiveConflictPolicy get archiveConflictPolicy =>
+      settings.archiveConflictPolicy;
   bool get monetEnabled => settings.monetEnabled;
   bool get openingFeedbackSurvey => settings.openingFeedbackSurvey;
   String? get feedbackBrowserError => settings.feedbackBrowserError;
@@ -522,6 +530,8 @@ class AppDependencies extends OwnedNotifier {
 
   Future<void> setAutoSaveEnabled(bool enabled) =>
       settings.setAutoSaveEnabled(enabled);
+  Future<void> setArchiveConflictPolicy(ArchiveConflictPolicy policy) =>
+      settings.setArchiveConflictPolicy(policy);
   Future<void> setMonetEnabled(bool enabled) =>
       settings.setMonetEnabled(enabled);
   Future<void> setIncludeShanghaiOverdraft(bool enabled) =>
@@ -542,7 +552,9 @@ class AppDependencies extends OwnedNotifier {
     }
     if (settings.initialized) return scan.scanOnce();
     return settings.initialize().then((_) async {
-      if (!disposed && request == _scanRequest) await scan.scanOnce();
+      if (!disposed && request == _scanRequest) {
+        await scan.scanOnce();
+      }
     });
   }
 
@@ -552,10 +564,21 @@ class AppDependencies extends OwnedNotifier {
     return scan.stop();
   }
 
-  Future<bool> acceptPendingSave(String id) {
+  Future<bool> acceptPendingSave(
+    String id, {
+    ArchiveConflictPolicy? conflictPolicy,
+  }) {
     _discardRecoveryFile();
-    return archive.accept(id);
+    final policy = conflictPolicy ?? settings.archiveConflictPolicy;
+    return archive.accept(
+      id,
+      conflictPolicy: policy,
+      replaceExistingHistory: policy == ArchiveConflictPolicy.overwrite,
+    );
   }
+
+  Future<bool> archiveCardExists(String fingerprint) =>
+      archive.cardExists(fingerprint);
 
   void declinePendingSave(String id) {
     _discardRecoveryFile();

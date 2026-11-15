@@ -8,12 +8,16 @@ class EmvCandidateFailure {
     required this.reason,
     required this.message,
     this.statusHex,
+    this.advertisedByDirectory = false,
   });
 
   final String aidHex;
   final String reason; // invalid_aid / select_rejected / fci_error / io_error
   final String message;
   final String? statusHex;
+
+  /// 被拒绝的 AID 由卡片应用目录明确列出。
+  final bool advertisedByDirectory;
 }
 
 /// 一次 EMV 应用发现的完整结果。
@@ -30,7 +34,7 @@ class EmvDiscoveryResult {
   final List<EmvCandidateFailure> failures;
   final List<String> diagnostics;
 
-  /// PPSE 未得到任何 AID、使用了内置回退表时为 true。
+  /// 尝试过内置候选 AID 时为 true。
   final bool usedFallback;
   final TransportFailure? transportFailure;
 

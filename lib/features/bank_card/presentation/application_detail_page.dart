@@ -19,6 +19,8 @@ class ApplicationDetailPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = application;
+    final pan = app.summary.pan;
+    final expiry = app.summary.expiry;
     return FoldSafePage(
       child: Scaffold(
         appBar: AppBar(title: Text(app.application.displayLabel)),
@@ -34,15 +36,16 @@ class ApplicationDetailPage extends StatelessWidget {
                 _kv('选择状态', app.application.selected ? '已选择' : '未选择'),
                 _kv('读取记录', '${app.records.length} 条'),
                 _hint(context, '只读模式：部分信息可能未开放直接读取，记录可能不完整。'),
-                if (app.summary.pan != null) ...[
-                  _kv('卡号 (PAN)', app.summary.pan!),
+                if (app.application.selected || pan != null)
+                  _kv('卡号 (PAN)', pan ?? '未读到'),
+                if (pan != null)
                   _kv('卡号来源', '应用数据标签 ${app.summary.panSourceTag}'),
-                ],
-                if (app.summary.expiry != null)
+                if (app.application.selected || expiry != null)
                   _kv(
                     '有效期',
-                    '${app.summary.expiry}'
-                        '（来源 ${app.summary.expirySourceTag}）',
+                    expiry == null
+                        ? '未读到'
+                        : '$expiry（来源 ${app.summary.expirySourceTag}）',
                   ),
                 if (app.summary.effectiveDate != null)
                   _kv('生效日期', app.summary.effectiveDate!),

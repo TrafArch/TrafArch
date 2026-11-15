@@ -8,10 +8,10 @@ import '../../city_union/city_union_reader.dart';
 import '../../tunion/tunion_reader.dart';
 import 'shanghai_transit_union_models.dart';
 
-/// 上海交通卡（交通联合版）专用识别器。
+/// 上海交通卡 / 哈尔滨城市通 TU + CU 识读器。
 ///
-/// 先读取 TU（JT/T 978.2），仅已确认 TU 且规范化卡号前缀为
-/// 31047700 时读取 CU（CJ/T 331-2016）。余额缺失不阻断上海身份确认。
+/// 先读取 TU（JT/T 978.2），仅已确认 TU 且规范化卡号命中对应城市前缀
+/// 时读取 CU（CJ/T 331-2016）。余额缺失不阻断 TU 身份确认。
 /// 两侧独立保留数据与错误；CU 失败不丢弃 TU，CU 发行标识不能替代 TU 证据。
 class ShanghaiTransitUnionCardParser implements CardParser {
   ShanghaiTransitUnionCardParser(
@@ -39,7 +39,7 @@ class ShanghaiTransitUnionCardParser implements CardParser {
 
   void _report(double progress) => onProgress?.call(progress.clamp(0.0, 1.0));
 
-  /// 先确认上海 TU，再读取 CU；未命中时保留真实的 CU 未探测状态。
+  /// 先确认城市 TU，再读取 CU；未命中时保留真实的 CU 未探测状态。
   Future<ShanghaiTransitUnionResult> read({bool probeCu = true}) async {
     final apdu = ApduExchange(transceive: _transceive);
     _report(0);
@@ -48,8 +48,13 @@ class ShanghaiTransitUnionCardParser implements CardParser {
     _report(0.5);
 
     final cu =
-        probeCu && tu.isShanghaiTu && tu.transportFailure?.stopsSession != true
-        ? await _readCu(apdu)
+        probeCu && tu.isDualCityTu && tu.transportFailure?.stopsSession != true
+        ? await _readCu(
+            apdu,
+            moduleName: tu.isHarbinTu
+                ? HarbinTransitUnionIds.moduleName
+                : moduleName,
+          )
         : ShanghaiTransitApplication(
             system: ShanghaiTransitUnionIds.cuSystem,
             probed: false,
@@ -120,7 +125,10 @@ class ShanghaiTransitUnionCardParser implements CardParser {
   }
 
   /// 城市一卡通应用识读（CU）：读余额开关常开（该卡种 CU 侧为独立钱包）。
-  Future<ShanghaiTransitApplication> _readCu(ApduExchange apdu) async {
+  Future<ShanghaiTransitApplication> _readCu(
+    ApduExchange apdu, {
+    required String moduleName,
+  }) async {
     onStage?.call('$moduleName · ${ShanghaiTransitUnionIds.cuSystem}');
     final info = CardInfo();
     final records = <ApduRecord>[];

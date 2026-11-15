@@ -19,7 +19,9 @@ class IdentityPanel extends StatelessWidget {
     final identity = app.analysis?.identity;
     final isTUnion = CardParserIds.isTUnionFamily(parsed?.parserId);
     final isCityUnion = parsed?.parserId == CardParserIds.cityUnion;
-    final isShanghai = parsed?.parserId == CardParserIds.shanghaiTunion;
+    final isDualCity =
+        parsed?.parserId == CardParserIds.shanghaiTunion ||
+        parsed?.parserId == CardParserIds.harbinTunion;
     return [
       ExpertField('解析器', parsed?.parserName ?? '—'),
       ExpertField(
@@ -30,9 +32,9 @@ class IdentityPanel extends StatelessWidget {
       ),
       // 交通联合应用：交通联合解析器专属字段，仅在命中时展示
       if (isTUnion) ExpertField('交通联合应用', '已发现'),
-      if (isShanghai) ...[
+      if (isDualCity) ...[
         ExpertField(
-          '上海交通卡识别状态',
+          '${parsed!.parserId == CardParserIds.harbinTunion ? '哈尔滨城市通' : '上海交通卡'}识别状态',
           app.shanghaiTransitUnion?.status.label ?? '未知',
         ),
         ExpertField('TU 应用', app.shanghaiTransitUnion?.tu.stateText ?? '未知'),

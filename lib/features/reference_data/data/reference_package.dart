@@ -51,7 +51,7 @@ class ReferencePackage {
     if (manifest['format_version'] != 1) {
       throw const FormatException('Unsupported reference manifest');
     }
-    final spec = (manifest['packages'] as Map)[protocol] as Map;
+    var spec = (manifest['packages'] as Map)[protocol] as Map;
     final name = spec['file'] as String;
     final hash = spec['sha256'] as String;
     if (!RegExp(r'^[A-Za-z0-9_.-]+\.sqlite$').hasMatch(name) ||
@@ -67,6 +67,15 @@ class ReferencePackage {
         sha256.convert(bytes).toString() != hash) {
       throw FormatException('$protocol asset digest mismatch');
     }
+    return _install(protocol, spec, hash, bytes);
+  }
+
+  static Future<ReferencePackage> _install(
+    String protocol,
+    Map spec,
+    String hash,
+    Uint8List bytes,
+  ) async {
     final support = await getApplicationSupportDirectory();
     final directory = Directory('${support.path}/trafarch_reference');
     await directory.create(recursive: true);
@@ -109,6 +118,26 @@ class ReferencePackage {
           metadata['format_version'] != '1' ||
           metadata['content_version'] != spec['content_version']) {
         throw FormatException('$protocol package metadata mismatch');
+      }
+      final declaredCounts = spec['tables'] as Map;
+      for (final item in declaredCounts.entries) {
+        final name = item.key as String;
+        final expected = item.value as int;
+        if (name.isEmpty ||
+            expected < 0 ||
+            db.select(
+              "SELECT 1 FROM sqlite_master WHERE type IN ('table', 'view') AND name = ?",
+              [name],
+            ).isEmpty) {
+          throw FormatException('$protocol invalid table count: $name');
+        }
+        final quoted = name.replaceAll('"', '""');
+        final actual = db
+            .select('SELECT COUNT(*) AS n FROM "$quoted"')
+            .single['n'];
+        if (actual != expected) {
+          throw FormatException('$protocol table count mismatch: $name');
+        }
       }
       final required = protocol == 'TU'
           ? <String, List<String>>{
@@ -291,8 +320,8 @@ class ReferencePackage {
         }
       }
       final counts = <String, int>{
-        for (final item in (spec['tables'] as Map).entries)
-          item.key as String: (item.value as num).toInt(),
+        for (final item in declaredCounts.entries)
+          item.key as String: item.value as int,
       };
       return ReferencePackage._(
         db,

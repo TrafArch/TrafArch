@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../shared/presentation/adaptive_layout.dart';
+import '../../../shared/domain/archive_conflict_policy.dart';
 
 import '../../../app/app_info.dart';
 import '../../../app/app_dependencies.dart';
@@ -33,6 +34,43 @@ class _SettingsPageState extends State<SettingsPage> {
 
   void _onChanged() {
     if (mounted) setState(() {});
+  }
+
+  Future<void> _pickArchiveConflictPolicy() async {
+    final app = widget.app;
+    final selected = await showDialog<ArchiveConflictPolicy>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('已经存在的记录'),
+        children: [
+          RadioGroup<ArchiveConflictPolicy>(
+            groupValue: app.archiveConflictPolicy,
+            onChanged: (value) => Navigator.pop(context, value),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final policy in ArchiveConflictPolicy.values)
+                  RadioListTile<ArchiveConflictPolicy>(
+                    value: policy,
+                    title: Text(policy.label),
+                  ),
+              ],
+            ),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 12, bottom: 8),
+              child: TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('取消'),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (selected != null) await app.setArchiveConflictPolicy(selected);
   }
 
   @override
@@ -89,6 +127,15 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ),
                 section('读卡与数据', [
+                  Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.history_outlined),
+                      title: const Text('已经存在的记录'),
+                      subtitle: Text(app.archiveConflictPolicy.label),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: _pickArchiveConflictPolicy,
+                    ),
+                  ),
                   Card(
                     child: SwitchListTile(
                       secondary: const Icon(Icons.save_outlined),

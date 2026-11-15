@@ -16,6 +16,7 @@ abstract final class CardTypes {
   /// 上海交通卡（交通联合版）：TU + CU 双标卡独立卡种（由专用识别器以
   /// 卡号前缀 + 应用结构双重确认，不归入普通交通联合卡）。
   static const String shanghaiTransitUnion = 'shanghai_transit_union';
+  static const String harbinTransitUnion = 'harbin_transit_union';
 
   static const String lingnanTong = 'lingnan_tong';
   static const String lingnanTunion = 'lingnan_tunion';
@@ -41,6 +42,7 @@ String cardTypeLabel(String cardType) => switch (cardType) {
   CardTypes.cityUnion => '城市一卡通',
   CardTypes.octopusTunion => '八达通全国通卡',
   CardTypes.shanghaiTransitUnion => '上海交通卡（交通联合版）',
+  CardTypes.harbinTransitUnion => '哈尔滨城市通（交通联合版）',
   CardTypes.lingnanTong => '岭南通',
   CardTypes.lingnanTunion => '岭南通（交通联合版）',
   CardTypes.shenzhenTunion => '深圳通（交通联合版）',

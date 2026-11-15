@@ -86,6 +86,33 @@ ParsedCard _macauCard() {
 }
 
 void main() {
+  testWidgets('双应用仅 TU 余额可读时不把岭南通余额当作零', (tester) async {
+    final localInfo = CardInfo()
+      ..isLNT = true
+      ..isYCT = true;
+    final card = ParsedCard(
+      parserId: CardParserIds.lingnanTunion,
+      parserName: '岭南通（交通联合版）',
+      info: const TUnionCardInfo(balanceFen: 4500),
+      transactions: const [],
+      localCard: ReadResult(
+        info: localInfo,
+        records: const [],
+        extras: CardExtras(),
+      ),
+    );
+    final app = _App(card);
+    addTearDown(app.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: TransitSummaryPanel(app: app)),
+      ),
+    );
+    expect(find.text('岭南通余额'), findsNothing);
+    expect(find.text('¥45.00'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('岭南通单标卡摘要统一显示岭南通且隐藏未确认互通状态', (tester) async {
     final app = _App(_lingnanCard());
     addTearDown(app.dispose);

@@ -9,6 +9,7 @@ import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/local/apdu_exchange.dart';
 import 'package:transit_card_analyzer/protocols/transit/local/local_card_models.dart';
 import 'package:transit_card_analyzer/protocols/transit/local/cards/shanghai_transit_union_card.dart';
+import 'package:transit_card_analyzer/protocols/transit/multiapp/application_evidence.dart';
 import 'package:transit_card_analyzer/protocols/transport/transport_failure.dart';
 
 // Reuse the real attachment bytes, not the permissive transport in that test.
@@ -108,6 +109,22 @@ List<_Step> _rejectCu() => [
   _Step.reject('00A4040009A00000000386980701'),
   _Step.reject('80A4040009A0000000038698070100'),
   _Step.reject('80A4040009A00000000386980701'),
+];
+
+// TU 已确认后的快速 CU 探测：不重置 MF、不尝试无 Le 分支。
+List<_Step> _fastCuReject() => [
+  _Step.reject(_cuSelect),
+  _Step.reject('80A4040009A0000000038698070100'),
+];
+
+List<_Step> _macauReject() => [
+  _Step.reject('00A404000AB0C4C3C5CDA8C7AEB0FC00'),
+];
+
+// 支付目录未披露银行应用：PPSE / PSE 均被拒绝。
+List<_Step> _bankAbsent() => [
+  _Step.reject('00A404000E325041592E5359532E444446303100'),
+  _Step.reject('00A404000E315041592E5359532E444446303100'),
 ];
 
 List<_Step> _noTuLocalPrefix() => [
@@ -232,7 +249,11 @@ void main() {
     test(
       'confirmed LNT with non-target TU $serial never mixes Shanghai/CU',
       () async {
-        final replay = _Replay([..._lnt(), ..._tu(serial: serial)]);
+        final replay = _Replay([
+          ..._lnt(),
+          ..._tu(serial: serial),
+          ..._bankAbsent(),
+        ]);
         final bank = _BankProbe();
         final result = (await LocalCardReader(
           replay.call,
@@ -253,12 +274,16 @@ void main() {
     );
   }
 
-  for (final prefix in ['31048703', '31048709', '31048724']) {
+  for (final prefix in ['31048703', '31048709', '31048710', '31048724']) {
     test(
       'confirmed TU $prefix probes APP Y once and isolates both applications',
       () async {
         final serial = '00${prefix}9534635882';
-        final replay = _Replay([..._lnt(), ..._tu(serial: serial)]);
+        final replay = _Replay([
+          ..._lnt(),
+          ..._tu(serial: serial),
+          ..._bankAbsent(),
+        ]);
         final bank = _BankProbe();
         final result = (await LocalCardReader(
           replay.call,
@@ -283,13 +308,22 @@ void main() {
     '00310487999534635882',
   ]) {
     test(
-      'ordinary TU $serial rejects early APPY then reuses TU without CU or rereads',
+      'ordinary TU $serial rejects early APPY then probes CU/Macau and reuses TU',
       () async {
-        final replay = _Replay([..._rejectAppy(), ..._tu(serial: serial)]);
+        final replay = _Replay([
+          ..._rejectAppy(),
+          ..._tu(serial: serial),
+          ..._fastCuReject(),
+          ..._macauReject(),
+        ]);
         final result = (await LocalCardReader(replay.call).read())!;
         expect(result.parsedCard!.parserId, CardParserIds.tunion);
         expect(result.parsedCard!.localCard, isNull);
         _expectTu(result, serial);
+        ApplicationEvidence ev(String id) =>
+            result.applications.firstWhere((a) => a.appId == id);
+        expect(ev('cu').state, ApplicationProbeState.selectRejected);
+        expect(ev('macau').state, ApplicationProbeState.selectRejected);
         replay.verify();
       },
     );
@@ -313,32 +347,43 @@ void main() {
   );
 
   for (final transportError in [false, true]) {
-    test('APP Y failure retains TU (transport=$transportError)', () async {
-      final replay = _Replay([
-        if (transportError) _Step.lost(_appy) else ..._rejectAppy(),
-        if (!transportError) ..._tu(),
-      ]);
-      if (transportError) {
-        await expectLater(
-          LocalCardReader(replay.call).read(),
-          throwsA(isA<ApduTransportException>()),
+    test(
+      'APPY rejection leaves TU as the confirmed application (transport=$transportError)',
+      () async {
+        final replay = _Replay([
+          if (transportError) _Step.lost(_appy) else ..._rejectAppy(),
+          if (!transportError) ...[
+            ..._tu(),
+            ..._fastCuReject(),
+            ..._macauReject(),
+          ],
+        ]);
+        if (transportError) {
+          await expectLater(
+            LocalCardReader(replay.call).read(),
+            throwsA(isA<ApduTransportException>()),
+          );
+          replay.verify();
+          return;
+        }
+        final result = (await LocalCardReader(replay.call).read())!;
+        _expectTu(result, _serial);
+        expect(result.parsedCard!.parserId, CardParserIds.tunion);
+        expect(result.parsedCard!.localCard, isNull);
+        expect(
+          result.applications
+              .where((a) => a.appId == 'tu')
+              .single
+              .confirmed,
+          isTrue,
+        );
+        expect(
+          result.readResult!.transportFailure,
+          transportError ? same(_tagLost) : isNull,
         );
         replay.verify();
-        return;
-      }
-      final result = (await LocalCardReader(replay.call).read())!;
-      _expectTu(result, _serial);
-      expect(result.parsedCard!.parserId, CardParserIds.lingnanTunion);
-      final local = result.parsedCard!.localCard!;
-      expect(local.extras.slots['lnt.appyConfirmed'], isFalse);
-      expect(local.info.observedBalance, isNull);
-      expect(_trips(local), isEmpty);
-      expect(
-        result.readResult!.transportFailure,
-        transportError ? same(_tagLost) : isNull,
-      );
-      replay.verify();
-    });
+      },
+    );
   }
 
   test(
@@ -405,15 +450,24 @@ void main() {
       final baselineIdentity = service.identify(baseline)!;
       baselineReplay.verify();
       final fingerprints = <String>[];
-      for (final suffix in [_rejectAppy(), _lnt()]) {
-        final replay = _Replay([...suffix, ..._tu()]);
+      for (final appyConfirmed in [false, true]) {
+        final suffix = appyConfirmed ? _lnt() : _rejectAppy();
+        final replay = _Replay([
+          ...suffix,
+          ..._tu(),
+          if (!appyConfirmed) ..._fastCuReject(),
+          if (!appyConfirmed) ..._macauReject(),
+        ]);
         final card = (await LocalCardReader(replay.call).read())!.parsedCard!;
         expect(
           service.identify(card)!.fingerprint,
           baselineIdentity.fingerprint,
         );
         final identified = service.identify(card)!;
-        expect(identified.identity.cardType, CardTypes.lingnanTunion);
+        expect(
+          identified.identity.cardType,
+          appyConfirmed ? CardTypes.lingnanTunion : CardTypes.chinaTunion,
+        );
         expect(identified.cardNumber, '310487039534635882');
         fingerprints.add(identified.fingerprint);
         replay.verify();
