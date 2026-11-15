@@ -91,7 +91,7 @@ void main() {
     await tester.pump();
   });
   testWidgets(
-    'preview return preference survives UI switching, sample reset and host recreation',
+    'preview return preference survives UI switching and host recreation',
     (tester) async {
       tester.view.physicalSize = const Size(412, 892);
       tester.view.devicePixelRatio = 1;
@@ -131,14 +131,6 @@ void main() {
       await tester.tap(toggle());
       await tester.pumpAndSettle();
       expect(store.values[SettingsKeys.galleryPredictiveBackEnabled], 'false');
-      await tester.scrollUntilVisible(
-        find.text('恢复初始样例'),
-        350,
-        scrollable: galleryVerticalScroll(),
-      );
-      await tester.tap(find.text('恢复初始样例'));
-      await tester.pumpAndSettle();
-      await openSettings();
       expect(tester.widget<SwitchListTile>(toggle()).value, isFalse);
       BetaUiScope.maybeOf(tester.element(find.byType(GalleryApp)))!
           .onChanged(false);

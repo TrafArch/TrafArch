@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -119,9 +120,9 @@ void main() {
     'predictive page cancel preserves history, commit resumes from the current offset',
     (tester) async {
       c.navigate(GalleryPage.settings);
-      c.navigate(GalleryPage.about);
+      c.navigate(GalleryPage.feedback);
       await mount(tester);
-      final about = find.byKey(const ValueKey(GalleryPage.about));
+      final about = find.byKey(const ValueKey(GalleryPage.feedback));
       final original = c.navigationStack.map((e) => e.id).toList();
       await gestureEvent(tester, 'startBackGesture');
       await gestureEvent(tester, 'updateBackGestureProgress', .35);
@@ -130,7 +131,7 @@ void main() {
       expect(c.navigationStack.map((e) => e.id), original);
       await gestureEvent(tester, 'cancelBackGesture');
       await tester.pumpAndSettle();
-      expect(c.page, GalleryPage.about);
+      expect(c.page, GalleryPage.feedback);
       expect(tester.getTopLeft(about).dx, 0);
       await gestureEvent(tester, 'startBackGesture');
       await gestureEvent(tester, 'updateBackGestureProgress', .35);
@@ -184,7 +185,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
       expect(titleWidth(), lessThan(restingWidth));
       expect(title.hitTestable(), findsNothing);
-      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(const Duration(milliseconds: 150));
       expect(tester.getTopLeft(title).dy, greaterThan(restingY));
       expect(title, findsOneWidget);
       await tester.pumpAndSettle();
@@ -711,7 +712,9 @@ void main() {
       await tester.ensureVisible(tabs);
       await tester.pumpAndSettle();
       final selectorElement = tester.element(tabs);
-      scroll.position.jumpTo(120);
+      scroll.position.jumpTo(
+        math.min(120, scroll.position.maxScrollExtent),
+      );
       await tester.pump();
       final originalOffset = scroll.position.pixels;
       await tester.tap(find.text('卡片信息'));
@@ -719,7 +722,10 @@ void main() {
       final content = find.text('完整卡号');
       expect(content, findsOneWidget);
       expect(find.text('仅展示样例中保留的记录，可能不代表完整历史。'), findsNothing);
-      expect(scroll.position.pixels, closeTo(originalOffset, .1));
+      expect(
+        scroll.position.pixels,
+        closeTo(math.min(originalOffset, scroll.position.maxScrollExtent), .1),
+      );
       expect(tester.element(tabs), same(selectorElement));
       expect(
         tester.state<ScrollableState>(galleryVerticalScroll(within: list)),

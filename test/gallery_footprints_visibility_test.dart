@@ -82,25 +82,22 @@ void main() {
     });
   }
 
-  testWidgets('settings and its scene picker provide no footprints entry', (
+  testWidgets('settings exposes no footprints or scene management entry', (
     tester,
   ) async {
     c.navigate(GalleryPage.settings);
     await mount(tester);
     final settingsList = find.byType(ListView).last;
     await tester.scrollUntilVisible(
-      find.text('内置场景'),
+      find.text('关于 TrafArch'),
       350,
       scrollable: galleryVerticalScroll(within: settingsList),
     );
     expect(find.textContaining('足迹'), findsNothing);
-    expect(find.text('51 个预置场景 · 切换后载入固定样例'), findsOneWidget);
-    await tester.tap(find.text('内置场景'));
-    await tester.pumpAndSettle();
-    expect(c.page, GalleryPage.scenes);
-    expect(find.text('01 主页面'), findsOneWidget);
-    expect(find.text('卡包'), findsOneWidget);
-    expect(find.textContaining('足迹'), findsNothing);
+    expect(find.text('样例管理'), findsNothing);
+    expect(find.text('内置场景'), findsNothing);
+    expect(find.text('恢复初始样例'), findsNothing);
+    expect(find.textContaining('预置场景'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

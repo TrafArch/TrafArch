@@ -26,7 +26,7 @@ void main() {
   tearDown(() => c.dispose());
 
   testWidgets(
-    'settings opens separate information pages with nested back navigation',
+    'settings inlines about, drops sample management and keeps information pages',
     (tester) async {
       tester.view.physicalSize = const Size(412, 892);
       tester.view.devicePixelRatio = 1;
@@ -35,36 +35,32 @@ void main() {
       c.navigate(GalleryPage.settings);
       await tester.pumpWidget(GalleryApp(controller: c));
       await tester.pumpAndSettle();
+      final version = find.text(
+        '版本 ${AppInfo.version} (${AppInfo.buildNumber})',
+      );
       await tester.scrollUntilVisible(
-        find.text('版本 ${AppInfo.version}'),
+        version,
         450,
         scrollable: galleryVerticalScroll(),
       );
+      // About is inline: showing the version never opens a secondary page.
+      expect(c.page, GalleryPage.settings);
+      expect(find.text(AppInfo.appName), findsWidgets);
+      expect(find.text('样例管理'), findsNothing);
+      expect(find.text('内置场景'), findsNothing);
+      expect(find.text('恢复初始样例'), findsNothing);
       await Scrollable.ensureVisible(
-        tester.element(find.text('版本 ${AppInfo.version}')),
+        tester.element(version),
         alignment: .5,
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('版本 ${AppInfo.version}'));
-      await tester.pumpAndSettle();
-      expect(c.page, GalleryPage.about);
-      expect(c.overlay, isNull);
-      expect(
-        find.descendant(
-          of: find.byKey(const ValueKey(GalleryPage.about)),
-          matching: find.byType(ModalBarrier),
-        ),
-        findsNothing,
-      );
-      expect(find.byKey(const ValueKey('nav-home')), findsNothing);
-      expect(find.text('kajolno'), findsOneWidget);
       await tester.tap(find.text('致谢'));
       await tester.pumpAndSettle();
       expect(c.page, GalleryPage.acknowledgements);
       expect(find.text('读卡识途数据源'), findsOneWidget);
       await tester.tap(find.byTooltip('返回'));
       await tester.pumpAndSettle();
-      expect(c.page, GalleryPage.about);
+      expect(c.page, GalleryPage.settings);
       LicenseRegistry.addLicense(
         () => Stream.value(
           const LicenseEntryWithLineBreaks([
@@ -73,17 +69,29 @@ void main() {
         ),
       );
       addTearDown(LicenseRegistry.reset);
+      await tester.scrollUntilVisible(
+        find.text('开放源代码许可'),
+        200,
+        scrollable: galleryVerticalScroll(),
+      );
       await tester.tap(find.text('开放源代码许可'));
       await tester.pumpAndSettle();
       expect(c.page, GalleryPage.licenses);
       await tester.tap(find.text('information-test-package'));
       await tester.pumpAndSettle();
+      expect(c.overlay, GalleryOverlay.licenseDetail);
       expect(find.text('Sample license terms'), findsOneWidget);
-      await tester.tap(find.byTooltip('返回'));
+      await tester.tap(find.byTooltip('关闭'));
       await tester.pumpAndSettle();
+      expect(c.overlay, isNull);
       await tester.tap(find.byTooltip('返回'));
       await tester.pumpAndSettle();
       expect(c.page, GalleryPage.settings);
+      await tester.scrollUntilVisible(
+        find.text('问题反馈'),
+        200,
+        scrollable: galleryVerticalScroll(),
+      );
       await tester.tap(find.text('问题反馈'));
       await tester.pumpAndSettle();
       expect(c.page, GalleryPage.feedback);
@@ -207,7 +215,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    c.navigate(GalleryPage.about);
+    c.navigate(GalleryPage.settings);
     await tester.pumpWidget(
       GalleryApp(
         controller: c,
@@ -222,6 +230,11 @@ void main() {
       150,
       scrollable: galleryVerticalScroll(),
     );
+    await Scrollable.ensureVisible(
+      tester.element(find.text('隐私政策')),
+      alignment: .5,
+    );
+    await tester.pumpAndSettle();
     expect(find.byTooltip('复制隐私政策链接'), findsNothing);
     await tester.tap(find.text('隐私政策'));
     await tester.pumpAndSettle();

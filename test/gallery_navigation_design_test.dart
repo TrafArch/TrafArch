@@ -495,7 +495,6 @@ void main() {
         GalleryPage.knowledge,
         GalleryPage.qr,
         GalleryPage.detail,
-        GalleryPage.about,
         GalleryPage.feedback,
         GalleryPage.acknowledgements,
       ]) {

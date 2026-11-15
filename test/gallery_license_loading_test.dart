@@ -44,10 +44,20 @@ void main() {
     tester.view.physicalSize = const Size(360, 892);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    c.navigate(GalleryPage.about);
+    c.navigate(GalleryPage.settings);
     await tester.pumpWidget(GalleryApp(controller: c));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('开放源代码许可'),
+      350,
+      scrollable: galleryVerticalScroll(),
+    );
     await tester.tap(find.text('开放源代码许可'));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> closeSheet(WidgetTester tester) async {
+    await tester.tap(find.byTooltip('关闭'));
     await tester.pumpAndSettle();
   }
 
@@ -64,22 +74,24 @@ void main() {
       expect(find.byKey(const ValueKey('license-row-119')), findsNothing);
       await tester.tap(find.text(entries.first.name));
       await tester.pumpAndSettle();
+      expect(c.overlay, GalleryOverlay.licenseDetail);
       expect(entries.first.reads, 1);
       expect(
         find.text('License terms for ${entries.first.name}'),
         findsOneWidget,
       );
+      await closeSheet(tester);
+      expect(c.overlay, isNull);
       c.update(() => c.themeMode = ThemeMode.dark);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text(entries.first.name));
       await tester.pumpAndSettle();
       await tester.tap(find.text(entries.first.name));
       await tester.pumpAndSettle();
       expect(
         entries.first.reads,
         1,
-        reason: 'Repeated expansion reuses parsed paragraphs',
+        reason: 'Reopening the sheet reuses parsed paragraphs',
       );
+      await closeSheet(tester);
       await tester.scrollUntilVisible(
         find.text(entries.last.name),
         600,
@@ -122,6 +134,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(entry.reads, 1);
       expect(find.text('License terms for ${entry.name}'), findsOneWidget);
+      expect(find.text('其他许可证'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

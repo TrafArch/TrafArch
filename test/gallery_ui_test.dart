@@ -537,7 +537,6 @@ void main() {
         GalleryPage.detail,
         GalleryPage.settings,
         GalleryPage.expert,
-        GalleryPage.about,
         GalleryPage.feedback,
         GalleryPage.acknowledgements,
         GalleryPage.qr,

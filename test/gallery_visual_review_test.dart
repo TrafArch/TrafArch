@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -60,6 +61,14 @@ void main() {
         await Future.wait([sans.load(), mono.load(), icons.load()]);
         await Directory(output!).create(recursive: true);
       });
+      LicenseRegistry.addLicense(
+        () => Stream.value(
+          const LicenseEntryWithLineBreaks([
+            'design-review-package',
+          ], 'Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction.'),
+        ),
+      );
+      addTearDown(LicenseRegistry.reset);
       final boundary = GlobalKey();
       await tester.pumpWidget(
         RepaintBoundary(
@@ -206,6 +215,30 @@ void main() {
           scrollable: galleryVerticalScroll(),
         );
         await capture('$mode-settings');
+        await tester.scrollUntilVisible(
+          find.text('关于 TrafArch'),
+          300,
+          scrollable: galleryVerticalScroll(),
+        );
+        await capture('$mode-settings-about');
+        await tester.scrollUntilVisible(
+          find.text('贡献者'),
+          200,
+          scrollable: galleryVerticalScroll(),
+        );
+        await tester.tap(find.text('贡献者'));
+        await tester.pumpAndSettle();
+        // Let bundled avatar images finish decoding before the artifact.
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 400)),
+        );
+        await capture('$mode-contributors-sheet');
+        c.back();
+        c.navigate(GalleryPage.licenses);
+        await capture('$mode-licenses');
+        await tester.tap(find.text('design-review-package'));
+        await capture('$mode-license-sheet');
+        c.back();
         c.back();
         c.navigate(GalleryPage.cards);
         c.update(() => c.docked = true);
