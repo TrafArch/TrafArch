@@ -259,14 +259,14 @@ void main() {
       );
       c.update(() {});
       await tester.pumpAndSettle();
-      DecorationImage? faceImage() =>
-          (tester
-                      .widget<Container>(
-                        find.byKey(const ValueKey('card-face-shanghai')),
-                      )
-                      .decoration!
-                  as BoxDecoration)
-              .image;
+      MemoryImage? faceImage() {
+        final images = find.descendant(
+          of: find.byKey(const ValueKey('card-face-shanghai')),
+          matching: find.byType(Image),
+        );
+        if (images.evaluate().isEmpty) return null;
+        return tester.widget<Image>(images.first).image as MemoryImage;
+      }
       expect(faceImage(), isNull);
       await setImage(Colors.red);
       final red = faceImage();

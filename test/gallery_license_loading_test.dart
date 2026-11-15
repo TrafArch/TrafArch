@@ -52,6 +52,9 @@ void main() {
       350,
       scrollable: galleryVerticalScroll(),
     );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('开放源代码许可'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('开放源代码许可'));
     await tester.pumpAndSettle();
   }

@@ -168,7 +168,7 @@ void main() {
       expect(find.byKey(const ValueKey(GalleryPage.home)), findsOneWidget);
       final incoming = find.descendant(
         of: find.byKey(const ValueKey(GalleryPage.cards)),
-        matching: find.byType(ReorderableListView),
+        matching: find.byType(CustomScrollView),
       );
       expect(tester.getTopLeft(incoming).dx, closeTo(360, .1));
       expect(find.byKey(const ValueKey(GalleryPage.trips)), findsNothing);

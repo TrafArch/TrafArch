@@ -75,13 +75,15 @@ void main() {
     final image = File('assets/icon/app_icon.png').readAsBytesSync();
     c.update(() => c.current.image = image);
     await tester.pumpAndSettle();
-    final face = tester.widget<Container>(
-      find.byKey(const ValueKey('card-face-shanghai')),
+    final faceImage = tester.widget<Image>(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('card-face-shanghai')),
+            matching: find.byType(Image),
+          )
+          .first,
     );
-    expect(
-      ((face.decoration! as BoxDecoration).image!.image as MemoryImage).bytes,
-      same(image),
-    );
+    expect((faceImage.image as MemoryImage).bytes, same(image));
     c.read(fail: true);
     await tester.pump(const Duration(milliseconds: 1600));
     await tester.pumpAndSettle();

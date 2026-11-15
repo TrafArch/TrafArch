@@ -115,7 +115,10 @@ void main() {
           .descendant(
             of: find.byKey(ValueKey(page)),
             matching: find.byWidgetPredicate(
-              (widget) => widget is ListView || widget is ReorderableListView,
+              (widget) =>
+                  widget is ListView ||
+                  widget is ReorderableListView ||
+                  widget is CustomScrollView,
             ),
           )
           .first;
