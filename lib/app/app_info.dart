@@ -11,8 +11,8 @@ class AppInfo {
   /// 当前展示用应用名称：中文名留空时回退为英文名。
   static String get appName => appNameZh.isEmpty ? appNameEn : appNameZh;
 
-  static const String version = '1.0.5-beta.2';
-  static const String buildNumber = '4182';
+  static const String version = '1.0.8-beta.1';
+  static const String buildNumber = '4184';
 
   /// Android 清单版本码：直接使用源码构建号，不加 ABI 偏移。
   static String get androidVersionCode => buildNumber;
