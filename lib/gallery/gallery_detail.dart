@@ -1008,99 +1008,104 @@ class _GalleryDetailFace extends StatelessWidget {
       24.0,
       layout.width - 40 - (_faceBrands(card).isEmpty ? 0 : 80),
     );
-    return Container(
+    return SizedBox(
       key: ValueKey('card-face-${card.id}'),
       width: double.infinity,
       height: layout.expandedHeight,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
+      child: ClipRRect(
         borderRadius: BorderRadius.circular(22),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [face.start, face.end],
-        ),
-        border: Border.all(color: tokens.line.withValues(alpha: .3)),
-      ),
-      child: Stack(
-        children: [
-          if (card.image != null)
-            Positioned.fill(child: _FaceCropImage(card: card)),
-          Positioned(
-            left: 20,
-            top: 20,
-            width: nameWidth,
-            child: Text(
-              card.name,
-              key: ValueKey('face-title-${card.id}'),
-              style: nameStyle,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [face.start, face.end],
             ),
+            border: card.image == null
+                ? Border.all(color: tokens.line.withValues(alpha: .3))
+                : null,
           ),
-          if (_faceBrands(card).isNotEmpty)
-            Positioned(
-              top: 20,
-              right: 20,
-              child: _FaceBrandMark(card: card, id: 'detail-face'),
-            ),
-          Positioned(
-            left: 20,
-            top: numberTop,
-            width: amountWidth,
-            child: Semantics(
-              label: '余额，${balance.displayText}',
-              excludeSemantics: true,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: balance.known
-                    ? Row(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.baseline,
-                        textBaseline: TextBaseline.alphabetic,
-                        children: [
-                          if (balance.currencyLabel.isNotEmpty) ...[
-                            Text(
-                              balance.currencyLabel,
-                              key: ValueKey('face-currency-${card.id}'),
-                              style: unitStyle,
-                            ),
-                            const SizedBox(width: 8),
-                          ],
-                          Text(
-                            balance.number,
-                            key: ValueKey('face-number-${card.id}'),
-                            style: numberStyle,
-                          ),
-                        ],
-                      )
-                    : Text(
-                        balance.displayText,
-                        key: ValueKey('face-unknown-${card.id}'),
-                        style: unitStyle,
-                      ),
-              ),
-            ),
-          ),
-          Positioned(
-            right: 20,
-            bottom: 20,
-            width: layout.tailWidth + 2,
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerRight,
-              child: Text(
-                '**** ${card.tail}',
-                key: ValueKey('face-tail-${card.id}'),
-                maxLines: 1,
-                softWrap: false,
-                style: GalleryTypography.caption.copyWith(
-                  fontFamily: 'monospace',
-                  color: secondary,
+          child: Stack(
+            children: [
+              if (card.image != null)
+                Positioned.fill(child: _FaceCropImage(card: card)),
+              Positioned(
+                left: 20,
+                top: 20,
+                width: nameWidth,
+                child: Text(
+                  card.name,
+                  key: ValueKey('face-title-${card.id}'),
+                  style: nameStyle,
                 ),
               ),
-            ),
+              if (_faceBrands(card).isNotEmpty)
+                Positioned(
+                  top: 20,
+                  right: 20,
+                  child: _FaceBrandMark(card: card, id: 'detail-face'),
+                ),
+              Positioned(
+                left: 20,
+                top: numberTop,
+                width: amountWidth,
+                child: Semantics(
+                  label: '余额，${balance.displayText}',
+                  excludeSemantics: true,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: balance.known
+                        ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
+                            children: [
+                              if (balance.currencyLabel.isNotEmpty) ...[
+                                Text(
+                                  balance.currencyLabel,
+                                  key: ValueKey('face-currency-${card.id}'),
+                                  style: unitStyle,
+                                ),
+                                const SizedBox(width: 8),
+                              ],
+                              Text(
+                                balance.number,
+                                key: ValueKey('face-number-${card.id}'),
+                                style: numberStyle,
+                              ),
+                            ],
+                          )
+                        : Text(
+                            balance.displayText,
+                            key: ValueKey('face-unknown-${card.id}'),
+                            style: unitStyle,
+                          ),
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 20,
+                bottom: 20,
+                width: layout.tailWidth + 2,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    '**** ${card.tail}',
+                    key: ValueKey('face-tail-${card.id}'),
+                    maxLines: 1,
+                    softWrap: false,
+                    style: GalleryTypography.caption.copyWith(
+                      fontFamily: 'monospace',
+                      color: secondary,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

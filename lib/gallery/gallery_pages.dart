@@ -677,15 +677,10 @@ extension _GalleryPages on _GalleryViewState {
       );
     }
     Color foreground(GalleryCard card, {bool secondary = false}) =>
-        card.image != null
-        ? _faceForeground(card, secondary: secondary)
-        : secondary
-        ? t.muted
-        : t.text;
-    final faceText = GalleryCardFace.values.first;
+        _walletForeground(card, secondary: secondary);
     final numberStyle = GalleryTypography.lead.copyWith(
       inherit: false,
-      color: faceText.foreground,
+      color: t.cardTextPrimary,
       fontFeatures: const [FontFeature.tabularFigures()],
     );
     final parts = {

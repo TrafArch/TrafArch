@@ -12,7 +12,7 @@ class AppInfo {
   static String get appName => appNameZh.isEmpty ? appNameEn : appNameZh;
 
   static const String version = '1.0.5-beta.2';
-  static const String buildNumber = '4172';
+  static const String buildNumber = '4182';
 
   /// Android 清单版本码：直接使用源码构建号，不加 ABI 偏移。
   static String get androidVersionCode => buildNumber;

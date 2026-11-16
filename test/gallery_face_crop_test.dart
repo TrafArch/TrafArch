@@ -288,4 +288,36 @@ void main() {
     expect(find.text('从相册选择图片'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('cropper previews share the card scrim without an idle outline', (
+    tester,
+  ) async {
+    mockPicker(() async => imagePath);
+    await mountFace(tester);
+    await pickAndFinish(tester);
+    // Both preview regions render the same image layer as the final card.
+    expect(find.byKey(const ValueKey('face-image-scrim')), findsNWidgets(2));
+    for (final key in ['face-crop-region-detail', 'face-crop-region-list']) {
+      final region = find.byKey(ValueKey(key));
+      final container = tester.widget<AnimatedContainer>(
+        find
+            .descendant(of: region, matching: find.byType(AnimatedContainer))
+            .first,
+      );
+      expect((container.decoration! as BoxDecoration).border, isNull);
+    }
+    // Theme switching only recolours the scrim; crop coordinates stay put.
+    final detail = c.faceCrop!.detail;
+    final list = c.faceCrop!.list;
+    c.update(() => c.themeMode = ThemeMode.dark);
+    await tester.pumpAndSettle();
+    expect(c.faceCrop!.detail.scale, detail.scale);
+    expect(c.faceCrop!.detail.offsetX, detail.offsetX);
+    expect(c.faceCrop!.detail.offsetY, detail.offsetY);
+    expect(c.faceCrop!.list.scale, list.scale);
+    expect(c.faceCrop!.list.offsetX, list.offsetX);
+    expect(c.faceCrop!.list.offsetY, list.offsetY);
+    expect(find.byKey(const ValueKey('face-image-scrim')), findsNWidgets(2));
+    expect(tester.takeException(), isNull);
+  });
 }

@@ -34,6 +34,18 @@ class GalleryTokens extends ThemeExtension<GalleryTokens> {
   Color get text => scheme.onSurface;
   Color get muted => scheme.onSurfaceVariant;
   Color get line => scheme.outlineVariant;
+
+  /// Card-face semantic roles (spec 2.5 §3.2). Every list, detail and home
+  /// card reads text through these instead of deciding by page.
+  Color get cardSurface => surface;
+  Color get cardTextPrimary =>
+      dark ? const Color(0xffe7ecf5) : const Color(0xff202938);
+  Color get cardTextSecondary =>
+      dark ? const Color(0xffa7b2c3) : const Color(0xff697586);
+  Color get cardDivider =>
+      dark ? const Color(0xff303d50) : const Color(0xffe5e7eb);
+  GalleryCardImageStyle get cardImageStyle =>
+      dark ? GalleryCardImageStyle.dark : GalleryCardImageStyle.light;
   Color get outline => scheme.outline;
   Color get tone => scheme.primaryContainer;
   Color get onTone => scheme.onPrimaryContainer;

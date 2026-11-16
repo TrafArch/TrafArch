@@ -65,15 +65,53 @@ class _FaceCropImage extends StatelessWidget {
           );
         }
         return ClipRect(
-          child: ColorFiltered(
-            colorFilter: const ColorFilter.mode(
-              Color(0x99070c16),
-              BlendMode.darken,
-            ),
-            child: image,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              image,
+              IgnorePointer(
+                child: _FaceImageScrim(
+                  style: Theme.of(context)
+                      .extension<GalleryTokens>()!
+                      .cardImageStyle,
+                ),
+              ),
+            ],
           ),
         );
       },
+    );
+  }
+}
+
+/// The single scrim layer shared by every custom-image card surface. A uniform
+/// light/dark scrim keeps text legible, and the light theme adds a soft
+/// top/bottom gradient only where text sits, leaving the middle untouched.
+class _FaceImageScrim extends StatelessWidget {
+  const _FaceImageScrim({required this.style});
+
+  final GalleryCardImageStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    const scrim = Color(0xff070c16);
+    final base = scrim.withValues(alpha: style.overlayAlpha);
+    final edge = Color.alphaBlend(
+      Colors.black.withValues(alpha: style.textGradientAlpha),
+      base,
+    );
+    return DecoratedBox(
+      key: const ValueKey('face-image-scrim'),
+      decoration: BoxDecoration(
+        gradient: style.textGradientAlpha == 0
+            ? LinearGradient(colors: [base, base])
+            : LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [edge, base, base, edge],
+                stops: const [0, .3, .7, 1],
+              ),
+      ),
     );
   }
 }
@@ -98,6 +136,7 @@ class _FaceCropRegion extends StatefulWidget {
     required this.source,
     required this.onChanged,
     required this.child,
+    this.radius = 22,
   });
 
   final String title;
@@ -105,6 +144,10 @@ class _FaceCropRegion extends StatefulWidget {
   final Size source;
   final ValueChanged<GalleryFaceCrop> onChanged;
   final Widget child;
+
+  /// Matches the preview surface radius so the active ring hugs the card edge
+  /// without drawing a second outline around the image (spec 2.5 §2).
+  final double radius;
 
   @override
   State<_FaceCropRegion> createState() => _FaceCropRegionState();
@@ -176,27 +219,21 @@ class _FaceCropRegionState extends State<_FaceCropRegion> {
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOutCubic,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: _active ? t.onTone : t.line,
-              width: _active ? 2 : 1,
-            ),
+            borderRadius: BorderRadius.circular(widget.radius),
+            border: _active ? Border.all(color: t.onTone, width: 2) : null,
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(23),
-            child: RawGestureDetector(
-              gestures: {
-                _CropScaleRecognizer:
-                    GestureRecognizerFactoryWithHandlers<_CropScaleRecognizer>(
-                      () => _CropScaleRecognizer(),
-                      (recognizer) => recognizer
-                        ..onStart = _onStart
-                        ..onUpdate = _onUpdate
-                        ..onEnd = _onEnd,
-                    ),
-              },
-              child: KeyedSubtree(key: _surfaceKey, child: widget.child),
-            ),
+          child: RawGestureDetector(
+            gestures: {
+              _CropScaleRecognizer:
+                  GestureRecognizerFactoryWithHandlers<_CropScaleRecognizer>(
+                    () => _CropScaleRecognizer(),
+                    (recognizer) => recognizer
+                      ..onStart = _onStart
+                      ..onUpdate = _onUpdate
+                      ..onEnd = _onEnd,
+                  ),
+            },
+            child: KeyedSubtree(key: _surfaceKey, child: widget.child),
           ),
         ),
         const SizedBox(height: 4),
@@ -448,6 +485,7 @@ extension _GalleryFaceCropper on _GalleryViewState {
                   title: '卡包列表页',
                   crop: session.list,
                   source: session.sourceSize,
+                  radius: 24,
                   onChanged: (crop) => c.updateFaceCrop(list: crop),
                   child: _walletCardSurface(preview, id: 'crop-list'),
                 ),
@@ -504,12 +542,12 @@ extension _GalleryFaceCropper on _GalleryViewState {
     final value = _balancePresentation(card);
     final numberStyle = GalleryTypography.lead.copyWith(
       inherit: false,
-      color: _faceForeground(card),
+      color: _walletForeground(card),
       fontFeatures: const [FontFeature.tabularFigures()],
     );
     final currencyStyle = GalleryTypography.caption.copyWith(
       inherit: false,
-      color: _faceForeground(card, secondary: true),
+      color: _walletForeground(card, secondary: true),
     );
     double measure(String text, TextStyle style) {
       final painter = TextPainter(
@@ -536,7 +574,7 @@ extension _GalleryFaceCropper on _GalleryViewState {
           ? _text(
               value.displayText,
               role: GalleryTypography.label,
-              color: _faceForeground(card, secondary: true),
+              color: _walletForeground(card, secondary: true),
             )
           : FittedBox(
               fit: BoxFit.scaleDown,
@@ -581,7 +619,8 @@ extension _GalleryFaceCropper on _GalleryViewState {
 
   /// The real wallet row surface, shared by the wallet list, the cropper's
   /// list region and the face sheet preview so the crop window always matches
-  /// the component that renders it (spec 2.4 §6.2).
+  /// the component that renders it (spec 2.4 §6.2). One clip rounds both the
+  /// image and the surface; image faces add no extra border (spec 2.5 §2).
   Widget _walletCardSurface(
     GalleryCard card, {
     required String id,
@@ -591,13 +630,13 @@ extension _GalleryFaceCropper on _GalleryViewState {
   }) => Container(
     key: ValueKey('$id-card-${card.id}'),
     clipBehavior: Clip.antiAlias,
-    decoration: card.image != null
-        ? _faceDecoration(card, radius: 24)
-        : BoxDecoration(
-            color: t.surface,
+    decoration: card.image == null
+        ? BoxDecoration(
+            color: t.cardSurface,
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: t.line.withValues(alpha: .65)),
-          ),
+            border: Border.all(color: t.cardDivider),
+          )
+        : _faceDecoration(card, radius: 24, border: false),
     child: Stack(
       children: [
         if (card.image != null)
@@ -625,9 +664,7 @@ extension _GalleryFaceCropper on _GalleryViewState {
                             _text(
                               card.name,
                               role: GalleryTypography.card,
-                              color: card.image != null
-                                  ? _faceForeground(card)
-                                  : t.text,
+                              color: _walletForeground(card),
                             ),
                             _gap(4),
                             _walletAmount(card, numberWidth: numberWidth),

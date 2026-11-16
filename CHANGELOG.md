@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-11-16 — spec 2.5 卡面图片视觉修复
+
+- 按 `TrafArch_spec_2.5.md` 清理自定义卡面图片的外围轮廓：图片卡只保留一层圆角裁切与边界，不再在图片外叠加外层 Border；裁切预览默认不画描边，仅在拖动／缩放时显示与卡面圆角对齐的单层环，去掉预览容器与卡面圆角不一致产生的接缝。
+- 卡包列表余额接入卡面语义 Token：新增 `cardTextPrimary`／`cardTextSecondary`／`cardDivider`／`cardSurface`；余额数字用主文字色，币种、地区／卡种与最近读取用次要文字色。修复暗色模式余额仍沿用浅色卡面深字的问题；surface 与 divider 复用当前 scheme 角色，保留五套预设与莫奈取色。
+- 自定义图片蒙层按主题独立配置（`GalleryCardImageStyle`）：亮色整体黑色蒙层由 0.60 降至 0.36，并在上下文字区叠 0.10 局部渐变、中部保留原图色彩；暗色完整保留 0.60。蒙层改为独立图层，不再用额外 ColorFilter 改写图片亮度与饱和度。
+- 裁切器预览、更换卡面预览与最终卡面共用同一图片裁切与蒙层组件；主题切换只更换蒙层参数，不改变裁切坐标，也不重新生成图片。
+- 回归：标准 `flutter test` 全量 2878 项通过、2 项跳过；唯一失败为既有 `gallery_wallet_refinements_test`「卡面字段长余额／未知余额」`pumpAndSettle` 超时，该失败在本轮开始前的干净工作树同样复现，与本次改动无关。新增 `gallery_card_face_visuals_test`（亮暗余额 Token 与对比度、亮暗蒙层参数、图片卡无重复描边）及 `gallery_face_crop_test` 的裁切预览共用蒙层、默认无边框、切换主题不改裁切坐标断言，全部通过。`flutter analyze` 无新增告警，仅保留既有 info 与 Material 弃用提示。
+- 数据资产未改动：TU `517c59f3…`、CU `77ba3ad4…`、参考清单 `37cfdbdc…` 构建前后一致。
+- 构建开发者原签名 arm64-v8a Release APK `1.0.5-beta.2+4182`（33.7 MiB，`build/app/outputs/flutter-apk/app-arm64-v8a-release.apk`，入口 `lib/main_gallery.dart`），AppInfo 保留 `4182`，pubspec 自动预留 `4183`。构建前核对同包名已消耗版本码：今日 `1.0.8-beta.1` 已占用 `4181`，另 `1.0.6-beta.1` 占用过 `4174`；最初按 pubspec `4173` 启动的构建产物与随后校正的 `4174` 产物均作废（`4174` 与既有记录重复），最终以未使用的新号 `4182` 重新构建并交付。按用户本轮指示跳过安装包拆包核验，未再比对包名、versionCode 与证书。
+
 ## 2026-11-16 — 版本 1.0.8-beta.1
 
 - 版本名更新为 `1.0.8-beta.1`。构建一次开发者原签名 arm64 Release APK，应用名 `TrafArch`，包名 `com.kajolno.TrafArch`，实际 Android `versionCode` 为 `4181`。

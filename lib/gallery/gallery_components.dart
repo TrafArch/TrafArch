@@ -620,21 +620,36 @@ extension _GalleryComponents on _GalleryViewState {
   Color _faceForeground(GalleryCard card, {bool secondary = false}) =>
       _faceForegroundOf(card, secondary: secondary);
 
+  /// Text colour for wallet rows and other plain surfaces. Image faces keep
+  /// the light foreground because the photo scrim darkens them; plain cards
+  /// follow the semantic card tokens in both themes (spec 2.5 §3).
+  Color _walletForeground(GalleryCard card, {bool secondary = false}) {
+    if (card.image != null) {
+      return secondary
+          ? GalleryCardFace.imageSecondaryForeground
+          : GalleryCardFace.imageForeground;
+    }
+    return secondary ? t.cardTextSecondary : t.cardTextPrimary;
+  }
+
   List<Color> _faceColors(String face) {
     final palette = GalleryCardFace.byId(face);
     return [palette.start, palette.end];
   }
 
-  BoxDecoration _faceDecoration(GalleryCard card, {double radius = 22}) =>
-      BoxDecoration(
-        borderRadius: BorderRadius.circular(radius),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: _faceColors(card.face),
-        ),
-        border: Border.all(color: const Color(0x29ffffff)),
-      );
+  BoxDecoration _faceDecoration(
+    GalleryCard card, {
+    double radius = 22,
+    bool border = true,
+  }) => BoxDecoration(
+    borderRadius: BorderRadius.circular(radius),
+    gradient: LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: _faceColors(card.face),
+    ),
+    border: border ? Border.all(color: const Color(0x29ffffff)) : null,
+  );
 
   GalleryBalancePresentation _balancePresentation(GalleryCard card) =>
       GalleryBalancePresentation.parse(
@@ -681,9 +696,7 @@ extension _GalleryComponents on _GalleryViewState {
   }
 
   Widget _cardMetadata(GalleryCard card, {required String id}) {
-    final color = card.image == null
-        ? t.muted
-        : _faceForeground(card, secondary: true);
+    final color = _walletForeground(card, secondary: true);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -691,7 +704,9 @@ extension _GalleryComponents on _GalleryViewState {
         Divider(
           key: ValueKey('$id-divider-${card.id}'),
           height: 1,
-          color: color.withValues(alpha: .18),
+          color: card.image == null
+              ? t.cardDivider
+              : color.withValues(alpha: .18),
         ),
         _gap(10),
         LayoutBuilder(
@@ -728,7 +743,7 @@ extension _GalleryComponents on _GalleryViewState {
     constraints: BoxConstraints(minHeight: 204 + _extraTextScale * 80),
     width: double.infinity,
     clipBehavior: Clip.antiAlias,
-    decoration: _faceDecoration(card),
+    decoration: _faceDecoration(card, border: card.image == null),
     child: Stack(
       children: [
         if (card.image != null)

@@ -191,6 +191,32 @@ class GalleryPalette {
   }
 }
 
+/// Card image scrim parameters. Light and dark are tuned independently so the
+/// light-theme face stays translucent while the dark-theme look is unchanged
+/// (spec 2.5 §4).
+@immutable
+class GalleryCardImageStyle {
+  const GalleryCardImageStyle({
+    required this.overlayAlpha,
+    required this.textGradientAlpha,
+  });
+  static const light = GalleryCardImageStyle(
+    overlayAlpha: .36,
+    textGradientAlpha: .10,
+  );
+  static const dark = GalleryCardImageStyle(
+    overlayAlpha: .60,
+    textGradientAlpha: 0,
+  );
+
+  /// Uniform scrim over the whole image.
+  final double overlayAlpha;
+
+  /// Extra scrim at the top and bottom edges where card text sits; fades to
+  /// zero across the middle so the photo keeps its original colour there.
+  final double textGradientAlpha;
+}
+
 @immutable
 class GalleryCardFace {
   const GalleryCardFace(this.id, this.name, this.start, this.end);
