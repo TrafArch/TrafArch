@@ -217,8 +217,8 @@ class SaveCardDialog extends StatelessWidget {
         Text(
           conflict
               ? askEachTime
-                    ? '这张卡已有记录，请选择跳过或覆盖本次保存。'
-                    : '这张卡已有记录，是否覆盖本次保存？'
+                    ? '这张卡已有记录，请选择跳过，或用本次读取更新该卡。已有历史记录会保留。'
+                    : '这张卡已有记录，是否用本次读取更新？已有历史记录会保留。'
               : '是否将本次读取的卡片保存到卡片列表？',
         ),
         const SizedBox(height: 12),

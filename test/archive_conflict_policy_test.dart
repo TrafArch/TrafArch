@@ -22,7 +22,7 @@ import 'package:transit_card_analyzer/shared/domain/archive_conflict_policy.dart
 import 'support/test_database.dart';
 
 void main() {
-  test('已存在记录：跳过不写库，覆盖更新标量并替换旧批次', () async {
+  test('已存在记录：跳过不写库，覆盖更新标量并保留旧批次', () async {
     final database = testDatabase();
     final repository = CardRepository(database);
     final controller = ArchiveController(
@@ -62,7 +62,6 @@ void main() {
       await controller.accept(
         'existing-a',
         conflictPolicy: ArchiveConflictPolicy.overwrite,
-        replaceExistingHistory: true,
       ),
       isTrue,
     );
@@ -92,7 +91,6 @@ void main() {
       await controller.accept(
         'existing-c',
         conflictPolicy: ArchiveConflictPolicy.overwrite,
-        replaceExistingHistory: true,
       ),
       isTrue,
     );
@@ -100,7 +98,13 @@ void main() {
     history = await ArchiveHistory(repository).load(card.id);
     expect(card.balanceFen, 3000);
     expect(originalBatchCount, 1);
-    expect(history.batches, hasLength(1));
+    expect(history.batches, hasLength(2));
+    expect(
+      history.batches.map(
+        (batch) => batch.decoded.snapshot?.extensions['captureAttemptId'],
+      ),
+      containsAll(['existing-a', 'existing-c']),
+    );
     expect(
       history.records.every((record) => record.sources.length == 1),
       isTrue,
@@ -203,6 +207,7 @@ void main() {
       ),
     );
     expect(find.text('记录已存在'), findsOneWidget);
+    expect(find.textContaining('已有历史记录会保留'), findsOneWidget);
     expect(find.text('跳过'), findsOneWidget);
     expect(find.text('覆盖'), findsOneWidget);
   });

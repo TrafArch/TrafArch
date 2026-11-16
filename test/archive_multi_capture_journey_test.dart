@@ -29,7 +29,7 @@ import 'support/test_database.dart';
 typedef _Journey = JourneyPresentation<TripCardPresentation<ArchiveRecordKind>>;
 
 void main() {
-  test('同一张卡覆盖保存两次只保留第二次批次和一组行程详情', () async {
+  test('同一张卡覆盖保存两次保留两批证据且汇总为一段行程', () async {
     final database = testDatabase();
     final repository = CardRepository(database);
     final controller = ArchiveController(
@@ -78,7 +78,6 @@ void main() {
       await controller.accept(
         'overwrite-read-1',
         conflictPolicy: ArchiveConflictPolicy.overwrite,
-        replaceExistingHistory: true,
       ),
       isTrue,
     );
@@ -88,7 +87,6 @@ void main() {
       await controller.accept(
         'overwrite-read-2',
         conflictPolicy: ArchiveConflictPolicy.overwrite,
-        replaceExistingHistory: true,
       ),
       isTrue,
     );
@@ -97,17 +95,20 @@ void main() {
     final history = await ArchiveHistory(repository).load(card.id);
     final journeys = _journeys(history);
 
-    expect(history.batches, hasLength(1));
+    expect(history.batches, hasLength(2));
     expect(history.records, hasLength(1));
-    expect(history.records.single.sources, hasLength(1));
+    expect(history.records.single.sources, hasLength(2));
     expect(journeys, hasLength(1));
-    expect(journeys.single.events, hasLength(2));
+    // Each retained batch keeps its own two side-detail evidence rows.
+    expect(journeys.single.events, hasLength(4));
     expect(journeys.single.events.expand((event) => event.sourceIds).toSet(), {
-      history.batches.single.id,
+      for (final batch in history.batches) batch.id,
     });
     expect(
-      history.batches.single.decoded.snapshot?.extensions['captureAttemptId'],
-      'overwrite-read-2',
+      history.batches.map(
+        (batch) => batch.decoded.snapshot?.extensions['captureAttemptId'],
+      ),
+      containsAll(['overwrite-read-1', 'overwrite-read-2']),
     );
   });
 
