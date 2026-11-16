@@ -3,6 +3,9 @@ import 'dart:ui' show Size;
 
 import 'package:flutter/services.dart';
 
+import '../protocols/felica/models/jpy_amount_formatter.dart';
+import 'gallery_balance_presentation.dart';
+
 typedef GalleryRecord = Map<String, dynamic>;
 
 /// Normalized crop parameters relative to the centered-cover baseline.
@@ -201,6 +204,12 @@ class GalleryCard {
 
   String balance(bool includeOverdraft) {
     if (unknownBalance) return '暂不可用';
+    if (currency == GalleryCurrency.jpy) {
+      return GalleryBalancePresentation.parse(
+        rawBalance,
+        currencyCode: 'JPY',
+      ).displayText;
+    }
     if (id != 'shanghai') {
       return RegExp(r'^-?[\d,.]+$').hasMatch(rawBalance)
           ? '¥$rawBalance'
@@ -224,7 +233,7 @@ enum GalleryCurrency {
 
   String format(int amount) => switch (this) {
     cny => '¥${formatGalleryMoney(amount)}',
-    jpy => '${formatGalleryMoney(amount * 100).split('.').first} JPY',
+    jpy => formatJpyAmount(amount),
     hkd => 'HK\$${formatGalleryMoney(amount)}',
   };
 

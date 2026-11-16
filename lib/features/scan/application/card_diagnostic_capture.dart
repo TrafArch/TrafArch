@@ -27,6 +27,10 @@ Map<String, Object?> captureCardInfo(CardReadOutcome result) =>
       FelicaReadOutcome(:final card) => {
         'cardNumber': null,
         'idm': card.idm,
+        if (card.amusementIc case final data?) ...{
+          'accessCode': data.accessCode,
+          'issuer': data.issuer,
+        },
         'cardName': card.displayName,
         'cardType': card.cardType,
         'productType': card.cardProductType.name,

@@ -1,5 +1,6 @@
 import '../../../protocols/felica/models/felica_models.dart';
 import '../../../protocols/felica/models/felica_card_type.dart';
+import '../../../protocols/felica/models/jpy_amount_formatter.dart';
 
 String summaryDate(DateTime d) {
   final m = d.month.toString().padLeft(2, '0');
@@ -19,7 +20,11 @@ String felicaAmountText(FelicaTransaction tx, List<FelicaWallet> wallets) {
   final amount = tx.amountMinorUnits;
   if (amount == null) return '金额未解析';
   final wallet = walletForTransaction(tx, wallets);
-  final text = wallet == null ? '$amount（币种未知）' : wallet.formatAmount(amount);
+  final text = wallet != null
+      ? wallet.formatAmount(amount)
+      : tx.suica != null && tx.currency == 'JPY'
+      ? formatJpyAmount(amount)
+      : '$amount（币种未知）';
   // Suica 历史记录的金额字段是交易后残高，不能当作单笔交易额展示。
   return tx.amountIsBalance ? '$text（残高）' : text;
 }
@@ -39,7 +44,11 @@ FelicaWallet? walletForTransaction(
       if (wallet.currency == currency) return wallet;
     }
   }
-  if (wallets.length == 1 && tx.walletKind == FelicaWalletKind.unknown) {
+  if (wallets.length == 1 &&
+      tx.walletKind == FelicaWalletKind.unknown &&
+      tx.suica == null &&
+      currency != null &&
+      currency.isNotEmpty) {
     return wallets.single;
   }
   return null;
@@ -48,6 +57,7 @@ FelicaWallet? walletForTransaction(
 String felicaTime(FelicaTransaction tx) {
   final time = tx.time;
   if (time == null) return '时间未解析';
+  if (tx.suica?.hasTime == false) return summaryDate(time);
   String pad2(int value) => value.toString().padLeft(2, '0');
   return '${time.year}-${pad2(time.month)}-${pad2(time.day)} '
       '${pad2(time.hour)}:${pad2(time.minute)}';

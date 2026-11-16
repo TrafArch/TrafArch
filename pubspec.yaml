@@ -1,7 +1,7 @@
 name: transit_card_analyzer
 description: "TrafArch - NFC 交通卡读取与分析"
 publish_to: 'none'
-version: 1.0.8-beta.2+2195
+version: 1.0.8-beta.2+2198
 
 environment:
   sdk: ^3.13.5
@@ -51,6 +51,8 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/suica/
+    - third_party/amusement_ic/
     - assets/data/TrafArch_Database_TU.sqlite
     - assets/data/TrafArch_Database_CU.sqlite
     - assets/data/reference_manifest.json

@@ -31,7 +31,7 @@ class TransitSummaryPanel extends StatelessWidget {
     final felica = app.felicaResult;
     // FeliCa（NFC-F）结果：与 TU / CU 卡片视图并列，使用同一版式。
     if (felica != null && parsed == null) {
-      return [FelicaSummaryPanel(felica: felica)];
+      return [FelicaSummaryPanel(felica: felica, stations: app.suicaStations)];
     }
     final identified = app.lastIdentified;
     final isTUnion = CardParserIds.isTUnionFamily(parsed?.parserId);

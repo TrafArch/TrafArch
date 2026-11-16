@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../../app/app_dependencies.dart';
+import '../../protocols/felica/models/amusement_ic_data.dart';
 import '../../shared/presentation/adaptive_layout.dart';
+import '../../shared/presentation/amusement_ic_summary.dart';
 import '../../shared/presentation/application_evidence_panel.dart';
 import '../archive/application/archive_history.dart';
 import '../archive/application/cu_archive_projection.dart';
@@ -18,6 +20,8 @@ import '../trips/trip_cards_view.dart';
 import '../trips/cu_transaction_list.dart';
 import '../trips/shanghai_mirrored_records.dart';
 import '../trips/tunion_cash_log_view.dart';
+import '../trips/suica_trip_list.dart';
+import '../trips/suica_trip_presenter.dart';
 
 /// Uses captured archive display fields, never current reference matches or NFC.
 class RecoveryResultPanel extends StatelessWidget {
@@ -70,6 +74,20 @@ class RecoveryResultPanel extends StatelessWidget {
         .map((application) => application.payload)
         .whereType<TUnionCashLog>()
         .firstOrNull;
+    final frozenSuica = capture.summary['suicaTrips'];
+    final decoded = summary['decoded'];
+    final amusementIc = decoded is Map
+        ? AmusementIcData.fromJson(decoded['amusementIc'])
+        : null;
+    final isAmusementIc =
+        summary['productType'] == 'amusementIc' ||
+        (decoded is Map &&
+            (decoded['productType'] == 'amusementIc' ||
+                decoded['amusementIc'] is Map));
+    final suicaTrips = <SuicaTripPresentation>[
+      if (frozenSuica is List)
+        for (final item in frozenSuica) ?SuicaTripPresentation.fromJson(item),
+    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -93,13 +111,23 @@ class RecoveryResultPanel extends StatelessWidget {
                 ),
                 if (summary['cardNumber'] case final String number)
                   SelectableText(number),
+                if (isAmusementIc) ...[
+                  if (summary['idm'] case final String idm)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(width: 84, child: Text('IDm')),
+                        Expanded(child: SelectableText(idm)),
+                      ],
+                    ),
+                  AmusementIcSummary(data: amusementIc),
+                ],
                 Text('读取时间：${capture.readAt.toLocal()}'),
                 if (summary['balanceText'] case final String text)
                   Text('读取时余额：$text')
                 else if (summary['balanceFen'] case final int balance)
                   Text(
-                    '读取时余额：${(balance / 100).toStringAsFixed(2)}'
-                    ' ${summary['currencyCode'] ?? '币种未知'}',
+                    '读取时余额：${snapshot?.snapshot?.context.formatAmount(balance) ?? '${(balance / 100).toStringAsFixed(2)} ${summary['currencyCode'] ?? '币种未知'}'}',
                   ),
                 Text(
                   capture.interrupted
@@ -144,6 +172,13 @@ class RecoveryResultPanel extends StatelessWidget {
           ),
         ],
         if (cashLog != null) TUnionCashLogView(log: cashLog),
+        if (suicaTrips.isNotEmpty)
+          SuicaTripList(
+            trips: suicaTrips,
+            initialFilters: app.recoveryFilters['live:suica'],
+            onFiltersChanged: (values) =>
+                app.recoveryFilters['live:suica'] = values,
+          ),
         if (trips != null && trips.entries.isNotEmpty)
           TripCardsView(
             entries: trips.entries,

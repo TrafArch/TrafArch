@@ -150,6 +150,34 @@ class LocalCardReader {
     final apdu = ApduExchange(transceive: _transceive);
     final extrasReader = CardExtrasReader(apdu);
     final tripReader = TripRecordReader(apdu);
+    ParsedCard? mergedCuCard;
+    Object? cuReadError;
+    final cuRecords = <ApduRecord>[];
+    var triedSecondaryCu = false;
+    var stoppedBeforeTuProcess = false;
+
+    Future<void> readSecondaryCu(ParsedCard tuCard) async {
+      triedSecondaryCu = true;
+      onStage?.call(CommonUnitCu.moduleName);
+      final cuInfo = CardInfo();
+      final cu = CommonUnitCu(apdu);
+      try {
+        if (await cu.selectPrimary(cuInfo)) {
+          mergedCuCard = await cu.read(cuInfo, cuRecords, readBalance: true);
+        } else if (CommonUnitCu.hasQingdaoWallet(tuCard)) {
+          mergedCuCard = await cu.readQingdaoWallet(tuCard, cuInfo, cuRecords);
+        }
+      } on Exception catch (e) {
+        mergedCuCard = cu.parsedCard;
+        cuReadError = e;
+        callback.onError(_mapError(e));
+        if (_transportFailureOf(e)?.stopsSession == true &&
+            (mergedCuCard == null || mergedCuCard!.cityUnionFiles.isEmpty) &&
+            !CommonUnitCu.hasQingdaoWallet(tuCard)) {
+          rethrow;
+        }
+      }
+    }
 
     try {
       callback.onProgress(5);
@@ -211,17 +239,52 @@ class LocalCardReader {
 
       // 1) LNT 已确认时只探 TU，不混入城市 CU 或其他地方卡读法。
       callback.onProgress(10);
-      final shanghai = await ShanghaiTransitUnionCardParser(
-        _transceive,
-        onStage: onStage,
-        onProgress: (p) => callback.onProgress(10 + (p * 40).round()),
-      ).read(probeCu: !appyConfirmed);
+      final shanghai =
+          await ShanghaiTransitUnionCardParser(
+            _transceive,
+            onStage: onStage,
+            onProgress: (p) => callback.onProgress(10 + (p * 40).round()),
+          ).read(
+            probeCu: !appyConfirmed,
+            beforeTuProcessRecords: (wallet) async {
+              if (!CommonUnitCu.hasQingdaoWallet(wallet)) {
+                return TuProcessReadAction.unchanged;
+              }
+              // Dedicated city routes have priority even when issuer/manager
+              // bytes conflict with the TU card-number identity.
+              final primary = ShanghaiTransitApplication(
+                system: ShanghaiTransitUnionIds.tuSystem,
+                confirmed: true,
+                card: wallet,
+                cardInfo: CardInfo(),
+                records: const [],
+              );
+              if (primary.isDualCityTu ||
+                  Shenzhentong.matchesTuIdentity(
+                    confirmed: true,
+                    cardNumber: wallet.info.displayCardNumber,
+                  )) {
+                return TuProcessReadAction.unchanged;
+              }
+              // Read the local wallet before the potentially long TU process scan.
+              await readSecondaryCu(wallet);
+              if (_transportFailureOf(cuReadError)?.stopsSession == true) {
+                stoppedBeforeTuProcess = true;
+                return TuProcessReadAction.stopSession;
+              }
+              onStage?.call(CommonUnitTu.moduleName);
+              return TuProcessReadAction.restoreApplication;
+            },
+          );
       final tuCard = shanghai.tu.card;
       final cuCard = shanghai.cu.card;
       final tuProbe = _applicationEvidence(
         shanghai.tu,
         'tu',
         CommonUnitTu.moduleName,
+        incompleteReason: stoppedBeforeTuProcess
+            ? 'CU 读取终止；已保留 TU 身份、余额与交易明细，TU 过程记录未读取'
+            : null,
       );
       if (tuProbe != null) probes.add(tuProbe);
       final cuProbe = _applicationEvidence(
@@ -383,7 +446,7 @@ class LocalCardReader {
       //    再独立探测澳门通钱包，最后以 TU 为主卡返回。
       if (tuCard != null) {
         final tuFailure = shanghai.tu.transportFailure;
-        if (tuFailure != null && tuFailure.stopsSession) {
+        if (tuFailure != null && tuFailure.stopsSession && !triedSecondaryCu) {
           // TU 已保留部分数据时不再尝试后续应用探测。
           callback.onProgress(95);
           return _outcome(
@@ -395,64 +458,24 @@ class LocalCardReader {
           );
         }
 
-        ParsedCard? mergedCuCard;
-        Object? cuReadError;
         if (!shanghai.cu.probed) {
-          onStage?.call(CommonUnitCu.moduleName);
-          final cuInfo = CardInfo();
-          final cuRecords = <ApduRecord>[];
-          final cu = CommonUnitCu(apdu);
-          var triedQingdaoWallet = false;
-          try {
-            if (await cu.selectPrimary(cuInfo)) {
-              mergedCuCard = await cu.read(
-                cuInfo,
-                cuRecords,
-                readBalance: true,
-              );
-            } else if (CommonUnitCu.hasQingdaoWallet(tuCard)) {
-              triedQingdaoWallet = true;
-              mergedCuCard = await cu.readQingdaoWallet(
-                tuCard,
-                cuInfo,
-                cuRecords,
-              );
-            }
-          } on Exception catch (e) {
-            mergedCuCard = cu.parsedCard;
-            cuReadError = e;
-            callback.onError(_mapError(e));
-            if (_transportFailureOf(e)?.stopsSession == true &&
-                (mergedCuCard == null || mergedCuCard.cityUnionFiles.isEmpty)) {
-              if (!triedQingdaoWallet) rethrow;
-              probes.add(
-                ApplicationEvidence.failed(
-                  'cu',
-                  CommonUnitCu.moduleName,
-                  readError: e,
-                  transportFailure: _transportFailureOf(e),
-                ),
-              );
-              return _outcome(
-                shanghai.tu.cardInfo,
-                shanghai.tu.records,
-                extras,
-                tuCard,
-                readError: e,
-              );
-            }
-          }
-          if (mergedCuCard != null && mergedCuCard.cityUnionFiles.isNotEmpty) {
+          if (!triedSecondaryCu) await readSecondaryCu(tuCard);
+          final observedCu = mergedCuCard;
+          final readError =
+              _transportFailureOf(cuReadError)?.stopsSession == true
+              ? cuReadError
+              : shanghai.tu.readError ?? cuReadError;
+          if (observedCu != null && observedCu.cityUnionFiles.isNotEmpty) {
             probes.add(
               ApplicationEvidence.succeeded(
                 'cu',
                 CommonUnitCu.moduleName,
-                balanceFen: mergedCuCard.info.balanceFen,
+                balanceFen: observedCu.info.balanceFen,
                 recordCount: cuRecords.where((r) => r.type == 2).length,
                 records: cuRecords,
                 readError: cuReadError,
                 transportFailure: _transportFailureOf(cuReadError),
-                payload: mergedCuCard,
+                payload: observedCu,
               ),
             );
             final dual = ParsedCard(
@@ -462,8 +485,8 @@ class LocalCardReader {
               transactions: tuCard.transactions,
               transactionFileObserved: tuCard.transactionFileObserved,
               transitProcessRecords: tuCard.transitProcessRecords,
-              cityUnionFiles: mergedCuCard.cityUnionFiles,
-              cityUnionBalanceFen: mergedCuCard.info.balanceFen,
+              cityUnionFiles: observedCu.cityUnionFiles,
+              cityUnionBalanceFen: observedCu.info.balanceFen,
               dualApplication: true,
               selectedAidHex: tuCard.selectedAidHex,
             );
@@ -476,16 +499,32 @@ class LocalCardReader {
               [...shanghai.tu.records, ...cuRecords],
               extras,
               dual,
-              readError: shanghai.tu.readError ?? cuReadError,
+              readError: readError,
             );
           }
           probes.add(
-            ApplicationEvidence.rejected(
-              'cu',
-              CommonUnitCu.moduleName,
-              reason: cuReadError?.toString() ?? 'CU 应用未确认',
-            ),
+            cuReadError != null
+                ? ApplicationEvidence.failed(
+                    'cu',
+                    CommonUnitCu.moduleName,
+                    readError: cuReadError,
+                    transportFailure: _transportFailureOf(cuReadError),
+                  )
+                : ApplicationEvidence.rejected(
+                    'cu',
+                    CommonUnitCu.moduleName,
+                    reason: cuReadError?.toString() ?? 'CU 应用未确认',
+                  ),
           );
+          if (_transportFailureOf(readError)?.stopsSession == true) {
+            return _outcome(
+              shanghai.tu.cardInfo,
+              shanghai.tu.records,
+              extras,
+              tuCard,
+              readError: readError,
+            );
+          }
         }
 
         // 澳门通钱包作为独立应用探测；确认后保留其身份、余额与流水证据，
@@ -924,8 +963,9 @@ class LocalCardReader {
   static ApplicationEvidence? _applicationEvidence(
     ShanghaiTransitApplication app,
     String appId,
-    String displayName,
-  ) {
+    String displayName, {
+    String? incompleteReason,
+  }) {
     if (!app.probed) return null;
     final card = app.card;
     final identity = app.identity;
@@ -946,6 +986,22 @@ class LocalCardReader {
         displayName,
         readError: app.readError,
         transportFailure: app.transportFailure,
+      );
+    }
+    if (incompleteReason != null) {
+      return ApplicationEvidence(
+        appId: appId,
+        displayName: displayName,
+        state: ApplicationProbeState.partial,
+        probed: true,
+        confirmed: app.confirmed,
+        readSucceeded: app.readSucceeded,
+        cardNumber: cardNumber,
+        balanceFen: card?.info.balanceFen,
+        recordCount: app.records.where((r) => r.type == 2).length,
+        records: app.records,
+        payload: card,
+        notes: [incompleteReason],
       );
     }
     return ApplicationEvidence.succeeded(

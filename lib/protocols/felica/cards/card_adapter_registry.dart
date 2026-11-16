@@ -1,6 +1,7 @@
 library;
 
 import 'felica_card_adapter.dart';
+import 'amusement_ic_adapter.dart';
 import 'generic_adapter.dart';
 import 'octopus_adapter.dart';
 import 'suica_adapter.dart';
@@ -20,9 +21,12 @@ class CardAdapterRegistry {
 
   final List<FelicaCardAdapter> _adapters;
 
-  /// 默认注册表：Suica（经 SuicaDetector 服务探测后匹配）→ 八达通 → 通用兜底。
-  factory CardAdapterRegistry.defaults() =>
-      CardAdapterRegistry([const SuicaAdapter(), const OctopusAdapter()]);
+  /// 默认注册表：Suica → 八达通 → Amusement IC 候选 → 通用兜底。
+  factory CardAdapterRegistry.defaults() => CardAdapterRegistry([
+    const SuicaAdapter(),
+    const OctopusAdapter(),
+    const AmusementIcAdapter(),
+  ]);
 
   void register(FelicaCardAdapter adapter) => _adapters.add(adapter);
 

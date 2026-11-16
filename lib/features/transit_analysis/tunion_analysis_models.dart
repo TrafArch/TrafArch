@@ -75,8 +75,14 @@ class Currency {
   static const cny = Currency(code: 'CNY', symbol: '¥', unit: '元');
   static const hkd = Currency(code: 'HKD', symbol: 'HK\$', unit: '港元');
   static const mop = Currency(code: 'MOP', symbol: 'MOP\$', unit: '澳门元');
+  static const jpy = Currency(code: 'JPY', symbol: 'JP￥', unit: '日元');
 
-  static const _known = <String, Currency>{'CNY': cny, 'HKD': hkd, 'MOP': mop};
+  static const _known = <String, Currency>{
+    'CNY': cny,
+    'HKD': hkd,
+    'MOP': mop,
+    'JPY': jpy,
+  };
 
   /// 货币代码 → 货币；null / 未收录回退人民币（缺省口径）。
   static Currency fromCode(String? code) {

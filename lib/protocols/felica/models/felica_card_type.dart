@@ -10,6 +10,7 @@ library;
 /// 把未确认的卡归入上述任一产品。
 enum FelicaCardType {
   suica,
+  amusementIc,
   octopus,
   octopusTUnion,
   octopusLingnanDual,
@@ -18,11 +19,12 @@ enum FelicaCardType {
 }
 
 /// 卡产品所属家族（用于识别与展示分组，不用于读取权限判断）。
-enum FelicaCardFamily { suica, octopus, unknown }
+enum FelicaCardFamily { suica, amusementIc, octopus, unknown }
 
 extension FelicaCardTypeInfo on FelicaCardType {
   FelicaCardFamily get family => switch (this) {
     FelicaCardType.suica => FelicaCardFamily.suica,
+    FelicaCardType.amusementIc => FelicaCardFamily.amusementIc,
     FelicaCardType.octopus ||
     FelicaCardType.octopusTUnion ||
     FelicaCardType.octopusLingnanDual ||

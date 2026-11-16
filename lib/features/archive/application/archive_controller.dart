@@ -11,6 +11,8 @@ import '../../../protocols/transit/tunion/tunion_models.dart';
 import '../../../protocols/transit/tunion/tunion_process_parser.dart';
 import 'card_records_export.dart';
 import 'cu_archive_projection.dart';
+import 'suica_archive_capture.dart';
+import 'amusement_ic_archive_capture.dart';
 import '../domain/card_session_snapshot.dart';
 import '../domain/pending_card_save.dart';
 import '../data/card_repository.dart';
@@ -56,6 +58,33 @@ class ArchiveController extends OwnedNotifier {
     if (disposed) return;
     final parsed = view.parsedCard;
     if (parsed == null) {
+      try {
+        final item =
+            captureAmusementIcArchive(
+              view,
+              attemptId,
+              readAt,
+              frames,
+              metadataIssues,
+            ) ??
+            captureSuicaArchive(
+              view,
+              attemptId,
+              readAt,
+              frames,
+              metadataIssues,
+            );
+        if (item == null) return;
+        pending = item;
+        fingerprint = item.fingerprint;
+        identified = IdentifiedCard(
+          fingerprint: item.fingerprint,
+          identity: item.identity,
+        );
+        notifyListeners();
+      } catch (e) {
+        log('FeliCa 归档准备失败：$e');
+      }
       return;
     }
     try {
@@ -155,8 +184,7 @@ class ArchiveController extends OwnedNotifier {
           'captureAttemptId': attemptId,
           if (view.applications.isNotEmpty)
             'applicationEvidence': [
-              for (final application in view.applications)
-                application.toJson(),
+              for (final application in view.applications) application.toJson(),
             ],
           if (parsed.localCard?.info.isBmac == true)
             'beijingBmac': {
@@ -410,9 +438,7 @@ class ArchiveController extends OwnedNotifier {
     if (disposed || item == null || item.pendingSaveId != id) return false;
     final generation = _generation;
     final exists = await cardExists(item.fingerprint);
-    if (disposed ||
-        generation != _generation ||
-        pending?.pendingSaveId != id) {
+    if (disposed || generation != _generation || pending?.pendingSaveId != id) {
       return false;
     }
     if (exists) {
@@ -442,10 +468,9 @@ class ArchiveController extends OwnedNotifier {
 
   Future<bool> cardExists(String fingerprint) async {
     try {
-      final existing =
-          await (repository.db.select(repository.db.savedCards)
-                ..where((t) => t.cardFingerprint.equals(fingerprint)))
-              .getSingleOrNull();
+      final existing = await (repository.db.select(
+        repository.db.savedCards,
+      )..where((t) => t.cardFingerprint.equals(fingerprint))).getSingleOrNull();
       return existing != null;
     } catch (e) {
       log('卡片档案存在性检查失败：$e');
@@ -453,10 +478,7 @@ class ArchiveController extends OwnedNotifier {
     }
   }
 
-  Future<bool> _save(
-    PendingCardSave item, {
-    int? parseVersion,
-  }) async {
+  Future<bool> _save(PendingCardSave item, {int? parseVersion}) async {
     try {
       await repository.db.transaction(() async {
         final existing =

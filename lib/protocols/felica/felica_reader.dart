@@ -40,42 +40,64 @@ class FelicaReader {
     try {
       onStage?.call('FeliCa 协议探测');
       onProgress?.call(5);
-      final polling = await protocol.polling(
+      var polling = await protocol.polling(
         systemCode: preferredSystemCode ?? FelicaCommand.systemCodeWildcard,
       );
       idmHex = polling.idmHex;
       onProgress?.call(20);
 
-      try {
-        systemCodes = await protocol.requestSystemCode(polling.idm);
+      // Lite/Lite-S only support Polling and block access. Request System Code
+      // would time out before an adapter can read these cards. Sony assigns IC
+      // types F0/F1 and system 88B4; neither alone confirms an AIC product.
+      var liteSelected = preferredSystemCode == FelicaKnownSystemCodes.lite;
+      if (!liteSelected && (polling.pmm[1] == 0xF0 || polling.pmm[1] == 0xF1)) {
+        polling = await protocol.polling(
+          systemCode: FelicaKnownSystemCodes.lite,
+        );
+        idmHex = polling.idmHex;
+        liteSelected = true;
+      }
+      if (liteSelected) {
+        systemCodes = [FelicaKnownSystemCodes.lite];
         statuses.add(
-          FelicaReadStatus(
+          const FelicaReadStatus(
             stage: 'FeliCa 系统码',
             state: FelicaReadState.success,
-            message: '卡片返回 ${systemCodes.length} 个系统码',
+            message: '已通过 Polling 选择 FeliCa Lite 系统 88B4',
           ),
         );
-      } on FelicaProtocolException catch (e) {
-        if (preferredSystemCode == null || e.stopsSession) rethrow;
-        systemCodes = [preferredSystemCode];
-        statuses.add(
-          FelicaReadStatus(
-            stage: 'FeliCa 系统码',
-            state: FelicaReadState.partial,
-            message:
-                'Request System Code 失败（${e.message}），'
-                '回退 Android 探测到的系统码',
-            rawResponse: e.raw,
-            transportFailure: e.transportFailure,
-          ),
-        );
+      } else {
+        try {
+          systemCodes = await protocol.requestSystemCode(polling.idm);
+          statuses.add(
+            FelicaReadStatus(
+              stage: 'FeliCa 系统码',
+              state: FelicaReadState.success,
+              message: '卡片返回 ${systemCodes.length} 个系统码',
+            ),
+          );
+        } on FelicaProtocolException catch (e) {
+          if (preferredSystemCode == null || e.stopsSession) rethrow;
+          systemCodes = [preferredSystemCode];
+          statuses.add(
+            FelicaReadStatus(
+              stage: 'FeliCa 系统码',
+              state: FelicaReadState.partial,
+              message:
+                  'Request System Code 失败（${e.message}），'
+                  '回退 Android 探测到的系统码',
+              rawResponse: e.raw,
+              transportFailure: e.transportFailure,
+            ),
+          );
+        }
       }
       if (systemCodes.isEmpty) {
         systemCodes = [preferredSystemCode ?? FelicaCommand.systemCodeWildcard];
       }
       onProgress?.call(35);
 
-      final context = FelicaCardContext(
+      var context = FelicaCardContext(
         idm: idmHex,
         idmBytes: polling.idm,
         systemCodes: systemCodes,
@@ -83,6 +105,21 @@ class FelicaReader {
         serviceProbes: {},
       );
       final adapter = await _registry.select(context);
+      if (adapter.cardType == 'amusement_ic' && !liteSelected) {
+        // Discovery can list other systems than the one currently selected.
+        // Read 88B4 only with the IDm returned by its own Polling response.
+        polling = await protocol.polling(
+          systemCode: FelicaKnownSystemCodes.lite,
+        );
+        idmHex = polling.idmHex;
+        context = FelicaCardContext(
+          idm: idmHex,
+          idmBytes: polling.idm,
+          systemCodes: systemCodes,
+          protocol: protocol,
+          serviceProbes: {},
+        );
+      }
       onStage?.call('FeliCa 卡型匹配：${adapter.cardType}');
       onProgress?.call(45);
 

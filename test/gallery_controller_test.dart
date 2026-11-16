@@ -194,10 +194,17 @@ void main() {
     expect(c.trips.length, 6);
   });
 
+  test('Suica balance presentation preserves the frozen source amount', () {
+    final card = c.cards.firstWhere((card) => card.id == 'suica');
+    final original = card.rawBalance;
+    expect(card.balance(false), 'JP￥1,240');
+    expect(card.rawBalance, original);
+  });
+
   test('weekly samples keep explicit CNY, JPY and HKD currencies', () {
     for (final sample in [
       (GalleryCurrency.cny, '−¥1,234.56', 123456, '¥1,234.56'),
-      (GalleryCurrency.jpy, '−1,234 JPY', 1234, '1,234 JPY'),
+      (GalleryCurrency.jpy, '−1,234 JPY', 1234, 'JP￥1,234'),
       (GalleryCurrency.hkd, '−HK\$1,234.56', 123456, 'HK\$1,234.56'),
     ]) {
       final summary = weeklySummary(sample.$1, [
@@ -237,7 +244,7 @@ void main() {
       final weekly = weeklySummary(card.currency, c.ledger(card));
       expect(weekly.rideCount, 0);
       expect(weekly.total, 0);
-      expect(weekly.format(0), card.id == 'suica' ? '0 JPY' : 'HK\$0.00');
+      expect(weekly.format(0), card.id == 'suica' ? 'JP￥0' : 'HK\$0.00');
     }
     final unknown = weeklySummary(null, [
       {'isoDate': '2026-10-27', 'amount': '−¥2.00', 'kind': 'bus'},

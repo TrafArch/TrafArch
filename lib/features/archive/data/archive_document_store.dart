@@ -411,6 +411,9 @@ Map<String, dynamic> _mergeExtras(
   for (final entry in incoming.entries) {
     if (result.containsKey(entry.key) &&
         _canonical(result[entry.key]) != _canonical(entry.value)) {
+      if (label == '卡片扩展' && entry.key == 'suicaManualNumber') {
+        throw const FormatException('备份中的 Suica 手工卡面号码与本地记录冲突（含清除操作），原始数据未覆盖');
+      }
       throw FormatException('$label ${entry.key} 内容冲突，原始数据未覆盖');
     }
     result[entry.key] = entry.value;

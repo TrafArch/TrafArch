@@ -654,68 +654,77 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-    'card face keeps its fields separate for long and unknown money',
-    (tester) async {
-      c.openCard(c.current);
-      await mount(tester);
-      for (final width in [320.0, 360.0, 412.0]) {
-        for (final scale in [1.0, 1.5, 2.0]) {
-          tester.view.physicalSize = Size(width, 2400);
-          tester.platformDispatcher.textScaleFactorTestValue = scale;
-          for (final balance in ['86.50', '-1,234,567.89', '—']) {
-            c.update(() {
-              c.current.rawBalance = balance;
-              c.current.name = balance == '86.50'
-                  ? '上海公共交通卡'
-                  : '上海公共交通卡 交通联合纪念版';
-            });
-            await tester.pumpAndSettle();
-            final face = tester.getRect(
-              find.byKey(const ValueKey('card-face-shanghai')),
+  testWidgets('card face keeps its fields separate for long and unknown money', (
+    tester,
+  ) async {
+    c.openCard(c.current);
+    await mount(tester);
+    for (final width in [320.0, 360.0, 412.0]) {
+      for (final scale in [1.0, 1.5, 2.0]) {
+        tester.view.physicalSize = Size(width, 2400);
+        tester.platformDispatcher.textScaleFactorTestValue = scale;
+        for (final balance in ['86.50', '-1,234,567.89', '—']) {
+          c.update(() {
+            c.current.rawBalance = balance;
+            c.current.name = balance == '86.50' ? '上海公共交通卡' : '上海公共交通卡 交通联合纪念版';
+          });
+          try {
+            // Resizing a short ledger must converge instead of repeatedly
+            // adding and removing bottom padding from stale scroll metrics.
+            await tester.pumpAndSettle(
+              const Duration(milliseconds: 100),
+              EnginePhase.sendSemanticsUpdate,
+              const Duration(seconds: 3),
             );
-            final title = tester.getRect(
-              find.byKey(const ValueKey('face-title-shanghai')),
-            );
-            final tail = tester.getRect(
-              find.byKey(const ValueKey('face-tail-shanghai')),
-            );
-            final amount = tester.getRect(
-              find.byKey(
-                ValueKey(
-                  'face-${balance == '—' ? 'unknown' : 'number'}-shanghai',
-                ),
-              ),
-            );
-            for (final field in [title, tail, amount]) {
-              expect(face.contains(field.topLeft), isTrue);
-              expect(
-                face.contains(field.bottomRight - const Offset(.01, .01)),
-                isTrue,
-              );
-            }
-            expect(amount.top, greaterThan(title.bottom));
-            expect(tail.top, greaterThan(title.bottom));
-            expect(amount.overlaps(tail), isFalse);
-            expect(find.text('当前余额'), findsNothing);
-            expect(find.textContaining('最近读取'), findsNothing);
-            if (balance == '—') {
-              expect(
-                find.byKey(const ValueKey('face-currency-shanghai')),
-                findsNothing,
-              );
-            } else {
-              expect(find.text('CNY ¥'), findsOneWidget);
-            }
-            if (scale >= 1.5) expect(tail.top, greaterThan(amount.bottom));
-            expect(
-              tester.takeException(),
-              isNull,
-              reason: '$width / $scale / $balance',
+          } catch (error) {
+            fail(
+              'Card layout did not settle for $width / $scale / $balance: $error',
             );
           }
+          final face = tester.getRect(
+            find.byKey(const ValueKey('card-face-shanghai')),
+          );
+          final title = tester.getRect(
+            find.byKey(const ValueKey('face-title-shanghai')),
+          );
+          final tail = tester.getRect(
+            find.byKey(const ValueKey('face-tail-shanghai')),
+          );
+          final amount = tester.getRect(
+            find.byKey(
+              ValueKey(
+                'face-${balance == '—' ? 'unknown' : 'number'}-shanghai',
+              ),
+            ),
+          );
+          for (final field in [title, tail, amount]) {
+            expect(face.contains(field.topLeft), isTrue);
+            expect(
+              face.contains(field.bottomRight - const Offset(.01, .01)),
+              isTrue,
+            );
+          }
+          expect(amount.top, greaterThan(title.bottom));
+          expect(tail.top, greaterThan(title.bottom));
+          expect(amount.overlaps(tail), isFalse);
+          expect(find.text('当前余额'), findsNothing);
+          expect(find.textContaining('最近读取'), findsNothing);
+          if (balance == '—') {
+            expect(
+              find.byKey(const ValueKey('face-currency-shanghai')),
+              findsNothing,
+            );
+          } else {
+            expect(find.text('CNY ¥'), findsOneWidget);
+          }
+          if (scale >= 1.5) expect(tail.top, greaterThan(amount.bottom));
+          expect(
+            tester.takeException(),
+            isNull,
+            reason: '$width / $scale / $balance',
+          );
         }
       }
-    },
-  );
+    }
+  });
 }

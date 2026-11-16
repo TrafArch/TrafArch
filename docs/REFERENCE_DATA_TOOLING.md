@@ -1,5 +1,41 @@
 # Offline reference data tooling
 
+## Suica 原始站点包（2026-11-16）
+
+Suica 独立使用 `assets/suica/suica_stationcode.db` 与 `manifest.json`。它不是
+TU/CU 城市扩充表，不经过 TU/CU schema 或 `regions` 查询。发布命令仅从本次
+用户提供的 Suica Reader APK 中提取原库，不执行 APK 代码、不联网、不改写
+SQLite；不依赖或替代当前本地缺失的旧 `tools.reference_data`。
+
+```powershell
+python -X utf8 dev/suica/publish_suica.py --source-apk C:\path\suicareader.apk
+python -X utf8 dev/suica/publish_suica.py --source-apk C:\path\suicareader.apk --verify
+$env:TRAFARCH_SUICA_SOURCE_APK='C:\path\suicareader.apk'
+python -X utf8 -m unittest discover -s dev/suica -p test_publish_suica.py -v
+```
+
+脚本固定核对所审阅 APK 的 SHA256；更换来源必须重新审阅，不能任意覆盖。
+`--verify` 只读比较原始字节和可重现清单；发布保留原库名、两张表、两个索引、
+全部 6435 条站点记录及 `user_version=20261017`。源表字段为 `_id`、`areacode`、
+`linecode`、`stationorder`、`companyname`、`linename`、`stationname`，nullable 文本
+不补默认值；查询按区域/线路/站点三键精确匹配，冲突匹配返回未知。
+
+| 证据 | SHA256 |
+|---|---|
+| 来源 APK | `5b407a0456f7cf4592ce2964511c642fc6352b04d6a0cc23e855a268df14a132` |
+| 原库及发布库（字节相同） | `57d4fe1af5154e9adab0a4a38619fe8095c7f509ac28c743bf554ba199a43abd` |
+| 独立 Suica manifest | `1abde5038c9a5f60ff0b4c7c4006d8bf215e20351bf1d3880afc3f361985864f` |
+
+归属保留 Suica Reader（包名 `yanzm.products.suicareader`），数据来自用户提供的
+安装包，不将 APK 内第三方依赖的 Apache NOTICE 当作站点库本身的授权声明。
+来源许可未核定，清单如实记录此状态。解析器为依据字段事实的独立 Dart 实现，
+未复制或执行 APK 中的应用代码。
+
+运行时先核对清单大小与 SHA256，缓存到独立摘要命名文件，再以 SQLite
+`OpenMode.readOnly` 打开；异常时保留原始码、报告站名不可用。读卡不依赖网络。
+包中记录并不保证为当前运营线路，也不保证卡片所记计费站就是实际上下车站。
+Suica/TU/CU 各自加载、各自释放，不修改档案数据库或既有 TU/CU 清单。
+
 ## Jinan CU Lines 2/3/8 user revision (2026-10-30)
 
 The current CU revision adds 52 records to the existing `region_济南_2500`:

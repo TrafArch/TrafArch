@@ -1,3 +1,5 @@
+import '../../../protocols/felica/models/jpy_amount_formatter.dart';
+
 /// Context captured with a read, never resolved from the current scan.
 /// Null values mean unknown, including for legacy snapshots.
 class ArchiveContext {
@@ -59,6 +61,7 @@ class ArchiveContext {
     if (digits == null || digits < 0 || digits > 9) {
       return '$amount 最小单位（${currency ?? '币种未知'}，单位精度未知）';
     }
+    if (currency == 'JPY' && digits == 0) return formatJpyAmount(amount);
     // String magnitude also handles the minimum signed integer without abs overflow.
     final magnitude = amount
         .toString()

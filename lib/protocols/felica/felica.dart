@@ -1,6 +1,7 @@
 library;
 
 export 'cards/card_adapter_registry.dart';
+export 'cards/amusement_ic_adapter.dart';
 export 'cards/felica_card_adapter.dart';
 export 'cards/felica_card_profiles.dart';
 export 'cards/felica_wallet_factory.dart';
@@ -12,9 +13,12 @@ export 'detection/suica_detector.dart';
 export 'felica_hex.dart';
 export 'felica_reader.dart';
 export 'models/cross_border_payment.dart';
+export 'models/amusement_ic_data.dart';
 export 'models/felica_card_type.dart';
 export 'models/felica_models.dart';
+export 'models/suica_transaction_details.dart';
 export 'parsers/felica_block_parser.dart';
+export 'parsers/amusement_ic_parser.dart';
 export 'parsers/suica_record_parser.dart';
 export 'protocol/felica_command.dart';
 export 'protocol/felica_protocol.dart';

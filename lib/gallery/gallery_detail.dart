@@ -46,26 +46,23 @@ extension _GalleryDetail on _GalleryViewState {
       ],
     };
     const navHeight = 56.0;
+    final renderedScrollDeficit = _detailScrollDeficit;
     return NotificationListener<ScrollMetricsNotification>(
       onNotification: (notification) {
         // Short ledgers still collapse the face fully: pad the scroll range up
-        // to the shrink distance so the content can ride up. Adjust by the
-        // measured shortfall so a clamped (zero) extent converges instead of
-        // subtracting a stale deficit.
+        // to the shrink distance so the content can ride up. Tie the correction
+        // to the padding that produced these metrics: a deferred callback must
+        // not apply the same shortfall again to a newer, unrendered deficit.
         _detailMaxExtent = notification.metrics.maxScrollExtent;
         final target = math.max(
           0.0,
-          _detailScrollDeficit + (_detailShrinkDistance - _detailMaxExtent),
+          renderedScrollDeficit + (_detailShrinkDistance - _detailMaxExtent),
         );
         if ((target - _detailScrollDeficit).abs() > .5) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
-            final next = math.max(
-              0.0,
-              _detailScrollDeficit + (_detailShrinkDistance - _detailMaxExtent),
-            );
-            if ((next - _detailScrollDeficit).abs() > .5) {
-              _updateDetail(() => _detailScrollDeficit = next);
+            if ((target - _detailScrollDeficit).abs() > .5) {
+              _updateDetail(() => _detailScrollDeficit = target);
             }
           });
         }
@@ -571,7 +568,7 @@ extension _GalleryDetail on _GalleryViewState {
                 const SizedBox(width: 8),
                 Flexible(
                   child: _text(
-                    entry.record['amount'] as String,
+                    galleryDisplayAmount(entry.record['amount'] as String),
                     role: GalleryTypography.lead,
                     align: TextAlign.right,
                   ),
