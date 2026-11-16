@@ -102,7 +102,14 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('检查更新'), findsNothing);
-    expect(find.text('版本 ${AppInfo.version} (${AppInfo.androidVersionCode})'), findsOneWidget);
+    expect(
+      find.text('版本 ${AppInfo.version} (${AppInfo.displayBuildNumber})'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('版本 ${AppInfo.version} (${AppInfo.buildNumber})'),
+      findsNothing,
+    );
     expect(await service.checkNow(), isNull);
     expect(await service.checkOnce(), isNull);
     expect(calls, 0);

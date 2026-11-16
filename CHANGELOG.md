@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-16 — 关于页构建号去掉 ABI 偏移
+
+- 旧界面与 2.x 界面的关于页统一显示 `AppInfo.displayBuildNumber`：Android versionCode `4186` 扣除 arm64 拆包追加的 `2000`，页面显示构建号 `2186`；当前预留号 `4187` 将显示 `2187`。Android 清单版本码、更新比较和日志仍保留完整 versionCode。
+- 回归：关于页及 2.x 信息页专项 31 项通过；全量 2879 项通过、2 项跳过，唯一失败为既有 `gallery_wallet_refinements_test` 长余额 `pumpAndSettle` 超时。静态检查无新增问题，保留 5 条既有 info。
+
 ## 2026-11-16 — 源码版本名同步为 1.0.8-beta.1
 
 - 将 `pubspec.yaml` 与 `AppInfo.version` 同步为 `1.0.8-beta.1`，修复后续合并后源码版本名回退的问题；构建号保持当前 `AppInfo` `4183`、pubspec 预留 `4184`，本次不编译安装包。

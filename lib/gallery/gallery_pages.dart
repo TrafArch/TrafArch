@@ -1425,7 +1425,7 @@ extension _GalleryPages on _GalleryViewState {
         ),
         _gap(4),
         _text(
-          '版本 ${AppInfo.version} (${AppInfo.buildNumber})',
+          '版本 ${AppInfo.version} (${AppInfo.displayBuildNumber})',
           role: GalleryTypography.caption,
           color: t.muted,
         ),

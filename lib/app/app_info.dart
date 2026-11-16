@@ -12,9 +12,21 @@ class AppInfo {
   static String get appName => appNameZh.isEmpty ? appNameEn : appNameZh;
 
   static const String version = '1.0.8-beta.1';
-  static const String buildNumber = '4184';
+  static const String buildNumber = '4188';
 
-  /// Android 清单版本码：直接使用源码构建号，不加 ABI 偏移。
+  /// Flutter arm64 拆包追加到 Android versionCode 的 ABI 偏移。
+  static const int _splitAbiVersionCodeOffset = 2000;
+
+  /// 关于页展示的构建号：去掉 Android versionCode 中的 ABI 偏移。
+  static String get displayBuildNumber {
+    final versionCode = int.tryParse(buildNumber);
+    if (versionCode == null || versionCode <= _splitAbiVersionCodeOffset) {
+      return buildNumber;
+    }
+    return '${versionCode - _splitAbiVersionCodeOffset}';
+  }
+
+  /// Android 清单版本码：当前直接使用 4xxx 完整构建号。
   static String get androidVersionCode => buildNumber;
   static const String author = 'kajolno';
   static const String copyright = '© 2026 kajolno';
