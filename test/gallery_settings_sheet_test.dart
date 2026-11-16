@@ -206,14 +206,19 @@ void main() {
     for (final name in [
       'kajolno',
       'Nightingale0504',
+      'Makitoid',
       '林天仪',
       'mitkimi',
-      'Makitoid',
       '鳄鱼宝宝',
       'DearVa',
     ]) {
       expect(find.text(name), findsOneWidget, reason: name);
     }
+    double top(String name) => tester.getTopLeft(find.text(name)).dy;
+    expect(top('Nightingale0504'), lessThan(top('Makitoid')));
+    expect(top('Makitoid'), lessThan(top('林天仪')));
+    expect(find.textContaining('钻石赞助商'), findsNWidgets(2));
+    expect(find.textContaining('钻石级'), findsNothing);
     // Only contributors with a verified profile show the external link.
     expect(find.text('主页'), findsNWidgets(6));
     await tester.tap(find.text('主页').first);

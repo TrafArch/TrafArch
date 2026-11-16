@@ -258,6 +258,24 @@ class GalleryTokens extends ThemeExtension<GalleryTokens> {
     warning: warning ?? this.warning,
     elevationDarkness: elevationDarkness ?? this.elevationDarkness,
   );
+
+  /// Value equality keeps ThemeData comparable across rebuilds. Without it,
+  /// every notification produces a fresh ThemeExtension instance and
+  /// MaterialApp restarts its 200ms theme cross-fade, rebuilding every
+  /// Theme-dependent widget on each animation frame.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is GalleryTokens &&
+          other.scheme == scheme &&
+          other.dynamic == dynamic &&
+          other.success == success &&
+          other.warning == warning &&
+          other.elevationDarkness == elevationDarkness;
+
+  @override
+  int get hashCode =>
+      Object.hash(scheme, dynamic, success, warning, elevationDarkness);
   @override
   GalleryTokens lerp(covariant GalleryTokens? other, double t) => other == null
       ? this

@@ -68,6 +68,7 @@ class _GalleryAppState extends State<GalleryApp> {
   late final Future<GalleryController> _ready;
   GalleryController? _owned;
   late final GalleryPreferences _preferences;
+  final _appearance = _GalleryAppearance();
 
   @override
   void initState() {
@@ -119,18 +120,8 @@ class _GalleryAppState extends State<GalleryApp> {
             supportedLocales: const [Locale('zh', 'CN'), Locale('en')],
             localizationsDelegates: GlobalMaterialLocalizations.delegates,
             themeMode: c.themeMode,
-            theme: GalleryTokens.from(
-              c.data,
-              false,
-              c.monet ? 'blue' : c.palette,
-              dynamicScheme: c.monet ? lightDynamic : null,
-            ).theme(),
-            darkTheme: GalleryTokens.from(
-              c.data,
-              true,
-              c.monet ? 'blue' : c.palette,
-              dynamicScheme: c.monet ? darkDynamic : null,
-            ).theme(),
+            theme: _appearance.theme(c, lightDynamic, false),
+            darkTheme: _appearance.theme(c, darkDynamic, true),
             builder: (context, child) {
               final tokens = Theme.of(context).extension<GalleryTokens>()!;
               return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -170,6 +161,51 @@ class _GalleryAppState extends State<GalleryApp> {
         ),
       );
     },
+  );
+}
+
+/// Gallery theme inputs are stable between notifications, so the same
+/// [ThemeData] instance is reused. MaterialApp animates a 200ms cross-fade
+/// whenever the incoming theme differs; a fresh instance per notification
+/// restarts that fade and rebuilds every Theme-dependent widget each frame
+/// of a page transition.
+class _GalleryAppearance {
+  final _tokens = <(int, bool, String, bool, ColorScheme?), GalleryTokens>{};
+  final _themes = <(int, bool, String, bool, ColorScheme?), ThemeData>{};
+
+  (int, bool, String, bool, ColorScheme?) _key(
+    GalleryController controller,
+    bool dark,
+    ColorScheme? dynamic,
+  ) => (
+    identityHashCode(controller.data),
+    dark,
+    controller.palette,
+    controller.monet,
+    controller.monet ? dynamic : null,
+  );
+
+  GalleryTokens tokens(
+    GalleryController controller,
+    ColorScheme? dynamic,
+    bool dark,
+  ) => _tokens.putIfAbsent(
+    _key(controller, dark, dynamic),
+    () => GalleryTokens.from(
+      controller.data,
+      dark,
+      controller.monet ? 'blue' : controller.palette,
+      dynamicScheme: controller.monet ? dynamic : null,
+    ),
+  );
+
+  ThemeData theme(
+    GalleryController controller,
+    ColorScheme? dynamic,
+    bool dark,
+  ) => _themes.putIfAbsent(
+    _key(controller, dark, dynamic),
+    () => tokens(controller, dynamic, dark).theme(),
   );
 }
 
@@ -215,6 +251,7 @@ class _GalleryView extends StatefulWidget {
     required this.entry,
     required this.preferences,
     required this.anchors,
+    this.visible = true,
     this.onDisableBeta,
     this.openWebLink,
     this.openEmail,
@@ -223,6 +260,7 @@ class _GalleryView extends StatefulWidget {
   final GalleryRouteEntry entry;
   final GalleryPreferences preferences;
   final _GalleryAnchorRegistry anchors;
+  final bool visible;
   final VoidCallback? onDisableBeta;
   final Future<void> Function(Uri)? openWebLink;
   final Future<bool> Function(String)? openEmail;
@@ -265,6 +303,7 @@ class _GalleryViewState extends State<_GalleryView> {
   String? _linkError;
   bool _pickingFaceImage = false;
   String? _faceImageError;
+  Widget? _cachedLayout;
   Set<String>? _walletCardIds;
   final Set<String> _walletArrivals = {};
   GallerySpendingSelection _spendingSelection =
@@ -473,6 +512,11 @@ class _GalleryViewState extends State<_GalleryView> {
 
   @override
   Widget build(BuildContext context) {
+    if (!widget.visible && _cachedLayout != null) return _cachedLayout!;
+    return _cachedLayout = _buildLayout(context);
+  }
+
+  Widget _buildLayout(BuildContext context) {
     if (_generation != c.generation) {
       _generation = c.generation;
       _bucket = PageStorageBucket();
