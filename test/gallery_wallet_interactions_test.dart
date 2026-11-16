@@ -161,6 +161,24 @@ void main() {
     );
   }
 
+  testWidgets('left swipe also reveals 更换卡面 on wallet cards', (tester) async {
+    await mount(tester);
+    final card = c.savedCards.first;
+    await reveal(tester, card.id);
+    final face = find.byKey(ValueKey('wallet-face-${card.id}'));
+    expect(face.hitTestable(), findsOneWidget);
+    await tester.tap(face);
+    await tester.pumpAndSettle();
+    expect(c.overlay, GalleryOverlay.face);
+    expect(c.selectedCard.id, card.id);
+    expect(find.byTooltip('关闭'), findsOneWidget);
+    await tester.tap(find.byTooltip('关闭'));
+    await tester.pumpAndSettle();
+    expect(c.overlay, isNull);
+    expect(c.savedCards, hasLength(3));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'left swipe reveals a button, deletion collapses and undo expands the same card',
     (tester) async {

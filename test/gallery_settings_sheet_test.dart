@@ -215,10 +215,19 @@ void main() {
       expect(find.text(name), findsOneWidget, reason: name);
     }
     // Only contributors with a verified profile show the external link.
-    expect(find.text('主页'), findsNWidgets(5));
+    expect(find.text('主页'), findsNWidgets(6));
     await tester.tap(find.text('主页').first);
     await tester.pumpAndSettle();
     expect(links, ['https://github.com/kajolno']);
+    links.clear();
+    final lintianyiRow = find
+        .ancestor(of: find.text('林天仪'), matching: find.byType(Row))
+        .first;
+    await tester.tap(
+      find.descendant(of: lintianyiRow, matching: find.text('主页')),
+    );
+    await tester.pumpAndSettle();
+    expect(links, ['https://github.com/wanghao-create']);
     // A longer list keeps its own scroll position inside the sheet.
     final sheet = find.byKey(const ValueKey('gallery-sheet'));
     await tester.scrollUntilVisible(

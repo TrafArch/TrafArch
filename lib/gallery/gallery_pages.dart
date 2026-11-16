@@ -848,6 +848,8 @@ extension _GalleryPages on _GalleryViewState {
                           name: card.name,
                           reduceMotion: _reduceMotion,
                           inserted: _walletArrivals.contains(card.id),
+                          onFace: () =>
+                              c.showOverlay(GalleryOverlay.face, card: card),
                           onDelete: () => _deleteWalletCard(card),
                           child: DecoratedBox(
                             decoration: BoxDecoration(
