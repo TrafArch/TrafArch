@@ -199,6 +199,36 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('custom badge size and fallback survive a missing city asset', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      DefaultAssetBundle(
+        bundle: _MissingBundle(),
+        child: const MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: JourneyTransportIcon(
+                mode: TripModeFilter.rail,
+                cityLabel: '上海',
+                isCrossCity: false,
+                size: 23,
+                fallbackIcon: Icons.train_outlined,
+                fallbackColor: Colors.teal,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final fallback = find.byIcon(Icons.train_outlined);
+    expect(fallback, findsOneWidget);
+    expect(tester.widget<Icon>(fallback).color, Colors.teal);
+    expect(tester.widget<Icon>(fallback).size, 23);
+    expect(tester.takeException(), isNull);
+  });
+
   for (final brightness in Brightness.values) {
     testWidgets('$brightness theme preserves logo colors and ticket layout', (
       tester,

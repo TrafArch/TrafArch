@@ -14,7 +14,6 @@
 /tools/
 /data/
 /scripts/
-/docs/
 migrate_working_dir/
 
 # IntelliJ related
@@ -58,3 +57,5 @@ app.*.map.json
 key.properties
 *.jks
 *.keystore
+
+*_TODO.md
