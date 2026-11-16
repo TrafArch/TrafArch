@@ -237,6 +237,19 @@ class _GalleryNavigatorState extends State<_GalleryNavigator>
     super.dispose();
   }
 
+  /// Opaque routes hide everything below them, so a covered page (or a page
+  /// that is already leaving after its route was popped) keeps its last build
+  /// instead of rebuilding an off-screen tree on every notification.
+  bool _isVisible(GalleryRouteEntry entry) {
+    final stack = widget.controller.navigationStack;
+    final index = stack.indexWhere((e) => e.id == entry.id);
+    if (index < 0) return false;
+    final lastOpaque = stack.lastIndexWhere(
+      (e) => e.kind != GalleryRouteKind.overlay,
+    );
+    return index >= lastOpaque;
+  }
+
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: Listenable.merge([widget.controller, widget.preferences]),
@@ -282,6 +295,7 @@ class _GalleryNavigatorState extends State<_GalleryNavigator>
                     controller: widget.controller,
                     preferences: widget.preferences,
                     anchors: _anchors,
+                    visible: _isVisible(entry),
                     onDisableBeta: widget.onDisableBeta,
                     openWebLink: widget.openWebLink,
                     openEmail: widget.openEmail,
@@ -553,9 +567,11 @@ class _GalleryPopupRoute extends PopupRoute<void> with _GalleryPredictiveRoute {
       // While the cropper is open the route stays put: the predictive gesture
       // crossfades cropper → face sheet inside the page instead of sliding.
       if (_cropGesture || _faceCropping) return content;
+      // Keep the sheet's painted content reusable while it tracks the gesture
+      // or slides away, matching the page route's boundary placement.
       return FractionalTranslation(
         translation: Offset(0, 1 - value),
-        child: content,
+        child: RepaintBoundary(child: content),
       );
     }
     if (_menu) return content;
