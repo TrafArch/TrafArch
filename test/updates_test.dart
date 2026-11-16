@@ -107,8 +107,12 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.text('版本 ${AppInfo.version} (${AppInfo.buildNumber})'),
-      findsNothing,
+      AppInfo.displayBuildNumber,
+      AppInfo.buildNumber,
+    );
+    expect(
+      AppInfo.androidVersionCode,
+      AppInfo.buildNumber,
     );
     expect(await service.checkNow(), isNull);
     expect(await service.checkOnce(), isNull);

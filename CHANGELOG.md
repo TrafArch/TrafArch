@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-11-16 — 2.x Gallery 默认启用 Firebase Analytics
+
+- 2.x Gallery 构建不再默认排除 Google Services 和 Firebase Analytics；`main_gallery.dart` 产物默认包含 `firebase-analytics`，可通过 Gradle 属性 `galleryAnalytics=false` 显式关闭，便于保留完全离线的预览构建。
+- APK 核验脚本改为要求 `FirebaseInitProvider` 与 Analytics/AppMeasurement 组件存在，并同步更新 Gallery 构建文档。
+- 注意：仓库内 `android/app/google-services.json` 仍只有 `appinvite_service`，没有 `analytics_service`。代码依赖已恢复，但 Firebase 控制台的 Analytics/GA4 是否启用无法从仓库确认；若控制台尚未启用或配置已过期，需要在 Firebase 项目设置中启用 Analytics 并重新下载该私有配置文件。
+
+## 2026-11-16 — 构建版本码统一为 2191
+
+- 按用户要求把 Android versionCode 基线从 4xxx 调整为 2xxx：`pubspec.yaml` 与 `AppInfo.buildNumber` 均为 `2191`，关于页显示值以及 AAB/APK 清单 versionCode 统一为 `2191`，不再通过显示层扣除 `2000`。
+- 注意：`2191` 低于此前已构建的 `4189`、`4191` 等版本码，Android 不允许用低 versionCode 覆盖安装旧包，Google Play 也会拒绝低于已发布版本码的 AAB。仅适用于全新安装、新渠道或先卸载旧包；需要覆盖升级时必须恢复递增的 4xxx 版本码。
+- 未编译安装包；下一轮实际打包使用 `2191` 并自动预留下一号。
+- 回归：全量 2882 项通过、2 项跳过；静态检查无新增问题。
+
 ## 2026-11-16 — 致谢页调整贡献者顺序与赞助商称谓
 
 - 2.x 设置致谢贡献者名单中 Makitoid 由第五位调整为第三位（kajolno、Nightingale0504 之后）；设置页收起态叠放的头像仍取名单前三位。

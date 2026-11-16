@@ -24,9 +24,9 @@ Gallery 周统计在独立展示模型中按固定演示周汇总，使用样例
 
 卡包列表与共用大卡面通过纯展示帮助模型 `GalleryBalancePresentation` 分离币种与数字，输入现有余额文本和明确币种代码，统一显示 CNY ¥、JPY ¥、HKD $、USD $、MOP ¥。裸 ¥／$ 不补猜币种；原余额字段、交易明细、导出与周统计接口不受展示格式影响。
 
-Android Gradle 根据 Dart target 的文件名识别内部构建，仅该入口排除 Google Services 插件与 Firebase Analytics 依赖；包名、显示名称、原签名和每次打包预留下一构建号的流程保持统一。详见 [GALLERY.md](GALLERY.md)。
+Android Gradle 根据 Dart target 的文件名识别 2.x Gallery 构建。Gallery 默认应用 Google Services 插件并包含 Firebase Analytics 依赖；需要完全离线的预览包时可通过 Gradle 属性 `galleryAnalytics=false` 显式关闭。包名、显示名称、原签名和每次打包预留下一构建号的流程保持统一。详见 [GALLERY.md](GALLERY.md)。
 
-Android 版本码直接使用 pubspec 的构建号，`force-version-code-ignoring-abi=true` 固定关闭 Flutter 拆分 APK 的 ABI 偏移；Gradle 拒绝用 false 覆盖，避免 AppInfo、更新比较与安装版本码再次分离。当前构建号沿用 arm64 拆包追加 2000 后的 4xxx 序列；旧界面和 2.x 关于页通过 `AppInfo.displayBuildNumber` 扣除该偏移展示基础构建号，Android 清单版本码、更新比较和日志仍保留完整 versionCode。打包前同步 AppInfo、成功打包后预留下一号的机制继续沿用；测试和配置检查不消耗号码。可通过 `dev/gallery/verify_version_codes.gradle` 只读核对 Debug／Profile／Release 各输出的配置版本码，最终交付仍须以 APK 清单为准。
+Android 版本码直接使用 pubspec 的构建号，`force-version-code-ignoring-abi=true` 固定关闭 Flutter 拆分 APK 的 ABI 偏移；Gradle 拒绝用 false 覆盖，避免 AppInfo、更新比较与安装版本码分离。旧界面和 2.x 关于页统一显示同一个 `AppInfo.buildNumber`，不再对历史 4xxx 产物额外加减 2000。打包前同步 AppInfo、成功打包后预留下一号的机制继续沿用；测试和配置检查不消耗号码。可通过 `dev/gallery/verify_version_codes.gradle` 只读核对 Debug／Profile／Release 各输出的配置版本码，最终交付仍须以 APK/AAB 清单为准。
 
 ## 小窗与分屏布局
 

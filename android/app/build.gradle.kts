@@ -13,15 +13,19 @@ plugins {
 // The application ID below is the install identity; a debug-signed build cannot
 // upgrade an installation that uses the developer's original signing key.
 val repairBuild = providers.gradleProperty("repairBuild").orNull == "true"
-// A separate Dart entrypoint hosts the offline UI gallery without analytics.
+// A separate Dart entrypoint hosts the UI gallery. Analytics is enabled by
+// default and can be disabled explicitly with -PgalleryAnalytics=false.
 val galleryBuild = providers.gradleProperty("target").orNull
     ?.replace('\\', '/')?.substringAfterLast('/') == "main_gallery.dart"
+val galleryAnalyticsEnabled =
+    providers.gradleProperty("galleryAnalytics").orNull?.lowercase() != "false"
 // Hand an aligned APK to the developer for signing with the original key.
 val unsignedApk = providers.gradleProperty("unsignedApk").orNull == "true"
 val hasGoogleServicesConfig = fileTree(projectDir) {
     include("google-services.json", "src/**/google-services.json")
 }.files.isNotEmpty()
-if (hasGoogleServicesConfig && !repairBuild && !galleryBuild) {
+if (hasGoogleServicesConfig && !repairBuild &&
+    (!galleryBuild || galleryAnalyticsEnabled)) {
     apply(plugin = "com.google.gms.google-services")
 }
 
@@ -244,12 +248,13 @@ dependencies {
     implementation("androidx.browser:browser:1.9.0")
     testImplementation("junit:junit:4.13.2")
 
-    // Import the Firebase BoM
-    if (!galleryBuild) {
+    // Import the Firebase BoM for production and gallery builds. The gallery
+    // preview can opt out with -PgalleryAnalytics=false.
+    if (!galleryBuild || galleryAnalyticsEnabled) {
         implementation(platform("com.google.firebase:firebase-bom:35.0.0"))
 
-    // TODO: Add the dependencies for Firebase products you want to use
-    // When using the BoM, don't specify versions in Firebase dependencies
+        // TODO: Add the dependencies for Firebase products you want to use
+        // When using the BoM, don't specify versions in Firebase dependencies
         implementation("com.google.firebase:firebase-analytics")
     }
 
