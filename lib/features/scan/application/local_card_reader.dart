@@ -3,10 +3,9 @@ library;
 import '../../../protocols/transit/card_parser.dart';
 import '../../../protocols/transit/city_union/city_union_reader.dart';
 import '../../../protocols/transit/tunion/tunion_models.dart';
+import '../../../protocols/transit/tunion/tunion_cash_log.dart';
 import '../../../protocols/transit/tunion/tunion_reader.dart';
 import '../../../protocols/transit/local/apdu_exchange.dart';
-import 'bank_card_probe.dart';
-import '../../../protocols/bank/domain/models/bank_card_result.dart';
 import '../../../protocols/transit/local/cards/beijing_local_card.dart';
 import '../../../protocols/transit/local/cards/beijing_bmac.dart';
 import '../../../protocols/transit/local/cards/common_card_info.dart';
@@ -25,8 +24,6 @@ import '../../../protocols/transit/local/trips/trip_dedup.dart';
 import '../../../protocols/transit/local/trips/trip_extras.dart';
 import '../../../protocols/transit/local/trips/trip_records.dart';
 import '../../../protocols/transport/transport_failure.dart';
-import '../../../protocols/bank/emv/data/aid_registry.dart';
-import '../../../protocols/bank/emv/protocol/emv_apdu.dart';
 
 /// 进度 / 错误回调（轻量抽象，对应原重写工程的 CardReaderCallback）。
 /// 会话 APDU 日志由上层 [LocalTransceive]（ScanController._exchange）统一记录，
@@ -45,30 +42,17 @@ class NoopLocalCardReaderCallback implements LocalCardReaderCallback {
   void onError(String message) {}
 }
 
-/// 一次识读的统一结果：既可能是交通卡（新架构汇总 + 对应卡型 [ParsedCard]），
-/// 也可能是银行卡（[BankCardResult]）。[parsedCard] 的 parserId 为
-/// tunion / cityUnion / localCard，供上层展示与分析链路按其分派；
-/// [bank] 非空时表示本次识读命中银行卡（EMV / PBOC）只读流程。
+/// 一次交通卡识读的结果，含结构化解析、原始记录和逐应用证据。
 class LocalReadOutcome {
   const LocalReadOutcome.transit({
     required this.readResult,
     required this.parsedCard,
     this.shanghai,
     this.applications = const [],
-  }) : bank = null;
+  });
 
-  const LocalReadOutcome.bankCard(
-    BankCardResult outcome, {
-    this.applications = const [],
-  })
-    : readResult = null,
-      parsedCard = null,
-      bank = outcome,
-      shanghai = null;
-
-  final ReadResult? readResult;
-  final ParsedCard? parsedCard;
-  final BankCardResult? bank;
+  final ReadResult readResult;
+  final ParsedCard parsedCard;
 
   /// 逐应用探测证据（一芯多应用组合按应用并列保留）。
   final List<ApplicationEvidence> applications;
@@ -78,39 +62,29 @@ class LocalReadOutcome {
   /// 记录与解析错误。
   final ShanghaiTransitUnionResult? shanghai;
 
-  /// 是否为银行卡识读产物（交通应用链路未命中时的一等阶段结果）。
-  bool get isBankCard => bank != null;
-
   /// 以最终证据列表重建结果（读卡完成后由编排层统一回填）。
   LocalReadOutcome withApplications(List<ApplicationEvidence> applications) {
-    final bank = this.bank;
-    if (bank != null) {
-      return LocalReadOutcome.bankCard(bank, applications: applications);
-    }
     return LocalReadOutcome.transit(
-      readResult: readResult!,
-      parsedCard: parsedCard!,
+      readResult: readResult,
+      parsedCard: parsedCard,
       shanghai: shanghai,
       applications: applications,
     );
   }
 }
 
-/// 交通卡 / 银行卡统一识读编排主体（新模块为主）：按优先级串联各读法，
+/// 交通卡统一识读编排主体（新模块为主）：按优先级串联各读法，
 /// 命中即返回。
 /// 0) 首次 APDU 只读选择 PAY.APPY（带 Le，状态拒绝可一次无 Le 兼容），
 ///    确认后先读完 LNT 信息/统计/TICL/余额/交易，再探 TU，绝不切回 LNT；
-///    LNT 已确认时 TU 目标前缀合并双侧，否则保留地方结果，不再 CU/银行；
+///    LNT 已确认时 TU 目标前缀合并双侧，否则保留地方结果，不再探测 CU；
 /// 1) 非 LNT 由 [ShanghaiTransitUnionCardParser] 读 TU，上海及哈尔滨城市通 TU 再探 CU；
-/// 2) 普通确认 TU 也纳入默认目录探测：继续探测普通 CU 与澳门通钱包，
-///    TU+PBOC / TU+CU / 澳门通+TU 组合按逐应用证据并列保留；
+/// 2) 普通确认 TU 也纳入多应用探测：继续探测普通 CU 与澳门通钱包，
+///    TU+CU / 澳门通+TU 组合按逐应用证据并列保留；
 /// 3) TU 无可返回结果时独立回退普通 CU，不冒认上海 TU、不重复探测；
 /// 4) 地方交通卡逐城市探测（武汉通 / 北京 / 羊城通 / 深圳通 /
 ///    苏州(苏薪·计次) / 天府通），命中后读取共用卡信息与行程 / 扩展记录，
 ///    最后余额重建 + 换乘去重；
-/// 5) 银行卡（EMV / PBOC）只读探测 [BankCardProbe]：交通应用未命中时为
-///    一等阶段兜底；TU / CU 已确认时经支付目录门控后在同一会话继续探测，
-///    与交通应用并存于一芯多应用卡。
 /// 全部阶段均不命中时返回 null。
 /// 传输经 [LocalTransceive] 注入（与 NfcChannel.transceive 同签名），
 /// 模块不依赖任何上层状态，可独立复用与测试。
@@ -119,7 +93,6 @@ class LocalCardReader {
     this._transceive, {
     this.callback = const NoopLocalCardReaderCallback(),
     this.onStage,
-    this.bankProbe,
   });
 
   final LocalTransceive _transceive;
@@ -128,111 +101,44 @@ class LocalCardReader {
   /// 识读阶段回调（供上层写「== 尝试解析：xx ==」日志；可空）。
   final void Function(String stage)? onStage;
 
-  /// 银行卡（EMV / PBOC）探测抽象；为空时流程只做交通卡识读。
-  final BankCardProbe? bankProbe;
-
   Future<LocalReadOutcome?> read() async {
     final probes = <ApplicationEvidence>[];
     final transit = await _readTransit(probes);
-    // TU / CU 已确认时银行应用是同一芯片上的独立应用，一并只读探测；
-    // 终止性传输失败后不得继续任何物理 I/O。
-    final bankable =
-        transit != null &&
-        probes
-            .where((p) => p.isTransitGeneralUnit)
-            .any((p) => p.confirmed) &&
-        probes.every((p) => p.transportFailure?.stopsSession != true);
-    if (transit != null && bankable) {
-      await _probeBank(probes, directoryLimited: true);
-      return transit.withApplications(List.unmodifiable(probes));
-    }
-    if (transit == null) {
-      // 交通应用链路未命中：作为统一识读流程的一等阶段执行银行卡只读探测。
-      final bank = await _probeBank(probes, directoryLimited: false);
-      if (bank != null) return bank;
-      return null;
+    if (transit == null) return null;
+    if (transit.readResult.transportFailure?.stopsSession != true &&
+        probes.any((p) => p.appId == 'tu' && p.confirmed) &&
+        probes.every((p) => p.transportFailure?.stopsSession != true)) {
+      await _readTuCashLog(probes);
     }
     return transit.withApplications(List.unmodifiable(probes));
   }
 
-  /// 银行卡（EMV / PBOC）只读探测；[directoryLimited] 为 true 时只允许
-  /// 目录披露的银行应用被继续枚举，避免对已确认交通卡无条件尝试全部
-  /// 内置候选 AID。
-  Future<LocalReadOutcome?> _probeBank(
-    List<ApplicationEvidence> probes, {
-    required bool directoryLimited,
-  }) async {
-    final probe = bankProbe;
-    if (probe == null) return null;
-    try {
-      if (directoryLimited && !await _bankDirectoryPresent()) {
-        probes.add(
-          ApplicationEvidence.rejected(
-            'bank',
-            '银行卡（EMV / PBOC）',
-            reason: 'PPSE / PSE 支付目录未披露银行应用',
-          ),
-        );
-        return null;
-      }
-      onStage?.call('银行卡（EMV / PBOC）');
-      callback.onProgress(30);
-      final outcome = await probe.probe(_transceive);
-      if (outcome == null) {
-        probes.add(
-          ApplicationEvidence.rejected(
-            'bank',
-            '银行卡（EMV / PBOC）',
-            reason: '应用目录与内置候选均未匹配到银行应用',
-          ),
-        );
-        return null;
-      }
-      callback.onProgress(95);
+  Future<void> _readTuCashLog(List<ApplicationEvidence> probes) async {
+    const name = '交通联合电子现金';
+    onStage?.call('$name（消费日志）');
+    final exchange = ApduExchange(transceive: _transceive);
+    final log = await TUnionCashLogReader(exchange).read();
+    if (log.confirmed) {
       probes.add(
         ApplicationEvidence.succeeded(
-          'bank',
-          '银行卡（EMV / PBOC）',
-          recordCount: outcome.applications.length,
-          readError: outcome.transportFailure,
-          transportFailure: outcome.transportFailure,
-          payload: outcome,
-          notes: [
-            'status=${outcome.status.name}',
-            if (outcome.discoveredApplications.isNotEmpty)
-              'discovered=${outcome.discoveredApplications.length}',
-          ],
+          'tuCash',
+          name,
+          recordCount: log.records.length,
+          readError: log.issue,
+          transportFailure: log.transportFailure,
+          payload: log,
         ),
       );
-      return LocalReadOutcome.bankCard(
-        outcome,
-        applications: List.unmodifiable(probes),
-      );
-    } catch (e) {
-      callback.onError(_mapError(e));
+    } else if (log.transportFailure != null) {
       probes.add(
         ApplicationEvidence.failed(
-          'bank',
-          '银行卡（EMV / PBOC）',
-          readError: e,
-          transportFailure: _transportFailureOf(e),
+          'tuCash',
+          name,
+          readError: log.issue,
+          transportFailure: log.transportFailure,
         ),
       );
-      return null;
     }
-  }
-
-  /// 轻量目录探测：2PAY / 1PAY 任一成功即认为存在银行应用候选。
-  Future<bool> _bankDirectoryPresent() async {
-    final exchange = ApduExchange(transceive: _transceive);
-    for (final name in [kEmvPpseName, kEmvPseName]) {
-      final response = await exchange.call(
-        EmvApdu.selectByName(name.codeUnits),
-        '银行卡支付目录探测',
-      );
-      if (response != null) return true;
-    }
-    return false;
   }
 
   Future<LocalReadOutcome?> _readTransit(
@@ -278,13 +184,9 @@ class LocalCardReader {
           ApplicationEvidence.succeeded(
             'lingnan',
             LingnanTong.moduleName,
-            cardNumber: lntInfo.cardNumber.isEmpty
-                ? null
-                : lntInfo.cardNumber,
+            cardNumber: lntInfo.cardNumber.isEmpty ? null : lntInfo.cardNumber,
             balanceFen: lntInfo.observedBalance,
-            recordCount: lntRecords
-                .where((r) => r.type == 2)
-                .length,
+            recordCount: lntRecords.where((r) => r.type == 2).length,
             records: lntRecords,
             readError: lntError,
             transportFailure: _transportFailureOf(lntError),
@@ -307,7 +209,7 @@ class LocalCardReader {
         throw lntError!;
       }
 
-      // 1) LNT 已确认时只探 TU，不混入城市 CU 或其他地方/银行读法。
+      // 1) LNT 已确认时只探 TU，不混入城市 CU 或其他地方卡读法。
       callback.onProgress(10);
       final shanghai = await ShanghaiTransitUnionCardParser(
         _transceive,
@@ -329,13 +231,14 @@ class LocalCardReader {
       );
       if (cuProbe != null) probes.add(cuProbe);
 
+      final mergedCard = shanghai.mergedCard;
       if (!appyConfirmed &&
           (shanghai.isShanghaiTransitUnion || shanghai.isHarbinTransitUnion) &&
-          shanghai.mergedCard != null) {
+          mergedCard != null) {
         callback.onProgress(95);
         return LocalReadOutcome.transit(
           readResult: shanghai.readResult,
-          parsedCard: shanghai.mergedCard,
+          parsedCard: mergedCard,
           shanghai: shanghai,
         );
       }
@@ -436,9 +339,7 @@ class LocalCardReader {
                       ? null
                       : sztInfo.cardNumber,
                   balanceFen: sztInfo.observedBalance,
-                  recordCount: sztRecords
-                      .where((r) => r.type == 2)
-                      .length,
+                  recordCount: sztRecords.where((r) => r.type == 2).length,
                   records: sztRecords,
                   readError: sztError,
                   transportFailure: _transportFailureOf(sztError),
@@ -501,6 +402,7 @@ class LocalCardReader {
           final cuInfo = CardInfo();
           final cuRecords = <ApduRecord>[];
           final cu = CommonUnitCu(apdu);
+          var triedQingdaoWallet = false;
           try {
             if (await cu.selectPrimary(cuInfo)) {
               mergedCuCard = await cu.read(
@@ -508,15 +410,36 @@ class LocalCardReader {
                 cuRecords,
                 readBalance: true,
               );
+            } else if (CommonUnitCu.hasQingdaoWallet(tuCard)) {
+              triedQingdaoWallet = true;
+              mergedCuCard = await cu.readQingdaoWallet(
+                tuCard,
+                cuInfo,
+                cuRecords,
+              );
             }
           } on Exception catch (e) {
             mergedCuCard = cu.parsedCard;
             cuReadError = e;
             callback.onError(_mapError(e));
             if (_transportFailureOf(e)?.stopsSession == true &&
-                (mergedCuCard == null ||
-                    mergedCuCard.cityUnionFiles.isEmpty)) {
-              rethrow;
+                (mergedCuCard == null || mergedCuCard.cityUnionFiles.isEmpty)) {
+              if (!triedQingdaoWallet) rethrow;
+              probes.add(
+                ApplicationEvidence.failed(
+                  'cu',
+                  CommonUnitCu.moduleName,
+                  readError: e,
+                  transportFailure: _transportFailureOf(e),
+                ),
+              );
+              return _outcome(
+                shanghai.tu.cardInfo,
+                shanghai.tu.records,
+                extras,
+                tuCard,
+                readError: e,
+              );
             }
           }
           if (mergedCuCard != null && mergedCuCard.cityUnionFiles.isNotEmpty) {
@@ -525,9 +448,7 @@ class LocalCardReader {
                 'cu',
                 CommonUnitCu.moduleName,
                 balanceFen: mergedCuCard.info.balanceFen,
-                recordCount: cuRecords
-                    .where((r) => r.type == 2)
-                    .length,
+                recordCount: cuRecords.where((r) => r.type == 2).length,
                 records: cuRecords,
                 readError: cuReadError,
                 transportFailure: _transportFailureOf(cuReadError),
@@ -583,8 +504,7 @@ class LocalCardReader {
         } on Exception catch (e) {
           macauError = e;
           callback.onError(_mapError(e));
-          if (!macauConfirmed &&
-              _transportFailureOf(e)?.stopsSession == true) {
+          if (!macauConfirmed && _transportFailureOf(e)?.stopsSession == true) {
             rethrow;
           }
         }
@@ -661,12 +581,9 @@ class LocalCardReader {
             ApplicationEvidence.succeeded(
               'cu',
               CommonUnitCu.moduleName,
-              cardNumber:
-                  info.cardNumber.isEmpty ? null : info.cardNumber,
+              cardNumber: info.cardNumber.isEmpty ? null : info.cardNumber,
               balanceFen: info.observedBalance,
-              recordCount: records
-                  .where((r) => r.type == 2)
-                  .length,
+              recordCount: records.where((r) => r.type == 2).length,
               records: List.of(records),
               readError: readError,
               transportFailure: _transportFailureOf(readError),
@@ -710,9 +627,7 @@ class LocalCardReader {
             MacauPassCard.moduleName,
             cardNumber: info.cardNumber.isEmpty ? null : info.cardNumber,
             balanceFen: info.observedBalance,
-            recordCount: records
-                .where((r) => r.label == '澳门通交易记录')
-                .length,
+            recordCount: records.where((r) => r.label == '澳门通交易记录').length,
             records: List.of(records),
             payload: info.rawInfo == null ? null : List<int>.of(info.rawInfo!),
           ),
@@ -730,8 +645,7 @@ class LocalCardReader {
         ),
       );
 
-      // 3) 老版武汉通（AP1.WHCTC）：先于 PBOC 探测完成应用确认；
-      //    一旦确认，即使后续流水读取失败也按地方卡返回，不再回退银行卡。
+      // 3) 老版武汉通（AP1.WHCTC）：确认后保留已读到的地方卡数据。
       final whctc = WuhanTongCard(apdu);
       if (await whctc.probe(info, records)) {
         info.isWHCTC = true;
@@ -743,18 +657,14 @@ class LocalCardReader {
             '武汉通（AP1.WHCTC）',
             cardNumber: info.cardNumber.isEmpty ? null : info.cardNumber,
             balanceFen: info.observedBalance,
-            recordCount: records
-                .where((r) => r.type == 2)
-                .length,
+            recordCount: records.where((r) => r.type == 2).length,
             payload: info.rawInfo == null ? null : List<int>.of(info.rawInfo!),
           ),
         );
         callback.onProgress(80);
         return await _finishLocal(tripReader, info, records, extras);
       }
-      probes.add(
-        ApplicationEvidence.rejected('wuhan', '武汉通（AP1.WHCTC）'),
-      );
+      probes.add(ApplicationEvidence.rejected('wuhan', '武汉通（AP1.WHCTC）'));
 
       onStage?.call(BeijingBmac.moduleName);
       final bmac = BeijingBmac(apdu);
@@ -767,9 +677,7 @@ class LocalCardReader {
             BeijingBmac.moduleName,
             cardNumber: info.cardNumber.isEmpty ? null : info.cardNumber,
             balanceFen: info.observedBalance,
-            recordCount: records
-                .where((r) => r.type == 2)
-                .length,
+            recordCount: records.where((r) => r.type == 2).length,
             payload: info.rawInfo == null ? null : List<int>.of(info.rawInfo!),
           ),
         );
@@ -804,18 +712,14 @@ class LocalCardReader {
             '北京互通卡（地方卡）',
             cardNumber: info.cardNumber.isEmpty ? null : info.cardNumber,
             balanceFen: info.observedBalance,
-            recordCount: records
-                .where((r) => r.type == 2)
-                .length,
+            recordCount: records.where((r) => r.type == 2).length,
             payload: info.rawInfo == null ? null : List<int>.of(info.rawInfo!),
           ),
         );
         callback.onProgress(80);
         return await _finishLocal(tripReader, info, records, extras);
       }
-      probes.add(
-        ApplicationEvidence.rejected('beijing', '北京互通卡（地方卡）'),
-      );
+      probes.add(ApplicationEvidence.rejected('beijing', '北京互通卡（地方卡）'));
 
       final szt = Shenzhentong(apdu);
       onStage?.call(Shenzhentong.moduleName);
@@ -828,9 +732,7 @@ class LocalCardReader {
             Shenzhentong.moduleName,
             cardNumber: info.cardNumber.isEmpty ? null : info.cardNumber,
             balanceFen: info.observedBalance,
-            recordCount: records
-                .where((r) => r.type == 2)
-                .length,
+            recordCount: records.where((r) => r.type == 2).length,
             records: List.of(records),
             payload: info.rawInfo == null ? null : List<int>.of(info.rawInfo!),
           ),
@@ -862,9 +764,7 @@ class LocalCardReader {
         // isTFT 已置位
       }
       if (suzhouConfirmed) {
-        probes.add(
-          ApplicationEvidence.confirmed('suzhou', '苏州（苏薪 / 计次）'),
-        );
+        probes.add(ApplicationEvidence.confirmed('suzhou', '苏州（苏薪 / 计次）'));
       } else if (tftConfirmed) {
         probes.add(
           ApplicationEvidence.confirmed('tft', TftLocalCard.moduleName),
@@ -890,14 +790,12 @@ class LocalCardReader {
             probes[probes.length - 1] = ApplicationEvidence.succeeded(
               probes.last.appId,
               probes.last.displayName,
-              cardNumber:
-                  info.cardNumber.isEmpty ? null : info.cardNumber,
+              cardNumber: info.cardNumber.isEmpty ? null : info.cardNumber,
               balanceFen: info.observedBalance,
-              recordCount: records
-                  .where((r) => r.type == 2)
-                  .length,
-              payload:
-                  info.rawInfo == null ? null : List<int>.of(info.rawInfo!),
+              recordCount: records.where((r) => r.type == 2).length,
+              payload: info.rawInfo == null
+                  ? null
+                  : List<int>.of(info.rawInfo!),
             );
           }
           return outcome;
@@ -1039,9 +937,7 @@ class LocalCardReader {
       return ApplicationEvidence.rejected(
         appId,
         displayName,
-        reason: app.errors.isEmpty
-            ? '应用未确认'
-            : app.errors.first,
+        reason: app.errors.isEmpty ? '应用未确认' : app.errors.first,
       );
     }
     if (app.readError != null && (card == null || !app.readSucceeded)) {

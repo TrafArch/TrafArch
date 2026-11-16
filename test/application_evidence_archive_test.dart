@@ -79,7 +79,7 @@ void main() {
         ApplicationProbeState.selectRejected);
   });
 
-  test('文本导出包含逐应用探测清单', () {
+  test('文本导出保留交通应用，旧银行卡条目不报为损坏', () {
     final snapshot = CardSessionSnapshot(
       extensions: {
         'applicationEvidence': [
@@ -90,6 +90,7 @@ void main() {
             balanceFen: 10000,
             recordCount: 3,
           ).toJson(),
+          {'appId': 'bank', 'displayName': '银行卡', 'state': 'readSucceeded'},
         ],
       },
     );
@@ -104,6 +105,8 @@ void main() {
     );
     final text = buildArchiveHistoryExport([history]);
     expect(text, contains('逐应用探测（捕获时快照）：'));
+    expect(text, isNot(contains('损坏的应用探测条目')));
+    expect(text, isNot(contains('银行卡')));
     expect(
       text,
       contains(

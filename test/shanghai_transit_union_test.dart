@@ -1,9 +1,7 @@
 // test/shanghai_transit_union_test.dart
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/features/scan/application/bank_card_probe.dart';
 import 'package:transit_card_analyzer/features/scan/application/local_card_reader.dart';
-import 'package:transit_card_analyzer/protocols/bank/domain/models/bank_card_result.dart';
 import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/city_union/city_union_models.dart';
 import 'package:transit_card_analyzer/protocols/transit/local/apdu_exchange.dart';
@@ -92,19 +90,19 @@ void main() {
         if (unified) {
           final outcome = (await LocalCardReader(link.call).read())!;
           expect(
-            outcome.parsedCard!.parserId,
+            outcome.parsedCard.parserId,
             isHarbin ? CardParserIds.harbinTunion : CardParserIds.tunion,
           );
           if (isHarbin) {
             expect(
-              outcome.parsedCard!.parserName,
+              outcome.parsedCard.parserName,
               HarbinTransitUnionIds.moduleName,
             );
-            expect(outcome.parsedCard!.dualApplication, isTrue);
-            expect(outcome.parsedCard!.info.applicationSerial, serial);
-            expect(outcome.parsedCard!.info.balanceFen, 500);
-            expect(outcome.parsedCard!.cityUnionBalanceFen, 500);
-            expect(outcome.parsedCard!.cityUnionFiles, isNotEmpty);
+            expect(outcome.parsedCard.dualApplication, isTrue);
+            expect(outcome.parsedCard.info.applicationSerial, serial);
+            expect(outcome.parsedCard.info.balanceFen, 500);
+            expect(outcome.parsedCard.cityUnionBalanceFen, 500);
+            expect(outcome.parsedCard.cityUnionFiles, isNotEmpty);
             expect(
               outcome.shanghai!.matchedPrefix,
               HarbinTransitUnionIds.cardNumberPrefix,
@@ -128,9 +126,9 @@ void main() {
   test('哈尔滨 CU 拒绝时保留 TU 身份和单侧余额', () async {
     final link = _GateLink(serial: '03104970200000000001', failCu: true);
     final outcome = (await LocalCardReader(link.call).read())!;
-    expect(outcome.parsedCard!.parserId, CardParserIds.harbinTunion);
-    expect(outcome.parsedCard!.dualApplication, isFalse);
-    expect(outcome.parsedCard!.cityUnionBalanceFen, isNull);
+    expect(outcome.parsedCard.parserId, CardParserIds.harbinTunion);
+    expect(outcome.parsedCard.dualApplication, isFalse);
+    expect(outcome.parsedCard.cityUnionBalanceFen, isNull);
     expect(outcome.shanghai!.cu.errors, isNotEmpty);
     expect(
       outcome.shanghai!.status,
@@ -159,8 +157,8 @@ void main() {
       }
       return link.call(apdu);
     }).read())!;
-    expect(result.parsedCard!.parserId, CardParserIds.harbinTunion);
-    expect(result.parsedCard!.dualApplication, isTrue);
+    expect(result.parsedCard.parserId, CardParserIds.harbinTunion);
+    expect(result.parsedCard.dualApplication, isTrue);
     expect(result.shanghai!.cu.cityUnionPublicInfo!.cityCode, '2300');
     expect(result.shanghai!.cu.records.single.label, 'CU 0x1A#1');
     expect(commands, contains('00B201D417'));
@@ -198,7 +196,7 @@ void main() {
         if (unified) {
           final result = await LocalCardReader(link.call).read();
           expect(
-            result!.parsedCard!.parserId,
+            result!.parsedCard.parserId,
             isShanghai
                 ? CardParserIds.shanghaiTunion
                 : ordinaryTu
@@ -296,19 +294,18 @@ void main() {
       link.call,
       onStage: stages.add,
     ).read())!;
-    expect(result.parsedCard!.parserId, CardParserIds.tunion);
-    expect(result.readResult!.transportFailure, same(_tagLost));
-    expect(result.readResult!.readError, isA<ApduTransportException>());
+    expect(result.parsedCard.parserId, CardParserIds.tunion);
+    expect(result.readResult.transportFailure, same(_tagLost));
+    expect(result.readResult.readError, isA<ApduTransportException>());
     expect(stages, ['岭南通', CommonUnitTu.moduleName]);
     expect(link.callsAfterFailure, 0);
   });
 
   for (final failureCommand in ['00A40000023F0000', '00B095001E']) {
-    test('无有效卡结果时终止错误不继续地方卡或银行 fallback at=$failureCommand', () async {
+    test('无有效卡结果时遇到终止错误即停止 APDU at=$failureCommand', () async {
       final link = _GateLink(failureCommand: failureCommand);
-      final bank = _RecordingBankProbe();
       await expectLater(
-        LocalCardReader(link.call, bankProbe: bank).read(),
+        LocalCardReader(link.call).read(),
         throwsA(
           isA<ApduTransportException>().having(
             (e) => e.failure,
@@ -318,7 +315,6 @@ void main() {
         ),
       );
       expect(link.callsAfterFailure, 0);
-      expect(bank.calls, 0);
     });
   }
 
@@ -976,16 +972,6 @@ const _tagLost = TransportFailure(
   code: 'TAG_LOST',
   message: 'synthetic card removed',
 );
-
-class _RecordingBankProbe implements BankCardProbe {
-  int calls = 0;
-
-  @override
-  Future<BankCardResult?> probe(LocalTransceive transceive) async {
-    calls++;
-    return null;
-  }
-}
 
 const _tuWalletAid = <int>[0xA0, 0x00, 0x00, 0x06, 0x32, 0x01, 0x01, 0x05];
 

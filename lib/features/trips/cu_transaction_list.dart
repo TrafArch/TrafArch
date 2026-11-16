@@ -85,6 +85,7 @@ class CuTransactionList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final metro = completeQingdaoMetroLinks(transactions);
     final entries = [
       for (final transaction in transactions)
         describeCuTrip(
@@ -93,6 +94,7 @@ class CuTransactionList extends StatelessWidget {
           remote: isRemote?.call(transaction) ?? false,
           savedSource: sourceLabels[transaction],
           currencySymbol: currencySymbol,
+          showQingdaoMetroLink: metro.contains(transaction.qingdaoMetro?.id),
         ),
     ];
     return TripCardsView(

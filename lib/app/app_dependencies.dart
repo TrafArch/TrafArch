@@ -28,8 +28,6 @@ import '../protocols/transit/multiapp/application_evidence.dart';
 import '../protocols/transit/qr/jt_t1179_qr_parser.dart';
 import '../protocols/transit/tunion/tunion_models.dart';
 import '../features/archive/data/app_database.dart';
-import '../protocols/bank/domain/models/bank_card_result.dart';
-import '../protocols/bank/parsers/bank_card_analyzer.dart';
 import '../features/archive/domain/pending_card_save.dart';
 import '../features/archive/data/card_repository.dart';
 import '../features/archive/application/card_identification_service.dart';
@@ -99,7 +97,7 @@ class AppDependencies extends OwnedNotifier {
     scan = ScanController(
       channel: channel ?? const MethodChannelNfcChannel(),
       felicaChannel: felicaChannel ?? const MethodChannelFelicaChannel(),
-      coordinator: CardReadCoordinator(assets),
+      coordinator: const CardReadCoordinator(),
       logEvent: (_) {},
       diagnostics: _logger,
     );
@@ -248,7 +246,6 @@ class AppDependencies extends OwnedNotifier {
     }
     try {
       references.releaseMemory();
-      if (!scan.scanning) scan.coordinator.releaseMemory();
       PaintingBinding.instance.imageCache.clear();
       return Future.value(true);
     } catch (_) {
@@ -408,12 +405,10 @@ class AppDependencies extends OwnedNotifier {
   bool get autoScanConsumed => scan.autoScanConsumed;
   String? get error => scan.error ?? scan.releaseError;
   ParsedCard? get parsedCard => _view?.parsedCard;
-  List<ApplicationEvidence> get applications =>
-      _view?.applications ?? const [];
+  List<ApplicationEvidence> get applications => _view?.applications ?? const [];
   ShanghaiTransitUnionResult? get shanghaiTransitUnion =>
       _view?.shanghaiTransitUnion;
   ReadResult? get localReadResult => _view?.localReadResult;
-  BankCardResult? get lastBankCardResult => _view?.lastBankCardResult;
   FelicaScanResult? get felicaResult => _view?.felicaResult;
   TUnionCardInfo? get cardInfo => _view?.cardInfo;
   List<TUnionTransaction> get transactions => _view?.transactions ?? const [];

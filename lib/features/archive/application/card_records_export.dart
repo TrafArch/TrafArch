@@ -83,9 +83,14 @@ String buildArchiveHistoryExport(
     }
     final applicationRows =
         history.latestCapture?.snapshot?.extensions['applicationEvidence'];
-    if (applicationRows is List && applicationRows.isNotEmpty) {
+    final visibleRows = applicationRows is List
+        ? applicationRows
+              .where((row) => !ApplicationEvidence.isRetiredBankEntry(row))
+              .toList(growable: false)
+        : const [];
+    if (visibleRows.isNotEmpty) {
       buffer.writeln('逐应用探测（捕获时快照）：');
-      for (final row in applicationRows) {
+      for (final row in visibleRows) {
         final application = ApplicationEvidence.tryParse(row);
         if (application == null) {
           buffer.writeln('  · （损坏的应用探测条目已保留在原始快照）');
@@ -93,10 +98,8 @@ String buildArchiveHistoryExport(
         }
         final details = <String>[
           if (application.cardNumber case final cardNumber?) '卡号 $cardNumber',
-          if (application.balanceFen case final balance?)
-            '余额 $balance 分',
-          if (application.recordCount > 0)
-            '${application.recordCount} 条记录',
+          if (application.balanceFen case final balance?) '余额 $balance 分',
+          if (application.recordCount > 0) '${application.recordCount} 条记录',
         ];
         buffer.writeln(
           '  · ${application.displayName}：'

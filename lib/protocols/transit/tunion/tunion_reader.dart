@@ -11,8 +11,7 @@ import '../local/local_card_models.dart';
 /// 交通联合通用单元（TU）：SELECT + JT/T 978.2 完整识读（新模块主体）。
 ///
 /// 本单元已内联原 `TUnionParser` 的全部读取实现（老模块移除）：
-/// - 应用选择：MF 复位 / 电子钱包 + 电子现金双 AID / CLA 0x00, 0x80 双尝试 /
-///   1PAY, 2PAY 支付系统目录引导；
+/// - 应用选择：MF 复位 / 电子钱包 + 电子现金双 AID / CLA 0x00、0x80 双尝试；
 /// - 文件读取：0x15 / 0x16 / 0x17 / 0x18 / 0x1A / 0x1E + GET BALANCE，
 ///   产出 [ParsedCard]（parserId [CardParserIds.tunion]）供既有分析与展示链路；
 /// - 同步回填新架构 [CardInfo] 字段与行程流水（[ApduRecord.type] == 2）。
@@ -207,17 +206,10 @@ class CommonUnitTu {
   // ---- TU 应用与文件读取 ----
 
   /// 应用选择：先复位选择主文件（MF），失败则忽略；
-  /// 然后依次尝试候选 AID（CLA 0x00 / 0x80），
-  /// 均失败时经 1PAY / 2PAY 支付系统目录引导后重试。
+  /// 然后直接尝试交通联合钱包与电子现金 AID（CLA 0x00 / 0x80）。
   Future<bool> _selectApplication(List<List<int>> candidateAids) async {
     await _exchange(TUnionApdu.selectFile(const [0x3F, 0x00]));
-    if (await _selectAid(candidateAids)) return true;
-
-    for (final dir in const ['1PAY.SYS.DDF01', '2PAY.SYS.DDF01']) {
-      await _exchange(TUnionApdu.select(dir.codeUnits));
-      if (await _selectAid(candidateAids)) return true;
-    }
-    return false;
+    return _selectAid(candidateAids);
   }
 
   Future<bool> _selectAid(List<List<int>> candidateAids) async {

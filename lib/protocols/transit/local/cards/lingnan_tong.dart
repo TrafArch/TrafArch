@@ -38,7 +38,7 @@ class LingnanTong {
       _select(CardAid.payAppy, 'appy', records, extras ?? CardExtras());
 
   // Both application names are eight bytes. Keep shared Case 3 AIDs unchanged;
-  // LNT needs Case 4 (Le=00) before any MF, TU or PSE selection.
+  // LNT needs Case 4 (Le=00) before any MF or TU selection.
   Future<bool> _select(
     List<int> aid,
     String name,

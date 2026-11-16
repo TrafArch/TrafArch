@@ -22,6 +22,8 @@ Map<String, dynamic> captureCuProjection(
         'timeUtcMillis': view.transactionTime?.millisecondsSinceEpoch,
         'regionCode': view.regionCode,
         'carrier': view.carrier,
+        if (view.qingdaoMetro case final link?)
+          'qingdaoMetro': {'id': link.id, 'isEntry': link.isEntry},
         'location': {
           'status': view.location.status.name,
           'issue': view.location.issue,
@@ -78,7 +80,8 @@ class CuArchiveProjection {
 
 CuArchiveProjection projectCuArchive(ArchiveHistoryResult history) {
   final records = <String, CuTransactionView>{};
-  final sources = <CuTransactionView, List<ArchiveRecordSource>>{};
+  final sources = <String, List<ArchiveRecordSource>>{};
+  final conflictingMetro = <String>{};
   final issues = <String>[];
   // Only identical frozen observations in the same context can share a row.
   // A changed match or unavailable reference package remains a separate view.
@@ -93,42 +96,63 @@ CuArchiveProjection projectCuArchive(ArchiveHistoryResult history) {
       continue;
     }
     final entries = projection['transactions'] as List;
+    final restored = <int, CuTransactionView>{};
     for (var index = 0; index < entries.length; index++) {
-      final path = 'cuProjection.transactions[$index]';
       try {
-        final view = _restoreView(entries[index]);
-        final fields = _map(entries[index]);
-        final recordFields = _map(fields['record'])..remove('recordNumber');
-        final snapshot = batch.decoded.snapshot!;
-        final context = snapshot.context;
-        final key = jsonEncode(
-          _canonical({
-            'fields': {...fields, 'record': recordFields},
-            'context': {
-              'systemId': context.systemId,
-              'applicationId': context.applicationId,
-              'currencyCode': context.currencyCode,
-              'minorUnitDigits': context.minorUnitDigits,
-              'timeZoneOffsetMinutes': context.timeZoneOffsetMinutes,
-              'clockBasis': context.clockBasis,
-            },
-            'cardCityCode': snapshot.cardCityCode,
-          }),
-        );
-        final kept = records.putIfAbsent(key, () => view);
-        sources
-            .putIfAbsent(kept, () => [])
-            .add(
-              ArchiveRecordSource(
-                batch.id,
-                path,
-                batch.storedParseVersion,
-                entries[index],
-              ),
-            );
+        restored[index] = _restoreView(entries[index]);
       } on FormatException {
-        issues.add('${batch.id}/$path: CU 历史记录不完整，原始快照已保留');
+        issues.add(
+          '${batch.id}/cuProjection.transactions[$index]: CU 历史记录不完整，原始快照已保留',
+        );
       }
+    }
+    final completeMetro = completeQingdaoMetroLinks(restored.values);
+    for (final entry in restored.entries) {
+      final index = entry.key;
+      final path = 'cuProjection.transactions[$index]';
+      final candidate = entry.value;
+      final view = completeMetro.contains(candidate.qingdaoMetro?.id)
+          ? candidate
+          : candidate.withQingdaoMetro(null);
+      final fields = _map(entries[index])..remove('qingdaoMetro');
+      final recordFields = _map(fields['record'])..remove('recordNumber');
+      final snapshot = batch.decoded.snapshot!;
+      final context = snapshot.context;
+      final key = jsonEncode(
+        _canonical({
+          'fields': {...fields, 'record': recordFields},
+          'context': {
+            'systemId': context.systemId,
+            'applicationId': context.applicationId,
+            'currencyCode': context.currencyCode,
+            'minorUnitDigits': context.minorUnitDigits,
+            'timeZoneOffsetMinutes': context.timeZoneOffsetMinutes,
+            'clockBasis': context.clockBasis,
+          },
+          'cardCityCode': snapshot.cardCityCode,
+        }),
+      );
+      final previous = records[key];
+      if (previous == null) {
+        records[key] = view;
+      } else if (!conflictingMetro.contains(key) && view.qingdaoMetro != null) {
+        if (previous.qingdaoMetro == null) {
+          records[key] = previous.withQingdaoMetro(view.qingdaoMetro);
+        } else if (previous.qingdaoMetro != view.qingdaoMetro) {
+          conflictingMetro.add(key);
+          records[key] = previous.withQingdaoMetro(null);
+        }
+      }
+      sources
+          .putIfAbsent(key, () => [])
+          .add(
+            ArchiveRecordSource(
+              batch.id,
+              path,
+              batch.storedParseVersion,
+              entries[index],
+            ),
+          );
     }
   }
   final indexed = records.values.indexed.toList();
@@ -145,8 +169,10 @@ CuArchiveProjection projectCuArchive(ArchiveHistoryResult history) {
   return CuArchiveProjection(
     transactions: List.unmodifiable(indexed.map((entry) => entry.$2)),
     sources: Map.unmodifiable({
-      for (final entry in sources.entries)
-        entry.key: List<ArchiveRecordSource>.unmodifiable(entry.value),
+      for (final entry in records.entries)
+        entry.value: List<ArchiveRecordSource>.unmodifiable(
+          sources[entry.key]!,
+        ),
     }),
     issues: List.unmodifiable(issues),
   );
@@ -205,6 +231,22 @@ CuTransactionView _restoreView(Object? value) {
   if (millis != null) _integer(millis, -8640000000000000, 8640000000000000);
   final carrier = data['carrier'];
   if (carrier != null) _integer(carrier, 0, 65535);
+  final capturedMetro = data['qingdaoMetro'];
+  QingdaoMetroLink? metro;
+  if (sfi == 0x18 &&
+      kind == CityUnionTransactionKind.consumption &&
+      capturedMetro is Map) {
+    final id = capturedMetro['id'];
+    final isEntry = capturedMetro['isEntry'];
+    if (id is String &&
+        isEntry is bool &&
+        RegExp(r'^[0-9A-F]{46}/[0-9A-F]{46}$').hasMatch(id)) {
+      final side = isEntry ? id.substring(0, 46) : id.substring(47);
+      if (side == raw.replaceAll(' ', '').toUpperCase()) {
+        metro = (id: id, isEntry: isEntry);
+      }
+    }
+  }
   return CuTransactionView(
     record: _CapturedCuRecord(Map.unmodifiable(recordData), sfi, kind),
     transactionTime: millis == null
@@ -212,6 +254,7 @@ CuTransactionView _restoreView(Object? value) {
         : DateTime.fromMillisecondsSinceEpoch(millis as int, isUtc: true),
     regionCode: _optionalString(data['regionCode']),
     carrier: carrier as int?,
+    qingdaoMetro: metro,
     location: ReferenceMatch(
       status,
       candidates,

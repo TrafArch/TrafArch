@@ -22,7 +22,7 @@ class ExchangePolicy {
   final bool retry6700;
   final bool correctContinuationLe;
 
-  /// Null preserves the original CLA; EMV uses the interindustry CLA 00.
+  /// Null preserves the original CLA.
   final int? continuationCla;
   final LeCorrectionTiming correctionTiming;
   final bool strictLength;
@@ -39,13 +39,6 @@ class ExchangePolicy {
     correctionTiming: LeCorrectionTiming.afterContinuation,
   );
   static const transit = ExchangePolicy();
-  static const emv = ExchangePolicy(
-    follow6100: true,
-    correct6c00: true,
-    correctContinuationLe: true,
-    continuationCla: 0,
-  );
-
   ExchangePolicy withStrictLength(bool strict) => ExchangePolicy(
     follow6100: follow6100,
     correct6c00: correct6c00,

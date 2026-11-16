@@ -1,4 +1,3 @@
-import '../../protocols/bank/domain/models/tlv_node.dart';
 import '../scan/domain/card_read_outcome.dart';
 
 /// Freeze fields already produced by the reader. No protocol replay on restart.
@@ -83,42 +82,6 @@ Map<String, Object?> captureReadResult(CardReadOutcome result) =>
             ],
           },
       },
-      BankReadOutcome(:final card) => {
-        ...card.toJson(),
-        'applications': [
-          for (final app in card.applications)
-            {
-              'aid': app.application.aidHex,
-              'label': app.application.displayLabel,
-              'parserId': app.parserId,
-              'summary': [
-                for (final field in app.summary.fields)
-                  {
-                    'tag': field.tag,
-                    'label': field.label,
-                    'value': field.value,
-                    'rawValueHex': field.rawValueHex,
-                    'sensitive': field.sensitive,
-                  },
-              ],
-              'fci': [for (final tag in app.fciTags) _tag(tag)],
-              'data': [for (final tag in app.dataTags) _tag(tag)],
-              'gpo': [for (final tag in app.gpoTags) _tag(tag)],
-              'gpoHex': app.gpoHex,
-              'records': [
-                for (final record in app.records)
-                  {
-                    'sfi': record.sfi,
-                    'recordNumber': record.recordNumber,
-                    'rawHex': record.rawHex,
-                    'parseError': record.parseError,
-                    'tags': [for (final tag in record.tags) _tag(tag)],
-                  },
-              ],
-              'issues': [for (final issue in app.issues) issue.toJson()],
-            },
-        ],
-      },
       FelicaReadOutcome(:final card) => {
         'cardType': card.cardType,
         'productType': card.cardProductType.name,
@@ -182,15 +145,5 @@ Map<String, Object?> captureReadResult(CardReadOutcome result) =>
             'expiresAt': info.rateExpiresAt?.toIso8601String(),
           },
       },
-      _ => const {},
+      UnsupportedReadOutcome() => const {},
     };
-
-Map<String, Object?> _tag(TlvNode tag) => {
-  'tag': tag.tagHex,
-  'length': tag.length,
-  'rawValueHex': tag.rawValueHex,
-  'description': tag.description,
-  'decodedValue': tag.decodedValue,
-  'masked': tag.masked,
-  'children': [for (final child in tag.children) _tag(child)],
-};

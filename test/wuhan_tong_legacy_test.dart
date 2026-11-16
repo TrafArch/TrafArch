@@ -1,7 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/features/scan/application/bank_card_probe.dart';
 import 'package:transit_card_analyzer/features/scan/application/local_card_reader.dart';
-import 'package:transit_card_analyzer/protocols/bank/domain/models/bank_card_result.dart';
 import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/local/apdu_exchange.dart';
 import 'package:transit_card_analyzer/protocols/transit/local/cards/wuhan_tong_card.dart';
@@ -12,20 +10,18 @@ const _selectWhctc = '00A40400094150312E5748435443';
 
 void main() {
   group('老版武汉通（WHCTC）', () {
-    test('AP1.WHCTC 确认后读取卡号 / 有效期 / 余额 / SFI 24 流水，且不再探测 PBOC', () async {
+    test('AP1.WHCTC 确认后读取卡号 / 有效期 / 余额 / SFI 24 流水', () async {
       final link = _CardLink(_whctcResponse);
-      final bank = _BankProbe();
-      final result = await LocalCardReader(link.call, bankProbe: bank).read();
+      final result = await LocalCardReader(link.call).read();
 
       expect(result, isNotNull);
-      expect(bank.calls, 0, reason: '应用确认后不得回退到 PBOC 探测');
 
-      final parsed = result!.parsedCard!;
+      final parsed = result!.parsedCard;
       expect(parsed.parserId, CardParserIds.localCard);
       expect(parsed.parserName, '地方交通卡 · 武汉通');
       expect(parsed.info.balanceFen, 1000);
 
-      final info = result.readResult!.info;
+      final info = result.readResult.info;
       expect(info.isWHCTC, isTrue);
       expect(info.isLocalCard, isTrue);
       expect(info.cardKindLabel, '武汉通');
@@ -41,7 +37,7 @@ void main() {
       expect(info.startDate!.month, 1);
       expect(info.startDate!.day, 1);
 
-      final trip = result.readResult!.trips.single;
+      final trip = result.readResult.trips.single;
       expect(trip.response, _logRecord);
       expect(trip.posType, 0x06);
       expect(trip.terminalHex, '123456789012');
@@ -68,31 +64,27 @@ void main() {
       expect(info.balance, 1000);
     });
 
-    test('AP1.WHCTC 选择失败：不认领卡片，仍允许后续 PBOC 探测', () async {
+    test('AP1.WHCTC 选择失败时不认领卡片', () async {
       final link = _CardLink((command) {
         if (_hex(command) == _selectWhctc) return const [0x6A, 0x82];
         return _whctcResponse(command);
       });
-      final bank = _BankProbe();
-      final result = await LocalCardReader(link.call, bankProbe: bank).read();
+      final result = await LocalCardReader(link.call).read();
 
       expect(result, isNull);
-      expect(bank.calls, 1);
     });
 
-    test('应用确认后流水读取失败仍返回本地卡结果（不落入 PBOC）', () async {
+    test('应用确认后流水读取失败仍返回本地卡结果', () async {
       final link = _CardLink((command) {
         if (command[1] == 0xB2) throw _tagLost;
         return _whctcResponse(command);
       });
-      final bank = _BankProbe();
-      final result = await LocalCardReader(link.call, bankProbe: bank).read();
+      final result = await LocalCardReader(link.call).read();
 
       expect(result, isNotNull);
-      expect(bank.calls, 0);
-      expect(result!.parsedCard!.localCard!.info.isWHCTC, isTrue);
-      expect(result.readResult!.info.balance, 1000);
-      expect(result.readResult!.readError, isNotNull);
+      expect(result!.parsedCard.localCard!.info.isWHCTC, isTrue);
+      expect(result.readResult.info.balance, 1000);
+      expect(result.readResult.readError, isNotNull);
     });
   });
 }
@@ -131,15 +123,6 @@ class _CardLink {
       failed = true;
       rethrow;
     }
-  }
-}
-
-class _BankProbe implements BankCardProbe {
-  int calls = 0;
-  @override
-  Future<BankCardResult?> probe(LocalTransceive transceive) async {
-    calls++;
-    return null;
   }
 }
 
