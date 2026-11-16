@@ -1,0 +1,20 @@
+{
+  "format_version": 1,
+  "source": {
+    "application": "Suica Reader",
+    "apk_sha256": "5b407a0456f7cf4592ce2964511c642fc6352b04d6a0cc23e855a268df14a132",
+    "entry": "assets/suica_stationcode.db",
+    "attribution": "Original station database bundled with the user-provided Suica Reader APK; names, codes, tables and records are preserved verbatim.",
+    "license_status": "Database license not established. Third-party Apache notices in the APK do not establish an Apache license for this database."
+  },
+  "database": {
+    "file": "suica_stationcode.db",
+    "sha256": "57d4fe1af5154e9adab0a4a38619fe8095c7f509ac28c743bf554ba199a43abd",
+    "bytes": 496640,
+    "tables": {
+      "android_metadata": 0,
+      "stationcode": 6435
+    },
+    "user_version": 20261017
+  }
+}

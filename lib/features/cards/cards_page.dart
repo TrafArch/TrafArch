@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../shared/presentation/adaptive_layout.dart';
+import '../../shared/presentation/suica_identity_summary.dart';
 import '../archive/data/app_database.dart';
 import '../../app/app_dependencies.dart';
 import '../archive/application/archive_record_count.dart';
 import '../archive/domain/card_name_extension.dart';
+import '../archive/domain/amusement_ic_archive_identity.dart';
+import '../archive/domain/card_types.dart';
+import '../archive/domain/suica_archive_identity.dart';
 import '../qr/presentation/qr_action_button.dart';
 import '../settings/presentation/settings_action_button.dart';
 import '../archive/presentation/card_detail_page.dart';
@@ -127,6 +131,10 @@ class _CardsPageState extends State<CardsPage> {
                           _SavedCardTile(
                             card: summary.card,
                             recordCount: summary.recordCount,
+                            suicaIdentity: summary.suicaIdentity,
+                            suicaManualNumberText:
+                                summary.suicaManualNumberText,
+                            amusementIcIdentity: summary.amusementIcIdentity,
                             app: app,
                             selected: widget.selectedCardId == summary.card.id,
                             onSelect: widget.onSelectCard,
@@ -150,6 +158,9 @@ class _CardsPageState extends State<CardsPage> {
 class _SavedCardTile extends StatelessWidget {
   final SavedCard card;
   final ArchiveRecordCount recordCount;
+  final SuicaArchiveIdentity? suicaIdentity;
+  final String? suicaManualNumberText;
+  final AmusementIcArchiveIdentity? amusementIcIdentity;
   final AppDependencies app;
   final ValueChanged<String>? onSelect;
   final bool selected;
@@ -157,6 +168,9 @@ class _SavedCardTile extends StatelessWidget {
   const _SavedCardTile({
     required this.card,
     required this.recordCount,
+    this.suicaIdentity,
+    this.suicaManualNumberText,
+    this.amusementIcIdentity,
     required this.app,
     this.onSelect,
     this.selected = false,
@@ -166,6 +180,12 @@ class _SavedCardTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final isAmusementIc = card.cardType == CardTypes.amusementIc;
+    final isSuica = card.cardType == CardTypes.suica;
+    final aicIdentity = isAmusementIc
+        ? amusementIcIdentity ??
+              AmusementIcArchiveIdentity.fromCapturedData(null)
+        : null;
     return Card(
       color: selected ? scheme.secondaryContainer : null,
       margin: const EdgeInsets.only(bottom: 10),
@@ -187,20 +207,68 @@ class _SavedCardTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      card.displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      aicIdentity?.displayName(card.customName) ??
+                          card.displayName,
+                      maxLines: isAmusementIc ? null : 1,
+                      overflow: isAmusementIc ? null : TextOverflow.ellipsis,
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      card.cardNumberText,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: scheme.onSurfaceVariant,
+                    if (aicIdentity?.subtitle(card.customName)
+                        case final subtitle?) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
                       ),
-                    ),
+                    ],
+                    const SizedBox(height: 6),
+                    if (aicIdentity != null) ...[
+                      Text(
+                        'Access Code',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.outline,
+                        ),
+                      ),
+                      Text(
+                        aicIdentity.formattedAccessCode ?? 'Access Code 未读取',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ] else if (isSuica) ...[
+                      SuicaIdentitySummary(
+                        idm: suicaIdentity?.idm,
+                        hasConflict: suicaIdentity?.hasConflict ?? false,
+                        compact: true,
+                      ),
+                      if (suicaManualNumberText case final manualNumber?) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          '卡面编号（手工填写）',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        SelectableText(
+                          manualNumber,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                      ],
+                    ] else
+                      Text(
+                        card.cardNumberText,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
                     const SizedBox(height: 6),
                     Text(
                       card.lastReadShortText ?? '—',
@@ -211,39 +279,40 @@ class _SavedCardTile extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
+              if (!isAmusementIc) const SizedBox(width: 12),
               // 与左侧各占一半，右对齐贴住操作按钮；避免 loose Flexible
               // 的未用弹性空间把按钮顶离右缘，也避免长余额文本溢出。
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      archiveCardBalanceText(
-                            card,
-                            includeShanghaiOverdraft:
-                                app.includeShanghaiOverdraft,
-                          ) ??
-                          '—',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: scheme.primary,
+              if (!isAmusementIc)
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        archiveCardBalanceText(
+                              card,
+                              includeShanghaiOverdraft:
+                                  app.includeShanghaiOverdraft,
+                            ) ??
+                            '—',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: scheme.primary,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      recordCount.listText,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.outline,
+                      const SizedBox(height: 6),
+                      Text(
+                        recordCount.listText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.outline,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
               PopupMenuButton<_SavedCardAction>(
                 tooltip: '卡片操作',
                 icon: Icon(Icons.more_vert, size: 20, color: scheme.outline),

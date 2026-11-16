@@ -28,8 +28,11 @@ abstract final class CardTypes {
   /// 天府通等 parserId=localCard 的城市卡种）；正式卡名由解析结果提供。
   static const String localCard = 'local_card';
 
-  /// Suica（预留：FeliCa 解析器接入后启用）。
+  /// Suica（FeliCa，只读历史与日元钱包）。
   static const String suica = 'suica';
+
+  /// Amusement IC 游戏身份卡，无交通钱包。
+  static const String amusementIc = 'amusement_ic';
 }
 
 /// 卡型 → 兜底展示名称（无正式卡名与自定义名称时使用）。
@@ -50,5 +53,6 @@ String cardTypeLabel(String cardType) => switch (cardType) {
   CardTypes.macauPass => '澳门通',
   CardTypes.localCard => '地方交通卡',
   CardTypes.suica => 'Suica',
+  CardTypes.amusementIc => 'Amusement IC',
   _ => '未识别交通卡',
 };

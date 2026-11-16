@@ -18,7 +18,7 @@ List<int> _suicaBalanceBlock({int balance = 1000}) {
 List<int> _suicaRecord({int balance = 1000}) {
   final record = List<int>.filled(16, 0);
   record[0] = 0xC8; // 端末種：自販機（写入时刻）
-  record[1] = 0x0B; // 処理：物販
+  record[1] = 0x46; // 処理：物販
   record[4] = 0x33; // 日付：2025-10-20 打包（7 位年 | 4 位月 | 5 位日）
   record[5] = 0x54;
   record[6] = 0x43; // 時刻：08:30（高 5 位时 | 中 6 位分）
@@ -282,7 +282,7 @@ void main() {
     expect(record.decoded, isTrue);
     expect(record.amountYen, 1000);
     expect(record.time, DateTime(2025, 10, 20, 8, 30));
-    expect(record.type, '0x0B');
+    expect(record.type, '0x46');
     expect(record.terminal, '0xC8');
     expect(record.note, contains('交易后残高'));
     expect(record.toTransaction().amountIsBalance, isTrue);
@@ -330,13 +330,13 @@ void main() {
     expect(result.cardType, 'suica');
     expect(result.wallets.single.balanceMinorUnits, 1000);
     expect(result.wallets.single.balanceVerified, isTrue);
-    expect(result.wallets.single.balanceText, '¥1,000');
-    expect(result.transactions, hasLength(1));
-    final tx = result.transactions.single;
+    expect(result.wallets.single.balanceText, 'JP￥1,000');
+    expect(result.transactions, hasLength(2));
+    final tx = result.transactions.last;
     expect(tx.amountMinorUnits, 1000);
     expect(tx.time, DateTime(2025, 10, 20, 8, 30));
     expect(tx.decoded, isTrue);
-    expect(result.rawBlocks.length, 21);
+    expect(result.rawBlocks.length, 20);
     expect(result.state, FelicaReadState.success);
   });
 
@@ -346,7 +346,7 @@ void main() {
     final reader = FelicaReader(_ScriptedTag(balance: 500).transceive);
     final result = await reader.read();
     expect(result.wallets.single.balanceMinorUnits, 500);
-    expect(result.wallets.single.balanceText, '¥500');
+    expect(result.wallets.single.balanceText, 'JP￥500');
     expect(result.state, FelicaReadState.success);
   });
 

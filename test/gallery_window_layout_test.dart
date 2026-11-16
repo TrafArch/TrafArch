@@ -3,12 +3,12 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/gallery/gallery_app.dart';
 import 'package:transit_card_analyzer/gallery/gallery_controller.dart';
 import 'package:transit_card_analyzer/gallery/gallery_data.dart';
+
+import 'support/gallery_capture.dart';
 
 Finder verticalScroll() => find
     .byWidgetPredicate(
@@ -418,20 +418,7 @@ void main() {
     final oldShadows = debugDisableShadows;
     debugDisableShadows = false;
     try {
-      await tester.runAsync(() async {
-        final sans = FontLoader('sans-serif')
-          ..addFont(
-            Future.value(
-              ByteData.sublistView(
-                await File('C:/Windows/Fonts/msyh.ttc').readAsBytes(),
-              ),
-            ),
-          );
-        final icons = FontLoader('MaterialIcons')
-          ..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'));
-        await Future.wait([sans.load(), icons.load()]);
-        await Directory(captureDir!).create(recursive: true);
-      });
+      await prepareGalleryCapture(tester, outputDirectory: captureDir);
       final boundary = GlobalKey();
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
@@ -500,18 +487,12 @@ void main() {
           }
           await tester.pumpAndSettle();
           expect(tester.takeException(), isNull, reason: scenario);
-          await tester.runAsync(() async {
-            final image =
-                await (boundary.currentContext!.findRenderObject()!
-                        as RenderRepaintBoundary)
-                    .toImage(pixelRatio: 2);
-            final bytes = await image.toByteData(
-              format: ui.ImageByteFormat.png,
-            );
-            await File('$captureDir/${dark ? 'dark' : 'light'}-$scenario.png')
-                .writeAsBytes(bytes!.buffer.asUint8List());
-            image.dispose();
-          });
+          await captureGalleryFrame(
+            tester,
+            boundary: boundary,
+            name: '${dark ? 'dark' : 'light'}-$scenario',
+            outputDirectory: captureDir,
+          );
           if (c.overlay != null) {
             c.back();
             await tester.pumpAndSettle();
@@ -521,5 +502,5 @@ void main() {
     } finally {
       debugDisableShadows = oldShadows;
     }
-  }, skip: captureDir == null);
+  });
 }

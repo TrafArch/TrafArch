@@ -3,8 +3,11 @@ library;
 import '../../transport/transport_failure.dart';
 import '../protocol/felica_frame_evidence.dart';
 import '../felica_hex.dart';
+import 'amusement_ic_data.dart';
 import 'cross_border_payment.dart';
 import 'felica_card_type.dart';
+import 'jpy_amount_formatter.dart';
+import 'suica_transaction_details.dart';
 
 /// 一次 FeliCa 读取阶段的总体状态。
 enum FelicaReadState {
@@ -124,6 +127,7 @@ class FelicaWallet {
 
   /// 按本钱包的币种与小数位格式化金额（交易记录同样复用）。
   String formatAmount(int value) {
+    if (currency == 'JPY') return formatJpyAmount(value);
     final digits = fractionDigits < 0
         ? 0
         : (fractionDigits > 6 ? 6 : fractionDigits);
@@ -136,7 +140,6 @@ class FelicaWallet {
     final whole = _groupThousands(abs ~/ unit);
     if (digits == 0) {
       return switch (currency) {
-        'JPY' => '$sign¥$whole',
         'HKD' => '${sign}HK\$$whole',
         'CNY' => '$sign¥$whole',
         _ => '$sign$whole${currency.isEmpty ? '' : ' $currency'}',
@@ -212,6 +215,9 @@ class FelicaTransaction {
   /// 只有记录解析器能可靠确认时才置 true。
   final bool crossBorder;
 
+  /// Suica-specific field evidence; absent for other protocols or raw-only data.
+  final SuicaTransactionDetails? suica;
+
   const FelicaTransaction({
     this.time,
     this.amountMinorUnits,
@@ -225,6 +231,7 @@ class FelicaTransaction {
     this.currency,
     this.amountIsBalance = false,
     this.crossBorder = false,
+    this.suica,
   });
 }
 
@@ -251,6 +258,9 @@ class FelicaScanResult {
   /// 单钱包产品的跨境折算口径（目前仅八达通－全国通卡）。
   final CrossBorderPaymentInfo? crossBorder;
 
+  /// 游戏身份卡信息；Access Code 独立于 RF IDm 和交通卡号。
+  final AmusementIcData? amusementIc;
+
   const FelicaScanResult({
     required this.cardType,
     required this.displayName,
@@ -264,10 +274,11 @@ class FelicaScanResult {
     this.systemCodes = const [],
     this.transitCapability,
     this.crossBorder,
+    this.amusementIc,
     required this.scannedAt,
   });
 
-  /// 汇总状态：卡片离开 / 格式异常 / 失败优先，其次部分成功，
+  /// 汇总状态：卡片离开 / 格式异常 / 失败 / 拒绝访问优先，其次部分成功，
   /// 全部阶段成功才算 success；没有任何阶段信息时视为不支持。
   FelicaReadState get state {
     if (statuses.isEmpty) return FelicaReadState.unsupported;
@@ -279,6 +290,9 @@ class FelicaScanResult {
     }
     if (statuses.any((s) => s.state == FelicaReadState.failed)) {
       return FelicaReadState.failed;
+    }
+    if (statuses.any((s) => s.state == FelicaReadState.accessDenied)) {
+      return FelicaReadState.accessDenied;
     }
     if (statuses.any((s) => s.state == FelicaReadState.partial)) {
       return FelicaReadState.partial;
@@ -310,6 +324,7 @@ class FelicaScanResult {
     FelicaCardType? cardProductType,
     String? transitCapability,
     CrossBorderPaymentInfo? crossBorder,
+    AmusementIcData? amusementIc,
   }) => FelicaScanResult(
     cardType: cardType,
     displayName: displayName,
@@ -323,6 +338,7 @@ class FelicaScanResult {
     systemCodes: systemCodes ?? this.systemCodes,
     transitCapability: transitCapability ?? this.transitCapability,
     crossBorder: crossBorder ?? this.crossBorder,
+    amusementIc: amusementIc ?? this.amusementIc,
     scannedAt: scannedAt,
   );
 }

@@ -51,6 +51,8 @@ import '../features/recovery/capture_read_result.dart';
 import '../features/archive/domain/card_session_snapshot.dart';
 import '../features/scan/application/card_diagnostic_capture.dart';
 import '../platform/memory/memory_platform.dart';
+import '../features/trips/suica_trip_presenter.dart';
+import '../features/reference_data/data/suica_station_repository.dart';
 
 /// Composition root and presentation facade. Controllers own mutable state and
 /// resources; this object wires their lifetimes and propagates UI notifications.
@@ -274,6 +276,10 @@ class AppDependencies extends OwnedNotifier {
                       ...captureCardInfo(result),
                       'decoded': captureReadResult(result),
                     },
+                    if (suicaTrips.isNotEmpty)
+                      'suicaTrips': [
+                        for (final trip in suicaTrips) trip.toJson(),
+                      ],
                     if (_completedCapture case final item?) ...{
                       'cardName': item.displayName,
                       'cardNumber': item.cardNumber,
@@ -330,6 +336,13 @@ class AppDependencies extends OwnedNotifier {
       references.knowledge ?? KnowledgeBase.empty(),
     );
     _view = view;
+    for (final trip in view.suicaTrips) {
+      scan.addStructuredDiagnostic(id, 'parser_record', {
+        'parserId': 'felica.suica',
+        'fieldCategory': 'journeyPresentation',
+        'fields': trip.toJson(),
+      });
+    }
     archive.stage(
       view,
       id,
@@ -410,6 +423,9 @@ class AppDependencies extends OwnedNotifier {
       _view?.shanghaiTransitUnion;
   ReadResult? get localReadResult => _view?.localReadResult;
   FelicaScanResult? get felicaResult => _view?.felicaResult;
+  List<SuicaTripPresentation> get suicaTrips => _view?.suicaTrips ?? const [];
+  SuicaStationRepository? get suicaStations =>
+      _view?.knowledge.suicaStations ?? references.knowledge?.suicaStations;
   TUnionCardInfo? get cardInfo => _view?.cardInfo;
   List<TUnionTransaction> get transactions => _view?.transactions ?? const [];
   List<TUnionProcessRecord> get transitProcessRecords =>

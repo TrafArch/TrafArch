@@ -8,7 +8,10 @@ import 'archive_observation_times.dart';
 import 'archive_document_store.dart';
 import '../domain/card_archive_document.dart';
 import '../domain/card_archive_identity.dart';
+import '../domain/card_fingerprint.dart';
 import '../domain/card_session_snapshot.dart';
+import '../domain/card_types.dart';
+import '../domain/suica_manual_number.dart';
 
 /// 卡片档案仓库：写入 / 更新识别结果，维护用户自定义名称。
 ///
@@ -223,6 +226,58 @@ class CardRepository {
     });
   }
 
+  /// Save user-entered Suica card-back metadata without changing captured NFC
+  /// fields, read timestamps or immutable batch payloads. The relational update
+  /// only invalidates existing history/list streams; JSON owns this metadata.
+  Future<void> setSuicaManualNumber(String cardId, String? value) async {
+    final normalized = normalizeSuicaManualNumber(value);
+    await db.transaction(() async {
+      final card = await (db.select(
+        db.savedCards,
+      )..where((t) => t.id.equals(cardId))).getSingleOrNull();
+      if (card == null) throw StateError('卡片档案已不存在，无法保存卡面号码');
+      final idm = RegExp(r'^felica:suica:idm:([0-9A-Fa-f]{16})$')
+          .firstMatch(card.cardFingerprint)
+          ?.group(1);
+      if (card.cardType != CardTypes.suica ||
+          CardFingerprint.buildSuica(idm) == null) {
+        throw StateError('只有具有有效 IDm 的 Suica 档案可以保存卡面号码');
+      }
+
+      final store = ArchiveDocumentStore(db);
+      final document = await store.read(cardId);
+      if (document == null ||
+          document.card.id != cardId ||
+          document.card.cardFingerprint != card.cardFingerprint) {
+        throw const FormatException('卡片 JSON 档案与索引身份不一致，未修改卡面号码');
+      }
+      final previous = document.cardExtensions['suicaManualNumber'];
+      if (document.cardExtensions.containsKey('suicaManualNumber') &&
+          !SuicaManualNumber.isSupportedJson(previous)) {
+        throw const FormatException('已保存的卡面号码格式损坏或版本不受支持，原始数据未覆盖');
+      }
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final at = now > card.updatedAt ? now : card.updatedAt + 1;
+      final updated = document.copyWith(
+        card: document.card.copyWith(updatedAt: at),
+        cardExtensions: {
+          ...document.cardExtensions,
+          'suicaManualNumber': {
+            if (previous is Map) ...Map<String, dynamic>.from(previous),
+            'version': 1,
+            'source': 'user',
+            'value': normalized,
+            'updatedAt': at,
+          },
+        },
+      );
+      await (db.update(db.savedCards)..where((t) => t.id.equals(cardId))).write(
+        SavedCardsCompanion(updatedAt: Value(at)),
+      );
+      await store.put(updated);
+    });
+  }
+
   /// 删除卡片档案及其全部读取批次（同一事务，避免残留孤儿批次数据）；
   /// 返回是否确实删除了档案（档案不存在时返回 false）。
   /// 列表 / 详情页数据流会随删除自动刷新；该卡再次读取时可重新建档。
@@ -382,6 +437,7 @@ class CardRepository {
         batches: clean ? document.batches : indexedBatches,
         importedRecords: document.importedRecords,
         retainedSummaries: document.retainedSummaries,
+        cardExtensions: document.cardExtensions,
       );
     } on FormatException catch (issue) {
       // Keep this card reachable (including its delete action) and let other
@@ -401,6 +457,7 @@ class CardRepository {
       batches: document?.batches ?? const [],
       importedRecords: document?.importedRecords ?? const [],
       retainedSummaries: document?.retainedSummaries ?? const [],
+      cardExtensions: document?.cardExtensions ?? const {},
     );
   });
 
@@ -442,12 +499,14 @@ class ArchiveRows {
   final List<CardReadBatch> batches;
   final List<Map<String, dynamic>> importedRecords;
   final List<Map<String, dynamic>> retainedSummaries;
+  final Map<String, dynamic> cardExtensions;
   final Object? documentReadIssue;
   const ArchiveRows({
     required this.card,
     required this.batches,
     this.importedRecords = const [],
     this.retainedSummaries = const [],
+    this.cardExtensions = const {},
     this.documentReadIssue,
   });
 }

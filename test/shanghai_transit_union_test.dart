@@ -76,6 +76,22 @@ ShanghaiTransitApplication _application({
 );
 
 void main() {
+  test(
+    'secondary stopSession prevents later city-specific CU probes',
+    () async {
+      final link = _GateLink(serial: '03104970200000000001');
+      final result = await ShanghaiTransitUnionCardParser(link.call).read(
+        beforeTuProcessRecords: (_) async => TuProcessReadAction.stopSession,
+      );
+      expect(result.tu.card, isNotNull);
+      expect(result.tu.readError, isNull);
+      expect(result.tu.dataComplete, isFalse);
+      expect(result.tu.warnings, isNotEmpty);
+      expect(result.cu.probed, isFalse);
+      expect(link.cuSelects, 0);
+    },
+  );
+
   for (final unified in [false, true]) {
     for (final serial in [
       '03104970200000000001',

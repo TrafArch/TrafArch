@@ -87,6 +87,7 @@ class ArchiveHistoryResult {
   final List<ArchiveHistoryRecord> records;
   final List<LocalCardHistoryRecord> localCardRecords;
   final List<Map<String, dynamic>> importedRecords;
+  final Map<String, dynamic> cardExtensions;
   final SnapshotDecodeResult? latestCapture;
   final int? balanceObservedAt;
   final Object? documentReadIssue;
@@ -97,6 +98,7 @@ class ArchiveHistoryResult {
     this.records = const [],
     this.localCardRecords = const [],
     this.importedRecords = const [],
+    this.cardExtensions = const {},
     this.latestCapture,
     this.balanceObservedAt,
     this.documentReadIssue,
@@ -362,6 +364,7 @@ class ArchiveHistory {
       records: projectRecords(batches),
       localCardRecords: projectLocalCardRecords(batches),
       importedRecords: rows.importedRecords,
+      cardExtensions: rows.cardExtensions,
       latestCapture: scalar == null
           ? null
           : CardSessionSnapshot.decodeResult(scalar),

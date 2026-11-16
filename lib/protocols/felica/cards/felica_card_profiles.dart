@@ -38,6 +38,9 @@ class FelicaCardProfile {
 
 /// 已验证的 FeliCa 系统码（仅作候选特征，不单独据此断言卡型）。
 abstract final class FelicaKnownSystemCodes {
+  /// FeliCa Lite / Lite-S；只表示候选系统，不代表 Amusement IC。
+  static const int lite = 0x88B4;
+
   /// Suica / PASMO 等日本铁路系 IC 卡。
   static const int suica = 0x0003;
 
@@ -54,9 +57,9 @@ abstract final class SuicaServiceCodes {
   /// 余额块。
   static const int balanceBlock = 0;
 
-  /// 历史记录块范围：块 0 为余额，块 1..20 为历史（从新到旧）。
-  static const int historyFirstBlock = 1;
-  static const int historyLastBlock = 20;
+  /// 历史记录从新到旧共 20 块；块 0 同时提供最新交易后余额。
+  static const int historyFirstBlock = 0;
+  static const int historyLastBlock = 19;
 
   /// 单次读取块数（FeliCa 同时访问块数有限，取保守值）。
   static const int historyChunk = 8;

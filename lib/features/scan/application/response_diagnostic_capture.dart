@@ -460,6 +460,7 @@ Map<String, Object?>? _felica(
             'type': tx.type,
             'locationCode': tx.locationCode,
             'amountIsBalance': tx.amountIsBalance,
+            if (tx.suica != null) 'suica': tx.suica!.toJson(),
           },
     ],
   });

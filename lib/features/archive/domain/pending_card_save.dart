@@ -23,7 +23,7 @@ class PendingCardSave {
   /// 卡号（完整，不脱敏；入库与对话框展示共用）；未读到时为 null。
   final String? cardNumber;
 
-  /// 本次读取的余额快照（分）；未读到余额时为 null。
+  /// 本次读取的余额快照（货币最小单位，JPY 为整数日元）；未知为 null。
   final int? balanceFen;
 
   /// 余额货币代码（ISO 4217）；未读到余额时为 null。

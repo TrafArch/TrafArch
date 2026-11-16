@@ -97,6 +97,9 @@ Iterable<Map<String, Object?>> captureParserRecords(
         'state': card.state.name,
         'transitCapability': card.transitCapability,
       });
+      if (card.amusementIc case final data?) {
+        yield _record(parser, 'amusementIc', data.toJson());
+      }
       for (final wallet in card.wallets) {
         yield _record(parser, 'wallets', {
           'walletId': wallet.walletId,
@@ -124,6 +127,7 @@ Iterable<Map<String, Object?>> captureParserRecords(
           'rawHex': tx.rawHex,
           'decoded': tx.decoded,
           'amountIsBalance': tx.amountIsBalance,
+          if (tx.suica != null) 'suica': tx.suica!.toJson(),
           'crossBorder': tx.crossBorder,
           'note': tx.note,
         });

@@ -111,7 +111,7 @@ class ExpertPage extends StatelessWidget {
     final local = app.localReadResult;
     return _tab('expert-info-get', [
       if (felica != null && app.parsedCard == null)
-        FelicaSummaryPanel(felica: felica)
+        FelicaSummaryPanel(felica: felica, stations: app.suicaStations)
       else if (local != null && local.info.isMacauPass)
         MacauPassPanel(result: local)
       else

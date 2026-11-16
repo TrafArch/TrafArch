@@ -477,7 +477,7 @@ void main() {
     await _open(tester, repository, id);
     expect(find.byType(TripEntryCard), findsNWidgets(2));
     expect(find.text('-HK\$ 4.50'), findsOneWidget);
-    expect(find.text('-JPY 450'), findsOneWidget);
+    expect(find.text('-JP￥450'), findsOneWidget);
     await tester.tap(
       find.ancestor(
         of: find.text('-HK\$ 4.50'),

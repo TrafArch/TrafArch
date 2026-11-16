@@ -14,6 +14,7 @@ import '../../../protocols/transit/tunion/tunion_models.dart';
 import '../../../protocols/transit/tunion/tunion_process_parser.dart';
 import 'card_read_outcome.dart';
 import '../../../shared/domain/remote_card_use.dart';
+import '../../trips/suica_trip_presenter.dart';
 
 /// Immutable display projection, rebuilt once when an attempt completes.
 /// Original protocol data remains available independently of derived trips.
@@ -31,6 +32,14 @@ class ScanPresentation {
     );
     railTransitRecord = _deriveRail();
     busTransitRecord = _deriveBus();
+    suicaTrips = List.unmodifiable(
+      felicaResult?.cardProductType == FelicaCardType.suica
+          ? presentSuicaTrips(
+              felicaResult!.transactions,
+              stations: knowledge.suicaStations,
+            )
+          : const <SuicaTripPresentation>[],
+    );
   }
   final CardReadOutcome outcome;
   final KnowledgeBase knowledge;
@@ -39,6 +48,7 @@ class ScanPresentation {
   late final List<CuTransactionView> cityUnionTransactions;
   late final TransitRecord? railTransitRecord;
   late final BusTransitRecord? busTransitRecord;
+  late final List<SuicaTripPresentation> suicaTrips;
   TUnionCardInfo? get cardInfo => parsedCard?.info;
   List<TUnionTransaction> get transactions =>
       parsedCard?.transactions ?? const [];
@@ -81,8 +91,10 @@ class ScanPresentation {
     rawHex: cityUnionPublicInfo?.rawHex.replaceAll(' ', ''),
   );
   Currency get cardCurrency =>
-      analysis?.currency ??
-      Currency.fromCode(localReadResult?.info.currencyCode);
+      felicaResult?.cardProductType == FelicaCardType.suica
+      ? Currency.jpy
+      : analysis?.currency ??
+            Currency.fromCode(localReadResult?.info.currencyCode);
   BalanceInterpretation? get balanceInterpretation => parsedCard == null
       ? null
       : BalanceInterpretation.fromParsedCard(

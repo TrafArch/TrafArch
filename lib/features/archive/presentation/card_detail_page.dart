@@ -1,16 +1,26 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../shared/presentation/adaptive_layout.dart';
+import '../../../shared/presentation/amusement_ic_summary.dart';
+import '../../../shared/presentation/suica_identity_summary.dart';
 
 import '../data/app_database.dart';
 import '../domain/card_name_extension.dart';
+import '../domain/amusement_ic_archive_identity.dart';
 import '../data/card_repository.dart';
 import '../application/archive_history.dart';
 import '../application/archive_record_count.dart';
 import '../application/cu_archive_projection.dart';
+import '../application/suica_archive_projection.dart';
+import '../application/amusement_ic_archive_projection.dart';
+import '../domain/card_types.dart';
+import '../domain/suica_archive_identity.dart';
+import '../domain/suica_manual_number.dart';
 import '../../trips/cu_transaction_list.dart';
+import '../../trips/suica_trip_list.dart';
 import '../../trips/trip_cards_view.dart';
 import 'archive_trip_presenter.dart';
 import 'imported_archive_records.dart';
@@ -142,6 +152,31 @@ class _CardDetailBody extends StatelessWidget {
         .length;
     final readBatchCount = history.batches.length - summaryCount;
     final cityUnion = projectCuArchive(history);
+    final suica = projectSuicaArchive(history);
+    final isAmusementIc = history.card!.cardType == CardTypes.amusementIc;
+    final isSuica = history.card!.cardType == CardTypes.suica;
+    final suicaIdentity = isSuica
+        ? SuicaArchiveIdentity.resolve(
+            cardType: history.card!.cardType,
+            fingerprint: history.card!.cardFingerprint,
+            snapshots: history.batches
+                .map((batch) => batch.decoded.snapshot)
+                .nonNulls,
+          )
+        : null;
+    final manualNumberData = history.cardExtensions['suicaManualNumber'];
+    final manualNumberUnsupported =
+        history.cardExtensions.containsKey('suicaManualNumber') &&
+        !SuicaManualNumber.isSupportedJson(manualNumberData);
+    final canIdentifyForManualNumber =
+        isSuica &&
+        !suicaIdentity!.hasConflict &&
+        SuicaArchiveIdentity.resolve(
+              cardType: history.card!.cardType,
+              fingerprint: history.card!.cardFingerprint,
+            ).idm !=
+            null;
+    final amusementIc = projectAmusementIcArchive(history);
     final cuRecords = partitionShanghaiArchiveMirroredRecords(
       history: history,
       cityUnion: cityUnion,
@@ -197,10 +232,18 @@ class _CardDetailBody extends StatelessWidget {
           ),
           balanceObservationText: history.balanceObservationText,
           balanceObservationLabel: history.balanceObservationLabel,
+          amusementIc: isAmusementIc ? amusementIc : null,
+          suicaIdentity: suicaIdentity,
+          suicaManualNumber: SuicaManualNumber.fromJson(manualNumberData),
+          suicaManualNumberEditIssue: manualNumberUnsupported
+              ? '卡面编号格式暂不支持，当前版本无法编辑；原始资料已保留。'
+              : !canIdentifyForManualNumber
+              ? '无法确认档案身份，暂不能编辑卡面编号；原始资料已保留。'
+              : null,
         ),
         const SizedBox(height: 12),
         Text(
-          '行程记录 · $readBatchCount 个已保存批次'
+          '${isAmusementIc ? '读取记录' : '行程记录'} · $readBatchCount 个已保存批次'
           '${summaryCount == 0 ? '' : ' · $summaryCount 份导入摘要'}',
           style: Theme.of(context).textTheme.titleSmall,
         ),
@@ -214,8 +257,18 @@ class _CardDetailBody extends StatelessWidget {
             ),
           ),
         const SizedBox(height: 8),
-        if (trips.entries.isNotEmpty ||
-            (cityUnion.transactions.isEmpty && history.importedRecords.isEmpty))
+        for (final issue in amusementIc.issues)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Text(issue),
+          ),
+        if (!isAmusementIc &&
+            (trips.entries.isNotEmpty ||
+                (cityUnion.transactions.isEmpty &&
+                    suica.records.isEmpty &&
+                    suica.issues.isEmpty &&
+                    !suica.isHistoryUnobserved &&
+                    history.importedRecords.isEmpty)))
           TripCardsView(
             key: ValueKey(history.card!.id),
             entries: trips.entries,
@@ -238,6 +291,21 @@ class _CardDetailBody extends StatelessWidget {
             onFiltersChanged: (values) {
               recoveryFilters?['card:${history.card!.id}:cu'] = values;
             },
+          ),
+        if (suica.records.isNotEmpty)
+          SuicaTripList(
+            key: ValueKey('suica:${history.card!.id}'),
+            trips: suica.trips,
+            initialFilters: recoveryFilters?['card:${history.card!.id}:suica'],
+            onFiltersChanged: (values) {
+              recoveryFilters?['card:${history.card!.id}:suica'] = values;
+            },
+          ),
+        if (suica.isHistoryUnobserved) const Text('尚未读取到 Suica 历史记录'),
+        for (final issue in suica.issues)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Text(issue),
           ),
         if (localTrips.isNotEmpty)
           ArchivedLocalCardTrips(
@@ -354,6 +422,10 @@ class _ArchiveHeader extends StatelessWidget {
   final String? balanceText;
   final String? balanceObservationText;
   final String? balanceObservationLabel;
+  final AmusementIcArchiveProjection? amusementIc;
+  final SuicaArchiveIdentity? suicaIdentity;
+  final SuicaManualNumber? suicaManualNumber;
+  final String? suicaManualNumberEditIssue;
 
   const _ArchiveHeader({
     required this.card,
@@ -363,12 +435,22 @@ class _ArchiveHeader extends StatelessWidget {
     this.balanceText,
     this.balanceObservationText,
     this.balanceObservationLabel,
+    this.amusementIc,
+    this.suicaIdentity,
+    this.suicaManualNumber,
+    this.suicaManualNumberEditIssue,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final aicIdentity = amusementIc == null
+        ? null
+        : AmusementIcArchiveIdentity.fromCapturedData(amusementIc!.data);
+    final subtitle = aicIdentity == null
+        ? card.subtitle
+        : aicIdentity.subtitle(card.customName);
     return Card(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 8, 14),
@@ -382,18 +464,21 @@ class _ArchiveHeader extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        card.displayName,
+                        aicIdentity?.displayName(card.customName) ??
+                            card.displayName,
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        card.subtitle,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
+                      if (subtitle != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          subtitle,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ),
@@ -405,24 +490,89 @@ class _ArchiveHeader extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
-            _row(context, '已观察卡号', card.cardNumberText),
-            _row(context, '已观察余额', balanceText ?? '—'),
-            if (balanceObservationText case final observed?)
-              _row(
-                context,
-                balanceObservationLabel ?? '历史金额',
-                '$observed（非已验证港币账户余额）',
-              ),
-            _row(context, recordCount.label, recordCount.valueText),
+            if (amusementIc case final captured?) ...[
+              AmusementIcSummary(data: captured.data, showRawAccessCode: false),
+              if (captured.idm case final idm?) _row(context, 'IDm', idm),
+              if (captured.readAt case final readAt?)
+                _row(context, '代码读取', readAt.toLocal().toString()),
+            ] else ...[
+              if (suicaIdentity case final identity?) ...[
+                SuicaIdentitySummary(
+                  idm: identity.idm,
+                  hasConflict: identity.hasConflict,
+                  compact: true,
+                ),
+                if (suicaManualNumber case final number?) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    '卡面编号（手工填写）',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SelectableText(
+                          number.formatted,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: '复制卡面编号',
+                        onPressed: () async {
+                          final messenger = ScaffoldMessenger.maybeOf(context);
+                          await Clipboard.setData(
+                            ClipboardData(text: number.value),
+                          );
+                          if (messenger?.mounted == true) {
+                            messenger!.showSnackBar(
+                              const SnackBar(content: Text('已复制卡面编号')),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.copy_outlined),
+                      ),
+                    ],
+                  ),
+                ],
+                if (suicaManualNumberEditIssue case final issue?)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Text(issue, style: theme.textTheme.bodySmall),
+                  )
+                else
+                  TextButton.icon(
+                    onPressed: () => _editSuicaNumber(context),
+                    icon: const Icon(Icons.edit_outlined),
+                    label: Text(
+                      suicaManualNumber == null ? '填写卡面编号' : '修改卡面编号',
+                    ),
+                  ),
+              ] else
+                _row(context, '已观察卡号', card.cardNumberText),
+              _row(context, '已观察余额', balanceText ?? '—'),
+              if (balanceObservationText case final observed?)
+                _row(
+                  context,
+                  balanceObservationLabel ?? '历史金额',
+                  '$observed（非已验证港币账户余额）',
+                ),
+              _row(context, recordCount.label, recordCount.valueText),
+            ],
             _row(context, '最近读取', card.lastReadFullText ?? '—'),
-            for (final field in const {
-              'cardNumber': '卡号',
-              'balanceFen': '余额',
-              'currencyCode': '币种',
-              'transactionCount': '交易条数',
-            }.entries)
-              if (observedFields[field.key] == false)
-                _row(context, '本次缺失', '${field.value}未读到，摘要保留既往已观察值'),
+            if (amusementIc == null)
+              for (final field in const {
+                'cardNumber': '卡号',
+                'balanceFen': '余额',
+                'currencyCode': '币种',
+                'transactionCount': '交易条数',
+              }.entries)
+                if (observedFields[field.key] == false &&
+                    !(suicaIdentity != null && field.key == 'cardNumber'))
+                  _row(context, '本次缺失', '${field.value}未读到，摘要保留既往已观察值'),
           ],
         ),
       ),
@@ -449,6 +599,20 @@ class _ArchiveHeader extends StatelessWidget {
             child: SelectableText(value, style: theme.textTheme.bodyMedium),
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _editSuicaNumber(BuildContext context) async {
+    await showDialog<bool>(
+      context: context,
+      anchorPoint: (context.findRenderObject() as RenderBox?)?.localToGlobal(
+        Offset.zero,
+      ),
+      builder: (_) => _SuicaManualNumberDialog(
+        repository: repository,
+        cardId: card.id,
+        number: suicaManualNumber,
       ),
     );
   }
@@ -493,4 +657,106 @@ class _ArchiveHeader extends StatelessWidget {
       messenger.showSnackBar(const SnackBar(content: Text('已更新卡片名称')));
     }
   }
+}
+
+class _SuicaManualNumberDialog extends StatefulWidget {
+  const _SuicaManualNumberDialog({
+    required this.repository,
+    required this.cardId,
+    this.number,
+  });
+
+  final CardRepository repository;
+  final String cardId;
+  final SuicaManualNumber? number;
+
+  @override
+  State<_SuicaManualNumberDialog> createState() =>
+      _SuicaManualNumberDialogState();
+}
+
+class _SuicaManualNumberDialogState extends State<_SuicaManualNumberDialog> {
+  final _form = GlobalKey<FormState>();
+  late String _value = widget.number?.formatted ?? '';
+  bool _saving = false;
+  String? _saveError;
+
+  Future<void> _save() async {
+    if (_saving || !_form.currentState!.validate()) return;
+    final normalized = normalizeSuicaManualNumber(_value);
+    setState(() {
+      _saving = true;
+      _saveError = null;
+    });
+    try {
+      await widget.repository.setSuicaManualNumber(widget.cardId, normalized);
+      if (mounted) Navigator.pop(context, true);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _saveError = '卡面编号保存失败，请重试';
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => PopScope(
+    canPop: !_saving,
+    child: AlertDialog(
+      title: Text(widget.number == null ? '填写卡面编号' : '修改卡面编号'),
+      scrollable: true,
+      content: Form(
+        key: _form,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('填写卡面印刷的编号，仅作为手工备注保存。留空可清除。'),
+            const SizedBox(height: 12),
+            TextFormField(
+              initialValue: _value,
+              enabled: !_saving,
+              autofocus: true,
+              textCapitalization: TextCapitalization.characters,
+              textInputAction: TextInputAction.done,
+              decoration: const InputDecoration(
+                labelText: '卡面编号',
+                hintText: 'JE123 4567 8901 2345',
+                errorMaxLines: 4,
+              ),
+              onChanged: (value) => _value = value,
+              validator: (value) {
+                try {
+                  normalizeSuicaManualNumber(value);
+                  return null;
+                } on FormatException {
+                  return '请输入 2 位字母和 15 位数字，例如 JE123 4567 8901 2345';
+                }
+              },
+              onFieldSubmitted: (_) => _save(),
+            ),
+            if (_saveError case final message?) ...[
+              const SizedBox(height: 8),
+              Text(
+                message,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.pop(context, false),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: _saving ? null : _save,
+          child: Text(_saving ? '保存中…' : '保存'),
+        ),
+      ],
+    ),
+  );
 }

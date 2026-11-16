@@ -12,6 +12,7 @@ import '../presentation/archive_record_presenter.dart';
 import '../../trips/local_card_trip_presenter.dart';
 import 'archive_history.dart';
 import 'cu_archive_projection.dart';
+import 'suica_archive_projection.dart';
 
 /// A field-limited document contains no hidden restore payload or identifiers.
 class ArchiveRecordsDocument {
@@ -275,6 +276,9 @@ List<Map<String, dynamic>> projectArchiveRecords(
         'terminal': trip.terminalHex,
       });
     }
+    for (final record in projectSuicaArchive(history).records) {
+      result.add({..._base(card), ..._suicaRow(record)});
+    }
     // Imported fields remain exactly as captured; a current card label or
     // observation must not silently fill a field omitted by the export owner.
     for (final row in history.importedRecords) {
@@ -292,6 +296,83 @@ Map<String, dynamic> _base(SavedCard card) => {
   'card_name': card.displayName,
   'card_number': card.cardNumber,
 };
+
+Map<String, dynamic> _suicaRow(SuicaArchiveRecord record) {
+  final fields = record.fields;
+  final presentation = record.presentation;
+  final details = fields['details'];
+  final entryCode = details is Map ? details['entryStation'] : null;
+  final exitCode = details is Map ? details['exitStation'] : null;
+  final time = presentation.entry.info.timeText;
+  final knownDate =
+      time != null &&
+      RegExp(r'^\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2})?$').hasMatch(time);
+  final balance = fields['balanceYen'];
+  final verifiedBalance =
+      fields['amountIsBalance'] == true &&
+      fields['currencyCode'] == 'JPY' &&
+      record.context.currencyCode == 'JPY' &&
+      record.context.minorUnitDigits == 0 &&
+      balance is int;
+  final hasTime = details is Map ? details['hasTime'] : null;
+  final terminal = details is Map ? details['terminalCode'] : null;
+  return {
+    'record_type': presentation.entry.info.title,
+    'source': presentation.entry.info.sourceLabel,
+    'time': knownDate ? time : null,
+    // Suica rail history has one date for the completed movement. It does not
+    // contain independently observed entry and exit timestamps.
+    'entry_time': null,
+    'exit_time': null,
+    'time_basis': !knownDate
+        ? 'unknown'
+        : hasTime == true
+        ? '卡内时间，精确到分钟；时区未核实'
+        : hasTime == false
+        ? '卡内日期；时刻未记录'
+        : '卡内时间，精度未核实',
+    'entry_station': presentation.journey.start?.station,
+    'exit_station': presentation.journey.end?.station,
+    'entry_line': presentation.journey.start?.line,
+    'exit_line': presentation.journey.end?.line,
+    'entry_station_code': _suicaCode(entryCode),
+    'exit_station_code': _suicaCode(exitCode),
+    'entry_line_code': _suicaCode(entryCode, lineOnly: true),
+    'exit_line_code': _suicaCode(exitCode, lineOnly: true),
+    'station':
+        presentation.journey.start == null && presentation.journey.end == null
+        ? presentation.journey.events.single.endpoint.station
+        : null,
+    'line':
+        presentation.journey.start == null && presentation.journey.end == null
+        ? presentation.journey.events.single.endpoint.line
+        : null,
+    // SF 090F stores a post-transaction balance, not a fare. Even a captured
+    // difference between adjacent balances must not enter the fare column.
+    'amount': null,
+    'amount_raw': balance is int ? balance.toString() : null,
+    'amount_unit': verifiedBalance ? '日元（交易后余额）' : 'unknown',
+    'currency': _text(fields['currencyCode']),
+    'balance': verifiedBalance ? balance.toString() : null,
+    'terminal': terminal is int && terminal >= 0 && terminal <= 255
+        ? '0x${terminal.toRadixString(16).padLeft(2, '0').toUpperCase()}'
+        : null,
+  };
+}
+
+String? _suicaCode(Object? value, {bool lineOnly = false}) {
+  if (value is! Map) return null;
+  final parts = [
+    value['areaCode'],
+    value['lineCode'],
+    if (!lineOnly) value['stationCode'],
+  ];
+  if (parts.any((part) => part is! int || part < 0 || part > 255)) return null;
+  return parts
+      .cast<int>()
+      .map((part) => part.toRadixString(16).padLeft(2, '0').toUpperCase())
+      .join('/');
+}
 
 Map<String, dynamic> _tuRow(SavedCard card, ArchiveHistoryRecord record) {
   final fields = record.fields;

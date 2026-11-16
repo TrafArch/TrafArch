@@ -1,9 +1,15 @@
 import '../data/app_database.dart';
 import '../data/card_repository.dart';
 import '../domain/snapshot_diagnostics.dart';
+import '../domain/card_types.dart';
+import '../domain/amusement_ic_archive_identity.dart';
+import '../domain/suica_archive_identity.dart';
+import '../domain/suica_manual_number.dart';
+import 'amusement_ic_archive_projection.dart';
 import 'archive_history.dart';
 import 'archive_records_json.dart';
 import 'cu_archive_projection.dart';
+import 'suica_archive_projection.dart';
 
 /// Counts the same complete, deduplicated rows that the archive can export.
 /// The scalar transaction count remains the latest read's separate observation.
@@ -35,8 +41,11 @@ class ArchiveRecordCount {
       );
     }
     final int rows;
+    final SuicaArchiveProjection suica;
     try {
-      if (projectCuArchive(history).issues.isNotEmpty) {
+      suica = projectSuicaArchive(history);
+      if (projectCuArchive(history).issues.isNotEmpty ||
+          suica.issues.isNotEmpty) {
         return ArchiveRecordCount.unavailable(
           latestTransactionCount: history.card?.transactionCount,
         );
@@ -56,19 +65,42 @@ class ArchiveRecordCount {
       );
     }
     final latest = history.card?.transactionCount;
+    // A fully observed Suica history can now project to zero after removing
+    // initialized slots from old captures. Its stale positive scalar must not
+    // restore those slots as transactions. Observation-only captures still
+    // leave the complete count unknown, as do archives for other card types.
+    final hasObservedSuicaCaptures =
+        suica.hasHistoryObservation &&
+        history.batches.every((batch) {
+          final section = batch.decoded.snapshot?.extensions['suica'];
+          if (section is! Map) return false;
+          final records = section['records'];
+          return section['historyObserved'] == true ||
+              (records is List && records.isNotEmpty);
+        });
     final hasEmptyCapture =
         history.batches.isNotEmpty &&
         history.batches.every(
           (batch) =>
               batch.decoded.snapshot != null &&
               (batch.decoded.status == SnapshotDecodeStatus.supported ||
-                  batch.decoded.status == SnapshotDecodeStatus.legacy),
+                  batch.decoded.status == SnapshotDecodeStatus.legacy) &&
+              // A Suica capture may contain identity/evidence only because
+              // history could not be read. Its empty array is not a zero-row
+              // observation; a successful empty read declares that explicitly.
+              (!batch.decoded.snapshot!.extensions.containsKey('suica') ||
+                  (batch.decoded.snapshot!.extensions['suica'] is Map &&
+                      (batch.decoded.snapshot!.extensions['suica']
+                              as Map)['historyObserved'] ==
+                          true)),
         );
     // A legacy/observation-only payload may retain a positive numeric summary
     // without its underlying rows. Do not relabel that summary as saved history
     // or let an otherwise empty capture turn it into zero.
     final int? saved = rows > 0
         ? rows
+        : hasObservedSuicaCaptures
+        ? 0
         : latest != null && latest > 0
         ? null
         : latest == 0 || hasEmptyCapture
@@ -117,17 +149,35 @@ class ArchiveRecordCount {
 class ArchiveCardSummary {
   final SavedCard card;
   final ArchiveRecordCount recordCount;
+  final SuicaArchiveIdentity? suicaIdentity;
+  final String? suicaManualNumberText;
+  final AmusementIcArchiveIdentity? amusementIcIdentity;
 
-  const ArchiveCardSummary(this.card, this.recordCount);
+  const ArchiveCardSummary(
+    this.card,
+    this.recordCount, {
+    this.suicaIdentity,
+    this.suicaManualNumberText,
+    this.amusementIcIdentity,
+  });
 
   @override
   bool operator ==(Object other) =>
       other is ArchiveCardSummary &&
       card == other.card &&
-      recordCount == other.recordCount;
+      recordCount == other.recordCount &&
+      suicaIdentity == other.suicaIdentity &&
+      suicaManualNumberText == other.suicaManualNumberText &&
+      amusementIcIdentity == other.amusementIcIdentity;
 
   @override
-  int get hashCode => Object.hash(card, recordCount);
+  int get hashCode => Object.hash(
+    card,
+    recordCount,
+    suicaIdentity,
+    suicaManualNumberText,
+    amusementIcIdentity,
+  );
 }
 
 /// One list stream observes card and batch changes, including batch-only writes.
@@ -139,22 +189,51 @@ Stream<List<ArchiveCardSummary>> watchArchiveCardSummaries(
     .map((rows) {
       return List<ArchiveCardSummary>.unmodifiable([
         for (final row in rows)
-          if (row.card case final card?)
-            ArchiveCardSummary(card, _countArchiveRows(row)),
+          if (row.card != null) _summarizeArchiveRows(row),
       ]);
     })
     .distinct(_sameSummaries);
 
-ArchiveRecordCount _countArchiveRows(ArchiveRows row) {
+ArchiveCardSummary _summarizeArchiveRows(ArchiveRows row) {
+  final card = row.card!;
   try {
-    return ArchiveRecordCount.fromHistory(ArchiveHistory.project(row));
+    final history = ArchiveHistory.project(row);
+    return ArchiveCardSummary(
+      card,
+      ArchiveRecordCount.fromHistory(history),
+      amusementIcIdentity: card.cardType == CardTypes.amusementIc
+          ? AmusementIcArchiveIdentity.fromCapturedData(
+              projectAmusementIcArchive(history).data,
+            )
+          : null,
+      suicaIdentity: card.cardType == CardTypes.suica
+          ? SuicaArchiveIdentity.resolve(
+              cardType: card.cardType,
+              fingerprint: card.cardFingerprint,
+              snapshots: history.batches
+                  .map((batch) => batch.decoded.snapshot)
+                  .nonNulls,
+            )
+          : null,
+      suicaManualNumberText: card.cardType == CardTypes.suica
+          ? SuicaManualNumber.fromJson(
+              history.cardExtensions['suicaManualNumber'],
+            )?.formatted
+          : null,
+    );
   } on FormatException {
-    return ArchiveRecordCount.unavailable(
-      latestTransactionCount: row.card?.transactionCount,
+    return ArchiveCardSummary(
+      card,
+      ArchiveRecordCount.unavailable(
+        latestTransactionCount: card.transactionCount,
+      ),
     );
   } on RangeError {
-    return ArchiveRecordCount.unavailable(
-      latestTransactionCount: row.card?.transactionCount,
+    return ArchiveCardSummary(
+      card,
+      ArchiveRecordCount.unavailable(
+        latestTransactionCount: card.transactionCount,
+      ),
     );
   }
 }

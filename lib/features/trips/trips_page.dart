@@ -16,6 +16,7 @@ import 'shanghai_mirrored_records.dart';
 import 'local_card_trip_list.dart';
 import 'local_card_trip_presenter.dart';
 import '../recovery/recovery_result_panel.dart';
+import 'suica_trip_list.dart';
 
 /// 行程页：展示最近一次读卡解析出的行程流（0x18 交易明细为主干，
 /// 0x1A / 0x1E 过程记录逐条关联、确认重复合并、无法关联独立保留），
@@ -77,6 +78,14 @@ class _TripsBody extends StatelessWidget {
     }
 
     final analysis = app.analysis;
+    if (app.suicaTrips.isNotEmpty) {
+      return SuicaTripList(
+        trips: app.suicaTrips,
+        initialFilters: app.recoveryFilters['live:suica'],
+        onFiltersChanged: (values) =>
+            app.recoveryFilters['live:suica'] = values,
+      );
+    }
     final trips = analysis?.trips ?? const <TransitTrip>[];
     final rail = app.railTransitRecord;
     final bus = app.busTransitRecord;

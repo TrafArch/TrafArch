@@ -4,6 +4,13 @@ import 'package:flutter/material.dart';
 
 import '../../../app/app_dependencies.dart';
 import '../../archive/domain/pending_card_save.dart';
+import '../../archive/domain/card_session_snapshot.dart';
+import '../../archive/domain/card_types.dart';
+import '../../archive/domain/amusement_ic_archive_identity.dart';
+import '../../archive/domain/suica_archive_identity.dart';
+import '../../../protocols/felica/models/amusement_ic_data.dart';
+import '../../../shared/presentation/amusement_ic_summary.dart';
+import '../../../shared/presentation/suica_identity_summary.dart';
 import '../../../shared/domain/archive_conflict_policy.dart';
 
 /// One modal at a time, bound to the captured save ID and AppDependencies owner.
@@ -140,8 +147,7 @@ class _PendingSavePresenterState extends State<PendingSavePresenter> {
       builder: (_) => SaveCardDialog(
         pending: pending,
         conflict: exists,
-        askEachTime:
-            owner.archiveConflictPolicy == ArchiveConflictPolicy.ask,
+        askEachTime: owner.archiveConflictPolicy == ArchiveConflictPolicy.ask,
       ),
     );
     _navigator = navigator;
@@ -154,9 +160,7 @@ class _PendingSavePresenterState extends State<PendingSavePresenter> {
       if (save == true) {
         final ok = await owner.acceptPendingSave(
           id,
-          conflictPolicy: exists
-              ? ArchiveConflictPolicy.overwrite
-              : null,
+          conflictPolicy: exists ? ArchiveConflictPolicy.overwrite : null,
         );
         if (!ok && mounted && _isCurrent(owner, id)) {
           _shownId =
@@ -206,6 +210,24 @@ class SaveCardDialog extends StatelessWidget {
   final bool conflict;
   final bool askEachTime;
 
+  AmusementIcData? get _amusementIc {
+    final raw = pending.sessionDataJson;
+    if (raw == null) return null;
+    final section = CardSessionSnapshot.decode(raw)?.extensions['amusementIc'];
+    if (section is! Map || section['version'] != 1) return null;
+    return AmusementIcData.fromJson(section['data']);
+  }
+
+  SuicaArchiveIdentity get _suicaIdentity {
+    final raw = pending.sessionDataJson;
+    final snapshot = raw == null ? null : CardSessionSnapshot.decode(raw);
+    return SuicaArchiveIdentity.resolve(
+      cardType: pending.identity.cardType,
+      fingerprint: pending.fingerprint,
+      snapshots: [?snapshot],
+    );
+  }
+
   @override
   Widget build(BuildContext context) => AlertDialog(
     title: Text(conflict ? '记录已存在' : '保存卡片'),
@@ -222,8 +244,23 @@ class SaveCardDialog extends StatelessWidget {
               : '是否将本次读取的卡片保存到卡片列表？',
         ),
         const SizedBox(height: 12),
-        _row(context, '卡片名称', pending.displayName),
-        _row(context, '卡号', pending.cardNumberText),
+        _row(
+          context,
+          '卡片名称',
+          pending.identity.cardType == CardTypes.amusementIc
+              ? AmusementIcArchiveIdentity.fromCapturedData(_amusementIc)
+                    .defaultName
+              : pending.displayName,
+        ),
+        if (pending.identity.cardType == CardTypes.amusementIc)
+          AmusementIcSummary(data: _amusementIc, showRawAccessCode: false)
+        else if (pending.identity.cardType == CardTypes.suica)
+          SuicaIdentitySummary(
+            idm: _suicaIdentity.idm,
+            hasConflict: _suicaIdentity.hasConflict,
+          )
+        else
+          _row(context, '卡号', pending.cardNumberText),
       ],
     ),
     actions: [

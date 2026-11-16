@@ -8,6 +8,7 @@ import '../domain/card_types.dart';
 import '../data/card_repository.dart';
 import 'archive_history.dart';
 import 'cu_archive_projection.dart';
+import 'suica_archive_projection.dart';
 import '../../../protocols/transit/city_union/city_union_models.dart';
 import '../presentation/archive_record_presenter.dart';
 import '../../trips/local_card_trip_presenter.dart' as local_presenter;
@@ -63,6 +64,7 @@ String buildArchiveHistoryExport(
     final card = history.card;
     if (card == null) continue;
     final cityUnion = projectCuArchive(history);
+    final suica = projectSuicaArchive(history);
     final cuSourceLabels = cityUnion.sourceLabels;
     index++;
     buffer
@@ -121,9 +123,14 @@ String buildArchiveHistoryExport(
         .toList();
     if (history.records.isEmpty &&
         cityUnion.transactions.isEmpty &&
+        suica.records.isEmpty &&
         localTrips.isEmpty) {
       buffer.writeln(
-        history.hasDiagnostics ? '行程记录：（无可解码记录，详见批次诊断）' : '行程记录：（无）',
+        suica.isHistoryUnobserved
+            ? '尚未读取到 Suica 历史记录'
+            : history.hasDiagnostics || suica.issues.isNotEmpty
+            ? '行程记录：（无可解码记录，详见批次诊断）'
+            : '行程记录：（无）',
       );
     } else if (history.records.isNotEmpty) {
       buffer.writeln('行程记录（${history.records.length} 条）：');
@@ -186,6 +193,34 @@ String buildArchiveHistoryExport(
     }
     for (final issue in cityUnion.issues) {
       buffer.writeln('CU 诊断：$issue');
+    }
+    if (suica.records.isNotEmpty) {
+      buffer.writeln('Suica 历史记录（${suica.records.length} 条）：');
+      for (final record in suica.records) {
+        final presentation = record.presentation;
+        final start = presentation.journey.start?.station;
+        final end = presentation.journey.end?.station;
+        buffer
+          ..writeln('  · ${presentation.entry.info.title}')
+          ..writeln('    ${presentation.entry.info.timeText ?? '时间未知'}');
+        if (start != null && end != null) {
+          buffer.writeln('    $start → $end');
+        }
+        if (presentation.journey.balanceAfterText case final balance?) {
+          buffer.writeln('    交易后余额：$balance');
+        }
+        if (presentation.entry.info.amountText case final amount?) {
+          buffer.writeln('    $amount（余额差不保证等同单笔票价）');
+        }
+        buffer
+          ..writeln(
+            '    来源：${record.sources.map((source) => '${source.batchId}/${source.path}').join(', ')}',
+          )
+          ..writeln('    原始记录：${record.fields['rawHex']}');
+      }
+    }
+    for (final issue in suica.issues) {
+      buffer.writeln('Suica 诊断：$issue');
     }
     for (final batch in history.batches) {
       buffer
