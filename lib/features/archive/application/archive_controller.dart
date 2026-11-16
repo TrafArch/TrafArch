@@ -405,7 +405,6 @@ class ArchiveController extends OwnedNotifier {
     String id, {
     int? capturedParseVersion,
     ArchiveConflictPolicy conflictPolicy = ArchiveConflictPolicy.overwrite,
-    bool replaceExistingHistory = false,
   }) async {
     final item = pending;
     if (disposed || item == null || item.pendingSaveId != id) return false;
@@ -430,14 +429,7 @@ class ArchiveController extends OwnedNotifier {
     }
     pending = null;
     notifyListeners();
-    final operation = _save(
-      item,
-      parseVersion: capturedParseVersion,
-      replaceBatches:
-          exists &&
-          conflictPolicy == ArchiveConflictPolicy.overwrite &&
-          replaceExistingHistory,
-    );
+    final operation = _save(item, parseVersion: capturedParseVersion);
     _writes.add(operation);
     final ok = await operation;
     _writes.remove(operation);
@@ -464,7 +456,6 @@ class ArchiveController extends OwnedNotifier {
   Future<bool> _save(
     PendingCardSave item, {
     int? parseVersion,
-    bool replaceBatches = false,
   }) async {
     try {
       await repository.db.transaction(() async {
@@ -492,7 +483,6 @@ class ArchiveController extends OwnedNotifier {
           sessionDataJson: payload,
           parseVersion: parseVersion ?? kTripParseVersion,
           readAt: item.readAt,
-          replaceBatches: replaceBatches,
         );
         // A late full observation may update the retained balance while the
         // newest envelope remains partial. Refresh only its source extension;
@@ -583,12 +573,11 @@ class ArchiveController extends OwnedNotifier {
     final ok = await accept(
       item.pendingSaveId,
       conflictPolicy: ArchiveConflictPolicy.overwrite,
-      replaceExistingHistory: exists,
     );
     if (disposed || generation != _generation) return;
     autoSaveNotice = ok
         ? exists
-              ? '已覆盖保存：${item.displayName}'
+              ? '已更新保存：${item.displayName}（历史记录已保留）'
               : '已自动保存：${item.displayName}'
         : '自动保存失败：${item.displayName}';
     notifyListeners();

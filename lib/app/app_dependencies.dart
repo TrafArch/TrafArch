@@ -565,11 +565,7 @@ class AppDependencies extends OwnedNotifier {
   }) {
     _discardRecoveryFile();
     final policy = conflictPolicy ?? settings.archiveConflictPolicy;
-    return archive.accept(
-      id,
-      conflictPolicy: policy,
-      replaceExistingHistory: policy == ArchiveConflictPolicy.overwrite,
-    );
+    return archive.accept(id, conflictPolicy: policy);
   }
 
   Future<bool> archiveCardExists(String fingerprint) =>
