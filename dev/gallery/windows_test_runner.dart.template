@@ -1,0 +1,92 @@
+// Temporary host-test workaround for Flutter 3.47.1–3.47.7 / Dart 3.13.x.
+// Uses the installed Flutter tool's private APIs; revisit after an SDK upgrade.
+// https://github.com/dart-lang/sdk/issues/64627
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter_tools/runner.dart' as runner;
+import 'package:flutter_tools/src/base/template.dart';
+import 'package:flutter_tools/src/build_system/build_targets.dart';
+import 'package:flutter_tools/src/build_system/targets/hook_runner_native.dart';
+import 'package:flutter_tools/src/cache.dart';
+import 'package:flutter_tools/src/commands/test.dart';
+import 'package:flutter_tools/src/globals.dart' as globals;
+import 'package:flutter_tools/src/hook_runner.dart';
+import 'package:flutter_tools/src/isolated/build_targets.dart';
+import 'package:flutter_tools/src/isolated/mustache_template.dart';
+import 'package:flutter_tools/src/isolated/native_assets/test/native_assets.dart';
+import 'package:process/process.dart';
+
+class _WindowsTestProcessManager extends LocalProcessManager {
+  const _WindowsTestProcessManager();
+
+  @override
+  Future<Process> start(
+    List<Object> command, {
+    String? workingDirectory,
+    Map<String, String>? environment,
+    bool includeParentEnvironment = true,
+    bool runInShell = false,
+    ProcessStartMode mode = ProcessStartMode.normal,
+  }) {
+    final actual = List<Object>.of(command);
+    if (Platform.isWindows &&
+        command.first.toString().endsWith('flutter_tester.exe')) {
+      // The engine supplies --no-profiler when this switch is absent. Passing
+      // --dart-flags=--no-profiler directly is rejected by its VM flag allowlist.
+      actual.remove('--enable-dart-profiling');
+    }
+    return super.start(
+      actual,
+      workingDirectory: workingDirectory,
+      environment: environment,
+      includeParentEnvironment: includeParentEnvironment,
+      runInShell: runInShell,
+      mode: mode,
+    );
+  }
+}
+
+Future<void> main(List<String> args) async {
+  final sdk = File(Platform.resolvedExecutable)
+      .parent
+      .parent
+      .parent
+      .parent
+      .parent;
+  Cache.flutterRoot = sdk.path;
+  final version = jsonDecode(
+    File('${sdk.path}/bin/cache/flutter.version.json').readAsStringSync(),
+  ) as Map<String, dynamic>;
+  if (!Platform.isWindows ||
+      !RegExp(r'^3\.47\.[1-7]$').hasMatch('${version['frameworkVersion']}')) {
+    stderr.writeln(
+      'This workaround is limited to Windows Flutter 3.47.1–3.47.7. '
+      'Use flutter test and reassess the SDK issue after upgrading.',
+    );
+    exitCode = 64;
+    return;
+  }
+  stdout.writeln(
+    'Windows Flutter ${version['frameworkVersion']}: '
+    'Dart CPU sampling disabled for flutter_tester (SDK issue #64627).',
+  );
+  await runner.run(
+    ['test', ...args],
+    () => [
+      TestCommand(
+        verbose: args.contains('--verbose') || args.contains('-v'),
+        nativeAssetsBuilder: const TestCompilerNativeAssetsBuilderImpl(),
+      ),
+    ],
+    verbose: args.contains('--verbose') || args.contains('-v'),
+    reportCrashes: false,
+    overrides: {
+      ProcessManager: () => const _WindowsTestProcessManager(),
+      FlutterHookRunner: () => FlutterHookRunnerNative(),
+      TemplateRenderer: () => const MustacheTemplateRenderer(),
+      BuildTargets: () => const BuildTargetsImpl(),
+    },
+    shutdownHooks: globals.shutdownHooks,
+  );
+}

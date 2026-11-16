@@ -10,21 +10,28 @@ class JourneyTransportIcon extends StatelessWidget {
     required this.mode,
     required this.cityLabel,
     required this.isCrossCity,
+    this.size = 21,
+    this.fallbackIcon,
+    this.fallbackColor,
   });
 
   final TripModeFilter mode;
   final String? cityLabel;
   final bool isCrossCity;
+  final double size;
+  final IconData? fallbackIcon;
+  final Color? fallbackColor;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final fallback = Icon(
-      mode == TripModeFilter.bus
-          ? Icons.directions_bus_outlined
-          : Icons.subway_outlined,
-      color: scheme.primary,
-      size: 21,
+      fallbackIcon ??
+          (mode == TripModeFilter.bus
+              ? Icons.directions_bus_outlined
+              : Icons.subway_outlined),
+      color: fallbackColor ?? scheme.primary,
+      size: size,
     );
     final city = _canonicalCity(cityLabel);
     final logo = mode == TripModeFilter.rail && !isCrossCity
@@ -33,8 +40,8 @@ class JourneyTransportIcon extends StatelessWidget {
     if (logo == null) return fallback;
     return SvgPicture.asset(
       'assets/metro/metro_logo_$logo.svg',
-      width: 21,
-      height: 21,
+      width: size,
+      height: size,
       fit: BoxFit.contain,
       excludeFromSemantics: true,
       placeholderBuilder: (_) => fallback,

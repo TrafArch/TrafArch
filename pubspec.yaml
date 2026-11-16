@@ -1,7 +1,7 @@
 name: transit_card_analyzer
 description: "TrafArch - NFC 交通卡读取与分析"
 publish_to: 'none'
-version: 1.0.8-beta.1+2182
+version: 1.0.5-beta.2+4183
 
 environment:
   sdk: ^3.13.5
@@ -17,8 +17,8 @@ dependencies:
   # 锁定 1.9.x（最后的内置 Material 版本），待项目整体迁移 material_ui 后再升。
   dynamic_color: ^1.9.0
   path_provider: ^2.1.6
-  flutter_floating_bottom_bar: ^3.0.0
-  mobile_scanner: ^7.4.2
+  flutter_floating_bottom_bar: ^3.0.1
+  mobile_scanner: ^7.5.0
   # 调用系统默认浏览器/外部应用打开链接（QQ 加群跳转）
   url_launcher: ^6.3.3
   # 应用内打开 QQ 加群页；反馈问卷使用 Edge / Chrome Custom Tabs
@@ -28,11 +28,11 @@ dependencies:
 
   # 卡片档案持久化（Drift + SQLite）：正式卡名 / 用户自定义名称等卡片数据，
   # 后续交易记录、余额快照表统一在本数据库管理
-  drift: ^2.35.0
+  drift: ^2.35.3
   drift_flutter: ^0.3.1
   # 项目自有只读参考包：SHA256 校验及 SQLite 点查
-  crypto: ^3.0.7
-  sqlite3: ^3.5.2
+  crypto: ^3.0.8
+  sqlite3: ^3.8.0
   # 卡片档案 ID 生成
   uuid: ^4.4.0
   # 本地城市地铁标志（SVG，保留原色和渐变）
@@ -43,10 +43,10 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^6.0.0
   # 测试用：生成二维码图案
-  qr: ^4.0.0
+  qr: ^4.0.1
   # Drift 代码生成：dart run build_runner build --delete-conflicting-outputs
-  drift_dev: ^2.35.0
-  build_runner: ^2.16.1
+  drift_dev: ^2.35.2
+  build_runner: ^2.17.1
 
 flutter:
   uses-material-design: true
@@ -55,4 +55,6 @@ flutter:
     - assets/data/TrafArch_Database_CU.sqlite
     - assets/data/reference_manifest.json
     - assets/icon/
+    - assets/contributors/
+    - assets/gallery/
     - assets/metro/

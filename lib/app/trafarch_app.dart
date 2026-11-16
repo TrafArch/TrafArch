@@ -14,10 +14,15 @@ import 'navigation/recovery_route_observer.dart';
 export 'navigation/app_shell.dart' show AppShell;
 
 class TransitCardAnalyzerApp extends StatefulWidget {
-  const TransitCardAnalyzerApp({super.key, this.createDependencies});
+  const TransitCardAnalyzerApp({
+    super.key,
+    this.createDependencies,
+    this.enableUpdateChecks = true,
+  });
 
   /// The root widget owns the returned state's initialization and disposal.
   final AppDependencies Function()? createDependencies;
+  final bool enableUpdateChecks;
 
   @override
   State<TransitCardAnalyzerApp> createState() => _TransitCardAnalyzerAppState();
@@ -87,10 +92,12 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp>
         return ValueListenableBuilder<bool>(
           valueListenable: _monetEnabled,
           // AppShell 作为 child 传入，避免莫奈开关翻转时重建整棵子树
-          child: UpdatePrompt(
-            service: _app.updates,
-            child: AppShell(app: _app, routeObserver: _routeObserver),
-          ),
+          child: widget.enableUpdateChecks
+              ? UpdatePrompt(
+                  service: _app.updates,
+                  child: AppShell(app: _app, routeObserver: _routeObserver),
+                )
+              : AppShell(app: _app, routeObserver: _routeObserver),
           builder: (context, monet, child) {
             return MaterialApp(
               title: AppInfo.appName,

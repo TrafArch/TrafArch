@@ -1,0 +1,1566 @@
+part of 'gallery_app.dart';
+
+extension _GalleryPages on _GalleryViewState {
+  Widget _home() => _fade(
+    'home',
+    _list([
+      _GalleryReadFlow(
+        state: c.readState,
+        hasRead: c.hasRead,
+        builder: _homeContent,
+      ),
+    ]),
+  );
+
+  Widget _homeContent(GalleryReadState state, bool hasRead) {
+    final card = c.current;
+    final reading = state == GalleryReadState.reading;
+    final failed = state == GalleryReadState.failed;
+    final showResult = hasRead && !reading && !failed;
+    final recent = c.trips.where((r) => r['kind'] != 'event').firstOrNull;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: showResult
+              ? 0
+              : _compactHeight
+              ? 8
+              : 32,
+        ),
+        SizedBox(
+          key: const ValueKey('home-card-expansion'),
+          child: !showResult
+              ? _GalleryReadPrompt(
+                  reading: reading,
+                  failed: failed,
+                  compact: _compactHeight,
+                )
+              : _face(card),
+        ),
+        if (showResult) ...[
+          _gap(10),
+          Row(
+            children: [
+              Icon(
+                failed
+                    ? Icons.error_outline_rounded
+                    : Icons.check_circle_outline,
+                size: 16,
+                color: failed ? t.warn : t.ok,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Semantics(
+                  liveRegion: true,
+                  child: _text(
+                    failed ? '读取失败，保留上次结果' : '今天 09:41 读取成功',
+                    role: GalleryTypography.caption,
+                    color: failed ? t.warn : t.onTone,
+                  ),
+                ),
+              ),
+              if (!failed)
+                _chip(
+                  card.saved
+                      ? c.autoSave
+                            ? '已自动保存'
+                            : '已保存'
+                      : '未保存',
+                ),
+            ],
+          ),
+        ],
+        _gap(
+          showResult
+              ? 16
+              : _compactHeight
+              ? 12
+              : 28,
+        ),
+        if (!reading)
+          if (!hasRead || failed)
+            Center(
+              child: SizedBox(
+                width: showResult ? double.infinity : 240,
+                child: _button(
+                  failed ? '重新读取' : '开始读取',
+                  () => c.read(),
+                  primary: true,
+                  icon: Icons.contactless_outlined,
+                ),
+              ),
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: _button(
+                    card.saved ? '再次读取' : '保存卡片',
+                    card.saved
+                        ? () => c.read()
+                        : () => c.showOverlay(GalleryOverlay.save),
+                    primary: true,
+                    icon: card.saved
+                        ? Icons.refresh_rounded
+                        : Icons.save_outlined,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _button(
+                    card.saved ? '更换卡面' : '再次读取',
+                    card.saved
+                        ? () => c.showOverlay(GalleryOverlay.face, card: card)
+                        : () => c.read(),
+                    icon: card.saved
+                        ? Icons.palette_outlined
+                        : Icons.refresh_rounded,
+                  ),
+                ),
+              ],
+            ),
+        if (failed && hasRead) ...[
+          _gap(20),
+          _text('读取失败，保留上次结果', role: GalleryTypography.label, color: t.warn),
+          _gap(12),
+          _face(card),
+        ],
+        if (showResult) ...[
+          _gap(16),
+          if (recent != null)
+            _panel(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _text(
+                          '最近一次行程',
+                          role: GalleryTypography.caption,
+                          color: t.muted,
+                        ),
+                      ),
+                      _text(
+                        '今天',
+                        role: GalleryTypography.caption,
+                        color: t.muted,
+                      ),
+                    ],
+                  ),
+                  _gap(8),
+                  _trip(recent),
+                ],
+              ),
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
+            )
+          else
+            _empty('暂无行程记录', '这张卡片没有可展示的行程', icon: Icons.route_outlined),
+          Padding(
+            padding: const EdgeInsets.only(top: 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Divider(),
+                TextButton(
+                  onPressed: () => c.navigate(GalleryPage.trips),
+                  style: TextButton.styleFrom(
+                    alignment: Alignment.centerLeft,
+                    padding: EdgeInsets.zero,
+                    foregroundColor: t.onTone,
+                  ),
+                  child: const Text(
+                    '查看全部行程  ›',
+                    style: GalleryTypography.caption,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        _gap(
+          showResult
+              ? 8
+              : _compactHeight
+              ? 12
+              : 32,
+        ),
+        _text(
+          '模拟数据',
+          role: GalleryTypography.caption,
+          color: t.muted,
+          align: showResult ? TextAlign.left : TextAlign.center,
+        ),
+      ],
+    );
+  }
+
+  Widget _trips() {
+    final trips = c.filteredTrips;
+    final grouped = <String, List<GalleryRecord>>{};
+    for (final trip in trips) {
+      grouped.putIfAbsent(trip['date'] as String, () => []).add(trip);
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth - 32;
+        double titleHeight(TextStyle style, double available) {
+          final painter = TextPainter(
+            text: TextSpan(
+              text: c.current.name,
+              style: style.copyWith(fontWeight: FontWeight.w400),
+            ),
+            textDirection: Directionality.of(context),
+            textScaler: MediaQuery.textScalerOf(context),
+          )..layout(maxWidth: math.max(1, available));
+          final height = painter.height;
+          painter.dispose();
+          return height;
+        }
+
+        final scaler = MediaQuery.textScalerOf(context);
+        final expandedHeight =
+            32.0 +
+            math.max(
+              28,
+              math.max(
+                titleHeight(GalleryTypography.card, (width - 97) * .6),
+                scaler.scale(24) * 1.2,
+              ),
+            );
+        final compactHeight =
+            18.0 +
+            math.max(
+              titleHeight(GalleryTypography.caption, (width - 44) * .6),
+              scaler.scale(18) * 1.2,
+            );
+        return CustomScrollView(
+          key: PageStorageKey('gallery-${c.generation}-trips-${_entry.qrView}'),
+          slivers: [
+            if (c.hasRead)
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                sliver: SliverPersistentHeader(
+                  pinned: true,
+                  delegate: _TripsSummaryDelegate(
+                    expandedHeight: _reduceMotion
+                        ? compactHeight
+                        : math.max(expandedHeight, compactHeight),
+                    compactHeight: compactHeight,
+                    builder: _tripsSummary,
+                  ),
+                ),
+              ),
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(16, 6, 16, _navLayout.listBottom),
+              sliver: SliverList.list(
+                children: [
+                  _gap(14),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _filterButton(c.source, GalleryOverlay.source),
+                      _filterButton(c.mode, GalleryOverlay.mode),
+                    ],
+                  ),
+                  if (!c.hasRead)
+                    _empty(
+                      '尚未读取卡片',
+                      '请先在首页读取一张交通卡',
+                      icon: Icons.route_outlined,
+                      action: _button(
+                        '前往首页',
+                        () => c.navigate(GalleryPage.home),
+                        primary: true,
+                      ),
+                    )
+                  else if (trips.isEmpty)
+                    _empty(
+                      c.trips.isEmpty ? '暂无行程记录' : '当前筛选下没有记录',
+                      c.trips.isEmpty ? '卡内记录可能不完整' : '试试其他来源或交通方式',
+                      icon: Icons.route_outlined,
+                    )
+                  else
+                    ...grouped.entries.expand(
+                      (entry) => [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(2, 22, 2, 12),
+                          child: Semantics(
+                            header: true,
+                            child: _text(
+                              entry.key,
+                              role: GalleryJourneyTypography.date,
+                            ),
+                          ),
+                        ),
+                        _panel(
+                          Column(
+                            children: [
+                              for (int i = 0; i < entry.value.length; i++) ...[
+                                if (i > 0) Divider(height: 1, color: t.line),
+                                _trip(entry.value[i]),
+                              ],
+                            ],
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          radius: 24,
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// One pinned surface contracts with scrolling, without overlapping copies.
+  Widget _tripsSummary(double progress) => Container(
+    key: const ValueKey('trips-summary'),
+    padding: EdgeInsets.symmetric(
+      horizontal: 16 + 2 * progress,
+      vertical: 16 - 7 * progress,
+    ),
+    decoration: BoxDecoration(
+      color: t.tone,
+      borderRadius: BorderRadius.circular(24),
+    ),
+    child: Row(
+      children: [
+        SizedBox(
+          width: 40 * (1 - progress),
+          child: Opacity(
+            opacity: 1 - progress,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: SizedBox(
+                width: 40,
+                height: 28,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Icon(
+                    Icons.credit_card_rounded,
+                    size: 28,
+                    color: t.onTone,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          flex: 3,
+          child: _text(
+            c.current.name,
+            role: TextStyle.lerp(
+              GalleryTypography.card,
+              GalleryTypography.caption,
+              progress,
+            )!,
+            weight: FontWeight.w400,
+            color: t.onTone,
+          ),
+        ),
+        SizedBox(width: 12 - 8 * progress),
+        SizedBox(
+          height: 24,
+          width: 1 - progress,
+          child: VerticalDivider(
+            width: 1,
+            color: t.onTone.withValues(alpha: .2 * (1 - progress)),
+          ),
+        ),
+        SizedBox(width: 12 - 8 * progress),
+        Expanded(
+          flex: 2,
+          child: Semantics(
+            label: '当前余额',
+            child: _amount(
+              c.current,
+              size: 24 - 6 * progress,
+              weight: FontWeight.w400,
+              alignment: Alignment.centerRight,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _filterButton(String label, GalleryOverlay overlay) => _menuAnchor(
+    'filter-${overlay.name}',
+    Semantics(
+      button: true,
+      expanded: c.overlay == overlay,
+      child: Tooltip(
+        message: overlay == GalleryOverlay.source ? '选择记录来源' : '选择交通方式',
+        child: TextButton(
+          key: ValueKey('filter-${overlay.name}'),
+          onPressed: () => _openDropdown(overlay, 'filter-${overlay.name}'),
+          style: TextButton.styleFrom(
+            minimumSize: const Size(0, 36),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            backgroundColor: label.startsWith('全部') ? t.surface : t.tone,
+            foregroundColor: label.startsWith('全部') ? t.muted : t.onTone,
+            shape: StadiumBorder(side: BorderSide(color: t.line)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(label, style: GalleryTypography.caption),
+              const SizedBox(width: 7),
+              const Icon(Icons.expand_more_rounded, size: 16),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Widget _trip(GalleryRecord trip, {bool interactive = true}) {
+    final rail = trip['kind'] == 'rail';
+    final event = trip['kind'] == 'event';
+    final oneWay = trip['oneWay'] == true;
+    final boarding = trip['entryTime'] as String? ?? '未记录';
+    final sub = (trip['sub'] as String? ?? '未记录 → 未记录').split(' → ');
+    final entry = trip['entryStation'] as String? ?? sub.first;
+    final exit =
+        trip['exitStation'] as String? ?? (sub.length > 1 ? sub.last : '未记录');
+    final entryLine =
+        trip['entryLine'] as String? ??
+        (rail
+            ? (trip['title'] as String).replaceFirst('地铁 ', '')
+            : (trip['title'] as String).replaceFirst('公交 ', ''));
+    final exitLine = trip['exitLine'] as String? ?? entryLine;
+    final city = trip['city'] as String? ?? '';
+    Widget lineBadge(String line) {
+      final redLine =
+          rail && city == '上海' && RegExp(r'^1\s*号线$').hasMatch(line);
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: redLine
+              ? t.shanghaiLineOne
+              : rail
+              ? t.tripBadgeRail
+              : t.tripBadgeBus,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: _text(
+          line,
+          role: GalleryJourneyTypography.line,
+          color: redLine
+              ? t.onShanghaiLineOne
+              : rail
+              ? t.tripBadgeOnRail
+              : t.tripBadgeOnBus,
+        ),
+      );
+    }
+
+    Widget endpoint(String phase, String line, String time, String station) =>
+        Semantics(
+          label: phase,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _text(time, role: GalleryJourneyTypography.time, lines: 1),
+                    if (line.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      lineBadge(line),
+                    ],
+                  ],
+                ),
+              ),
+              _gap(6),
+              _text(station, role: GalleryJourneyTypography.station),
+            ],
+          ),
+        );
+    final body = Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: event
+          ? Wrap(
+              spacing: 12,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Icon(Icons.login_rounded, size: 18, color: t.onTone),
+                const SizedBox(width: 12),
+                _text(
+                  trip['time'] as String,
+                  role: GalleryTypography.caption,
+                  mono: true,
+                  color: t.muted,
+                ),
+                const SizedBox(width: 12),
+                _text(
+                  trip['title'] as String,
+                  role: GalleryTypography.label,
+                  weight: FontWeight.w400,
+                ),
+                _text('过程记录', role: GalleryTypography.caption, color: t.muted),
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  spacing: 8,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: rail
+                                ? Colors.transparent
+                                : t.secondaryContainer,
+                            borderRadius: BorderRadius.circular(11),
+                          ),
+                          child: Center(
+                            child: JourneyTransportIcon(
+                              mode: rail
+                                  ? TripModeFilter.rail
+                                  : TripModeFilter.bus,
+                              cityLabel: city,
+                              // Different from the issuer does not mean cross-city.
+                              isCrossCity: trip['isCrossCity'] == true,
+                              size: 23,
+                              fallbackIcon: rail
+                                  ? Icons.train_outlined
+                                  : Icons.directions_bus_outlined,
+                              fallbackColor: rail
+                                  ? t.text
+                                  : t.onSecondaryContainer,
+                            ),
+                          ),
+                        ),
+                        _text(
+                          rail ? '轨道交通' : '公交',
+                          role: GalleryJourneyTypography.mode,
+                        ),
+                        if (city.isNotEmpty) ...[
+                          SizedBox(
+                            height: 14,
+                            child: VerticalDivider(width: 1, color: t.muted),
+                          ),
+                          _text(
+                            city,
+                            role: GalleryJourneyTypography.city,
+                            color: t.muted,
+                          ),
+                        ],
+                      ],
+                    ),
+                    if (trip['foreign'] == true) ...[
+                      _chip('异地用卡', weight: FontWeight.w400),
+                      const SizedBox(width: 6),
+                    ],
+                    _text(
+                      trip['amount'] as String,
+                      role: GalleryJourneyTypography.amount,
+                    ),
+                  ],
+                ),
+                _gap(12),
+                oneWay
+                    ? Wrap(
+                        key: const ValueKey('trip-one-way'),
+                        spacing: 10,
+                        runSpacing: 6,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: _text(
+                              boarding,
+                              role: GalleryJourneyTypography.oneWayTime,
+                              lines: 1,
+                            ),
+                          ),
+                          if (entryLine.isNotEmpty) lineBadge(entryLine),
+                          _text(entry, role: GalleryJourneyTypography.station),
+                        ],
+                      )
+                    : Row(
+                        key: const ValueKey('trip-endpoints'),
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: endpoint(
+                              rail ? '进站' : '上车',
+                              entryLine,
+                              boarding,
+                              entry,
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Center(
+                              child: Container(
+                                key: const ValueKey('trip-direction-arrow'),
+                                padding: const EdgeInsets.all(5),
+                                decoration: BoxDecoration(
+                                  color: t.tone.withValues(alpha: .5),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.arrow_forward_rounded,
+                                  size: 20,
+                                  color: t.muted,
+                                ),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: endpoint(
+                              rail ? '出站' : '下车',
+                              exitLine,
+                              trip['time'] as String? ?? '未记录',
+                              exit,
+                            ),
+                          ),
+                        ],
+                      ),
+                if (rail && trip['transferKnown'] == false && !interactive) ...[
+                  _gap(10),
+                  _text(
+                    '未记录换乘站',
+                    role: GalleryTypography.caption,
+                    color: t.onTone,
+                  ),
+                ],
+              ],
+            ),
+    );
+    return interactive
+        ? Semantics(
+            button: true,
+            label: '${trip['title']}，${trip['sub']}，${trip['amount']}',
+            child: InkWell(
+              onTap: () => c.showOverlay(GalleryOverlay.trip, trip: trip),
+              child: body,
+            ),
+          )
+        : body;
+  }
+
+  Widget _cards() {
+    final cards = c.savedCards;
+    final ids = cards.map((card) => card.id).toSet();
+    if (_walletCardIds != null)
+      _walletArrivals.addAll(ids.difference(_walletCardIds!));
+    _walletCardIds = ids;
+    if (_walletArrivals.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _walletArrivals.clear(),
+      );
+    }
+    Color foreground(GalleryCard card, {bool secondary = false}) =>
+        _walletForeground(card, secondary: secondary);
+    final numberStyle = GalleryTypography.lead.copyWith(
+      inherit: false,
+      color: t.cardTextPrimary,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
+    final parts = {
+      for (final card in cards) card.id: _balancePresentation(card),
+    };
+    double measure(String value, TextStyle style) {
+      final painter = TextPainter(
+        text: TextSpan(
+          text: value,
+          style: style.copyWith(
+            fontFamily: 'sans-serif',
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+        textDirection: Directionality.of(context),
+        textScaler: MediaQuery.textScalerOf(context),
+      )..layout();
+      final width = painter.width.ceilToDouble() + 2;
+      painter.dispose();
+      return width;
+    }
+
+    var numberWidth = 0.0;
+    for (final value in parts.values) {
+      if (!value.known) continue;
+      numberWidth = math.max(numberWidth, measure(value.number, numberStyle));
+    }
+    Widget handle(GalleryCard card, int index) => Semantics(
+      container: true,
+      excludeSemantics: true,
+      label: '${card.name}，长按拖动排序',
+      customSemanticsActions: {
+        if (index > 0)
+          CustomSemanticsAction(label: '上移'): () =>
+              c.reorderSavedCards(index, index - 1),
+        if (index < cards.length - 1)
+          CustomSemanticsAction(label: '下移'): () =>
+              c.reorderSavedCards(index, index + 1),
+      },
+      child: ReorderableDelayedDragStartListener(
+        index: index,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {},
+          child: Tooltip(
+            message: '长按拖动${card.name}',
+            triggerMode: TooltipTriggerMode.manual,
+            child: SizedBox(
+              key: ValueKey('wallet-drag-${card.id}'),
+              width: 44,
+              height: 48,
+              child: Icon(
+                Icons.drag_indicator_rounded,
+                color: foreground(card, secondary: true),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth - 32;
+        double titleHeight(TextStyle style, double available) {
+          final painter = TextPainter(
+            text: TextSpan(
+              text: '我的卡片',
+              style: style.copyWith(fontWeight: FontWeight.w400),
+            ),
+            textDirection: Directionality.of(context),
+            textScaler: MediaQuery.textScalerOf(context),
+          )..layout(maxWidth: math.max(1, available));
+          final height = painter.height;
+          painter.dispose();
+          return height;
+        }
+
+        final scaler = MediaQuery.textScalerOf(context);
+        final expandedHeight =
+            32.0 +
+            math.max(
+              26,
+              math.max(
+                titleHeight(GalleryTypography.card, (width - 97) * .6),
+                math.max(
+                  titleHeight(GalleryTypography.section, (width - 97) * .4),
+                  scaler.scale(24) * 1.2,
+                ),
+              ),
+            );
+        final compactHeight =
+            18.0 +
+            math.max(
+              titleHeight(GalleryTypography.caption, (width - 44) * .6),
+              scaler.scale(18) * 1.2,
+            );
+        return CustomScrollView(
+          key: PageStorageKey('gallery-${c.generation}-cards'),
+          slivers: [
+            if (cards.isNotEmpty)
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                sliver: SliverPersistentHeader(
+                  pinned: true,
+                  delegate: _TripsSummaryDelegate(
+                    expandedHeight: _reduceMotion
+                        ? compactHeight
+                        : math.max(expandedHeight, compactHeight),
+                    compactHeight: compactHeight,
+                    builder: (progress) =>
+                        _walletSummary(progress, cards.length),
+                  ),
+                ),
+              ),
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                16,
+                cards.isEmpty ? 6 : 20,
+                16,
+                _navLayout.listBottom,
+              ),
+              sliver: cards.isEmpty
+                  ? SliverToBoxAdapter(
+                      child: _empty(
+                        '还没有保存的卡片',
+                        '读取一张交通卡并保存到卡包',
+                        action: _button(
+                          '前往首页',
+                          () => c.navigate(GalleryPage.home),
+                          primary: true,
+                        ),
+                      ),
+                    )
+                  : SliverReorderableList(
+                      itemCount: cards.length,
+                      onReorderItem: c.reorderSavedCards,
+                      proxyDecorator: (child, index, animation) =>
+                          AnimatedBuilder(
+                            animation: animation,
+                            child: child,
+                            builder: (context, child) => Transform.scale(
+                              scale: _reduceMotion
+                                  ? 1
+                                  : 1 +
+                                        .02 *
+                                            Curves.easeOutCubic.transform(
+                                              animation.value,
+                                            ),
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(24),
+                                  boxShadow: t.shadows(
+                                    GalleryElevation.floating,
+                                  ),
+                                ),
+                                child: child,
+                              ),
+                            ),
+                          ),
+                      itemBuilder: (context, index) {
+                        final card = cards[index];
+                        return _GalleryWalletItem(
+                          key: ValueKey('wallet-item-${card.id}'),
+                          id: card.id,
+                          name: card.name,
+                          reduceMotion: _reduceMotion,
+                          inserted: _walletArrivals.contains(card.id),
+                          onFace: () =>
+                              c.showOverlay(GalleryOverlay.face, card: card),
+                          onDelete: () => _deleteWalletCard(card),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(24),
+                              boxShadow: t.shadows(GalleryElevation.card),
+                            ),
+                            child: _walletCardSurface(
+                              card,
+                              id: 'wallet',
+                              numberWidth: numberWidth,
+                              trailing: handle(card, index),
+                              onTap: () => c.openCard(card),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// The wallet summary contracts into a pinned capsule while scrolling,
+  /// mirroring the trips summary animation.
+  Widget _walletSummary(double progress, int count) => Container(
+    key: const ValueKey('wallet-summary'),
+    padding: EdgeInsets.symmetric(
+      horizontal: 16 + 2 * progress,
+      vertical: 16 - 7 * progress,
+    ),
+    decoration: BoxDecoration(
+      color: t.tone,
+      borderRadius: BorderRadius.circular(24),
+    ),
+    child: Row(
+      children: [
+        SizedBox(
+          width: 26 * (1 - progress),
+          child: Opacity(
+            opacity: 1 - progress,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: SizedBox(
+                width: 26,
+                height: 26,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Icon(Icons.wallet_outlined, size: 26, color: t.onTone),
+                ),
+              ),
+            ),
+          ),
+        ),
+        SizedBox(width: 12 * (1 - progress)),
+        Expanded(
+          child: _text(
+            '我的卡片',
+            role: TextStyle.lerp(
+              GalleryTypography.card,
+              GalleryTypography.caption,
+              progress,
+            )!,
+            color: t.onTone,
+          ),
+        ),
+        _text(
+          '$count 张',
+          role: TextStyle.lerp(
+            GalleryTypography.section,
+            GalleryTypography.caption,
+            progress,
+          )!,
+          color: t.onTone,
+        ),
+      ],
+    ),
+  );
+
+  void _deleteWalletCard(GalleryCard card) {
+    final removal = c.deleteCard(card);
+    if (removal == null || !mounted) return;
+    _toast(
+      '已删除“${card.name}”',
+      type: GalleryFeedbackType.info,
+      actionLabel: '撤销',
+      onAction: () => c.restoreCard(removal),
+    );
+  }
+
+  Widget _footprints() => _list([
+    IntrinsicHeight(
+      child: Row(
+        key: const ValueKey('footprint-summary'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final (i, pair) in [
+            ('${c.footprints.length}', '去过站点'),
+            ('16', '累计到访'),
+            ('3', '本月新站点'),
+          ].indexed) ...[
+            if (i > 0) const SizedBox(width: 8),
+            Expanded(
+              child: _panel(
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      height: MediaQuery.textScalerOf(context).scale(30),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: _text(pair.$1, role: GalleryTypography.stat),
+                      ),
+                    ),
+                    _gap(4),
+                    _text(
+                      pair.$2,
+                      role: GalleryTypography.caption,
+                      color: t.muted,
+                      align: TextAlign.center,
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 13,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    ),
+    _gap(18),
+    ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: AspectRatio(
+        aspectRatio: 372 / 286,
+        child: LayoutBuilder(
+          builder: (context, box) => Stack(
+            children: [
+              Positioned.fill(
+                child: SvgPicture.asset(
+                  'assets/gallery/footprints-map.svg',
+                  fit: BoxFit.fill,
+                  semanticsLabel: '站点地图示意，完整信息见下方站点列表',
+                ),
+              ),
+              ...c.footprints.indexed.map(
+                (item) => Positioned(
+                  left: (item.$2['x'] as num) / 100 * box.maxWidth - 5,
+                  top: (item.$2['y'] as num) / 100 * box.maxHeight - 5,
+                  child: Semantics(
+                    label: '${item.$2['name']}，${item.$2['visits']}次到访',
+                    child: Container(
+                      width: item.$1 == 0 ? 14 : 10,
+                      height: item.$1 == 0 ? 14 : 10,
+                      decoration: BoxDecoration(
+                        color: item.$1 == 0 ? t.action : t.onTone,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: t.bg, width: 2),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+    _sectionTitle('全部站点'),
+    _panel(
+      Column(
+        children: [
+          for (final station in c.footprints)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        station['kind'] == 'rail'
+                            ? Icons.train_outlined
+                            : Icons.directions_bus_outlined,
+                        color: t.onTone,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _text(
+                              station['name'] as String,
+                              role: GalleryTypography.body,
+                              weight: FontWeight.w600,
+                            ),
+                            _gap(3),
+                            _text(
+                              station['line'] as String,
+                              role: GalleryTypography.caption,
+                              color: t.muted,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  _gap(6),
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    spacing: 12,
+                    runSpacing: 4,
+                    children: [
+                      _text(
+                        '${station['visits']} 次到访',
+                        role: GalleryTypography.caption,
+                      ),
+                      _text(
+                        station['last'] as String,
+                        role: GalleryTypography.caption,
+                        color: t.muted,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    ),
+  ]);
+
+  Widget _settings() => _list([
+    _header('设置', back: true),
+    _sectionTitle('读卡与数据'),
+    _panel(
+      Column(
+        children: [
+          _switch(
+            '读取后自动保存',
+            c.autoSave,
+            c.setAutoSave,
+            subtitle: '每次读取后保存到当前卡包',
+          ),
+          const Divider(),
+          _switch(
+            '上海交通卡可透支余额',
+            c.includeOverdraft,
+            (value) => c.update(() => c.includeOverdraft = value),
+            subtitle:
+                '总余额${c.includeOverdraft ? '包含' : '扣除'}固定 8 元额度，CU 余额不重复扣除',
+          ),
+          const Divider(),
+          _settingRow(
+            '知识库',
+            () => c.navigate(GalleryPage.knowledge),
+            subtitle: 'TU 41 个地区 / CU 7 个地区',
+            icon: Icons.menu_book_outlined,
+          ),
+        ],
+      ),
+      padding: EdgeInsets.zero,
+    ),
+    _sectionTitle('数据与备份'),
+    _panel(
+      Column(
+        children: [
+          _settingRow(
+            '导出卡片记录',
+            () => c.export(all: true),
+            subtitle: '预览全部已保存卡片的记录，不保存文件',
+            icon: Icons.download_outlined,
+          ),
+          const Divider(),
+          _settingRow(
+            '导入卡片记录',
+            _importCardRecords,
+            subtitle: '选择备份文件预览内容，不修改当前样例',
+            icon: Icons.upload_outlined,
+          ),
+        ],
+      ),
+      padding: EdgeInsets.zero,
+    ),
+    _sectionTitle('外观'),
+    _panel(
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _text('外观主题', size: 14),
+                _gap(10),
+                _tabs(
+                  ['跟随系统', '浅色', '深色'],
+                  [
+                    ThemeMode.system,
+                    ThemeMode.light,
+                    ThemeMode.dark,
+                  ].indexOf(c.themeMode),
+                  (i) => c.update(
+                    () => c.themeMode = [
+                      ThemeMode.system,
+                      ThemeMode.light,
+                      ThemeMode.dark,
+                    ][i],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(),
+          _switch(
+            '莫奈取色',
+            c.monet,
+            (value) => c.update(() => c.monet = value),
+            subtitle: c.monet
+                ? (t.dynamic ? '当前使用系统莫奈配色' : '系统取色不可用，使用靛蓝配色')
+                : '使用手动选择的主题配色',
+          ),
+          _collapse(
+            !c.monet,
+            (_) => Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 14),
+              child: Row(
+                children: GalleryPalette.values.map((palette) {
+                  final swatch = t.dark
+                      ? palette.darkPrimary
+                      : palette.lightPrimary;
+                  return Expanded(
+                    child: Semantics(
+                      selected: c.palette == palette.id,
+                      child: TextButton(
+                        onPressed: () => c.update(() => c.palette = palette.id),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          minimumSize: Size.zero,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            side: BorderSide(
+                              color: c.palette == palette.id
+                                  ? t.onTone
+                                  : Colors.transparent,
+                              width: 2,
+                            ),
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Container(
+                              width: 30,
+                              height: 30,
+                              decoration: BoxDecoration(
+                                color: swatch,
+                                shape: BoxShape.circle,
+                              ),
+                              child: c.palette == palette.id
+                                  ? const Icon(
+                                      Icons.check_rounded,
+                                      color: Colors.white,
+                                      size: 18,
+                                    )
+                                  : null,
+                            ),
+                            _gap(7),
+                            _text(
+                              palette.name,
+                              role: GalleryTypography.caption,
+                              color: t.muted,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+          const Divider(),
+          _switch(
+            '预测性返回手势',
+            _preferences.enabled,
+            _preferences.setEnabled,
+            subtitle: _preferences.loading
+                ? '正在读取偏好…'
+                : '手势返回时预览上一页，松手返回或取消；支持的 Android 系统生效',
+          ),
+          _collapse(
+            _preferences.error != null,
+            (_) => Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _text(
+                      _preferences.error!,
+                      role: GalleryTypography.caption,
+                      color: t.warn,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: _preferences.loading ? null : _preferences.retry,
+                    child: const Text('重试'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const Divider(),
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _text('底栏样式', size: 14),
+                _gap(10),
+                _tabs(
+                  ['悬浮', '下沉'],
+                  c.docked ? 1 : 0,
+                  (i) => c.update(() => c.docked = i == 1),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      padding: EdgeInsets.zero,
+    ),
+    _sectionTitle('日志'),
+    _panel(
+      Column(
+        children: [
+          _switch(
+            '启用运行日志',
+            c.logsEnabled,
+            c.setLogs,
+            subtitle: '仅记录本次会话中的界面操作',
+          ),
+          _collapse(
+            c.logsEnabled,
+            (_) => Column(
+              children: [
+                const Divider(),
+                _settingRow(
+                  '导出日志',
+                  () => c.export(log: true),
+                  subtitle: '预览模拟日志，不保存文件',
+                  icon: Icons.download_outlined,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      padding: EdgeInsets.zero,
+    ),
+    _sectionTitle('帮助与支持'),
+    _panel(
+      _settingRow(
+        '问题反馈',
+        () => _openInformationPage(GalleryPage.feedback),
+        subtitle: 'QQ 群、邮箱与问卷反馈渠道',
+        icon: Icons.feedback_outlined,
+      ),
+      padding: EdgeInsets.zero,
+    ),
+    _sectionTitle('关于 TrafArch'),
+    _panel(
+      Column(
+        children: [
+          _aboutHero(),
+          const Divider(),
+          _settingRow(
+            '致谢',
+            () => _openInformationPage(GalleryPage.acknowledgements),
+            subtitle: '感谢读卡识途及数据贡献者',
+            icon: Icons.volunteer_activism_outlined,
+          ),
+          const Divider(),
+          _settingRow(
+            '开放源代码许可',
+            () => _openInformationPage(GalleryPage.licenses),
+            subtitle: '查看本应用使用的开源软件与许可',
+            icon: Icons.code_rounded,
+          ),
+          const Divider(),
+          _contactRow(
+            '隐私政策',
+            '了解数据与隐私保护',
+            Icons.privacy_tip_outlined,
+            link: AppSupport.privacy,
+          ),
+          const Divider(),
+          _contributorRow(),
+        ],
+      ),
+      padding: EdgeInsets.zero,
+    ),
+    _gap(24),
+    _text(
+      AppInfo.copyright,
+      role: GalleryTypography.caption,
+      color: t.muted,
+      align: TextAlign.center,
+    ),
+    if (widget.onDisableBeta != null) ...[
+      _sectionTitle('预览'),
+      _panel(
+        _switch(
+          '启用新界面（beta）',
+          true,
+          (_) => widget.onDisableBeta!(),
+          subtitle: '使用模拟数据；关闭后返回现有界面',
+        ),
+        padding: EdgeInsets.zero,
+      ),
+    ],
+  ]);
+
+  Widget _switch(
+    String label,
+    bool value,
+    ValueChanged<bool> onChanged, {
+    String? subtitle,
+  }) => SwitchListTile(
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+    title: _text(label, size: 14),
+    subtitle: subtitle == null
+        ? null
+        : _text(subtitle, role: GalleryTypography.caption, color: t.muted),
+    value: value,
+    onChanged: onChanged,
+  );
+  Widget _settingRow(
+    String label,
+    VoidCallback onTap, {
+    String? subtitle,
+    IconData? icon,
+  }) => ListTile(
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+    leading: icon == null ? null : Icon(icon, size: 21, color: t.onTone),
+    title: _text(label, size: 14),
+    subtitle: subtitle == null
+        ? null
+        : _text(subtitle, role: GalleryTypography.caption, color: t.muted),
+    trailing: const Icon(Icons.chevron_right_rounded, size: 18),
+    onTap: onTap,
+  );
+
+  Widget _aboutHero() => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 22, 16, 18),
+    child: Column(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(22),
+          child: Image.asset('assets/icon/app_icon.png', width: 72, height: 72),
+        ),
+        _gap(12),
+        _text(
+          AppInfo.appName,
+          role: GalleryTypography.section,
+          weight: FontWeight.w600,
+        ),
+        _gap(4),
+        _text(
+          '版本 ${AppInfo.version} (${AppInfo.buildNumber})',
+          role: GalleryTypography.caption,
+          color: t.muted,
+        ),
+      ],
+    ),
+  );
+
+  Widget _contributorAvatar(
+    GalleryContributor contributor,
+    int index, {
+    double size = 34,
+    bool ring = true,
+  }) {
+    final background = t.dataPalette[index % t.dataPalette.length];
+    Widget fallback() => Container(
+      color: background,
+      alignment: Alignment.center,
+      child: _text(
+        contributor.initial,
+        size: size * .42,
+        weight: FontWeight.w600,
+        color: GalleryColorEngine.readable(Colors.white, background),
+      ),
+    );
+    final asset = contributor.asset;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: ring ? Border.all(color: t.surface, width: 2) : null,
+      ),
+      child: ClipOval(
+        child: asset == null
+            ? fallback()
+            : Image.asset(
+                asset,
+                fit: BoxFit.cover,
+                filterQuality: FilterQuality.medium,
+                errorBuilder: (_, _, _) => fallback(),
+              ),
+      ),
+    );
+  }
+
+  Widget _contributorRow() {
+    const size = 34.0;
+    const overlap = 8.0;
+    final shown = galleryContributors.take(3).toList();
+    final extra = galleryContributors.length - shown.length;
+    final avatarWidth = size + math.max(0, shown.length - 1) * (size - overlap);
+    return InkWell(
+      key: const ValueKey('settings-contributors'),
+      onTap: () => c.showOverlay(GalleryOverlay.contributors),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: Row(
+          children: [
+            Expanded(child: _text('贡献者', size: 14)),
+            SizedBox(
+              width: avatarWidth + (extra > 0 ? size - overlap : 0),
+              height: size,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  for (var i = 0; i < shown.length; i++)
+                    Positioned(
+                      left: i * (size - overlap),
+                      child: _contributorAvatar(shown[i], i),
+                    ),
+                  if (extra > 0)
+                    Positioned(
+                      left: shown.length * (size - overlap),
+                      child: Container(
+                        width: size,
+                        height: size,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: t.surface2,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: t.surface, width: 2),
+                        ),
+                        child: _text(
+                          '+$extra',
+                          role: GalleryTypography.caption,
+                          color: t.muted,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            _text(
+              '${galleryContributors.length} 位',
+              role: GalleryTypography.caption,
+              color: t.muted,
+            ),
+            const SizedBox(width: 2),
+            const Icon(Icons.chevron_right_rounded, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TripsSummaryDelegate extends SliverPersistentHeaderDelegate {
+  _TripsSummaryDelegate({
+    required this.expandedHeight,
+    required this.compactHeight,
+    required this.builder,
+  });
+
+  final double expandedHeight, compactHeight;
+  final Widget Function(double) builder;
+
+  @override
+  double get maxExtent => expandedHeight;
+  @override
+  double get minExtent => compactHeight;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    final distance = maxExtent - minExtent;
+    final progress = distance <= 0
+        ? 1.0
+        : (shrinkOffset / distance).clamp(0.0, 1.0);
+    return RepaintBoundary(child: SizedBox.expand(child: builder(progress)));
+  }
+
+  @override
+  bool shouldRebuild(_TripsSummaryDelegate oldDelegate) => true;
+}

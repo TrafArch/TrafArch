@@ -316,9 +316,7 @@ class ReferencePackage {
             catalog['issuerNames'] is! List ||
             (catalog['issuerNames'] as List).isEmpty ||
             catalog['nameOverrides'] is! List) {
-          throw const FormatException(
-            'CU invalid card_catalog naming contract',
-          );
+          throw const FormatException('CU invalid card_catalog naming contract');
         }
       }
       final counts = <String, int>{
