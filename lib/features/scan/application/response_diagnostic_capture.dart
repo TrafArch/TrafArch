@@ -1,4 +1,3 @@
-import '../../../protocols/bank/domain/models/tlv_node.dart';
 import '../../../protocols/felica/protocol/felica_response.dart';
 import '../../../protocols/transit/card_parser.dart';
 import '../../../protocols/transit/city_union/city_union_models.dart';
@@ -47,7 +46,6 @@ Iterable<Map<String, Object?>> captureResponseFields(
     try {
       final decoded = switch (result) {
         TransitReadOutcome(:final card) => _transit(card, frame, body, command),
-        BankReadOutcome() => _bank(result, frame, body, command),
         FelicaReadOutcome() => _felica(result, body, command),
         UnsupportedReadOutcome() => null,
       };
@@ -418,78 +416,6 @@ Map<String, Object?> _localRecord(ApduRecord r, ReadResult result) => {
         if (value is Map && value['recordNumber'] == r.recordNumber) value,
     ],
   },
-};
-
-Map<String, Object?>? _bank(
-  BankReadOutcome result,
-  Map<String, Object?> frame,
-  List<int> body,
-  List<int> command,
-) {
-  final aid = _compact(frame['selectedApplication'] as String?);
-  final c = classifyRawCommand(command);
-  final matches = <Map<String, Object?>>[];
-  for (final app in result.card.applications) {
-    if (command.length >= 5 &&
-        command[1] == 0xA4 &&
-        command[2] == 4 &&
-        command.length >= 5 + command[4] &&
-        _hex(command.sublist(5, 5 + command[4])) ==
-            _compact(app.application.aidHex) &&
-        app.fciTags.isNotEmpty &&
-        _sameHex(body, app.application.directoryFciHex)) {
-      matches.add(
-        _decoded(app.parserId, {
-          'tags': [for (final tag in app.fciTags) _tag(tag)],
-        }),
-      );
-    }
-    if (aid != _compact(app.application.aidHex)) continue;
-    if (command.length == 5 &&
-        command[0] == 0x80 &&
-        command[1] == 0xCA &&
-        command[2] == 0x9F &&
-        command[3] == 0x36 &&
-        app.dataTags.length == 1 &&
-        _hex(body) == '9F3602${app.dataTags.single.rawValueHex}') {
-      matches.add(
-        _decoded(app.parserId, {
-          'tags': [for (final tag in app.dataTags) _tag(tag)],
-        }),
-      );
-    }
-    if (command.length >= 2 &&
-        command[1] == 0xA8 &&
-        _sameHex(body, app.gpoHex)) {
-      matches.add(
-        _decoded(app.parserId, {
-          'tags': [for (final tag in app.gpoTags) _tag(tag)],
-        }),
-      );
-    }
-    for (final r in app.records) {
-      if (r.sfi == c.sfi &&
-          r.recordNumber == c.recordNumber &&
-          _sameHex(body, r.rawHex)) {
-        matches.add(
-          _decoded(app.parserId, {
-            'tags': [for (final tag in r.tags) _tag(tag)],
-            'parseError': r.parseError,
-          }, state: r.parseError == null ? 'decoded' : 'partial'),
-        );
-      }
-    }
-  }
-  return matches.length == 1 ? matches.single : null;
-}
-
-Map<String, Object?> _tag(TlvNode node) => {
-  'tag': node.tagHex,
-  'length': node.length,
-  'name': node.description,
-  'value': node.decodedValue,
-  'rawHex': node.rawValueHex,
-  'children': [for (final child in node.children) _tag(child)],
 };
 
 Map<String, Object?>? _felica(

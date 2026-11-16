@@ -1,7 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/features/scan/application/bank_card_probe.dart';
 import 'package:transit_card_analyzer/features/scan/application/local_card_reader.dart';
-import 'package:transit_card_analyzer/protocols/bank/domain/models/bank_card_result.dart';
 import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/local/apdu_exchange.dart';
 import 'package:transit_card_analyzer/protocols/transit/local/local_card_models.dart';
@@ -99,25 +97,19 @@ void main() {
       'Beijing retains observed balance $balance after extras failure',
       () async {
         final link = _beijingLink(balance: balance, failInHistory: false);
-        final bank = _BankProbe();
-        final result = await LocalCardReader(link.call, bankProbe: bank).read();
+        final result = await LocalCardReader(link.call).read();
         expect(result, isNotNull);
-        expect(result!.parsedCard!.parserId, CardParserIds.localCard);
+        expect(result!.parsedCard.parserId, CardParserIds.localCard);
         expect(
-          result.parsedCard!.info.applicationSerial,
+          result.parsedCard.info.applicationSerial,
           '10000000000000000001',
         );
-        expect(result.parsedCard!.info.balanceFen, balance);
-        expect(result.readResult!.info.isBeijing, isTrue);
-        expect(result.readResult!.info.balance, balance);
-        expect(result.parsedCard!.localCard, same(result.readResult));
-        expect(result.readResult!.transportFailure, same(_tagLost));
-        expect(result.readResult!.readError, isA<ApduTransportException>());
-        expect(
-          bank.calls,
-          0,
-          reason: 'a confirmed transit card must not fall through',
-        );
+        expect(result.parsedCard.info.balanceFen, balance);
+        expect(result.readResult.info.isBeijing, isTrue);
+        expect(result.readResult.info.balance, balance);
+        expect(result.parsedCard.localCard, same(result.readResult));
+        expect(result.readResult.transportFailure, same(_tagLost));
+        expect(result.readResult.readError, isA<ApduTransportException>());
         expect(link.callsAfterFailure, 0);
       },
     );
@@ -127,10 +119,9 @@ void main() {
     'Beijing retains the observed history prefix and extras on tag loss',
     () async {
       final link = _beijingLink(balance: 10000, failInHistory: true);
-      final bank = _BankProbe();
-      final result = await LocalCardReader(link.call, bankProbe: bank).read();
+      final result = await LocalCardReader(link.call).read();
       expect(result, isNotNull);
-      final partial = result!.parsedCard!;
+      final partial = result!.parsedCard;
       expect(partial.info.balanceFen, 10000);
       final trip = partial.localCard!.trips.single;
       expect(trip.response, _localTrip);
@@ -140,7 +131,6 @@ void main() {
       expect(partial.localCard!.extras.dateRaw, [0x24, 0x10]);
       expect(partial.localCard!.transportFailure, same(_tagLost));
       expect(partial.localCard!.readError, isA<ApduTransportException>());
-      expect(bank.calls, 0);
       expect(link.callsAfterFailure, 0);
     },
   );
@@ -163,15 +153,13 @@ void main() {
         if (command[1] == 0x5C) throw _tagLost;
         return [0x6A, 0x82];
       });
-      final bank = _BankProbe();
-      final result = await LocalCardReader(link.call, bankProbe: bank).read();
+      final result = await LocalCardReader(link.call).read();
       expect(result, isNotNull);
-      expect(result!.parsedCard!.info.applicationSerial, '0304050607');
-      expect(result.parsedCard!.parserId, CardParserIds.lingnanTong);
-      expect(result.parsedCard!.info.balanceFen, isNull);
-      expect(result.readResult!.info.observedBalance, isNull);
-      expect(result.readResult!.transportFailure, same(_tagLost));
-      expect(bank.calls, 0);
+      expect(result!.parsedCard.info.applicationSerial, '0304050607');
+      expect(result.parsedCard.parserId, CardParserIds.lingnanTong);
+      expect(result.parsedCard.info.balanceFen, isNull);
+      expect(result.readResult.info.observedBalance, isNull);
+      expect(result.readResult.transportFailure, same(_tagLost));
       expect(link.callsAfterFailure, 0);
     },
   );
@@ -200,15 +188,6 @@ class _CardLink {
       failed = true;
       rethrow;
     }
-  }
-}
-
-class _BankProbe implements BankCardProbe {
-  int calls = 0;
-  @override
-  Future<BankCardResult?> probe(LocalTransceive transceive) async {
-    calls++;
-    return null;
   }
 }
 

@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/protocols/bank/domain/models/bank_card_result.dart';
-import 'package:transit_card_analyzer/protocols/bank/domain/models/card_application.dart';
 import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/local/local_card_models.dart';
 import 'package:transit_card_analyzer/protocols/transit/multiapp/application_evidence.dart';
@@ -41,15 +39,13 @@ void main() {
         '澳门通（钱包应用）',
         reason: '澳门通钱包应用未确认',
       );
-      final restoredRejected = ApplicationEvidence.tryParse(
-        rejected.toJson(),
-      )!;
+      final restoredRejected = ApplicationEvidence.tryParse(rejected.toJson())!;
       expect(restoredRejected.state, ApplicationProbeState.selectRejected);
       expect(restoredRejected.notes.single, '澳门通钱包应用未确认');
 
       final failed = ApplicationEvidence.failed(
-        'bank',
-        '银行卡（EMV / PBOC）',
+        'cu',
+        '城市一卡通',
         readError: 'synthetic error',
         transportFailure: const TransportFailure(
           kind: TransportFailureKind.tagLost,
@@ -60,8 +56,28 @@ void main() {
       final restoredFailed = ApplicationEvidence.tryParse(failed.toJson())!;
       expect(restoredFailed.state, ApplicationProbeState.failed);
       expect(restoredFailed.readError, 'synthetic error');
-      expect(restoredFailed.transportFailure!.kind, TransportFailureKind.tagLost);
+      expect(
+        restoredFailed.transportFailure!.kind,
+        TransportFailureKind.tagLost,
+      );
       expect(restoredFailed.transportFailure!.code, 'TAG_LOST');
+    });
+
+    test('旧快照中的银行卡证据不进入展示投影，原始数据保留', () {
+      final entry = {
+        'appId': 'bank',
+        'displayName': '银行卡',
+        'state': 'readSucceeded',
+        'payload': {
+          'kind': 'bank_card',
+          'discoveredAids': ['A000000333010101'],
+        },
+      };
+      expect(ApplicationEvidence.tryParse(entry), isNull);
+      expect(entry['payload'], {
+        'kind': 'bank_card',
+        'discoveredAids': ['A000000333010101'],
+      });
     });
 
     test('损坏条目返回 null，未知状态回退未探测且不抛异常', () {
@@ -96,33 +112,17 @@ void main() {
       expect(summary['balanceFen'], 3210);
     });
 
-    test('BankCardResult 摘要保留状态与已发现 AID', () {
-      final evidence = ApplicationEvidence.succeeded(
-        'bank',
-        '银行卡（EMV / PBOC）',
-        payload: BankCardResult(
-          protocolFamily: BankCardProtocolFamily.pboc,
-          analyzedAt: DateTime(2026),
-          parserVersion: '0.3.2',
-          status: BankCardStatus.partial,
-          discoveredApplications: const [
-            CardApplication(aidHex: 'A000000333010101', selected: true),
-          ],
-        ),
-      );
-      final summary = evidence.toJson()['payload'] as Map<String, dynamic>;
-      expect(summary['kind'], 'bank_card');
-      expect(summary['status'], 'partial');
-      expect(summary['discoveredAids'], ['A000000333010101']);
-    });
-
     test('ReadResult 摘要保留本地卡身份与卡号', () {
       final info = CardInfo()..isSZT = true;
       info.cardNumber = '4045620583';
       final evidence = ApplicationEvidence.succeeded(
         'shenzhen',
         '深圳通（PAY.SZT）',
-        payload: ReadResult(info: info, records: const [], extras: CardExtras()),
+        payload: ReadResult(
+          info: info,
+          records: const [],
+          extras: CardExtras(),
+        ),
       );
       final summary = evidence.toJson()['payload'] as Map<String, dynamic>;
       expect(summary['kind'], 'read_result');
@@ -135,9 +135,7 @@ void main() {
     testWidgets('空列表不渲染任何内容', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(
-            body: ApplicationEvidencePanel(applications: []),
-          ),
+          home: Scaffold(body: ApplicationEvidencePanel(applications: [])),
         ),
       );
       expect(find.text('逐应用探测'), findsNothing);
@@ -194,14 +192,8 @@ void main() {
         applicationProbeStateLabel(ApplicationProbeState.readSucceeded),
         '读取成功',
       );
-      expect(
-        applicationProbeStateLabel(ApplicationProbeState.partial),
-        '部分读取',
-      );
-      expect(
-        applicationProbeStateLabel(ApplicationProbeState.failed),
-        '失败',
-      );
+      expect(applicationProbeStateLabel(ApplicationProbeState.partial), '部分读取');
+      expect(applicationProbeStateLabel(ApplicationProbeState.failed), '失败');
     });
   });
 }

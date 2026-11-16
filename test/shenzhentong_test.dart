@@ -2,11 +2,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/features/archive/application/card_identification_service.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_types.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/tunion_knowledge_base.dart';
-import 'package:transit_card_analyzer/features/scan/application/bank_card_probe.dart';
 import 'package:transit_card_analyzer/features/scan/application/local_card_reader.dart';
 import 'package:transit_card_analyzer/features/scan/application/response_diagnostic_capture.dart';
 import 'package:transit_card_analyzer/features/scan/domain/card_read_outcome.dart';
-import 'package:transit_card_analyzer/protocols/bank/domain/models/bank_card_result.dart';
 import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/local/apdu_exchange.dart';
 import 'package:transit_card_analyzer/protocols/transit/local/cards/shenzhentong.dart';
@@ -37,13 +35,9 @@ void main() {
   for (final serial in ['03104870400000000001', '03100000000000000001']) {
     test('TU 精确号段触发地方应用 serial=$serial', () async {
       final link = _TuLink(serial: serial);
-      final bank = _BankProbe();
-      final outcome = (await LocalCardReader(
-        link.call,
-        bankProbe: bank,
-      ).read())!;
+      final outcome = (await LocalCardReader(link.call).read())!;
       final isShenzhen = serial.startsWith('031048704');
-      final card = outcome.parsedCard!;
+      final card = outcome.parsedCard;
       expect(
         card.parserId,
         isShenzhen ? CardParserIds.shenzhenTunion : CardParserIds.tunion,
@@ -52,7 +46,6 @@ void main() {
       expect(link.sztSelects, isShenzhen ? 1 : 0);
       expect(link.cuSelects, isShenzhen ? 0 : 2);
       expect(link.tuReads, 1);
-      expect(bank.calls, 0);
       expect(card.info.balanceFen, 500);
       if (isShenzhen) {
         final service = CardIdentificationService(KnowledgeBase.empty());
@@ -70,8 +63,8 @@ void main() {
         expect(card.localCard!.info.observedBalance, 12345);
         expect(card.localCard!.info.cardNumber, '4045620583');
         expect(card.localCard!.trips, hasLength(2));
-        expect(outcome.readResult!.info.cardNumber, isNot('4045620583'));
-        expect(outcome.readResult!.trips, isEmpty);
+        expect(outcome.readResult.info.cardNumber, isNot('4045620583'));
+        expect(outcome.readResult.trips, isEmpty);
         expect(card.localCard!.extras.slots['szt.confirmed'], isTrue);
         expect(card.dualApplication, isFalse, reason: '该字段专指 TU+CU，不冒充 CU');
       }
@@ -82,10 +75,10 @@ void main() {
     test('TU 余额拒绝仍触发 PAY.SZT，地方选择失败保留 TU failSelect=$failSelect', () async {
       final link = _TuLink(rejectTuBalance: true, failSztSelect: failSelect);
       final outcome = (await LocalCardReader(link.call).read())!;
-      expect(outcome.parsedCard!.parserId, CardParserIds.shenzhenTunion);
-      expect(outcome.parsedCard!.info.balanceFen, isNull);
+      expect(outcome.parsedCard.parserId, CardParserIds.shenzhenTunion);
+      expect(outcome.parsedCard.info.balanceFen, isNull);
       expect(link.sztSelects, 1);
-      final local = outcome.parsedCard!.localCard!;
+      final local = outcome.parsedCard.localCard!;
       expect(local.info.isSZT, !failSelect);
       expect(local.extras.slots['szt.confirmed'], !failSelect);
     });
@@ -94,48 +87,52 @@ void main() {
   for (final failAt in ['805C000204', '00B201C400']) {
     test('双应用中断保留独立部分结果且不继续 APDU at=$failAt', () async {
       final link = _TuLink(failAt: failAt);
-      final bank = _BankProbe();
-      final outcome = (await LocalCardReader(
-        link.call,
-        bankProbe: bank,
-      ).read())!;
-      expect(outcome.parsedCard!.parserId, CardParserIds.shenzhenTunion);
+      final outcome = (await LocalCardReader(link.call).read())!;
+      expect(outcome.parsedCard.parserId, CardParserIds.shenzhenTunion);
       expect(
-        outcome.readResult!.transportFailure!.kind,
+        outcome.readResult.transportFailure!.kind,
         TransportFailureKind.tagLost,
       );
       expect(link.afterFailure, 0);
-      expect(bank.calls, 0);
       expect(link.sztSelects, failAt == '805C000204' ? 0 : 1);
       expect(
-        outcome.parsedCard!.localCard!.extras.slots['szt.probed'],
+        outcome.parsedCard.localCard!.extras.slots['szt.probed'],
         failAt != '805C000204',
       );
       if (failAt == '00B201C400') {
-        expect(outcome.parsedCard!.info.balanceFen, 500);
-        expect(outcome.parsedCard!.localCard!.info.observedBalance, 12345);
+        expect(outcome.parsedCard.info.balanceFen, 500);
+        expect(outcome.parsedCard.localCard!.info.observedBalance, 12345);
       }
     });
   }
 
-  test('PAY.SZT 独立识别并按 Wiki 偏移读取，不进入通用文件或银行探测', () async {
+  test('尝试 PAY.SZT 时移卡保留已读的 TU 余额并停止 APDU', () async {
+    final link = _TuLink(failAt: '00A40400075041592E535A54');
+    final result = (await LocalCardReader(link.call).read())!;
+    expect(result.parsedCard.info.balanceFen, 500);
+    expect(
+      result.readResult.transportFailure!.kind,
+      TransportFailureKind.tagLost,
+    );
+    expect(link.afterFailure, 0);
+  });
+
+  test('PAY.SZT 独立识别并按 Wiki 偏移读取专用文件', () async {
     final commands = <String>[];
-    final bank = _BankProbe();
     final result = await LocalCardReader((command) async {
       commands.add(_hex(command));
       return _respond(command);
-    }, bankProbe: bank).read();
+    }).read();
     expect(result, isNotNull);
-    expect(bank.calls, 0);
-    final info = result!.readResult!.info;
+    final info = result!.readResult.info;
     expect(info.isSZT, isTrue);
     expect(info.cardNumber, '4045620583');
     expect(info.startDate, DateTime(2024, 1, 2));
-    expect(result.parsedCard!.info.effectiveDate, DateTime(2024, 1, 2));
+    expect(result.parsedCard.info.effectiveDate, DateTime(2024, 1, 2));
     expect(info.expiryDate, DateTime(2030, 12, 31));
     expect(info.observedBalance, 12345);
     expect(info.rawInfo, _basic());
-    final trips = result.readResult!.trips;
+    final trips = result.readResult.trips;
     expect(trips, hasLength(2));
     expect(trips[0].balanceDelta, -300);
     expect(trips[1].balanceDelta, 300);
@@ -177,9 +174,9 @@ void main() {
       final result = (await LocalCardReader((command) async {
         return _hex(command) == '805C000204' ? _ok(body) : _respond(command);
       }).read())!;
-      final local = result.readResult!;
+      final local = result.readResult;
       expect(local.info.observedBalance, fen);
-      expect(result.parsedCard!.info.balanceFen, fen);
+      expect(result.parsedCard.info.balanceFen, fen);
       expect(local.extras.slots['szt.balanceRaw'], body);
       expect(local.extras.slots['szt.balanceBcdFen'], bcdFen);
       expect(local.extras.slots['szt.balanceEncoding'], 'binary-be-signed31');
@@ -199,10 +196,10 @@ void main() {
       final result = (await LocalCardReader((command) async {
         return _hex(command) == '805C000204' ? _ok(body) : _respond(command);
       }).read())!;
-      expect(result.readResult!.info.observedBalance, isNull);
-      expect(result.parsedCard!.info.balanceFen, isNull);
-      expect(result.readResult!.info.isSZT, isTrue);
-      expect(result.readResult!.extras.slots['szt.balanceRaw'], body);
+      expect(result.readResult.info.observedBalance, isNull);
+      expect(result.parsedCard.info.balanceFen, isNull);
+      expect(result.readResult.info.isSZT, isTrue);
+      expect(result.readResult.extras.slots['szt.balanceRaw'], body);
     });
   }
 
@@ -210,10 +207,10 @@ void main() {
     final result = (await LocalCardReader((command) async {
       return _hex(command) == '805C000204' ? [0x69, 0x85] : _respond(command);
     }).read())!;
-    expect(result.readResult!.info.observedBalance, isNull);
-    expect(result.parsedCard!.info.balanceFen, isNull);
-    expect(result.readResult!.info.isSZT, isTrue);
-    expect(result.readResult!.extras.slots['szt.balanceRaw'], isNull);
+    expect(result.readResult.info.observedBalance, isNull);
+    expect(result.parsedCard.info.balanceFen, isNull);
+    expect(result.readResult.info.isSZT, isTrue);
+    expect(result.readResult.extras.slots['szt.balanceRaw'], isNull);
   });
 
   test('TU 主钱包与 PAY.SZT 高位余额独立，不能对 TU 套深圳本地编码', () async {
@@ -224,10 +221,10 @@ void main() {
       }
       return link.call(command);
     }).read())!;
-    expect(result.parsedCard!.parserId, CardParserIds.shenzhenTunion);
-    expect(result.parsedCard!.info.balanceFen, 500);
-    expect(result.readResult!.info.observedBalance, 500);
-    final local = result.parsedCard!.localCard!;
+    expect(result.parsedCard.parserId, CardParserIds.shenzhenTunion);
+    expect(result.parsedCard.info.balanceFen, 500);
+    expect(result.readResult.info.observedBalance, 500);
+    final local = result.parsedCard.localCard!;
     expect(local.info.observedBalance, 12345);
     expect(local.extras.slots['szt.balanceHexFen'], 2147495993);
     expect(local.extras.slots['szt.balanceBcdFen'], 80003039);
@@ -248,7 +245,7 @@ void main() {
       'response': [0x80, 0, 0, 0, 0x90, 0],
     };
     final fields = captureResponseFields(
-      TransitReadOutcome(result.parsedCard!),
+      TransitReadOutcome(result.parsedCard),
       [
         frame(0, '5041592E535A54', Shenzhentong.moduleName),
         frame(1, '5041592E5449434C', '岭南通'),
@@ -329,18 +326,12 @@ void main() {
     expect(records.where((r) => r.type == 2).single.balanceDelta, 300);
   });
 
-  test('SELECT 失败不认领，允许银行探测', () async {
-    final bank = _BankProbe();
-    final result = await LocalCardReader(
-      (_) async => [0x6A, 0x82],
-      bankProbe: bank,
-    ).read();
+  test('SELECT 失败时不认领深圳通', () async {
+    final result = await LocalCardReader((_) async => [0x6A, 0x82]).read();
     expect(result, isNull);
-    expect(bank.calls, 1);
   });
 
   test('应用确认后移卡保留深圳通身份及已读资料，不继续发送 APDU', () async {
-    final bank = _BankProbe();
     var lost = false;
     final result = await LocalCardReader((cmd) async {
       expect(lost, isFalse);
@@ -353,11 +344,10 @@ void main() {
         );
       }
       return _respond(cmd);
-    }, bankProbe: bank).read();
-    expect(result!.readResult!.info.isSZT, isTrue);
-    expect(result.readResult!.info.cardNumber, '4045620583');
-    expect(result.readResult!.readError, isNotNull);
-    expect(bank.calls, 0);
+    }).read();
+    expect(result!.readResult.info.isSZT, isTrue);
+    expect(result.readResult.info.cardNumber, '4045620583');
+    expect(result.readResult.readError, isNotNull);
   });
 
   test('循环记录读取有界，保留相同内容的不同槽位', () async {
@@ -489,14 +479,5 @@ class _TuLink {
     }
     if (selected == 'SZT') return _respond(command);
     return [0x6A, 0x82];
-  }
-}
-
-class _BankProbe implements BankCardProbe {
-  int calls = 0;
-  @override
-  Future<BankCardResult?> probe(LocalTransceive transceive) async {
-    calls++;
-    return null;
   }
 }

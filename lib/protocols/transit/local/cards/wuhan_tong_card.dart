@@ -7,10 +7,10 @@ import '../local_hex.dart';
 
 /// 老版武汉通（WHCTC，非接触 CPU 卡）。
 ///
-/// 该卡不按 PBOC / 交通联合文件布局组织，需先读取 MF 下的 SFI 10 与 SFI 5，
+/// 该卡需先读取 MF 下的 SFI 10 与 SFI 5，
 /// 再选择应用 `AP1.WHCTC` 才能读取钱包与流水。只在 `AP1.WHCTC` 选择成功
 /// 后认领卡片，避免普通卡片被误判；完成认领后即使后续读取失败也应作为
-/// 地方卡返回，不能再落入 PBOC 探测。
+/// 地方卡返回。
 class WuhanTongCard {
   WuhanTongCard(this._apdu);
   final ApduExchange _apdu;

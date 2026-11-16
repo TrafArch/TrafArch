@@ -9,7 +9,6 @@ import 'package:transit_card_analyzer/platform/nfc/felica_channel.dart';
 import 'package:transit_card_analyzer/platform/nfc/nfc_models.dart';
 import 'package:transit_card_analyzer/platform/nfc/nfc_service.dart';
 import 'package:transit_card_analyzer/platform/storage/app_logger.dart';
-import 'package:transit_card_analyzer/protocols/bank/domain/models/bank_card_result.dart';
 import 'package:transit_card_analyzer/shared/diagnostics/diagnostic_event.dart';
 
 import 'support/test_database.dart';
@@ -135,7 +134,7 @@ void main() {
     final scan = ScanController(
       channel: channel,
       felicaChannel: const MethodChannelFelicaChannel(),
-      coordinator: CardReadCoordinator(MissingTestAssets()),
+      coordinator: const CardReadCoordinator(),
       logEvent: (_) {},
       diagnostics: logger,
     );
@@ -171,38 +170,6 @@ void main() {
     expect(scan.trace.last, contains('>>'));
     expect(scan.frames.last.command, channel.commands.last);
     expect(session.events.last.type, 'session_end');
-  });
-
-  test('保留银行卡枚举诊断的会话标记为部分读取', () async {
-    final logger = AppLogger(store: MemoryLogStore())..enabled = true;
-    addTearDown(logger.close);
-    final channel = _Sessions();
-    final outcome = BankReadOutcome(
-      BankCardResult(
-        protocolFamily: BankCardProtocolFamily.unknown,
-        analyzedAt: DateTime.utc(2026),
-        parserVersion: 'test',
-        status: BankCardStatus.enumerationFailed,
-      ),
-    );
-    final scan = ScanController(
-      channel: channel,
-      felicaChannel: const MethodChannelFelicaChannel(),
-      coordinator: _NoIoCoordinator(outcome),
-      logEvent: (_) {},
-      diagnostics: logger,
-    );
-    addTearDown(scan.dispose);
-    final pending = scan.scanOnce();
-    final id = channel.discoveries.keys.single;
-    channel.discoveries[id]!.complete(_tag(id));
-    await pending;
-
-    final session = (await logger.readSessions()).single;
-    final info = session.events.singleWhere((e) => e.type == 'card_info');
-    expect(info.data['identificationState'], 'unknown');
-    expect(scan.outcome, same(outcome));
-    expect(session.outcome, 'partial');
   });
 
   test('取消后的迟到发现只写旧会话，不能污染新会话', () async {
@@ -254,7 +221,7 @@ void main() {
     final scan = ScanController(
       channel: channel,
       felicaChannel: const MethodChannelFelicaChannel(),
-      coordinator: CardReadCoordinator(MissingTestAssets()),
+      coordinator: const CardReadCoordinator(),
       logEvent: (_) {},
       diagnostics: logger,
     );
@@ -316,10 +283,7 @@ class _Sessions implements SessionNfcChannel {
 }
 
 class _NoIoCoordinator extends CardReadCoordinator {
-  _NoIoCoordinator([this.result = const UnsupportedReadOutcome()])
-    : super(MissingTestAssets());
-
-  final CardReadOutcome result;
+  _NoIoCoordinator();
 
   @override
   Future<CardReadOutcome> read(
@@ -328,7 +292,7 @@ class _NoIoCoordinator extends CardReadCoordinator {
     required Future<List<int>> Function(List<int>) felica,
     required void Function(String) onStage,
     required void Function(int) onProgress,
-  }) async => result;
+  }) async => const UnsupportedReadOutcome();
 }
 
 class _DelayedSessions extends _Sessions {

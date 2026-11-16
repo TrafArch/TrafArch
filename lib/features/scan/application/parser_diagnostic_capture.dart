@@ -1,5 +1,4 @@
 import '../../../protocols/transit/card_parser.dart';
-import '../../../protocols/bank/domain/models/tlv_node.dart';
 import '../domain/card_read_outcome.dart';
 
 /// Freeze the parser's final result at read time. These records also cover
@@ -88,55 +87,6 @@ Iterable<Map<String, Object?>> captureParserRecords(
       for (final file in card.cityUnionFiles) {
         yield _record(CardParserIds.cityUnion, 'files', file.toJson());
       }
-    case BankReadOutcome(:final card):
-      for (final app in card.applications) {
-        final parser = app.parserId;
-        final aid = app.application.aidHex;
-        yield _record(parser, 'identity', {
-          'aid': aid,
-          'label': app.application.displayLabel,
-          'selected': app.application.selected,
-          'cardNumber': app.summary.pan,
-          'panSourceTag': app.summary.panSourceTag,
-          'expiry': app.summary.expiry,
-          'expirySourceTag': app.summary.expirySourceTag,
-        });
-        for (final field in app.summary.fields) {
-          yield _record(parser, 'summaryFields', {
-            'aid': aid,
-            'tag': field.tag,
-            'label': field.label,
-            'value': field.value,
-            'rawHex': field.rawValueHex,
-            'sensitive': field.sensitive,
-          });
-        }
-        for (final (category, tags) in [
-          ('fciTags', app.fciTags),
-          ('dataTags', app.dataTags),
-          ('gpoTags', app.gpoTags),
-        ]) {
-          if (tags.isNotEmpty) {
-            yield _record(parser, category, {
-              'aid': aid,
-              'tags': [for (final tag in tags) _tag(tag)],
-            });
-          }
-        }
-        for (final record in app.records) {
-          yield _record(parser, 'records', {
-            'aid': aid,
-            'sfi': record.sfi,
-            'recordNumber': record.recordNumber,
-            'rawHex': record.rawHex,
-            'parseError': record.parseError,
-            'tags': [for (final tag in record.tags) _tag(tag)],
-          });
-        }
-        for (final issue in app.issues) {
-          yield _record(parser, 'issues', {'aid': aid, ...issue.toJson()});
-        }
-      }
     case FelicaReadOutcome(:final card):
       final parser = 'felica.${card.cardProductType.name}';
       yield _record(parser, 'identity', {
@@ -203,13 +153,3 @@ Map<String, Object?> _record(
   String category,
   Map<String, Object?> fields,
 ) => {'parserId': parserId, 'fieldCategory': category, 'fields': fields};
-
-Map<String, Object?> _tag(TlvNode tag) => {
-  'tag': tag.tagHex,
-  'name': tag.description,
-  'length': tag.length,
-  'value': tag.decodedValue,
-  'rawHex': tag.rawValueHex,
-  'masked': tag.masked,
-  'children': [for (final child in tag.children) _tag(child)],
-};

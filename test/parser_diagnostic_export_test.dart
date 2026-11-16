@@ -1,13 +1,11 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/features/scan/application/parser_diagnostic_capture.dart';
 import 'package:transit_card_analyzer/features/qr/application/qr_controller.dart';
+import 'package:transit_card_analyzer/features/scan/application/parser_diagnostic_capture.dart';
 import 'package:transit_card_analyzer/features/scan/domain/card_read_outcome.dart';
 import 'package:transit_card_analyzer/features/settings/application/diagnostic_export.dart';
 import 'package:transit_card_analyzer/platform/storage/app_logger.dart';
-import 'package:transit_card_analyzer/protocols/bank/domain/models/bank_card_result.dart';
-import 'package:transit_card_analyzer/protocols/bank/domain/models/card_application.dart';
 import 'package:transit_card_analyzer/protocols/felica/models/felica_card_type.dart';
 import 'package:transit_card_analyzer/protocols/felica/models/felica_models.dart';
 import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
@@ -77,25 +75,7 @@ void main() {
     expect(json['sessions'][0]['rawJsonl'], session.raw);
   });
 
-  test('银行卡每个 EMV/PBOC 应用和 FeliCa 钱包/流水均可导出', () async {
-    final bank = BankReadOutcome(
-      BankCardResult(
-        protocolFamily: 'mixed',
-        analyzedAt: DateTime.utc(2026),
-        parserVersion: 'test',
-        status: BankCardStatus.success,
-        applications: const [
-          ParsedApplication(
-            application: CardApplication(aidHex: 'A1', selected: true),
-            parserId: 'emv',
-          ),
-          ParsedApplication(
-            application: CardApplication(aidHex: 'A2', selected: true),
-            parserId: 'pboc',
-          ),
-        ],
-      ),
-    );
+  test('FeliCa 钱包和流水可通过解析器分组导出', () async {
     final felica = FelicaReadOutcome(
       FelicaScanResult(
         cardType: 'suica',
@@ -118,32 +98,21 @@ void main() {
     );
     final logger = AppLogger(store: MemoryLogStore())..enabled = true;
     addTearDown(logger.close);
-    for (final (id, result) in <(String, CardReadOutcome)>[
-      ('bank', bank),
-      ('felica', felica),
-    ]) {
-      final sink = logger.startSession(id);
-      for (final record in captureParserRecords(result)) {
-        sink.event('parser_record', data: record);
-      }
-      sink.end(DiagnosticOutcome.success);
+    final sink = logger.startSession('felica');
+    for (final record in captureParserRecords(felica)) {
+      sink.event('parser_record', data: record);
     }
+    sink.end(DiagnosticOutcome.success);
     final sessions = await logger.readSessions();
     final exported = jsonDecode(
       buildFullDiagnostics(sessions, DateTime.utc(2026)),
     );
-    final parserIds = (exported['sessions'] as List)
-        .expand((s) => s['parserGroups'] as List)
-        .map((g) => g['parserId'])
-        .toSet();
-    expect(parserIds, {'emv', 'pboc', 'felica.suica'});
-    final felicaGroups =
-        (exported['sessions'] as List).firstWhere(
-              (s) => s['sessionId'] == 'felica',
-            )['parserGroups'][0]['fieldGroups']
-            as List;
+    final session = (exported['sessions'] as List).single;
+    final parserGroup = (session['parserGroups'] as List).single;
+    expect(parserGroup['parserId'], 'felica.suica');
+    final fieldGroups = parserGroup['fieldGroups'] as List;
     expect(
-      felicaGroups.map((g) => g['category']),
+      fieldGroups.map((g) => g['category']),
       containsAll(['wallets', 'transactions']),
     );
   });

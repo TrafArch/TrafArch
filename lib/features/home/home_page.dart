@@ -84,7 +84,6 @@ class _HomePageState extends State<HomePage> {
     if (app.parsing) return '已读到卡片，正在解析数据…';
     if (scanning) return '正在监听 NFC 标签…';
     if (app.error != null) return '读取失败，请点击下方按钮重试';
-    if (app.lastBankCardResult != null) return '分析完成，再次读取请点击下方按钮';
     if (app.lastResult != null) return '读取完成，再次读取请点击下方按钮';
     return '点击下方按钮开始读取卡片信息';
   }
@@ -133,7 +132,6 @@ class _HomePageState extends State<HomePage> {
                         if (widget.active && !scanning) app.scanOnce();
                       },
                     ),
-                    // 最近扫描：NFC 卡片与银行卡只读分析。
                     secondary: RepaintBoundary(
                       child: app.recoveredCapture == null
                           ? RecentScanSection(app: app)

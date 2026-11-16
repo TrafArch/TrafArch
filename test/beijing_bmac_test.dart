@@ -92,7 +92,7 @@ void main() {
     () async {
       final link = _Link();
       final result = await LocalCardReader(link.call).read();
-      final parsed = result!.parsedCard!;
+      final parsed = result!.parsedCard;
       expect(parsed.parserId, CardParserIds.beijingBmac);
       expect(parsed.info.applicationSerial, '1234567890123456');
       expect(parsed.localCard!.extras.slots['bmac.recharges'], hasLength(3));
@@ -123,18 +123,18 @@ void main() {
       () async {
         final link = _Link()..failAt = failAt;
         final result = await LocalCardReader(link.call).read();
-        expect(result!.parsedCard!.parserId, CardParserIds.beijingBmac);
-        expect(result.parsedCard!.info.applicationSerial, '1234567890123456');
+        expect(result!.parsedCard.parserId, CardParserIds.beijingBmac);
+        expect(result.parsedCard.info.applicationSerial, '1234567890123456');
         expect(
-          result.parsedCard!.info.balanceFen,
+          result.parsedCard.info.balanceFen,
           failAt == '805C000204' ? isNull : 12345,
         );
-        expect(result.readResult!.transportFailure, same(_lost));
-        expect(result.readResult!.readError, isA<ApduTransportException>());
+        expect(result.readResult.transportFailure, same(_lost));
+        expect(result.readResult.readError, isA<ApduTransportException>());
         expect(link.callsAfterFailure, 0);
         if (failAt == '00B2029C17') {
           expect(
-            result.readResult!.extras.slots['bmac.recharges'],
+            result.readResult.extras.slots['bmac.recharges'],
             hasLength(1),
           );
         }

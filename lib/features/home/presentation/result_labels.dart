@@ -1,15 +1,7 @@
 import '../../../protocols/transit/card_parser.dart';
-import '../../../protocols/bank/domain/models/bank_card_result.dart';
 import '../../archive/domain/card_types.dart';
 
 const unrecognizedCardTypeLabel = '暂无可识别卡种';
-
-String bankFamilyText(String family) => switch (family) {
-  BankCardProtocolFamily.mixed => 'EMV + PBOC（按应用分别解析）',
-  BankCardProtocolFamily.pboc => 'PBOC（JR/T 0025 系列规则）',
-  BankCardProtocolFamily.emv => 'EMV（通用规范规则）',
-  _ => unrecognizedCardTypeLabel,
-};
 
 String transitTypeLabel(String? parserId) => cardTypeLabel(switch (parserId) {
   CardParserIds.shanghaiTunion => CardTypes.shanghaiTransitUnion,
@@ -33,37 +25,3 @@ String transitDisplayName({
         : parserId == CardParserIds.localCard
         ? localName ?? '地方交通卡'
         : transitTypeLabel(parserId));
-String bankStatusText(BankCardResult bank, {bool detailed = false}) =>
-    switch (bank.status) {
-      BankCardStatus.noCard => '未读到应用数据',
-      BankCardStatus.enumerationFailed => bankEnumerationText(
-        bank,
-        detailed: detailed,
-      ),
-      BankCardStatus.partial => '部分解析成功（仅公开可读数据）',
-      BankCardStatus.success => '解析完成',
-    };
-
-/// 银行卡枚举失败文案：优先展示具体原因码，避免统一盖成「PPSE 不支持」。
-String bankEnumerationText(BankCardResult bank, {bool detailed = false}) {
-  if (bank.transportFailure == null) {
-    for (final issue in bank.issues) {
-      if (issue.code == 'directory_select_rejected') return issue.message;
-    }
-  }
-  for (final issue in bank.issues) {
-    if (issue.stage == 'enumeration' || issue.stage == 'ppse') {
-      return '应用枚举未完成（${issue.code}）${detailed ? '：${issue.message}' : ''}';
-    }
-  }
-  return '应用枚举未完成';
-}
-
-String bankEmptyReason(BankCardResult bank) {
-  for (final issue in bank.issues) {
-    if (issue.stage == 'ppse') return issue.message;
-  }
-  return bank.status == BankCardStatus.enumerationFailed
-      ? '本次未成功选择任何应用'
-      : '未读到可展示的应用数据';
-}

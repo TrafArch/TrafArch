@@ -6,9 +6,11 @@ import '../../shared/domain/remote_card_use.dart';
 import '../../app/app_dependencies.dart';
 import '../../protocols/transit/card_parser.dart';
 import '../../protocols/transit/local/local_card_models.dart';
+import '../../protocols/transit/tunion/tunion_cash_log.dart';
 import '../qr/presentation/qr_action_button.dart';
 import '../settings/presentation/settings_action_button.dart';
 import 'trip_stream_view.dart';
+import 'tunion_cash_log_view.dart';
 import 'cu_transaction_list.dart';
 import 'shanghai_mirrored_records.dart';
 import 'local_card_trip_list.dart';
@@ -79,6 +81,12 @@ class _TripsBody extends StatelessWidget {
     final rail = app.railTransitRecord;
     final bus = app.busTransitRecord;
     final cuTransactions = app.cityUnionTransactions;
+    final cashLog = app.applications
+        .map((application) => application.payload)
+        .whereType<TUnionCashLog>()
+        .firstOrNull;
+    final cashCount =
+        cashLog?.records.where((record) => record.isPurchase).length ?? 0;
     // 地方交通卡（parserId=localCard：武汉通 / 北京互通卡 / 深圳通本地 /
     // 苏州苏薪·计次 / 天府通）的行程流水单独投影到同一票据式行程卡；
     // TU 行程和本地钱包各有来源；双应用同时展示，不合并两边的记录。
@@ -113,7 +121,10 @@ class _TripsBody extends StatelessWidget {
       cityUnionTransactions: cuTransactions,
     );
 
-    if (stream.isEmpty && cuTransactions.isEmpty && localTrips.isEmpty) {
+    if (stream.isEmpty &&
+        cuTransactions.isEmpty &&
+        localTrips.isEmpty &&
+        cashCount == 0) {
       return Card(
         child: ListTile(
           leading: const Icon(Icons.directions_transit_outlined),
@@ -137,10 +148,12 @@ class _TripsBody extends StatelessWidget {
             recordCount:
                 stream.length +
                 cuRecords.independent.length +
-                localTrips.length,
+                localTrips.length +
+                cashCount,
           ),
           const SizedBox(height: 12),
         ],
+        if (cashLog != null && cashCount > 0) TUnionCashLogView(log: cashLog),
         if (stream.isNotEmpty)
           TripStreamView(stream: stream, app: app, isRemote: app.isRemoteUse),
         if (localTrips.isNotEmpty)

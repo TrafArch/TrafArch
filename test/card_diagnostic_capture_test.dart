@@ -15,8 +15,6 @@ import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_models.dart';
 import 'package:transit_card_analyzer/shared/diagnostics/raw_data_category.dart';
 
-import 'support/test_database.dart';
-
 // Synthetic identities and process bytes; no real passenger information.
 const _process = [
   TUnionProcessRecord(
@@ -176,7 +174,6 @@ void main() {
 }
 
 class _Coordinator extends CardReadCoordinator {
-  _Coordinator() : super(MissingTestAssets());
   @override
   Future<CardReadOutcome> read(
     NfcScanResult tag, {
