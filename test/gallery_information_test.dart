@@ -36,7 +36,7 @@ void main() {
       await tester.pumpWidget(GalleryApp(controller: c));
       await tester.pumpAndSettle();
       final version = find.text(
-        '版本 ${AppInfo.version} (${AppInfo.buildNumber})',
+        '版本 ${AppInfo.version} (${AppInfo.displayBuildNumber})',
       );
       await tester.scrollUntilVisible(
         version,

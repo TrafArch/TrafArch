@@ -125,7 +125,7 @@ void main() {
       await reveal(item);
     }
     // About data is inline: logo, name, version and build number.
-    await reveal('版本 ${AppInfo.version} (${AppInfo.buildNumber})');
+    await reveal('版本 ${AppInfo.version} (${AppInfo.displayBuildNumber})');
     expect(find.text(AppInfo.appName), findsWidgets);
     for (final item in ['关于 TrafArch', '致谢', '开放源代码许可', '隐私政策', '贡献者']) {
       await reveal(item);
