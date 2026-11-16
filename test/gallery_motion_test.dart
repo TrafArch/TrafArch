@@ -117,6 +117,43 @@ void main() {
   );
 
   testWidgets(
+    'state notifications keep the app theme stable instead of re-tweening it',
+    (tester) async {
+      await mount(tester);
+      Theme theme() => tester.widget<Theme>(find.byType(Theme).first);
+      final before = theme().data;
+      c.update(() {});
+      await tester.pump();
+      expect(theme().data, same(before));
+      expect(tester.hasRunningAnimations, isFalse);
+      c.navigate(GalleryPage.settings);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(theme().data, same(before));
+      await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets(
+    'covered routes keep their built content until they are visible again',
+    (tester) async {
+      await mount(tester);
+      final read = find.text('开始读取', skipOffstage: false);
+      final readWidget = tester.widget<Text>(read);
+      c.navigate(GalleryPage.settings);
+      await tester.pumpAndSettle();
+      c.update(() {});
+      await tester.pump();
+      expect(tester.widget<Text>(read), same(readWidget));
+      c.back();
+      await tester.pumpAndSettle();
+      c.update(() {});
+      await tester.pump();
+      expect(tester.widget<Text>(read), isNot(same(readWidget)));
+    },
+  );
+
+  testWidgets(
     'predictive page cancel preserves history, commit resumes from the current offset',
     (tester) async {
       c.navigate(GalleryPage.settings);
