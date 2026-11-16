@@ -14,8 +14,6 @@ class TlvDiagnostic {
 class TlvPolicy {
   const TlvPolicy({
     this.maxLengthBytes = 4,
-    this.rejectLongFormForShortLength = false,
-    this.retainMalformedChildren = false,
     this.maxDepth = 8,
     this.maxNodes = 4096,
     this.maxInputBytes = 1024 * 1024,
@@ -23,10 +21,6 @@ class TlvPolicy {
     this.maxTagBytes = 5,
   });
   final int maxLengthBytes;
-  // Preserve the bank decoder's actual rule, without adding a new rejection
-  // of leading-zero long lengths that its existing implementation accepted.
-  final bool rejectLongFormForShortLength;
-  final bool retainMalformedChildren;
   final int maxDepth;
   final int maxNodes;
   final int maxInputBytes;
@@ -34,11 +28,6 @@ class TlvPolicy {
   final int maxTagBytes;
 
   static const discovery = TlvPolicy();
-  static const bank = TlvPolicy(
-    maxLengthBytes: 3,
-    rejectLongFormForShortLength: true,
-    retainMalformedChildren: true,
-  );
 }
 
 /// A raw BER tree node. Views share one immutable input buffer, so nested
@@ -81,20 +70,6 @@ class TlvParseResult {
   final List<TlvDiagnostic> diagnostics;
   final TlvDiagnostic? fatalDiagnostic;
   bool get accepted => fatalDiagnostic == null;
-
-  void throwIfInvalid() {
-    if (!accepted) throw BerTlvFormatException(this);
-  }
-}
-
-class BerTlvFormatException extends FormatException {
-  BerTlvFormatException(this.result)
-    : super(
-        result.fatalDiagnostic!.message,
-        result.raw,
-        result.fatalDiagnostic!.offset,
-      );
-  final TlvParseResult result;
 }
 
 abstract final class BerTlvParser {
@@ -202,13 +177,6 @@ class _TlvReader {
         for (var i = 0; i < count; i++) {
           length = (length << 8) | bytes[offset++];
         }
-        if (policy.rejectLongFormForShortLength && length < 128) {
-          return issue(
-            TlvDiagnosticKind.malformed,
-            'TLV 长度编码不规范（非最短形式）',
-            offset - count - 1,
-          );
-        }
       }
       final constructed = (first & 0x20) != 0;
       final children = <RawBerTlv>[];
@@ -220,14 +188,6 @@ class _TlvReader {
         error = issue(TlvDiagnosticKind.resourceLimit, 'TLV 累计值字节数超限', offset);
       } else if (constructed && length > 0) {
         error = readRange(offset, availableEnd, depth + 1, children);
-        if (error != null &&
-            policy.retainMalformedChildren &&
-            error.kind != TlvDiagnosticKind.resourceLimit) {
-          // Compatibility: a malformed child tree is opaque, with a visible
-          // diagnostic. Never swallow shared depth/node/byte exhaustion.
-          children.clear();
-          error = null;
-        }
       }
       out.add(
         RawBerTlv._(

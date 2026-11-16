@@ -4,13 +4,8 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/features/scan/application/response_diagnostic_capture.dart';
 import 'package:transit_card_analyzer/features/scan/domain/card_read_outcome.dart';
-import 'package:transit_card_analyzer/features/recovery/capture_read_result.dart';
 import 'package:transit_card_analyzer/features/settings/application/diagnostic_export.dart';
 import 'package:transit_card_analyzer/platform/storage/app_logger.dart';
-import 'package:transit_card_analyzer/protocols/bank/domain/models/bank_card_result.dart';
-import 'package:transit_card_analyzer/protocols/bank/domain/models/card_application.dart';
-import 'package:transit_card_analyzer/protocols/bank/domain/models/card_record.dart';
-import 'package:transit_card_analyzer/protocols/bank/domain/models/tlv_node.dart';
 import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/city_union/city_union_file_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/city_union/city_union_models.dart';
@@ -257,92 +252,6 @@ void main() {
     expect((decoded['fields'] as Map)['amountFen'], trip.amountFen);
     expect(trip.amountFen, 1000);
     expect((decoded['fields'] as Map)['recordBalanceFen'], 2000);
-  });
-
-  test('银行应用切换后沿用各自EMV/PBOC标签，不串字典', () {
-    final raw = _bytes('5A021234');
-    final apps = [
-      for (final parser in ['emv', 'pboc'])
-        ParsedApplication(
-          application: CardApplication(
-            aidHex: parser == 'emv' ? 'A0000000031010' : 'A000000333010101',
-          ),
-          parserId: parser,
-          records: [
-            CardRecord(
-              sfi: 1,
-              recordNumber: 1,
-              rawHex: '5A021234',
-              tags: [
-                TlvNode(
-                  tagHex: '5A',
-                  length: 2,
-                  rawValue: Uint8List.fromList([0x12, 0x34]),
-                  description: '$parser卡号',
-                  decodedValue: '1234',
-                ),
-              ],
-            ),
-          ],
-        ),
-    ];
-    final result = BankReadOutcome(
-      BankCardResult(
-        protocolFamily: 'mixed',
-        analyzedAt: DateTime.utc(2026),
-        parserVersion: 'test',
-        status: BankCardStatus.success,
-        applications: apps,
-      ),
-    );
-    final decoded = captureResponseFields(result, [
-      for (var i = 0; i < apps.length; i++)
-        _frame(i, apps[i].application.aidHex, [0, 0xB2, 1, 0x0C, 0], raw),
-    ]).toList();
-    expect(decoded.map((e) => e['parserId']), ['emv', 'pboc']);
-    expect((decoded[0]['fields'] as Map)['tags'][0]['name'], 'emv卡号');
-    expect((decoded[1]['fields'] as Map)['tags'][0]['name'], 'pboc卡号');
-  });
-
-  test('GET DATA 的 ATC 保留到恢复捕获和匹配的应用诊断，不借用其他响应', () {
-    const aid = 'A000000333010101';
-    final result = BankReadOutcome(
-      BankCardResult(
-        protocolFamily: 'pboc',
-        analyzedAt: DateTime.utc(2026),
-        parserVersion: '0.3.0',
-        status: BankCardStatus.partial,
-        applications: [
-          ParsedApplication(
-            application: const CardApplication(aidHex: aid),
-            parserId: 'pboc',
-            dataTags: [
-              TlvNode(
-                tagHex: '9F36',
-                length: 2,
-                rawValue: Uint8List.fromList([0, 10]),
-                description: '应用交易计数器',
-                decodedValue: '10',
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-    final frames = captureResponseFields(result, [
-      _frame(0, aid, _bytes('80CA9F3600'), _bytes('9F3602000A')),
-      _frame(1, aid, _bytes('80CA9F3600'), _bytes('9F3602000B')),
-      _frame(2, 'A0000000031010', _bytes('80CA9F3600'), _bytes('9F3602000A')),
-    ]).toList();
-    expect(frames.first['parserId'], 'pboc');
-    expect((frames.first['fields'] as Map)['tags'][0]['rawHex'], '000A');
-    expect((frames.first['fields'] as Map)['tags'][0]['value'], '10');
-    expect(frames.skip(1).every((f) => f['state'] != 'decoded'), isTrue);
-    final captured = captureReadResult(result);
-    expect(
-      (captured['applications'] as List).single['data'][0]['rawValueHex'],
-      '000A',
-    );
   });
 
   test('失败、空帧和61链式片段不伪造解析成功；旧日志不重新解析', () async {

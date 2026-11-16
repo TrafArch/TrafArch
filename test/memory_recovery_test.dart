@@ -337,6 +337,52 @@ void main() {
       );
     },
   );
+
+  testWidgets('legacy recovery exposes bank capture only as raw evidence', (
+    tester,
+  ) async {
+    const label = '旧版测试应用';
+    const number = '0000000000000001';
+    final now = DateTime.now();
+    final capture = RecoveryCapture(
+      readAt: now,
+      summary: const {
+        'cardType': 'mixed',
+        'cardName': label,
+        'cardNumber': number,
+        'decoded': {
+          'protocolFamily': 'mixed',
+          'status': 'success',
+          'discoveredApplications': [],
+        },
+      },
+      frames: const [
+        {
+          'command': [0, 164],
+          'response': [144, 0],
+        },
+      ],
+    );
+    final memory = _Memory()
+      ..text = RecoveryState(savedAt: now, tab: 0, capture: capture).encode();
+    final app = appFor(memory);
+    await tester.runAsync(app.init);
+    expect(app.recoveredCapture?.toJson(), capture.toJson());
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: RecoveryResultPanel(app: app)),
+      ),
+    );
+    expect(find.text(label), findsNothing);
+    expect(find.text(number), findsNothing);
+    expect(find.text('读取时的完整字段'), findsNothing);
+
+    await tester.tap(find.text('查看上次读取的原始数据'));
+    await tester.pumpAndSettle();
+    final raw = tester.widget<SelectableText>(find.byType(SelectableText));
+    expect(jsonDecode(raw.data!), capture.toJson());
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 }
 
 RecoveryState _state({DateTime? savedAt}) {

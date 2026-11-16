@@ -54,7 +54,6 @@ flutter:
     - assets/data/TrafArch_Database_TU.sqlite
     - assets/data/TrafArch_Database_CU.sqlite
     - assets/data/reference_manifest.json
-    - assets/dictionaries/
     - assets/icon/
     - assets/contributors/
     - assets/gallery/

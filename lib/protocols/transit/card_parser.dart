@@ -41,7 +41,6 @@ abstract final class CardParserIds {
 
 /// 统一卡片解析器接口。
 /// v0.1 仅接入交通联合（JT/T 978.2）一种卡型；
-/// 未来接入住建部卡/PBOC 金融卡时实现本接口并在 AppDependencies 中注册。
 abstract class CardParser {
   /// 解析器稳定标识（[CardParserIds] 常量，不随展示名与本地化变化）。
   String get parserId;

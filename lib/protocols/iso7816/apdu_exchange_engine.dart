@@ -47,12 +47,6 @@ class ApduTransportException implements Exception {
   String toString() => 'APDU transport: $failure';
 }
 
-/// Existing EMV clients catch FormatException; retain that API and add evidence.
-class ApduFormatException extends FormatException {
-  ApduFormatException(this.result) : super(result.failure!.message);
-  final ApduExchangeResult result;
-}
-
 class ApduExchangeEngine {
   const ApduExchangeEngine(this.transceive);
   final ApduTransceive transceive;

@@ -31,13 +31,17 @@ TripCardPresentation<CuTripSourceFilter> describeCuTrip(
   bool remote = false,
   String? savedSource,
   String currencySymbol = '¥',
+  bool showQingdaoMetroLink = true,
 }) {
   final record = transaction.record;
-  final location = transaction.location.value;
+  final metro = showQingdaoMetroLink ? transaction.qingdaoMetro : null;
+  final location = metro == null ? transaction.location.value : null;
   final kind =
       CityUnionLookupRules.presentation(transaction.carrier)?.$1 ??
       location?.kind;
-  final mode = record.kind == CityUnionTransactionKind.recharge
+  final mode = metro != null
+      ? TripModeFilter.rail
+      : record.kind == CityUnionTransactionKind.recharge
       ? TripModeFilter.other
       : switch (kind) {
           'bus' || 'custom_bus' || 'brt' => TripModeFilter.bus,
@@ -54,20 +58,25 @@ TripCardPresentation<CuTripSourceFilter> describeCuTrip(
   final info = TripEntryInfo(
     sourceLabel: transaction.sourceLabel,
     title:
-        '${transaction.kindLabel} · ${transaction.locationLabel} · '
+        '${metro == null ? transaction.kindLabel : (metro.isEntry ? '进站' : '出站')} · '
+        '${metro == null ? transaction.locationLabel : '站点未记录'} · '
         '序号 ${record.sequence}',
     line: line,
     timeText: transaction.timeLabel,
     amountText: amountText ?? '金额未知',
     isConsume: record.kind != CityUnionTransactionKind.recharge,
-    category: CityUnionLookupRules.presentation(transaction.carrier)?.$2,
-    badges: switch (transaction.location.status) {
-      ReferenceMatchStatus.ambiguous => const ['站名歧义'],
-      ReferenceMatchStatus.unavailable => const ['参考数据不可用'],
-      ReferenceMatchStatus.unknown => const ['未匹配'],
-      ReferenceMatchStatus.matched => const [],
-    },
-    remoteCityText: remote
+    category: metro == null
+        ? CityUnionLookupRules.presentation(transaction.carrier)?.$2
+        : null,
+    badges: metro != null
+        ? const []
+        : switch (transaction.location.status) {
+            ReferenceMatchStatus.ambiguous => const ['站名歧义'],
+            ReferenceMatchStatus.unavailable => const ['参考数据不可用'],
+            ReferenceMatchStatus.unknown => const ['未匹配'],
+            ReferenceMatchStatus.matched => const [],
+          },
+    remoteCityText: metro == null && remote
         ? '${cityName ?? '未知城市'}（${transaction.regionCode}）'
         : null,
     rawHex: record.rawHex,
@@ -76,9 +85,11 @@ TripCardPresentation<CuTripSourceFilter> describeCuTrip(
       ('记录类型', transaction.kindLabel),
       ('交易序号', '${record.sequence}'),
       ('交易时间', transaction.timeLabel),
-      ('地点', transaction.locationLabel),
+      if (metro != null) ('地铁时刻依据', '琴岛通 0x19 第 ${metro.isEntry ? 3 : 7} 槽'),
+      ('地点', metro == null ? transaction.locationLabel : '站点未记录'),
       ('终端原始编码', record.terminalHex ?? '未知'),
-      if (transaction.regionCode case final region?) ('受理地区代码', region),
+      if (metro == null && transaction.regionCode != null)
+        ('受理地区代码', transaction.regionCode!),
       if (location?.lineCode case final code?) ('线路原始编码', code),
       if (location?.stationCode case final code?) ('站点原始编码', code),
       (
@@ -89,7 +100,8 @@ TripCardPresentation<CuTripSourceFilter> describeCuTrip(
       ('交易金额', amountText ?? '未知'),
       ('金额原始字段', record.amountHex),
       ('金额四字节原始值', '${record.amountRaw}'),
-      if (transaction.location.issue case final issue?) ('地点诊断', issue),
+      if (metro == null && transaction.location.issue != null)
+        ('地点诊断', transaction.location.issue!),
       for (final error in record.errors) ('解析诊断', error),
     ],
   );
@@ -104,18 +116,26 @@ TripCardPresentation<CuTripSourceFilter> describeCuTrip(
     },
     mode: mode,
     dateText: record.transactionDate ?? '日期未知',
-    remote: remote,
+    remote: metro == null && remote,
     journeyEvent: JourneyEvent(
       payload: info,
       mode: mode,
-      role: JourneyEventRole.unknown,
-      cityCode: transaction.regionCode,
-      cityLabel: city,
+      role: metro == null
+          ? JourneyEventRole.unknown
+          : metro.isEntry
+          ? JourneyEventRole.entry
+          : JourneyEventRole.exit,
+      cityCode: metro == null ? transaction.regionCode : '4520',
+      cityLabel: metro == null ? city : '青岛',
+      scopeKey: metro?.id,
+      sourceIds: metro == null ? const {} : {metro.id},
+      applicationRecordId: metro?.id,
       endpoint: JourneyEndpoint(
         line: line,
-        station:
-            location?.station ??
-            (location == null ? transaction.locationLabel : null),
+        station: metro != null
+            ? null
+            : location?.station ??
+                  (location == null ? transaction.locationLabel : null),
         // CU stores a UTC instant separately from its original civil clock.
         // Use the captured clock for tickets, independent of the phone zone.
         time: transaction.transactionTime

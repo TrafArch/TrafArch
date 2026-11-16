@@ -16,7 +16,6 @@ import 'package:transit_card_analyzer/platform/nfc/nfc_models.dart';
 import 'package:transit_card_analyzer/platform/nfc/nfc_service.dart';
 import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
 
-import 'support/test_database.dart';
 import 'support/published_reference_fixture.dart';
 
 void main() {
@@ -405,7 +404,6 @@ class _Sessions implements SessionNfcChannel {
 }
 
 class _Coordinator extends CardReadCoordinator {
-  _Coordinator() : super(MissingTestAssets());
   int reads = 0;
   @override
   Future<CardReadOutcome> read(

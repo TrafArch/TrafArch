@@ -56,7 +56,7 @@ class ArchiveController extends OwnedNotifier {
     if (disposed) return;
     final parsed = view.parsedCard;
     if (parsed == null) {
-      return; // Bank/FeliCa archive policy is not invented here.
+      return;
     }
     try {
       final identity = CardIdentificationService(view.knowledge)

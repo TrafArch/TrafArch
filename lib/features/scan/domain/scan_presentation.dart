@@ -12,7 +12,6 @@ import '../../../protocols/transit/local/local_card_models.dart';
 import '../../../protocols/transit/local/cards/shanghai_transit_union_models.dart';
 import '../../../protocols/transit/tunion/tunion_models.dart';
 import '../../../protocols/transit/tunion/tunion_process_parser.dart';
-import '../../../protocols/bank/domain/models/bank_card_result.dart';
 import 'card_read_outcome.dart';
 import '../../../shared/domain/remote_card_use.dart';
 
@@ -56,10 +55,6 @@ class ScanPresentation {
   List<CityUnionFileView> get cityUnionFiles =>
       parsedCard?.cityUnionFiles ?? const [];
   ReadResult? get localReadResult => parsedCard?.localCard;
-  BankCardResult? get lastBankCardResult => switch (outcome) {
-    BankReadOutcome(:final card) => card,
-    _ => null,
-  };
   FelicaScanResult? get felicaResult => switch (outcome) {
     FelicaReadOutcome(:final card) => card,
     _ => null,

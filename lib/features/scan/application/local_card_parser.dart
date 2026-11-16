@@ -1,26 +1,14 @@
 library;
 
 import '../../../protocols/transit/card_parser.dart';
-import 'bank_card_probe.dart';
 import 'local_card_reader.dart';
 
 /// 卡片统一识读解析器（独立模块对外入口）。
 ///
-/// 本模块以新架构为主，已把原先分散在 `AppDependencies` 的老「交通联合
-/// （JT/T 978.2）/ 城市一卡通（CJ/T 331-2016）」识读融入内部：编排主体
-/// [LocalCardReader] 按「TU 富识读 → CU 富识读 → 地方交通卡探测 → 银行卡
-/// （EMV / PBOC）」优先级串联，交通卡产出 [ParsedCard.parserId] 分别为
-/// tunion / cityUnion / localCard，银行卡产出 BankCardResult，上层展示与
-/// 分析链路据此分派。
 /// 传输经应用侧 [ApduTransceive]（ScanController）注入，模块不依赖
 /// 任何上层状态，可独立复用与测试。
 class LocalCardParser implements CardParser {
-  LocalCardParser(
-    this._transceive, {
-    this.onStage,
-    this.onProgress,
-    this.bankProbe,
-  });
+  LocalCardParser(this._transceive, {this.onStage, this.onProgress});
 
   final ApduTransceive _transceive;
 
@@ -30,21 +18,16 @@ class LocalCardParser implements CardParser {
   /// 识读进度回调（0–100 百分比，供上层进度条展示；可空）。
   final void Function(int percent)? onProgress;
 
-  /// 银行卡（EMV / PBOC）探测抽象；作为统一流程的一等阶段被 [LocalCardReader]
-  /// 调用。为空时仅识读交通卡。
-  final BankCardProbe? bankProbe;
-
   @override
   String get parserId => CardParserIds.localCard;
 
   @override
   String get parserName => '卡片统一识读';
 
-  /// 统一识读入口：返回交通卡 / 银行卡的完整产物（供上层按类型分派）。
+  /// 统一识读入口：返回交通卡识读的完整产物。
   Future<LocalReadOutcome?> read() => LocalCardReader(
     _transceive,
     onStage: onStage,
-    bankProbe: bankProbe,
     callback: onProgress == null
         ? const NoopLocalCardReaderCallback()
         : _ProgressCallback(onProgress!),

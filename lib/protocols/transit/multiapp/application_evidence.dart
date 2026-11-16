@@ -1,9 +1,9 @@
 import '../local/local_card_models.dart';
+import '../tunion/tunion_cash_log.dart';
 import '../card_parser.dart';
-import '../../bank/domain/models/bank_card_result.dart';
 import '../../transport/transport_failure.dart';
 
-/// 一次识读中单个应用（TU / CU / 地方钱包 / 银行等）的探测状态。
+/// 一次识读中单个应用（TU / CU / 地方钱包等）的探测状态。
 ///
 /// 一芯多应用卡不再用单一 [ParsedCard] 布尔标记表达组合；每个应用独立
 /// 记录探测与否、选择结果、读取结果、身份、余额、流水与传输失败。
@@ -35,7 +35,7 @@ class ApplicationEvidence {
     this.notes = const [],
   });
 
-  /// 稳定应用标识（tu / cu / lingnan / shenzhen / macau / bank 等）。
+  /// 稳定应用标识（tu / cu / lingnan / shenzhen / macau 等）。
   final String appId;
   final String displayName;
   final ApplicationProbeState state;
@@ -59,7 +59,7 @@ class ApplicationEvidence {
   final Object? readError;
   final TransportFailure? transportFailure;
 
-  /// 类型化产物（如 ParsedCard / ReadResult / BankCardResult），按应用使用。
+  /// 类型化产物（如 ParsedCard / ReadResult），按应用使用。
   final Object? payload;
 
   /// 补充诊断原文，仅供展示，不替代字段。
@@ -134,9 +134,6 @@ class ApplicationEvidence {
     transportFailure: transportFailure,
   );
 
-  /// 是否为交通联合 / 城市一卡通通用单元（决定是否需要继续探测银行）。
-  bool get isTransitGeneralUnit => appId == 'tu' || appId == 'cu';
-
   /// 可序列化投影（快照 / 诊断 / 导出共用）；原始字节已在会话帧中保存。
   Map<String, dynamic> toJson() {
     final summary = payloadSummary();
@@ -168,30 +165,20 @@ class ApplicationEvidence {
 
   /// 类型化产物的轻量摘要；未知或不可序列化类型保留 null。
   Map<String, dynamic>? payloadSummary() => switch (payload) {
+    TUnionCashLog log => log.toJson(),
     ParsedCard(
       :final parserId,
       :final parserName,
       :final selectedAidHex,
       :final info,
-    ) => {
-      'kind': 'parsed_card',
-      'parserId': parserId,
-      'parserName': parserName,
-      'selectedAid': selectedAidHex,
-      if (info.balanceFen != null) 'balanceFen': info.balanceFen,
-    },
-    BankCardResult(
-      :final status,
-      :final protocolFamily,
-      :final discoveredApplications,
-    ) => {
-      'kind': 'bank_card',
-      'status': status.name,
-      'protocolFamily': protocolFamily,
-      'discoveredAids': [
-        for (final app in discoveredApplications) app.aidHex,
-      ],
-    },
+    ) =>
+      {
+        'kind': 'parsed_card',
+        'parserId': parserId,
+        'parserName': parserName,
+        'selectedAid': selectedAidHex,
+        if (info.balanceFen != null) 'balanceFen': info.balanceFen,
+      },
     ReadResult(:final info) => {
       'kind': 'read_result',
       'isLocalCard': info.isLocalCard,
@@ -201,17 +188,22 @@ class ApplicationEvidence {
     _ => null,
   };
 
+  /// 旧快照中的银行卡条目保留原文，跳过展示投影。
+  static bool isRetiredBankEntry(Object? raw) =>
+      raw is Map && raw['appId'] == 'bank';
+
   /// 从快照 / 诊断投影恢复；损坏条目返回 null，由调用方按容错策略保留原文。
   static ApplicationEvidence? tryParse(Object? raw) {
-    if (raw is! Map) return null;
+    if (raw is! Map || isRetiredBankEntry(raw)) return null;
     final json = Map<String, dynamic>.from(raw);
     final stateName = json['state'];
     final state = stateName is String
-        ? ApplicationProbeState.values
-              .asNameMap()[stateName]
+        ? ApplicationProbeState.values.asNameMap()[stateName]
         : null;
     final failure = json['transportFailure'];
-    final failureMap = failure is Map ? Map<String, dynamic>.from(failure) : null;
+    final failureMap = failure is Map
+        ? Map<String, dynamic>.from(failure)
+        : null;
     final kindName = failureMap?['kind'];
     final failureKind = kindName is String
         ? TransportFailureKind.values.asNameMap()[kindName]
@@ -225,12 +217,8 @@ class ApplicationEvidence {
       confirmed: json['confirmed'] == true,
       readSucceeded: json['readSucceeded'] == true,
       cardNumber: json['cardNumber']?.toString(),
-      balanceFen: json['balanceFen'] is int
-          ? json['balanceFen'] as int
-          : null,
-      recordCount: json['recordCount'] is int
-          ? json['recordCount'] as int
-          : 0,
+      balanceFen: json['balanceFen'] is int ? json['balanceFen'] as int : null,
+      recordCount: json['recordCount'] is int ? json['recordCount'] as int : 0,
       readError: json['readError']?.toString(),
       transportFailure: failureMap == null
           ? null
@@ -239,6 +227,9 @@ class ApplicationEvidence {
               message: failureMap['message']?.toString() ?? '',
               code: failureMap['code']?.toString(),
             ),
+      payload: json['appId'] == 'tuCash' && json['confirmed'] == true
+          ? TUnionCashLog.fromPayload(json['payload'])
+          : null,
       notes: [
         for (final note in notesRaw is List ? notesRaw : const [])
           if (note is String) note,

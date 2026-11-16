@@ -11,11 +11,13 @@ import '../archive/domain/card_session_snapshot.dart';
 import '../archive/domain/card_types.dart';
 import '../../protocols/transit/card_parser.dart';
 import '../../protocols/transit/multiapp/application_evidence.dart';
+import '../../protocols/transit/tunion/tunion_cash_log.dart';
 import '../archive/presentation/archive_trip_presenter.dart';
 import '../archive/presentation/local_card_history_records.dart';
 import '../trips/trip_cards_view.dart';
 import '../trips/cu_transaction_list.dart';
 import '../trips/shanghai_mirrored_records.dart';
+import '../trips/tunion_cash_log_view.dart';
 
 /// Uses captured archive display fields, never current reference matches or NFC.
 class RecoveryResultPanel extends StatelessWidget {
@@ -26,6 +28,12 @@ class RecoveryResultPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final capture = app.recoveredCapture;
     if (capture == null) return const SizedBox.shrink();
+    // 旧版读卡字段只在原始证据页展示。
+    final summary = switch (capture.summary['decoded']) {
+      {'protocolFamily': String(), 'discoveredApplications': List()} =>
+        const <String, Object?>{},
+      _ => capture.summary,
+    };
     final snapshot = capture.snapshotJson == null
         ? null
         : CardSessionSnapshot.decodeResult(capture.snapshotJson!);
@@ -56,9 +64,12 @@ class RecoveryResultPanel extends StatelessWidget {
         snapshot?.snapshot?.extensions['applicationEvidence'];
     final applications = <ApplicationEvidence>[
       if (applicationRows is List)
-        for (final row in applicationRows)
-          ?ApplicationEvidence.tryParse(row),
+        for (final row in applicationRows) ?ApplicationEvidence.tryParse(row),
     ];
+    final cashLog = applications
+        .map((application) => application.payload)
+        .whereType<TUnionCashLog>()
+        .firstOrNull;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -75,21 +86,20 @@ class RecoveryResultPanel extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   capture.pending?.identity.cardType == CardTypes.lingnanTong ||
-                          capture.summary['parserId'] ==
-                              CardParserIds.lingnanTong ||
-                          capture.summary['cardType'] == CardTypes.lingnanTong
+                          summary['parserId'] == CardParserIds.lingnanTong ||
+                          summary['cardType'] == CardTypes.lingnanTong
                       ? '岭南通'
-                      : capture.summary['cardName']?.toString() ?? '卡片信息',
+                      : summary['cardName']?.toString() ?? '卡片信息',
                 ),
-                if (capture.summary['cardNumber'] case final String number)
+                if (summary['cardNumber'] case final String number)
                   SelectableText(number),
                 Text('读取时间：${capture.readAt.toLocal()}'),
-                if (capture.summary['balanceText'] case final String text)
+                if (summary['balanceText'] case final String text)
                   Text('读取时余额：$text')
-                else if (capture.summary['balanceFen'] case final int balance)
+                else if (summary['balanceFen'] case final int balance)
                   Text(
                     '读取时余额：${(balance / 100).toStringAsFixed(2)}'
-                    ' ${capture.summary['currencyCode'] ?? '币种未知'}',
+                    ' ${summary['currencyCode'] ?? '币种未知'}',
                   ),
                 Text(
                   capture.interrupted
@@ -133,6 +143,7 @@ class RecoveryResultPanel extends StatelessWidget {
             title: '逐应用探测 · 捕获时快照',
           ),
         ],
+        if (cashLog != null) TUnionCashLogView(log: cashLog),
         if (trips != null && trips.entries.isNotEmpty)
           TripCardsView(
             entries: trips.entries,
@@ -169,7 +180,7 @@ class RecoveryResultPanel extends StatelessWidget {
           LocalCardHistoryRecords(
             records: ArchiveHistory.projectLocalCardRecords([batch]),
           ),
-        if (capture.summary['decoded'] case final Map decoded)
+        if (summary['decoded'] case final Map decoded)
           if (decoded.isNotEmpty)
             Card(
               child: ExpansionTile(

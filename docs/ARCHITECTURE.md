@@ -38,7 +38,7 @@ Android 主 Activity 显式声明 `resizeableActivity=true`，沿用 Flutter emb
 
 独立通道 `transit_card_analyzer/memory` 的原生→Dart `onMemoryPressure({'kill': bool, 'expiresAtMillis': int})` 返回 bool；原生 UI 队列与 Dart 消息队列均拒绝已过期通知。Dart→原生 `readRecovery`／`writeRecovery({'content': String})`／`clearRecovery` 只操作 `noBackupFilesDir/memory_recovery.json`。Android `AtomicFile` 发布完整文件，限制 UTF-8 8 MiB，不进入系统备份；有效期 24 小时，读取成功后消费，损坏／过期文件清理，新读取和确认操作作废旧现场。没有新增 SQLite 文件、表、迁移或后台服务。
 
-`AppDependencies` 将 TRIM 与 `WidgetsBindingObserver.didHaveMemoryPressure` 统一为可重建缓存清理；不销毁借给当前展示的参考库连接，不删除原始帧／日志／未保存结果。KILL 同步失效当前读卡代次，发起但不等待物理 NFC 关闭；现场写入、诊断及已接受档案操作使用独立 1.8 秒等待预算，超时如实返回失败。恢复启动就绪前不自动扫描。恢复主 Tab、设置／二维码／档案详情入口及行程筛选；临时弹窗返回父页面，不恢复相机或 NFC 句柄。交通卡沿用捕获快照的历史展示器，银行卡／FeliCa 保留已读字段与物理证据，不重跑协议、匹配或自动归档。恢复文件保留快照原文；待保存内容由恢复面板显式确认，沿用原读取时间和捕获解析版本，新档案继续执行既有保存观察元数据策略。
+`AppDependencies` 将 TRIM 与 `WidgetsBindingObserver.didHaveMemoryPressure` 统一为可重建缓存清理；不销毁借给当前展示的参考库连接，不删除原始帧／日志／未保存结果。KILL 同步失效当前读卡代次，发起但不等待物理 NFC 关闭；现场写入、诊断及已接受档案操作使用独立 1.8 秒等待预算，超时如实返回失败。恢复启动就绪前不自动扫描。恢复主 Tab、设置／二维码／档案详情入口及行程筛选；临时弹窗返回父页面，不恢复相机或 NFC 句柄。交通卡沿用捕获快照的历史展示器，FeliCa 保留已读字段与物理证据，不重跑协议、匹配或自动归档。恢复文件保留快照原文；待保存内容由恢复面板显式确认，沿用原读取时间和捕获解析版本，新档案继续执行既有保存观察元数据策略。
 
 ## JSON 档案与文件交换
 
@@ -92,7 +92,6 @@ lib/
     iso7816/                    APDU 模型、交换策略、有界 BER-TLV
     transport/                  平台无关的传输失败
     transit/{tunion,city_union,local,qr}/
-    bank/                       EMV / PBOC 枚举、读取、字典接口与领域模型
     felica/                     帧、协议、探测、卡适配器
   platform/{nfc,qr,storage,browser}/ MethodChannel、目录、设置、导出、日志、反馈浏览器
   features/
@@ -106,7 +105,6 @@ lib/
     expert/                     各文件和原始数据面板
     trips/                      行程条目、筛选、格式化与详情
     cards/                      档案列表
-    bank_card/presentation/     银行卡界面
   shared/                       生命周期基类和少量展示常量
 android/app/src/main/kotlin/com/kajolno/TrafArch/
   MainActivity.kt
@@ -120,14 +118,6 @@ android/app/src/main/kotlin/com/kajolno/TrafArch/
 本轮按迁移映射移动 159 个文件，移除旧 `lib/core` / `lib/state` / `lib/database` 中的产品实现；没有建立旧路径转发文件链。现有测试源码的 import 随文件更新，回放传输器只留在 `test/support`。精确映射见 `REFACTOR_FILE_MAP_20261021.json`。
 
 ## 依赖与装配
-
-### 银行卡严格只读边界
-
-EMV／PBOC 共享 `ContactlessReadParser`，银行卡解析版本为 0.3.2。应用发现优先使用 PPSE 中有效的 AID。PPSE 无有效候选时尝试 `1PAY.SYS.DDF01`，仅在 FCI 的 `6F/A5/88` 指定目录 SFI（1..10）时顺序读取目录记录，从 `70/61/4F` 提取 AID。PSE 路径未选中应用且通信仍正常时，继续探测尚未尝试的内置候选 AID。目录明示应用的 SELECT 被拒时保留状态字及诊断，卡种以成功选择的应用为准。
-
-应用选择成功后，以 `80 CA 9F 36 Le` 直接取得 ATC，再用绝对记录号 READ RECORD 枚举 SFI 1..30 的公开记录。每文件从记录 1 开始，拒绝后停止该文件；成功与失败读取共用单应用 254 次预算，通信失败即停止。没有 GPO 提供的 AFL，因此无法保证记录完整性。卡号和有效期分别优先取首条有效的 `5A` 和 `5F24`，并沿用二磁道标签回退；未取得的字段在已选应用详情中显示“未读到”。
-
-GPO 在部分非接触卡上会生成应用密文或递增 ATC，零金额与空 PDOL 均不能保证无副作用。当前流程移除 GPO 及 PDOL 组包，不提供交易模式或回退。`BankReadOnlyPolicy` 对 CLA、INS、参数和 APDU 结构实行封闭白名单，既用于 `exchangeReadOnly` 的初始及续传指令，也用于最接近实际通道的 `RecordingCardTransport`，禁止 GPO、GENERATE AC、PIN、认证、写入及未知指令。只允许 SELECT by name、绝对 READ RECORD、读取 9F36 的 GET DATA 和 GET RESPONSE，保留有界 61XX／6CXX 处理。`ParsedApplication.dataTags` 保留直接读取结果并进入界面、恢复捕获及诊断；旧 `gpoTags/gpoHex` 仅兼容已有捕获，不重读或改写历史数据。原生通道冻结契约不变。
 
 ### 边到边显示与系统安全区域
 
@@ -168,7 +158,7 @@ flowchart TD
   APP --> REF[ReferenceDataController]
   APP --> ARC[ArchiveController / ArchiveHistory]
   APP --> SET[Settings / QR / Diagnostics]
-  SCAN --> PROTO[protocols: TU / CU / Bank / FeliCa]
+  SCAN --> PROTO[protocols: TU / CU / 地方交通卡 / FeliCa]
   SCAN --> NFC[platform/nfc]
   NFC --> NATIVE[原生 session / FIFO / captured connection]
   REF --> PACK[只读 TU / CU 发布包]
@@ -192,7 +182,7 @@ TU 1E 的 mode 05 成功响应可能只是文件前缀。平铺 48 字节响应�
 
 共享 APDU engine 保留各族自己的 6100 / 6C00 / 6700、GET RESPONSE CLA、Le 修正顺序和资源上限。有效最终命令决定长度校验；Case 3 不把数据尾字节当 Le。共享 BER-TLV 树保留原始值、偏移与错误，深度 / 节点 / 字节有界。
 
-传输失败是 `TransportFailure`；只在平台层把准确的原生异常类映射为卡片离场，通用 TRANSCEIVE_FAILED 保持未知。银行卡保留应用发现证据和每个应用读取结果，终止性通信失败后停止物理 I/O。FeliCa 保留已读取数据、服务访问结果和终止失败；不发明未公开服务。
+传输失败是 `TransportFailure`；只在平台层把准确的原生异常类映射为卡片离场，通用 TRANSCEIVE_FAILED 保持未知。FeliCa 保留已读取数据、服务访问结果和终止失败；不发明未公开服务。
 
 上海与哈尔滨城市通双应用组合结果保留 TU、CU 各自的失败类型和已读内容；哈尔滨仅在已确认 TU 且卡号匹配 `31049702` 时探测 CU，并独立保留两侧余额及原始记录。终止性错误阻断后续应用探测，APDU 状态字拒绝不等同于传输中断。主身份由已确认的 TU 身份决定，两侧余额的完整性分别表达；上海专用透支与本地账本推断不作用于哈尔滨。
 
@@ -200,7 +190,11 @@ CU 读取按配置区分消费（18）、充值（10）和异地通道（上海 
 
 CU 的实时行程、档案详情与恢复现场通过 `cu_trip_presenter.dart` 适配共用的 `TripCardsView`、票据式 `TripEntryCard` 和详情弹层，来源按 CU 实际文件筛选，方式采用已解码的运营分类或唯一匹配类别；充值和未知方式放在其他记录。金额展示沿用 Trip Reader 1.7.17 的可追踪规则：金额字段字节 07-09 按卡内分解释，消费为负、充值为正；字节 06 仍包含在四字节原字段中，详情完整保留 `amountHex`、`amountRaw` 与解释依据，不从余额反推交易金额。CU 目前缺少已核实的进出站方向，事件保持 `unknown`，不因零金额、连续序号或终端分类组成完整行程；票卡显示交易金额，但行程后余额保持未知。详情保留线路站点编码、HEX、异常与全部保存来源。日期使用 CU 捕获的 UTC+08 卡内时钟，不随手机时区换日；实时 CU 补齐卡名、卡号、当前余额与可见记录数摘要。异地标识只比较 CU 命名空间内的发卡地区与受理地区，历史要求每份来源均能独立核实；上海双应用的镜像折叠继续保留。CU 筛选以独立恢复键保存，不改变快照、解析版本或数据库。
 
-一芯多应用按逐应用证据记录，不再以单一卡种布尔标记表达组合。`ApplicationEvidence` 为协议层通用模型，按应用保留探测与否、选择结果、读取结果、身份、余额、流水与传输失败；覆盖 TU、CU、岭南通、深圳通、澳门通、武汉通、BMAC、北京、苏州、天府通与银行卡。普通确认 TU 继续按默认目录探测普通 CU（非上海／哈尔滨组合）与澳门通钱包，确认到 CU 时以 TU 主卡并置 `dualApplication`／`cityUnionFiles` 合并，澳门通则只在 CU 未命中时作为独立证据探测；TU／CU 已确认后经 PPSE／PSE 支付目录门控在同一会话继续只读探测银行应用，目录未披露时不枚举全部内置候选 AID，交通应用全部未命中时保留完整银行卡探测。为减少读卡等待，TU 已确认后的 CU 存在性探测使用快速选择（不重置 MF，仅尝试 `CLA 00/80 + Le` 两条主命令）；TU 未命中时的完整 CU 兼容选择、无 Le 回退与上海／哈尔滨复合路径保持原样。终止性传输失败停止后续应用探测并保留已读数据。
+一芯多应用由协议层 `ApplicationEvidence` 按应用记录探测状态、选择结果、读取结果、身份、余额、流水与传输失败。覆盖 TU、CU、岭南通、深圳通、澳门通、武汉通、BMAC、北京、苏州和天府通。普通确认 TU 后继续探测普通 CU（非上海／哈尔滨组合）与澳门通钱包。确认到 CU 时以 TU 为主卡，通过 `dualApplication` 和 `cityUnionFiles` 合并该应用。CU 未命中时探测澳门通，证据单独记录。为减少读卡等待，TU 已确认后的 CU 存在性探测直接尝试 `CLA 00/80 + Le` 两条主命令。TU 未命中时使用完整的 CU 兼容选择路径，包含无 Le 回退。终止性传输失败停止后续应用探测并保留已读数据。
+
+琴岛通 TU 钱包同时满足 `0x15` 发卡机构前缀 `01984520` 与 `0x17` 管理文件城市 `4520`，且快速 CU 选择被拒绝时，才补试琴岛通贴卡交易页使用的 Case 3 无 Le 选择。成功选择且读回有效 CU `0x15` 后，按 `0x18` 的 23 字节布局读取前 10 槽。`06`／`09` 为消费，`02` 为充值，有卡内证据的零金额消费按原记录展示。日期、时间、类型或金额无法核实的记录及与同次 TU 流水逐字节相同的镜像保留原始证据。对存在两种金额候选的捕获读取琴岛通 `0x19` 槽 3／7 的最近进出站时间，只有两个时刻均精确唯一对应同次 `0x18` 消费，且原始槽位和序号连续，才给原交易附加进、出站方向。月累计字段不参与金额计算。行程显示出站明细金额及两侧时间，线路和站点保持未知。档案从单次完整 `cuProjection` 恢复此配对，配对标记不改变原交易的去重身份。
+
+交通联合电子现金消费日志由 `TUnionCashLogReader` 读取。确认 TU 且通信仍可继续时，直接选择固定 AID `A000000632010106`。FCI 中的 AID 须匹配，且 `9F4D` 须声明 `0x0B` 日志入口。用 `GET DATA 9F4F` 取得字段布局并保留原始槽位、格式和记录字节。行程页与恢复现场单独列出有明确时间、消费类型和人民币金额的记录，站点和行程余额保持未知。该日志独立于电子钱包交易和交通过程记录。
 
 逐应用证据贯通实时与档案：`ApplicationEvidence.toJson`／`tryParse` 是可序列化投影，新读取快照以 `applicationEvidence` 扩展冻结（非 Drift 表字段，不迁移、不改写旧快照）；专家页"信息获取"与恢复现场经共享 `ApplicationEvidencePanel` 并列展示各应用状态、卡号、余额与记录数，常规"卡片信息"详情继续只展示主卡片与行程，文本导出与诊断 `card_info` 事件包含同一份逐应用清单。旧档案没有该扩展时保持原展示，损坏条目只回退到原始快照，不阻断页面。
 
@@ -233,7 +227,7 @@ manifest v1 必须含 `format_version: 1` 和 `app: {build: 整数, version: 字
 
 ## 本地诊断日志
 
-响应字段在扫描产物可用时以 `response_fields` 事件按帧号、命令和响应原文冻结，日志导出不重新调用解析器。TU 基本文件复用 `CommonUnitTu.decodeCardInfo` 纯方法，其余 TU 交易／过程、CU 文件、地方卡记录、EMV/PBOC 标签和 FeliCa 产品记录直接消费当前解析结果；同时检查已选应用、来源坐标与原始字节，双应用切换不借用最终卡型。无响应、空响应、状态拒绝、未解析及旧日志未捕获分别标注；分段／批量／模板数据缺少单帧唯一对应时只保留原文。完整导出 v3 中物理帧的 `response` 为 `{parserId,state,statusWord?,fields}`，`raw` 为原始字节；有序 events 中物理帧使用相同投影，`rawJsonl` 仍保留存储原文。字段时间保持解析器的本地时钟口径，不把交易时间转换为 UTC。
+响应字段在扫描产物可用时以 `response_fields` 事件按帧号、命令和响应原文冻结，日志导出不重新调用解析器。TU 基本文件复用 `CommonUnitTu.decodeCardInfo` 纯方法，其余 TU 交易／过程、CU 文件、地方卡记录和 FeliCa 产品记录直接消费当前解析结果；同时检查已选应用、来源坐标与原始字节，双应用切换不借用最终卡型。无响应、空响应、状态拒绝、未解析及旧日志未捕获分别标注；分段／批量／模板数据缺少单帧唯一对应时只保留原文。完整导出 v3 中物理帧的 `response` 为 `{parserId,state,statusWord?,fields}`，`raw` 为原始字节；有序 events 中物理帧使用相同投影，`rawJsonl` 仍保留存储原文。字段时间保持解析器的本地时钟口径，不把交易时间转换为 UTC。
 
 设置页原“导出日志”入口改名为常驻的“日志管理器”，开关只控制新增持久化记录；关闭后仍可选择、清理及导出已有记录，管理界面只提供完整读卡诊断。
 
