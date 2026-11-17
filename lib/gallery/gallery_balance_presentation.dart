@@ -77,7 +77,7 @@ class GalleryBalancePresentation {
     }
     final symbol = _symbols[explicitCode];
     if (symbol != null) {
-      final label = '$explicitCode $symbol';
+      final label = explicitCode == 'HKD' ? r'HK$' : '$explicitCode $symbol';
       return GalleryBalancePresentation._(
         known: true,
         currencyLabel: label,

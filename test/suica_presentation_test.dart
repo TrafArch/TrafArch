@@ -22,6 +22,42 @@ import 'package:transit_card_analyzer/protocols/felica/parsers/suica_record_pars
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  for (final balance in [0, 900]) {
+    for (final scale in [1.0, 2.0]) {
+      testWidgets(
+        'saved rail balance $balance remains visible without amount at scale $scale',
+        (tester) async {
+          tester.view.devicePixelRatio = 1;
+          tester.view.physicalSize = const Size(320, 740);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          addTearDown(tester.view.resetPhysicalSize);
+          final live = presentSuicaTrips([
+            _rail(balance: balance, change: null),
+          ]).single;
+          final restored = SuicaTripPresentation.fromJson(live.toJson())!;
+          expect(restored.entry.info.amountText, isNull);
+          expect(restored.journey.balanceAfterText, 'JP￥$balance');
+          await tester.pumpWidget(
+            MaterialApp(
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(context)
+                    .copyWith(textScaler: TextScaler.linear(scale)),
+                child: child!,
+              ),
+              home: Scaffold(
+                body: SingleChildScrollView(
+                  child: SuicaTripList(trips: [restored]),
+                ),
+              ),
+            ),
+          );
+          expect(find.text('行程后余额 JP￥$balance'), findsOneWidget);
+          expect(find.textContaining('余额差'), findsNothing);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
   test('a Suica scan exposes yen to shared currency consumers', () {
     final presentation = ScanPresentation(
       FelicaReadOutcome(
@@ -38,6 +74,38 @@ void main() {
     expect(presentation.cardCurrency.symbol, 'JP￥');
     expect(presentation.cardCurrency.unit, '日元');
   });
+
+  testWidgets(
+    'Japanese rail footer follows domestic amount layout without seats',
+    (tester) async {
+      for (final (change, expectedAmount) in [
+        (-100, '-JP￥100'),
+        (0, 'JP￥0'),
+        (100, '+JP￥100'),
+      ]) {
+        final live = presentSuicaTrips([_rail(change: change)]).single;
+        final stored = live.toJson();
+        final trip = SuicaTripPresentation.fromJson(stored)!;
+        expect(trip.entry.info.amountText, '余额差 $expectedAmount');
+        expect(trip.journey.amountText, expectedAmount);
+        expect(trip.journey.seatLabel, isNull);
+        expect(trip.toJson(), stored);
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SingleChildScrollView(child: SuicaTripList(trips: [trip])),
+            ),
+          ),
+        );
+        expect(find.text(expectedAmount), findsOneWidget);
+        expect(find.text('行程后余额 JP￥900'), findsOneWidget);
+        expect(find.textContaining('余额差'), findsNothing);
+        expect(find.textContaining('商务座'), findsNothing);
+        expect(find.textContaining('普通座'), findsNothing);
+        expect(tester.takeException(), isNull);
+      }
+    },
+  );
 
   test('Suica railway date does not invent a midnight time', () {
     final tx = const SuicaRecordParser()
@@ -165,7 +233,8 @@ void main() {
       expect(trip.journey.start?.station, '東京');
       expect(trip.journey.end?.station, '新橋');
       expect(trip.journey.start?.line, '東海道本');
-      expect(trip.journey.start?.timeText, '时刻未记录');
+      expect(trip.journey.start?.timeText, '仅记录日期');
+      expect(trip.journey.cityLabel, '日本');
       expect(trip.journey.duration, isNull);
       expect(trip.entry.info.timeText, '2025-10-20');
       expect(trip.entry.info.amountText, '余额差 -JP￥100');
@@ -243,6 +312,7 @@ void main() {
       expect(restored.entry.info.rawHex, '16010000335401010103840300000200');
       expect(restored.entry.info.fields, original.entry.info.fields);
       expect(restored.entry.info.amountText, '余额差 -JP￥100');
+      expect(restored.journey.cityLabel, '日本');
       expect(restored.toJson(), json);
       for (final invalid in [
         null,
@@ -309,6 +379,83 @@ void main() {
     },
   );
 
+  test(
+    'rail parsing resolves hex keys through trips and the read summary',
+    () async {
+      final stations = await _stations();
+      for (final (entryLine, entryCode, exitLine, exitCode, start, end) in [
+        (0xEF, 0x04, 0xAE, 0x09, '蔵前', '成田空港'),
+        (0x03, 0x0D, 0x02, 0x03, '新宿', '秋葉原'),
+      ]) {
+        final tx = const SuicaRecordParser()
+            .parseBlock(
+              blockNumber: 0,
+              bytes: [
+                0x16,
+                1,
+                0,
+                0,
+                0x33,
+                0x54,
+                entryLine,
+                entryCode,
+                exitLine,
+                exitCode,
+                0x84,
+                3,
+                0,
+                0,
+                2,
+                0,
+              ],
+            )
+            .toTransaction();
+        final trip = presentSuicaTrips([tx], stations: stations).single;
+        expect(trip.journey.start?.station, start);
+        expect(trip.journey.end?.station, end);
+        expect(trip.entry.info.timeText, '2025-10-20');
+        expect(trip.journey.start?.timeText, '仅记录日期');
+        expect(trip.journey.cityLabel, '日本');
+        expect(
+          suicaTransactionSummary(tx, stations: stations),
+          contains('$start → $end'),
+        );
+      }
+    },
+  );
+
+  testWidgets(
+    'restored Japanese rail cards explain date precision at large text',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(320, 740);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final original = presentSuicaTrips([_rail()]).single;
+      final restored = SuicaTripPresentation.fromJson(original.toJson())!;
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: TextScaler.linear(2)),
+            child: child!,
+          ),
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: SuicaTripList(trips: [restored]),
+            ),
+          ),
+        ),
+      );
+      expect(find.text('日本轨道交通'), findsOneWidget);
+      expect(find.text('地区未知轨道交通'), findsNothing);
+      expect(find.text('仅记录日期'), findsNWidgets(2));
+      expect(find.text('本次读取的乘车履历仅含日期，不含进出站时刻。'), findsOneWidget);
+      expect(find.text('00:00'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets(
     'summary resolves station names and points to the full trip page',
     (tester) async {
@@ -353,6 +500,7 @@ const _yenWallet = FelicaWallet(
 FelicaTransaction _rail({
   int block = 0,
   int balance = 900,
+  int? change = -100,
   String? currency = 'JPY',
   SuicaStationCode? entry,
 }) => FelicaTransaction(
@@ -371,7 +519,7 @@ FelicaTransaction _rail({
     regionCode: 0,
     hasTime: false,
     kind: SuicaRecordKind.rail,
-    balanceChangeYen: -100,
+    balanceChangeYen: change,
     entryStation:
         entry ??
         const SuicaStationCode(

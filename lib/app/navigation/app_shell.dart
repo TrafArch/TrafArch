@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_floating_bottom_bar/flutter_floating_bottom_bar.dart';
 
@@ -79,6 +81,10 @@ class _AppShellState extends State<AppShell> with RouteAware {
   }
 
   void _select(int value) {
+    if (value == index) return;
+    // Invalidate the read/update before changing pages. Native release may
+    // finish asynchronously; a late result must not survive this navigation.
+    unawaited(app.stop());
     app.recoveryTab = value;
     setState(() => index = value);
   }
@@ -172,12 +178,7 @@ class _AppShellState extends State<AppShell> with RouteAware {
                 ],
               ),
               // 3.0.0 起 child（悬浮栏本体）与 body 同为必填参数
-              child: FloatingNavBar(
-                index: index,
-                onSelect: (i) {
-                  if (i != index) _select(i);
-                },
-              ),
+              child: FloatingNavBar(index: index, onSelect: _select),
             ),
           ),
         ),

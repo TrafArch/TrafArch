@@ -15,6 +15,38 @@ import 'package:transit_card_analyzer/features/trips/suica_trip_list.dart';
 import 'support/test_database.dart';
 
 void main() {
+  test('new corrected station capture wins without rewriting old evidence', () {
+    final old = _record();
+    final corrected = _record();
+    final oldPresentation = old['presentation'] as Map;
+    final correctedPresentation = corrected['presentation'] as Map;
+    (oldPresentation['start'] as Map)['station'] = '旧站名';
+    (correctedPresentation['start'] as Map)['station'] = '修正后站名';
+    final history = _history([
+      [corrected],
+      [old],
+    ]);
+    final projection = projectSuicaArchive(history);
+    expect(projection.records, hasLength(1));
+    expect(projection.records.single.sources, hasLength(2));
+    expect(projection.trips.single.journey.start?.station, '修正后站名');
+    expect(projection.trips.single.journey.cityLabel, '日本');
+    final retained =
+        history.batches.last.decoded.snapshot!.extensions['suica'] as Map;
+    final row = (retained['records'] as List).single as Map;
+    expect(((row['presentation'] as Map)['start'] as Map)['station'], '旧站名');
+    expect(row['rawHex'], old['rawHex']);
+    // A capture without a newer reread still keeps its frozen station words.
+    expect(
+      projectSuicaArchive(
+        _history([
+          [old],
+        ]),
+      ).trips.single.journey.start?.station,
+      '旧站名',
+    );
+  });
+
   test(
     'legacy initialized slots are hidden from Suica history counts and exports',
     () {

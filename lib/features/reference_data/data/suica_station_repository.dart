@@ -143,6 +143,10 @@ class SuicaStationRepository {
   }
 
   /// Exactly matches the source's area, line and station-order namespace.
+  /// The original reader queries unpadded lowercase hexadecimal strings.
+  /// INTEGER affinity stores numeric-looking hex keys as numbers, while keys
+  /// containing a-f stay TEXT; binding the decoded decimal byte can misidentify
+  /// a station (for example NFC 0x0d must query 'd', not source key '13').
   /// Identical duplicate rows agree; conflicting names never choose a winner.
   SuicaStation? lookup({
     required int areaCode,
@@ -153,7 +157,11 @@ class SuicaStationRepository {
     final rows = _database.select(
       'SELECT DISTINCT companyname,linename,stationname FROM stationcode '
       'WHERE areacode=? AND linecode=? AND stationorder=? LIMIT 2',
-      [areaCode, lineCode, stationCode],
+      [
+        areaCode.toRadixString(16),
+        lineCode.toRadixString(16),
+        stationCode.toRadixString(16),
+      ],
     );
     if (rows.length != 1) return null;
     final row = rows.single;

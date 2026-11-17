@@ -82,6 +82,85 @@ void main() {
   });
 
   test(
+    'published hexadecimal station keys match the original reader',
+    () async {
+      final repository = await SuicaStationRepository.load(_PublishedBundle());
+      addTearDown(repository.close);
+      for (final (area, line, station, expectedLine, expectedStation) in [
+        (1, 0xEF, 0x04, '都営浅草', '蔵前'),
+        (1, 0xAE, 0x09, '成田空港', '成田空港'),
+        (1, 0xF3, 0x19, '都営大江戸', '東新宿'),
+        (1, 0xF3, 0x07, '都営大江戸', '蔵前'),
+        (1, 0xF2, 0x22, '都営大江戸', '都庁前'),
+        (1, 0xE4, 0x37, '日比谷', '神谷町'),
+        (1, 0xE6, 0x21, '半蔵門', '渋谷'),
+        (1, 0xE3, 0x31, '銀座', '末広町'),
+        (1, 0xE7, 0x0A, '副都心', '東新宿'),
+        (3, 0xEF, 0x04, '名古屋', '烏森'),
+      ]) {
+        final result = repository.lookup(
+          areaCode: area,
+          lineCode: line,
+          stationCode: station,
+        );
+        expect(result?.lineName, expectedLine);
+        expect(result?.stationName, expectedStation);
+      }
+    },
+  );
+
+  test(
+    'hexadecimal numbers do not silently select a different station',
+    () async {
+      final repository = await SuicaStationRepository.load(_PublishedBundle());
+      addTearDown(repository.close);
+      expect(
+        repository
+            .lookup(areaCode: 0, lineCode: 3, stationCode: 0x0D)
+            ?.stationName,
+        '新宿',
+      );
+      expect(
+        repository
+            .lookup(areaCode: 0, lineCode: 3, stationCode: 0x13)
+            ?.stationName,
+        '阿佐ヶ谷',
+      );
+      expect(
+        repository
+            .lookup(areaCode: 0, lineCode: 1, stationCode: 0x19)
+            ?.stationName,
+        '藤沢',
+      );
+    },
+  );
+
+  test('every published hex key resolves to its exact source record', () async {
+    final repository = await SuicaStationRepository.load(_PublishedBundle());
+    addTearDown(repository.close);
+    final source = sqlite3.open(
+      'assets/suica/suica_stationcode.db',
+      mode: OpenMode.readOnly,
+    );
+    addTearDown(source.close);
+    final rows = source.select('SELECT * FROM stationcode');
+    expect(rows, hasLength(6435));
+    for (final row in rows) {
+      // Source keys are hex strings even where SQLite stores numeric-looking
+      // strings as INTEGER. Decode the database's namespace into NFC bytes.
+      final result = repository.lookup(
+        areaCode: int.parse('${row['areacode']}', radix: 16),
+        lineCode: int.parse('${row['linecode']}', radix: 16),
+        stationCode: int.parse('${row['stationorder']}', radix: 16),
+      );
+      expect(result, isNotNull, reason: 'source row ${row['_id']}');
+      expect(result!.companyName, row['companyname']);
+      expect(result.lineName, row['linename']);
+      expect(result.stationName, row['stationname']);
+    }
+  });
+
+  test(
     'conflicting exact-key matches remain unknown, identical duplicates agree',
     () async {
       final repository = await SuicaStationRepository.load(

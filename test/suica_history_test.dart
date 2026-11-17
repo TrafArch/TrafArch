@@ -428,10 +428,39 @@ void main() {
     expect(result.transactions.last.suica!.balanceChangeYen, isNull);
   });
 
-  test('balance difference rejects gaps, reversed dates, invalid fields and sequence wrap', () async {
+  test(
+    'adjacent history balances survive strictly increasing counter gaps',
+    () async {
+      final result = await _HistoryTag({
+        0: _record(sequence: 15, balance: 600),
+        1: _record(sequence: 13, balance: 800),
+        2: _record(process: 2, sequence: 9, balance: 1000),
+        3: _record(sequence: 7, balance: 500),
+      }).read();
+      expect(result.transactions.map((tx) => tx.suica!.balanceChangeYen), [
+        -200,
+        -200,
+        500,
+        null,
+      ]);
+      expect(result.transactions.map((tx) => tx.amountMinorUnits), [
+        600,
+        800,
+        1000,
+        500,
+      ]);
+      expect(
+        result.transactions.map((tx) => tx.amountIsBalance),
+        everyElement(isTrue),
+      );
+    },
+  );
+
+  test('balance difference rejects missing blocks, reversed dates, invalid fields and sequence wrap', () async {
     for (final records in <Map<int, List<int>>>[
       {0: _record(), 2: _record(sequence: 99, balance: 1200)},
-      {0: _record(), 1: _record(sequence: 98, balance: 1200)},
+      {0: _record(), 1: _record(sequence: 100, balance: 1200)},
+      {0: _record(), 1: _record(sequence: 101, balance: 1200)},
       {0: _record(), 1: _record(sequence: 99, day: 17, balance: 1200)},
       {0: _record(), 1: _record(sequence: 99, day: 31, balance: 1200)},
       {0: _record(), 1: _record(sequence: 99, balance: 65535)},

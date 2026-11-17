@@ -24,7 +24,6 @@ class FelicaSummaryPanel extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final crossBorder = felica.crossBorder;
-    final now = DateTime.now();
     return [
       ...summaryNameLine(context, felica.displayName),
       summaryField(context, '识别状态', felica.stateText),
@@ -55,16 +54,6 @@ class FelicaSummaryPanel extends StatelessWidget {
               '（按发卡方汇率折算，不是独立 '
               '${crossBorder.targetCurrency} 钱包）',
         ),
-        if (crossBorder.hasVerifiedExchangeRate &&
-            !crossBorder.isExpiredAt(now))
-          summaryField(
-            context,
-            '汇率',
-            '1 ${crossBorder.sourceCurrency} = '
-                '${crossBorder.exchangeRateText} '
-                '${crossBorder.targetCurrency}'
-                '${crossBorder.rateUpdatedAt == null ? '' : '（更新于 ${summaryDate(crossBorder.rateUpdatedAt!)}）'}',
-          ),
       ],
       if (felica.wallets.length > 1)
         summaryHint(

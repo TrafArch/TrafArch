@@ -4,6 +4,7 @@ import android.app.Activity
 import android.nfc.NfcAdapter
 import android.nfc.Tag
 import android.nfc.tech.TagTechnology
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -19,7 +20,7 @@ import java.util.UUID
 internal class NfcSessionController(private val activity: Activity) {
     private enum class State { WAITING, DISCOVERING, CONNECTED, METADATA_ONLY, CLOSED }
 
-    private class Session(val id: String, val discovery: OnceResult) {
+    private class Session(val id: String, val discovery: OnceResult, val readerFlags: Int) {
         val gate = Any()
         @Volatile var stopped = false
         var state = State.WAITING // Main looper only.
@@ -51,7 +52,7 @@ internal class NfcSessionController(private val activity: Activity) {
     private var lastRetirement: Pair<String, Retirement>? = null
     private val adapter: NfcAdapter? by lazy { NfcAdapter.getDefaultAdapter(activity) }
 
-    fun start(requestedId: String?, result: OnceResult) {
+    fun start(requestedId: String?, result: OnceResult, felicaOnly: Boolean) {
         if (disposed) {
             result.error("NFC_STOPPED", "扫描已停止", null)
             return
@@ -71,18 +72,57 @@ internal class NfcSessionController(private val activity: Activity) {
             return
         }
         active?.let { retire(it) }
-        val session = Session(id, result)
+        val readerFlags = if (felicaOnly) FELICA_READER_FLAGS else READER_FLAGS
+        val session = Session(id, result, readerFlags)
         active = session
+        if (felicaOnly) {
+            NfcDiscoveryLifecycle.armTimeout(
+                schedule = { delay, action -> main.postDelayed({ action() }, delay) },
+                currentPhase = {
+                    if (disposed || active !== session || session.stopped) null else when (session.state) {
+                        State.WAITING -> NfcDiscoveryPhase.WAITING_FOR_TAG
+                        State.DISCOVERING -> NfcDiscoveryPhase.CONNECTING
+                        else -> null
+                    }
+                },
+                onTimeout = { phase ->
+                    session.discovery.error(
+                        "NFC_DISCOVERY_TIMEOUT", "八达通 NFC-F 发现超时，请重新贴卡。",
+                        mapOf("sessionId" to session.id, "discoveryPhase" to phase.diagnosticValue),
+                    )
+                    retire(session)
+                },
+            )
+        }
         if (foreground) enableDiscovery(session)
     }
 
     private fun enableDiscovery(session: Session) {
         if (disposed || active !== session || session.state != State.WAITING) return
         try {
-            // This callback captures the registering session; it never claims a newer pending reply.
-            adapter?.enableReaderMode(activity, { tag ->
-                main.post { discovered(session, tag) }
-            }, READER_FLAGS, null)
+            // The dedicated Octopus balance reader performs a local Polling and
+            // one read-only balance exchange; it has no HTTP pending window.
+            // Keep the 500 ms presence interval used by the official reader so
+            // platform presence checks leave the short local exchange room.
+            val options = if (session.readerFlags == FELICA_READER_FLAGS) {
+                Bundle().apply {
+                    putInt(NfcAdapter.EXTRA_READER_PRESENCE_CHECK_DELAY, 500)
+                }
+            } else null
+            NfcDiscoveryLifecycle.activate(
+                resetDiscovery = session.readerFlags == FELICA_READER_FLAGS,
+                isCurrent = {
+                    !disposed && foreground && active === session &&
+                        !session.stopped && session.state == State.WAITING
+                },
+                disable = { adapter?.disableReaderMode(activity) },
+                enable = {
+                    // Capture the registering session; never claim a newer pending reply.
+                    adapter?.enableReaderMode(activity, { tag ->
+                        main.post { discovered(session, tag) }
+                    }, session.readerFlags, options)
+                },
+            )
         } catch (error: Exception) {
             session.discovery.error("NFC_SCAN_FAILED", error.message ?: "无法启动 NFC 扫描", details(session, error))
             retire(session)
@@ -99,6 +139,10 @@ internal class NfcSessionController(private val activity: Activity) {
 
     private fun discovered(session: Session, tag: Tag) {
         if (disposed || !foreground || active !== session || session.state != State.WAITING) return
+        if (!NfcDiscoveryLifecycle.acceptsTag(
+                felicaOnly = session.readerFlags == FELICA_READER_FLAGS,
+                hasFelica = tag.techList?.any { it == "android.nfc.tech.NfcF" } == true,
+            )) return
         session.state = State.DISCOVERING
         io.execute(SessionWork(session) {
             try {
@@ -154,20 +198,21 @@ internal class NfcSessionController(private val activity: Activity) {
             return
         }
         session.replies.add(result)
+        val logRaw = BuildConfig.DEBUG && session.readerFlags != FELICA_READER_FLAGS
         // Capture BOTH the session and its immutable connection at acceptance, including legacy calls.
         io.execute(SessionWork(session) {
             try {
                 if (!connection.isConnected) {
                     complete(session, result) { disconnected(felica, result) }
                 } else {
-                    if (BuildConfig.DEBUG) Log.d("TrafArchNfcRaw", ">> ${bytes.toHex()}")
+                    if (logRaw) Log.d("TrafArchNfcRaw", ">> ${bytes.toHex()}")
                     val response = connection.transceive(bytes)
-                    if (BuildConfig.DEBUG) Log.d("TrafArchNfcRaw", "<< ${response.toHex()}")
+                    if (logRaw) Log.d("TrafArchNfcRaw", "<< ${response.toHex()}")
                     // ByteArray preserves Dart Uint8List (unsigned bytes), including SW1/SW2 and LEN.
                     complete(session, result) { result.success(response) }
                 }
             } catch (error: Exception) {
-                if (BuildConfig.DEBUG) Log.e("TrafArchNfcRaw", "transceive failed", error)
+                if (logRaw) Log.e("TrafArchNfcRaw", "transceive failed", error)
                 complete(session, result) {
                     result.error("TRANSCEIVE_FAILED", error.message, details(session, error))
                 }
@@ -343,8 +388,9 @@ internal class NfcSessionController(private val activity: Activity) {
     companion object {
         private const val MAX_PENDING_COMMANDS = 64
         private const val CLOSE_ACK_TIMEOUT_MS = 10_000L
+        private const val FELICA_READER_FLAGS = NfcAdapter.FLAG_READER_NFC_F or
+            NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK
         private const val READER_FLAGS = NfcAdapter.FLAG_READER_NFC_A or
-            NfcAdapter.FLAG_READER_NFC_B or NfcAdapter.FLAG_READER_NFC_F or
-            NfcAdapter.FLAG_READER_NFC_V or NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK
+            NfcAdapter.FLAG_READER_NFC_B or NfcAdapter.FLAG_READER_NFC_V or FELICA_READER_FLAGS
     }
 }

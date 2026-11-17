@@ -130,25 +130,29 @@ class _TripsBody extends StatelessWidget {
       cityUnionTransactions: cuTransactions,
     );
 
-    if (stream.isEmpty &&
+    final noRecords =
+        stream.isEmpty &&
         cuTransactions.isEmpty &&
         localTrips.isEmpty &&
-        cashCount == 0) {
-      return Card(
-        child: ListTile(
-          leading: const Icon(Icons.directions_transit_outlined),
-          title: const Text('暂无行程数据'),
-          subtitle: Text(
-            app.lastResult == null ? '读取卡片后在这里展示解析出的行程记录' : '本次读取未解析到行程记录',
-          ),
+        cashCount == 0;
+    final emptyRecords = Card(
+      child: ListTile(
+        leading: const Icon(Icons.directions_transit_outlined),
+        title: const Text('暂无行程数据'),
+        subtitle: Text(
+          app.lastResult == null ? '读取卡片后在这里展示解析出的行程记录' : '本次读取未解析到行程记录',
         ),
-      );
+      ),
+    );
+    if (noRecords && !app.isOctopusCard) {
+      return emptyRecords;
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (analysis != null ||
+        if (app.isOctopusCard ||
+            analysis != null ||
             app.cityUnionDetected ||
             localTrips.isNotEmpty) ...[
           _SessionHeader(
@@ -162,6 +166,7 @@ class _TripsBody extends StatelessWidget {
           ),
           const SizedBox(height: 12),
         ],
+        if (noRecords) emptyRecords,
         if (cashLog != null && cashCount > 0) TUnionCashLogView(log: cashLog),
         if (stream.isNotEmpty)
           TripStreamView(stream: stream, app: app, isRemote: app.isRemoteUse),
@@ -209,6 +214,7 @@ class _SessionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    if (app.isOctopusCard) return _octopusSummary(context);
     final identity = analysis?.identity;
     final wallet = analysis?.wallet;
     final local = app.localReadResult;
@@ -282,6 +288,67 @@ class _SessionHeader extends StatelessWidget {
                 ),
               ],
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _octopusSummary(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final cardName =
+        app.lastIdentified?.displayName ??
+        app.felicaResult?.displayName ??
+        '八达通';
+    final cardNumber =
+        app.lastIdentified?.cardNumber ??
+        app.parsedCard?.info.displayCardNumber ??
+        app.felicaResult?.idm;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              cardName,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              cardNumber ?? '未读取到卡号',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              app.octopusBalanceText ?? '港币余额未读取',
+              textAlign: TextAlign.end,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: scheme.primary,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '记录 $recordCount 条',
+              textAlign: TextAlign.end,
+              style: theme.textTheme.bodySmall?.copyWith(color: scheme.outline),
+            ),
+            if (app.octopusReadNotice case final notice?) ...[
+              const SizedBox(height: 10),
+              Text(
+                notice,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
           ],
         ),
       ),

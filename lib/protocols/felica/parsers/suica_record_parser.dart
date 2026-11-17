@@ -210,8 +210,9 @@ class SuicaRecordParser {
     );
   }
 
-  /// Only adjacent physical blocks with consecutive counters can establish a
-  /// balance change. No initial balance or wrapped counter is guessed.
+  /// Only adjacent valid physical blocks establish a balance change. The card's
+  /// counter can skip values between recorded operations, so require forward
+  /// order rather than a step of one. No initial balance or wrap is guessed.
   List<FelicaTransaction> toTransactions(List<SuicaHistoryRecord> records) => [
     for (var index = 0; index < records.length; index++)
       if (!records[index].isBlank)
@@ -244,7 +245,7 @@ class SuicaRecordParser {
         currentSequence == null ||
         olderSequence == null ||
         olderSequence <= 0 ||
-        currentSequence != olderSequence + 1) {
+        currentSequence <= olderSequence) {
       return null;
     }
     // A date-only railway record cannot be ordered by an invented midnight.
