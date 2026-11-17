@@ -79,9 +79,13 @@ class _HomePageState extends State<HomePage> {
   }
 
   String get _statusText {
+    if (app.octopus.progressMessage case final progress?) return progress;
     if (app.recoveredCapture != null) return '上次结果已恢复，重新贴卡可再次读取';
     if (app.recoveryNotice != null) return app.recoveryNotice!;
     if (app.parsing) return '已读到卡片，正在解析数据…';
+    if (app.octopusReadFailure case final failure?) {
+      return '基础信息已读取，八达通余额读取未完成。$failure';
+    }
     if (scanning) return '正在监听 NFC 标签…';
     if (app.error != null) return '读取失败，请点击下方按钮重试';
     if (app.lastResult != null) return '读取完成，再次读取请点击下方按钮';
@@ -125,7 +129,7 @@ class _HomePageState extends State<HomePage> {
                   child: AdaptiveSupportingContent(
                     primary: ScanControls(
                       scanning: scanning,
-                      progress: app.readProgress,
+                      progress: app.octopus.busy ? null : app.readProgress,
                       statusText: _statusText,
                       buttonLabel: _buttonLabel,
                       onScanCard: () {

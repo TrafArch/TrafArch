@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart' show Value;
 
 import '../../../protocols/transit/card_parser.dart';
@@ -464,6 +466,99 @@ class ArchiveController extends OwnedNotifier {
       notifyListeners();
     }
     return ok;
+  }
+
+  /// Add the locally read HKD wallet balance to this read's archive snapshot.
+  ///
+  /// The TU scalar stays in [SavedCards.balanceFen] as the original CNY
+  /// observation. The independent NFC-F reading is stored as a
+  /// [VerifiedAccountBalance] inside the captured balance interpretation, which
+  /// is what archive history uses to show the account balance. Only the current
+  /// read is updated: a card saved by this attempt is matched by `lastReadAt`,
+  /// and a still-pending save carries the same evidence when the user confirms.
+  Future<void> attachVerifiedAccountBalance({
+    required String fingerprint,
+    required DateTime readAt,
+    required int balanceMinor,
+    required String evidenceSource,
+  }) async {
+    if (disposed || fingerprint != this.fingerprint) return;
+    final verified = VerifiedAccountBalance(
+      amountMinor: balanceMinor,
+      currency: 'HKD',
+      evidenceSource: evidenceSource,
+    );
+    final item = pending;
+    if (item != null && item.fingerprint == fingerprint) {
+      final updated = _withVerifiedAccountBalance(
+        item.sessionDataJson,
+        verified,
+      );
+      if (updated != null && updated != item.sessionDataJson) {
+        pending = PendingCardSave(
+          pendingSaveId: item.pendingSaveId,
+          readAt: item.readAt,
+          fingerprint: item.fingerprint,
+          identity: item.identity,
+          cardNumber: item.cardNumber,
+          balanceFen: item.balanceFen,
+          currencyCode: item.currencyCode,
+          transactionCount: item.transactionCount,
+          sessionDataJson: updated,
+        );
+        notifyListeners();
+      }
+    }
+    try {
+      final saved = await (repository.db.select(
+        repository.db.savedCards,
+      )..where((t) => t.cardFingerprint.equals(fingerprint))).getSingleOrNull();
+      if (saved == null || saved.lastReadAt != readAt.millisecondsSinceEpoch) {
+        return;
+      }
+      final updated = _withVerifiedAccountBalance(
+        saved.sessionDataJson,
+        verified,
+      );
+      if (updated == null || updated == saved.sessionDataJson) return;
+      await (repository.db.update(repository.db.savedCards)
+            ..where((t) => t.id.equals(saved.id)))
+          .write(SavedCardsCompanion(sessionDataJson: Value(updated)));
+      await repository.refreshDocument(saved.id);
+      if (!disposed) notifyListeners();
+    } catch (e) {
+      log('八达通余额写入档案失败：$e');
+    }
+  }
+
+  String? _withVerifiedAccountBalance(
+    String? payload,
+    VerifiedAccountBalance verified,
+  ) {
+    if (payload == null) return null;
+    final decoded = CardSessionSnapshot.decodeResult(payload);
+    if (decoded.formatVersion != 3 ||
+        decoded.status != SnapshotDecodeStatus.supported) {
+      return null;
+    }
+    final root = jsonDecode(payload);
+    if (root is! Map<String, dynamic>) return null;
+    final context = root['context'];
+    if (context is! Map<String, dynamic>) return null;
+    final raw = context['balanceInterpretation'];
+    if (raw is! Map<String, dynamic>) return null;
+    final interpretation = Map<String, dynamic>.of(raw)
+      ..['verifiedAccountBalance'] = verified.toJson()
+      ..['accountCurrency'] = 'HKD'
+      ..['accountBalanceMinor'] = verified.amountMinor;
+    final resolved = BalanceInterpretation.fromJson(interpretation);
+    if (!resolved.isOctopusTunion ||
+        resolved.accountBalanceMinor != verified.amountMinor) {
+      return null;
+    }
+    context['balanceInterpretation'] = interpretation;
+    root['context'] = context;
+    return jsonEncode(root);
   }
 
   Future<bool> cardExists(String fingerprint) async {

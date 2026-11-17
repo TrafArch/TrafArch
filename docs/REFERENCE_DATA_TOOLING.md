@@ -34,6 +34,10 @@ python -X utf8 -m unittest discover -s dev/suica -p test_publish_suica.py -v
 运行时先核对清单大小与 SHA256，缓存到独立摘要命名文件，再以 SQLite
 `OpenMode.readOnly` 打开；异常时保留原始码、报告站名不可用。读卡不依赖网络。
 包中记录并不保证为当前运营线路，也不保证卡片所记计费站就是实际上下车站。
+原库 `areacode`、`linecode`、`stationorder` 的键值使用十六进制文本语义。
+SQLite INTEGER 亲和性使纯数字键以整数存储，含 a–f 的键仍为文本；查询参数应
+与原读取器一致，传小写、不补零、不带0x前缀的十六进制字符串。不得通过改写库
+把这些键转成十进制，或在查不到时跨区域猜匹配。发布库回归逐项核验6435个源键。
 Suica/TU/CU 各自加载、各自释放，不修改档案数据库或既有 TU/CU 清单。
 
 ## Jinan CU Lines 2/3/8 user revision (2026-10-30)

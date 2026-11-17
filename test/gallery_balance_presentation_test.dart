@@ -6,7 +6,7 @@ void main() {
     for (final (code, amount, expected) in [
       ('CNY', '¥31.20', 'CNY ¥31.20'),
       ('JPY', '1,240 JPY', 'JP￥1,240'),
-      ('HKD', r'HK$52.00', r'HKD $52.00'),
+      ('HKD', r'HK$52.00', r'HK$52.00'),
       ('USD', r'$0.00', r'USD $0.00'),
       ('MOP', '18.50', 'MOP ¥18.50'),
     ]) {
@@ -25,7 +25,7 @@ void main() {
     for (final (original, expected) in [
       ('CNY 31.20', 'CNY ¥31.20'),
       ('1,240 JPY', 'JP￥1,240'),
-      (r'HKD $52.00', r'HKD $52.00'),
+      (r'HKD $52.00', r'HK$52.00'),
       ('0.00 usd', r'USD $0.00'),
       ('mop 18.50', 'MOP ¥18.50'),
     ]) {
@@ -57,7 +57,7 @@ void main() {
           r'$52.00',
           currencyCode: 'HKD',
         ).displayText,
-        r'HKD $52.00',
+        r'HK$52.00',
       );
       expect(
         GalleryBalancePresentation.parse(

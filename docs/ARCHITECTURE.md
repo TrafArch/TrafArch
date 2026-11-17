@@ -22,11 +22,29 @@ Gallery 预测性返回使用 Flutter 公开的手势生命周期与自定义 Pa
 
 Gallery 周统计在独立展示模型中按固定演示周汇总，使用样例的明确币种及最小货币单位；只统计有明确日期的对应币种扣款。人民币／港币保留两位小数，日元使用整数；未知币种保留不可用，不从真实卡号、地区或当前时间推断。
 
-卡包列表与共用大卡面通过纯展示帮助模型 `GalleryBalancePresentation` 分离币种与数字，输入现有余额文本和明确币种代码，统一显示 CNY ¥、JPY ¥、HKD $、USD $、MOP ¥。裸 ¥／$ 不补猜币种；原余额字段、交易明细、导出与周统计接口不受展示格式影响。
+卡包列表与共用大卡面通过纯展示帮助模型 `GalleryBalancePresentation` 分离币种与数字，输入现有余额文本和明确币种代码，统一显示 CNY ¥、JP￥、HK$、USD $、MOP ¥。裸 ¥／$ 不补猜币种；原余额字段、交易明细、导出与周统计接口不受展示格式影响。
 
 Android Gradle 根据 Dart target 的文件名识别 2.x Gallery 构建。Gallery 默认应用 Google Services 插件并包含 Firebase Analytics 依赖；需要完全离线的预览包时可通过 Gradle 属性 `galleryAnalytics=false` 显式关闭。包名、显示名称、原签名和每次打包预留下一构建号的流程保持统一。详见 [GALLERY.md](GALLERY.md)。
 
 Android 版本码直接使用 pubspec 的构建号，`force-version-code-ignoring-abi=true` 固定关闭 Flutter 拆分 APK 的 ABI 偏移；Gradle 拒绝用 false 覆盖，避免 AppInfo、更新比较与安装版本码分离。旧界面和 2.x 关于页统一显示同一个 `AppInfo.buildNumber`，不再对历史 4xxx 产物额外加减 2000。打包前同步 AppInfo、成功打包后预留下一号的机制继续沿用；测试和配置检查不消耗号码。可通过 `dev/gallery/verify_version_codes.gradle` 只读核对 Debug／Profile／Release 各输出的配置版本码，最终交付仍须以 APK/AAB 清单为准。
+
+## 八达通本地余额读取
+
+`AppDependencies` 组合 `OctopusBalanceController`、纯 Dart `OctopusBalanceReader` 与既有专用 `OctopusNfcChannel`。普通 `scanOnce()` 先完成识别和物理 NFC 关闭，识别到八达通后继续读港币余额；两个阶段共用 `scanning` 状态与首页同一个读取按钮。普通关闭失败保留基础信息并阻止后续会话。设置页不再提供官方联网开关或同意弹窗，旧的启用／同意设置不再参与读取；旧官方 OCAP、HTTP、登记和更新汇率运行代码已退役。
+
+本地读取只使用两帧：Polling `8008`，然后 Read Without Encryption 服务 `0117`、块列表元素 `8000`。余额位于返回的 16 字节块字节 2..3，按 `(raw - 350) × 10` 得到港币分；不经过浮点、不发网络请求、不写卡。所有响应校验 LEN、响应码、每个应答的 IDm、状态字节与块数。
+
+余额读取成功后，本次 HKD 读数还会以 `VerifiedAccountBalance` 写入该次读取的档案快照，卡包与历史显示港币；TU 原始 `balanceFen` 与 CNY 币种保持不变。
+
+余额结果仅包含 HKD 最小货币单位、当前 NFC-F IDm 与读取时间。`AppDependencies.currentOctopusResult` 同时核对本次 `ScanPresentation` 和控制器结果对象。新普通扫描清除旧绑定；停止、切页、下一次扫描、销毁和内存恢复会作废在途请求。控制器先暂存余额，确认同一会话物理关闭后才发布；关闭失败保持 busy、保留关闭错误并阻止新会话，停止操作可重试关闭。取消期间的响应和关闭确认均不能恢复已作废结果。
+
+已有明确 `0x8008` NFC-F IDm 时，通过 `expectedCardIdm` 核对第二阶段，协议同时校验每个应答的 IDm。只有 TU 结果时，没有已验证的 TU 卡号与 NFC-F IDm 映射；此时组合显示依赖用户按提示保持同一张卡连续读取，不能宣称已完成跨接口身份验证。不会根据卡号格式猜测映射，也不会把 TU 金额换标签或用汇率倒算港币余额。
+
+余额控制器只允许结构有效的只读 NFC-F 命令：`0x8008` Polling、Request Service、Request Response、Read Without Encryption、Request System Code；禁止认证、写入及未知命令。请求发送前复制并冻结，防止排队期间变更。专用原生通道继续使用同一 sessionId、`frame` 参数、共享物理关闭屏障、500 ms presence-check 与受会话保护的 disable→enable 发现切换；不修改普通扫描或 Suica 读取。原生发现期限 55 秒、Dart 发现兜底 60 秒、余额操作上限 20 秒。
+
+诊断沿用既有本地开关及导出，只记录阶段、命令码、长度、耗时和白名单错误码；不记录余额、IDm、完整帧、异常原文或任何网络输入。日志异常不改变读卡或释放流程。
+
+首页「最近扫描」与行程顶部摘要使用相同 `octopusBalanceText`、`octopusReadNotice`。港币来自本次成功结果，括号内金额来自原始 TU 读取，如 `HK$50.00 (￥42.05)`；港币失败时明确保持未读取，TU 缺失时不补括号或零。行程即使没有记录也保留卡片摘要。所有汇率数值、更新按钮、独立在线面板与联网设置已移除；通用 FeliCa 摘要也不再渲染旧快照的汇率数值。旧档案、快照模型和数据库资产不改写。
 
 ## 小窗与分屏布局
 
@@ -82,18 +100,30 @@ Android 主 Activity 显式声明 `resizeableActivity=true`，沿用 Flutter emb
 当前余额与最新历史，保留单次读取结果，不重复发请求或读取越界块 20。
 读取中断保留成功块。`SuicaRecordParser` 只解析原始字段，
 `SuicaTransactionDetails` 区分物理块号与卡内 16 位流水号、铁路/公交/购物/
-特殊/未知布局、时间精度和站点状态；只有相邻有效且流水连续的记录提供
-独立余额差，交易金额原字段仍是交易后余额，币种明确为 JPY。
+特殊/未知布局、时间精度和站点状态；只有同次读取中物理相邻、有效且流水
+严格正向的记录提供独立余额差。卡内流水允许跳号，但缺块、无效字段、日期
+倒序、流水重复/倒退/回绕和最旧记录不猜差额。交易金额原字段仍是交易后余额，
+币种明确为 JPY。
 
 `KnowledgeBase` 独立加载 `SuicaStationRepository`，读取经 SHA256 校验的
 `assets/suica/suica_stationcode.db`。此原库来自用户提供的 Suica Reader APK，
 由 `dev/suica/publish_suica.py` 离线原样提取；原表、索引和 6435 条记录不改。
 查询使用区域、线路、站点三键；特殊端点、未匹配及歧义均不补猜站名。
+源库三键采用小写、不补零的十六进制文本语义：虽然列声明 INTEGER，
+SQLite 会将纯数字键存为整数、含 a–f 的键存为文本。运行时必须把协议字节
+转换为十六进制字符串参数，不能直接绑定十进制整数，否则会漏匹配或选错站。
 加载失败只令 Suica 站名不可用，不影响原码解析及 TU/CU 数据。
 
 `ScanPresentation` 在读卡完成后生成 `SuicaTripPresentation`，现有行程页使用
 `SuicaTripList` 展示全部记录。每条铁路记录的两端来自同一原块，不跨记录配对；
 只有日期的记录不显示假定的时分。首页和专家摘要显示最近五条，并指向行程页。
+Suica 行程的地区标签为“日本”；090F 铁路履历有有效日期但没有时分时显示
+“仅记录日期”，列表说明当前履历不含进出站时刻。购物记录有明确时分时照常显示。
+行程票卡复用国内交通卡的底部布局，显示带正负号的 `JP￥` 金额与“行程后余额”，
+不提供席别或商务座判断；余额已知时独立显示，金额未知不再将余额隐藏。
+“余额差”来源说明保留在详情与冻结 JSON 中，票卡只去掉金额的说明前缀；
+旧捕获不重新解析、不跨批次补算金额。国内进行中行程继续不显示最终金额与余额。
+当前未读取另一个 108F 闸机记录服务，不将其可能提供的少量近期时刻推定到090F历史。
 内存恢复冻结已解析字段、站名、参考包哈希和展示投影，重启不重跑解析或查库；
 诊断包含原字段与展示投影。Suica 通过独立的 `felica:suica:idm:<16 HEX>`
 本地指纹关联同一卡片，严格校验 IDm，逻辑卡号仍为 null，不把 IDm 当卡号。

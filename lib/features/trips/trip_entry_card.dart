@@ -157,10 +157,18 @@ class _JourneyTicket extends StatelessWidget {
     final amount = journey.state == JourneyState.inProgress
         ? null
         : journey.amountText;
+    final balance = journey.state == JourneyState.inProgress
+        ? null
+        : journey.balanceAfterText;
     final end = journey.end;
     final start = journey.start;
     final complete = start != null && end != null;
     final seat = journey.seatLabel;
+    final hasAmountDetails =
+        amount != null ||
+        journey.fareAdjustmentAmountText != null ||
+        (seat != null && journey.state != JourneyState.inProgress);
+    final showBalance = balance != null || amount != null;
     final radius = BorderRadius.circular(22);
     return Card(
       margin: const EdgeInsets.only(bottom: 14),
@@ -262,31 +270,39 @@ class _JourneyTicket extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          if (journey.fareAdjustmentAmountText case final fare?)
-                            Text('补票 $fare', style: theme.textTheme.bodySmall),
-                          if (amount != null)
-                            Text(
-                              journey.startsWithFareAdjustment
-                                  ? '出站 $amount'
-                                  : amount,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          if (seat != null &&
-                              journey.state != JourneyState.inProgress)
-                            Text(seat, style: theme.textTheme.bodySmall),
-                        ],
-                      ),
-                      if (amount != null) ...[
-                        const SizedBox(width: 8),
+                      if (hasAmountDetails)
+                        Flexible(
+                          fit: FlexFit.loose,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              if (journey.fareAdjustmentAmountText
+                                  case final fare?)
+                                Text(
+                                  '补票 $fare',
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                              if (amount != null)
+                                Text(
+                                  journey.startsWithFareAdjustment
+                                      ? '出站 $amount'
+                                      : amount,
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              if (seat != null &&
+                                  journey.state != JourneyState.inProgress)
+                                Text(seat, style: theme.textTheme.bodySmall),
+                            ],
+                          ),
+                        ),
+                      if (showBalance) ...[
+                        if (hasAmountDetails) const SizedBox(width: 8),
                         Flexible(
                           fit: FlexFit.loose,
                           child: Text(
-                            '行程后余额 ${journey.balanceAfterText ?? '未知'}',
+                            '行程后余额 ${balance ?? '未知'}',
                             textAlign: TextAlign.end,
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: scheme.onSurfaceVariant,
@@ -301,7 +317,7 @@ class _JourneyTicket extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(dateLabel, style: theme.textTheme.bodySmall),
-                        if (amount != null || seat != null) ...[
+                        if (hasAmountDetails || showBalance) ...[
                           const SizedBox(height: 8),
                           Align(
                             alignment: Alignment.centerRight,

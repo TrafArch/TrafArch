@@ -26,7 +26,7 @@ OctopusDetectionEvidence _noVerifiedProductEvidence(
 /// - 八达通－岭南通 / 深港互通行：港币钱包 + 人民币钱包，两个钱包
 ///   必须分别验证服务与读取权限。
 ///
-/// 本适配器不读取未公开的八达通服务、不猜测服务码、不绕过访问控制；
+/// 本适配器只负责基础识别；港币余额由组合层的独立只读流程继续读取。
 /// 未获得已验证产品证据时只展示港币钱包占位，不预设第二钱包。
 class OctopusAdapter implements FelicaCardAdapter {
   const OctopusAdapter({
@@ -79,13 +79,12 @@ class OctopusAdapter implements FelicaCardAdapter {
   }
 }
 
-const _serviceUnavailable = '本适配器尚未实现并验证该八达通产品的余额与交易记录读取';
+const _serviceUnavailable = '基础识别只确认卡型；港币余额由独立本地只读阶段读取，交易记录不读取';
 
 String _statusMessage(FelicaCardProfile? product) {
   if (product == null) {
     return '已确认八达通族（系统码 0x8008），但未获得可验证的产品证据'
-        '（全国通 / 岭南通 / 深港互通行）；仅建立港币钱包占位，'
-        '不预设第二钱包。$_serviceUnavailable';
+        '（全国通 / 岭南通 / 深港互通行），不预设第二钱包。';
   }
   return switch (product.type) {
     FelicaCardType.octopusTUnion =>
@@ -95,11 +94,11 @@ String _statusMessage(FelicaCardProfile? product) {
     FelicaCardType.octopusLingnanDual =>
       '已按已验证证据识别为八达通－岭南通：'
           '产品定义含八达通港币与岭南通人民币两个独立钱包，'
-          '两个钱包需分别验证服务与权限，当前均不可读。$_serviceUnavailable',
+          '两个钱包需分别验证服务与权限。$_serviceUnavailable',
     FelicaCardType.octopusShenzhenTongDual =>
       '已按已验证证据识别为深港互通行：'
           '产品定义含八达通港币与深圳通人民币两个独立钱包，'
-          '两个钱包需分别验证服务与权限，当前均不可读。$_serviceUnavailable',
+          '两个钱包需分别验证服务与权限。$_serviceUnavailable',
     _ => _serviceUnavailable,
   };
 }

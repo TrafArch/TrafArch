@@ -46,6 +46,60 @@ when that work executes. A legacy `stopScan()` still means "stop whichever sessi
 active when the request arrives"; native cannot infer which old Dart attempt sent it.
 The parent must use IDs for all new transports and cleanup paths.
 
+### Dedicated NFC-F entry point
+
+Channel **`transit_card_analyzer/octopus_nfc`** accepts `scanOnce`,
+`transceiveFelica`, and `stopScan` with the session-aware arguments and success
+results above. Each call requires an explicit nonblank `sessionId`. `scanOnce`
+captures NFC-F reader mode and `FLAG_READER_SKIP_NDEF_CHECK` for that session.
+The dedicated reader supplies `EXTRA_READER_PRESENCE_CHECK_DELAY = 500` ms,
+retained for the local Octopus balance reader. The Dart balance flow does not
+run network waits or periodic keep-alive exchanges. Other readers keep their
+existing options. Pause and resume retain these settings. The FeliCa exchange uses `frame` and
+returns the complete NFC-F response including LEN. The Dart adapter propagates
+platform errors and treats a missing or empty exchange response as a failure.
+
+Both channels share the controller, ID history, active session, command queue,
+and retirement barrier. A scan on either channel retires the previous active
+session. An ID-scoped stop joins retirement for that ID, even after a later
+scan has been accepted. The Octopus coordinator owns card identity, command
+authorization, and cleanup. The controller skips raw frame logging for its
+NFC-F-only sessions.
+
+`NfcDiscoveryLifecycle` starts dedicated NFC-F discovery with a guarded
+`disableReaderMode` → `enableReaderMode` sequence. It checks active-session,
+foreground and stopped state before disabling and again before enabling. This
+reset applies only to the dedicated reader; ordinary reader activation and the
+shared physical-close barrier keep their existing behavior. A callback without
+`android.nfc.tech.NfcF` is ignored before claiming `DISCOVERING`, so an incompatible
+old tag cannot consume the dedicated session's one discovery response.
+
+The dedicated session has a **55-second native discovery deadline**, starting
+when the session is registered. Its callback acts only on that same active,
+unstopped session in `WAITING` or `DISCOVERING`; success, stop, replacement or
+disposal makes the callback inert. Expiry returns `NFC_DISCOVERY_TIMEOUT` with
+`sessionId` and the fixed `details.discoveryPhase` value, then retires the session:
+
+| `discoveryPhase` | Native state | Meaning |
+|---|---|---|
+| `waiting_for_tag` | `WAITING` | No acceptable NFC-F tag has been claimed; an incompatible callback may have been ignored |
+| `connecting` | `DISCOVERING` | A tag was claimed, but metadata/connection publication has not completed |
+
+The deadline continues while a waiting session is paused. Dart keeps its
+**60-second fallback** and uses the same error code if native does not complete;
+that fallback does not invent a native discovery phase. Neither timeout proves
+physical release: Dart still performs ID-scoped cleanup and observes the existing
+close acknowledgement. Only the two fixed phase values may enter sanitized
+diagnostics; arbitrary error details, identifiers and payloads do not.
+
+The reset is informed by [AOSP `NfcService.java`](https://android.googlesource.com/platform/packages/modules/Nfc/+/refs/heads/main/NfcNci/src/com/android/nfc/NfcService.java):
+the zero-flags reader-mode branch calls `StopPresenceChecking`, while
+`applyRouting` can defer reconfiguration when a tag remains present. The supplied
+APK's `com.octopus.f1MOT.F1Detector` uses `ignore(tag, 1, ...)` on some mode switches;
+`com.octopus.f1.F1Detector` disables/enables reader mode on pause/resume. These are
+comparison evidence, not proof of this device's failure point. TrafArch does not
+copy `ignore` or the vendor's complete mode-switching policy.
+
 ## Dart ownership and cancellation
 
 ```dart
@@ -107,8 +161,9 @@ the running command and responses waiting for main-loop delivery. No command can
 overtake a previous command on that connection. Process-wide scheduling also keeps
 old retirement work ahead of a replacement Activity/engine's later connection work.
 
-Retirement detaches and marks a session closed first, disables its reader mode on
-the main looper, completes its pending scan/commands with `NFC_STOPPED`, and removes
+Retirement detaches and marks a session closed first, replaces its reader mode
+with the foreground idle reader (or disables it outside the foreground) on the
+main looper, completes its pending scan/commands with `NFC_STOPPED`, and removes
 its queued work. A separate background close worker can interrupt the exact old
 technology while its I/O is blocked; no monitor is held across that I/O. A FIFO
 retirement barrier waits off-main for abort and the old worker, then sweeps remaining
@@ -185,6 +240,7 @@ MIFARE block-0 read is preserved; no authentication or new card capability is ad
 | `STALE_SESSION` | `NFC 会话已失效`; `sessionId`, optional `activeSessionId` | Added: stale/unknown ID or reused scan ID; no current-session mutation |
 | `NFC_BUSY` | `NFC 指令队列已满`; `sessionId` | Added: bounded command queue full; command was not sent |
 | `NFC_SCAN_FAILED` | Exception message, fallback `无法启动 NFC 扫描`; session/exception details | Added: reader-mode setup or fatal discovery error |
+| `NFC_DISCOVERY_TIMEOUT` | `八达通 NFC-F 发现超时，请重新贴卡。`; `sessionId`, fixed `discoveryPhase` | Dedicated NFC-F discovery/connection deadline; retires the session, not a close-success acknowledgement |
 | `NFC_CLOSE_FAILED` | `NFC 连接关闭失败`; `sessionId`, `closing`, plus `errors` or timeout `reason` | Added: truthful incomplete/failed close acknowledgement |
 
 Unknown methods remain `notImplemented`. Platform errors remain errors, never empty
@@ -219,7 +275,11 @@ may finish after cancellation; cancellation is not a rollback of a completed wri
 
 ## Verification boundary
 
-This contract describes source implementation and required Dart integration. No
-unit tests, Gradle, Kotlin compilation, APK builds, emulator or device calls were
-run. Source lifecycle review and a syntax-only parse do not establish driver abort
-latency, real-card behavior or Android build compatibility.
+This contract describes source implementation and required Dart integration.
+The Octopus addition has Dart channel/lifecycle tests, Kotlin type checking and
+an isolated JVM lifecycle smoke check; no APK build or emulator run was performed
+for this change. The local balance reader's frame flow was additionally captured
+from the supplied third-party app on a real Octopus card on 2026-11-17: that
+logging establishes the card command/response bytes and the balance formula, not
+TrafArch's own end-to-end native transport on a device. These checks do not
+establish driver abort latency or final Android package compatibility.

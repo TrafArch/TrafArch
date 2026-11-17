@@ -124,6 +124,8 @@ SuicaTripPresentation _presentSuicaTrip(
       ? '时刻未解析'
       : timeKnown
       ? '${_two(tx.time!.hour)}:${_two(tx.time!.minute)}'
+      : kind == SuicaRecordKind.rail
+      ? '仅记录日期'
       : '时刻未记录';
   final entryStation = _station(details?.entryStation, stations);
   final exitStation = _station(details?.exitStation, stations);
@@ -154,11 +156,13 @@ SuicaTripPresentation _presentSuicaTrip(
           ? '未知（日期未解析）'
           : timeKnown
           ? '分钟（卡片记录）'
+          : kind == SuicaRecordKind.rail
+          ? '日期（本条乘车履历不含进出站时刻）'
           : '日期；时刻未记录',
     ),
     ('交易后余额', balance ?? '未知'),
     if (amount != null) ('余额差', amount.substring('余额差 '.length)),
-    if (change != null) ('余额差说明', '相邻连续历史记录的交易后余额之差，不保证等同单笔票价'),
+    if (change != null) ('余额差说明', '同次读取中相邻有效历史块的交易后余额之差，不保证等同单笔票价'),
     ..._stationFields(
       kind == SuicaRecordKind.special ? '地点' : '进站',
       details?.entryStation,
@@ -233,13 +237,20 @@ SuicaTripPresentation _projection({
   JourneyEndpoint? end,
   String? balanceAfterText,
 }) {
+  // Match the shared domestic ticket's signed amount layout while keeping
+  // balance-difference provenance in the frozen detail fields and JSON.
+  final amount = info.amountText;
+  final ticketAmount = amount != null && amount.startsWith('余额差 ')
+      ? amount.substring('余额差 '.length)
+      : amount;
   final event = JourneyEvent(
     payload: info,
     mode: mode,
     role: JourneyEventRole.single,
+    cityLabel: '日本',
     endpoint: point,
     evidenceSource: JourneyEvidenceSource.transaction,
-    amountText: info.amountText,
+    amountText: ticketAmount,
     balanceAfterText: balanceAfterText,
   );
   final entry = TripCardPresentation(
@@ -256,9 +267,10 @@ SuicaTripPresentation _projection({
       events: List.unmodifiable([event.withPayload(entry)]),
       mode: mode,
       state: state,
+      cityLabel: '日本',
       start: start,
       end: end,
-      amountText: info.amountText,
+      amountText: ticketAmount,
       balanceAfterText: balanceAfterText,
     ),
   );

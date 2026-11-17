@@ -270,7 +270,7 @@ void main() {
         for (final (id, label) in [
           ('shenzhen', 'CNY ¥'),
           ('suica', 'JP￥'),
-          ('octopus', r'HKD $'),
+          ('octopus', r'HK$'),
         ]) {
           expect(
             tester

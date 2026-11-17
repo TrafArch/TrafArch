@@ -9,27 +9,34 @@ import io.flutter.plugin.common.MethodChannel
 internal class NfcChannelHandler(activity: Activity, messenger: BinaryMessenger) {
     private val sessions = NfcSessionController(activity)
     private val channel = MethodChannel(messenger, "transit_card_analyzer/nfc")
+    private val octopusChannel = MethodChannel(messenger, "transit_card_analyzer/octopus_nfc")
 
     init {
-        channel.setMethodCallHandler { call, rawResult ->
+        bind(channel, felicaOnly = false)
+        bind(octopusChannel, felicaOnly = true)
+    }
+
+    private fun bind(target: MethodChannel, felicaOnly: Boolean) {
+        target.setMethodCallHandler { call, rawResult ->
             val result = OnceResult(rawResult)
             when (call.method) {
-                "scanOnce", "stopScan", "transceive", "transceiveFelica" -> handle(call, result)
+                "scanOnce", "stopScan", "transceiveFelica" -> handle(call, result, felicaOnly)
+                "transceive" -> if (felicaOnly) result.notImplemented() else handle(call, result, felicaOnly)
                 else -> result.notImplemented()
             }
         }
     }
 
-    private fun handle(call: MethodCall, result: OnceResult) {
+    private fun handle(call: MethodCall, result: OnceResult, felicaOnly: Boolean) {
         val map = call.arguments as? Map<*, *>
         val rawId = map?.get("sessionId")
-        if (map?.containsKey("sessionId") == true && (rawId !is String || rawId.isBlank())) {
+        if ((felicaOnly || map?.containsKey("sessionId") == true) && (rawId !is String || rawId.isBlank())) {
             result.error("BAD_ARGUMENT", "sessionId 数据格式错误", null)
             return
         }
         val sessionId = rawId as? String
         when (call.method) {
-            "scanOnce" -> sessions.start(sessionId, result)
+            "scanOnce" -> sessions.start(sessionId, result, felicaOnly)
             "stopScan" -> sessions.stop(sessionId, result)
             else -> {
                 val felica = call.method == "transceiveFelica"
@@ -55,6 +62,7 @@ internal class NfcChannelHandler(activity: Activity, messenger: BinaryMessenger)
 
     fun dispose() {
         channel.setMethodCallHandler(null)
+        octopusChannel.setMethodCallHandler(null)
         sessions.dispose()
     }
 }
