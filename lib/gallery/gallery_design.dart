@@ -171,24 +171,20 @@ abstract final class GalleryJourneyTypography {
 
 @immutable
 class GalleryPalette {
-  const GalleryPalette(this.id, this.name, this.lightPrimary, this.darkPrimary);
+  const GalleryPalette(this.id, this.name);
   final String id, name;
-  final Color lightPrimary, darkPrimary;
   static final values = [
     for (final spec in GalleryThemeSpec.values)
-      GalleryPalette(spec.id, spec.name, spec.primary, spec.dark),
+      GalleryPalette(spec.id, spec.name),
   ];
   static GalleryPalette byId(String id) =>
       values.firstWhere((p) => p.id == id, orElse: () => values.first);
-  ColorScheme scheme(bool dark) {
-    final spec = GalleryThemeSpec.byId(id);
-    return buildGalleryScheme(
-      spec.primary,
-      dark: dark,
-      tint: spec.tint,
-      darkAnchor: spec.dark,
-    );
-  }
+  GalleryThemeSpec get spec => GalleryThemeSpec.byId(id);
+  GallerySchemeTokens tokens(bool dark) => spec.tokens(dark);
+  Color get lightPrimary => spec.light.primary;
+  Color get darkPrimary => spec.tokens(true).primary;
+  ColorScheme scheme(bool dark) =>
+      buildGalleryColorScheme(tokens(dark), dark: dark);
 }
 
 /// Card image scrim parameters. Light and dark are tuned independently so the
@@ -226,6 +222,10 @@ class GalleryCardFace {
   static const imageSecondaryForeground = Color(0xfff7f9fc);
   Color get foreground => const Color(0xff18263a);
   Color get secondaryForeground => const Color(0xff304057);
+
+  /// The more saturated end of the preset gradient is the card's Monet seed
+  /// until the user supplies a photo of their own.
+  Color get seed => end;
   static const values = [
     GalleryCardFace('blue', '海蓝', Color(0xffc4dff7), Color(0xff8fb8e1)),
     GalleryCardFace('teal', '青玉', Color(0xffb9e5d9), Color(0xff82c7bd)),

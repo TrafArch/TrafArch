@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:ui' show Size;
 
 import 'package:flutter/services.dart';
 
@@ -150,6 +149,10 @@ class GalleryCard {
   GalleryFaceCrop detailCrop;
   GalleryFaceCrop listCrop;
 
+  /// Seed extracted from [image] in this session (Monet Adaptive Canvas).
+  /// Preset gradient faces derive their seed from [face] instead.
+  Color? monetSeed;
+
   /// A session preview copy: shares the frozen identity fields while the
   /// cropper's temporary image and crop parameters stay uncommitted.
   GalleryCard.preview(
@@ -174,7 +177,8 @@ class GalleryCard {
        image = image ?? other.image,
        imageSize = imageSize ?? other.imageSize,
        detailCrop = detailCrop ?? other.detailCrop,
-       listCrop = listCrop ?? other.listCrop;
+       listCrop = listCrop ?? other.listCrop,
+       monetSeed = other.monetSeed;
 
   /// Display precision only; the original captured label remains unchanged.
   String get readDateLabel {

@@ -32,13 +32,13 @@ flutter run -t lib/main_gallery.dart
 
 ## 运行时设计规范
 
-配色集中于 GalleryPalette／GalleryTokens 与 OKLCH 颜色引擎 `gallery_color_engine.dart`，字体角色集中于 GalleryTypography，五套手动主题保留原 ID。按 spec 2.2 采用规范 Primary／Tint／Dark（靛蓝 #4E7098／#D5E4F1／#344B68 等）与共享中性色，亮暗各自独立表面阶梯；交互主色按文字对比自动校正，语义色（success／warning／error／info）独立于主题。数据色 data-1..5 与 chart-track 由种子 hue 旋转生成、与 UI 主题分离，分类映射固定（轨道→data-1／公交→data-2／其他→data-3）。运行时不再读取冻结 fixtures 的旧色板。ColorScheme 和状态色逐角色插值。
+配色集中于 GalleryPalette／GalleryTokens／GallerySchemeTokens 与 OKLCH 颜色引擎 `gallery_color_engine.dart`，字体角色集中于 GalleryTypography；六套手动主题保留 blue／teal／violet／rose／amber 并新增 mist。按 Monet Adaptive Canvas 采用四层表面（Canvas／Surface／Surface Container／High 与三级 Outline）：亮色使用 spec 固定 Token、Surface 恒 #FFFFFF；暗色按种子色相独立生成，不反转亮色。交互主色按文字对比自动校正，语义色（success／warning／error／info）独立于主题。数据色 data-1..5 与 chart-track 由种子 hue 旋转生成、与 UI 主题分离，分类映射固定（轨道→data-1／公交→data-2／其他→data-3）。运行时不再读取冻结 fixtures 的旧色板。ColorScheme 和状态色逐角色插值，主题切换使用 240ms／easeInOut 全局过渡。
 
-莫奈由锁定的 dynamic_color 1.9.x 只读获取系统颜色，应用恢复前台时刷新。可用时保留系统主色及容器配对，不可用时回退靛蓝；关闭后恢复手动主题。首页品牌标志使用原 SVG 轮廓，前景与底色随当前主题变化，启动图标和官方交通联合标识保持原资源。
+莫奈跟随当前首页卡片：预设渐变卡面直接提供种子，自选图片由 `gallery_monet.dart` 在相册选择完成时有界采样，裁切拖动不重算、`完成` 保存后一次性切换；取消裁切不改主题，取色失败回退当前预设（默认靛蓝），不读取系统壁纸色。首页品牌标志使用原 SVG 轮廓，前景与底色随当前主题变化，启动图标和官方交通联合标识保持原资源。
 
 阴影区分贴面、轻卡片、悬浮与模态；普通卡片轻影配细线，菜单用双层阴影、独立悬浮面和明确边线，暗色同时提高悬浮面亮度；悬浮底栏亮色无框线、加强双层外轮廓阴影，暗色无阴影、加细边线。卡面四套为提亮的海蓝、青玉、鸢紫、暖铜浅色渐变，配深色文字；用户图片卡面保留深色遮罩和白色文字；卡包整行使用对应渐变／自选图片卡面，左侧为 34dp 非接触图标，右侧为无底无框的管理按钮；卡包数字独立于币种，按共同中心线对齐。
 
-两种底栏共享 GalleryNavigationLayout。有效安全区为 max(0, viewPadding.bottom − viewInsets.bottom)，Scaffold 处理键盘高度，底栏不重复计入。悬浮内容高 62dp，底边距为安全区＋18dp；下沉完整按钮行高 65dp，在安全区上方，非零安全区再加 8dp；两者内容高度均随系统字号增高。下沉底色调浅为普通表面混入 25% 凹陷表面，系统导航区同色。正文底部留白取底栏总占位＋16dp，提示条取总占位＋12dp；系统安全区不属于按钮点击范围。手势与三键导航均按系统 inset 处理，方向／窗口／键盘变化时重新计算。
+两种底栏共享 GalleryNavigationLayout。有效安全区为 max(0, viewPadding.bottom − viewInsets.bottom)，Scaffold 处理键盘高度，底栏不重复计入。悬浮内容高 62dp，底边距为安全区＋18dp；下沉完整按钮行高 65dp，在安全区上方，非零安全区再加 8dp；两者内容高度均随系统字号增高。下沉底栏使用 Surface，选中项使用 Primary Container，系统导航区同色。正文底部留白取底栏总占位＋16dp，提示条取总占位＋12dp；系统安全区不属于按钮点击范围。手势与三键导航均按系统 inset 处理，方向／窗口／键盘变化时重新计算。
 
 卡包普通字号下将金额保留在卡名右侧，金额列共享宽度与缩放；1.5 倍及以上大字体统一改上下布局。币种统一作为前缀显示 CNY ¥、JPY ¥、HKD $、USD $、MOP ¥，各行共享前缀保留宽度，数值按共同中心线对齐，不将币种留在金额后面。未知值保留原语义。
 

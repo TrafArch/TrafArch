@@ -520,7 +520,8 @@ extension _GalleryFaceCropper on _GalleryViewState {
   }
 
   /// The outer sheet's 完成 is the only place that commits the image and both
-  /// crop parameter sets onto the card (spec 2.4 §8.2).
+  /// crop parameter sets onto the card (spec 2.4 §8.2). The Monet seed was
+  /// sampled when the photo was chosen, so the theme switches once, here.
   void _commitFaceSheet(GalleryFaceCropSession? session) {
     if (session != null) {
       final card = c.cards.firstWhere(
@@ -532,6 +533,7 @@ extension _GalleryFaceCropper on _GalleryViewState {
         card.imageSize = session.sourceSize;
         card.detailCrop = session.detail;
         card.listCrop = session.list;
+        if (session.seed != null) card.monetSeed = session.seed;
         c.faceCrop = null;
       }, '保存卡面图片');
     }

@@ -366,7 +366,7 @@ extension _GalleryComponents on _GalleryViewState {
             : t.onTone,
       ),
       side: WidgetStatePropertyAll(
-        BorderSide(color: primary ? Colors.transparent : t.line),
+        BorderSide(color: primary ? Colors.transparent : t.outline),
       ),
       shape: const WidgetStatePropertyAll(GalleryGeometry.buttonShape),
       textStyle: const WidgetStatePropertyAll(GalleryTypography.button),

@@ -2,11 +2,207 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// OKLCH color engine shared by the five preset themes and Monet extraction
-/// (TrafArch spec 2.2, Part II). Presets and wallpaper seeds run through the
-/// same pipeline: seed validation -> theme tokens -> dynamic data palette.
+/// Light-mode tokens for one preset theme (Monet Adaptive Canvas spec §3).
+///
+/// Presets keep their documented values instead of being regenerated from the
+/// seed, so switching themes stays predictable. Dark mode is generated from the
+/// same seed through [GalleryColorEngine.tokens] and never inverts these values.
+@immutable
+class GalleryLightTokens {
+  const GalleryLightTokens({
+    required this.canvas,
+    required this.surface,
+    required this.surfaceContainer,
+    required this.surfaceContainerHigh,
+    required this.primary,
+    required this.primaryContainer,
+    required this.outlineSoft,
+    required this.outline,
+    required this.outlineStrong,
+  });
+
+  final Color canvas;
+  final Color surface;
+  final Color surfaceContainer;
+  final Color surfaceContainerHigh;
+  final Color primary;
+  final Color primaryContainer;
+  final Color outlineSoft;
+  final Color outline;
+  final Color outlineStrong;
+}
+
+/// The full four-layer surface set plus the interaction and neutral roles that
+/// custom components read through [GalleryTokens].
+@immutable
+class GallerySchemeTokens {
+  const GallerySchemeTokens({
+    required this.canvas,
+    required this.surface,
+    required this.surfaceContainer,
+    required this.surfaceContainerHigh,
+    required this.primary,
+    required this.primaryContainer,
+    required this.outlineSoft,
+    required this.outline,
+    required this.outlineStrong,
+    required this.onSurface,
+    required this.onSurfaceVariant,
+    required this.mutedText,
+    required this.onPrimary,
+    required this.onPrimaryContainer,
+  });
+
+  final Color canvas;
+  final Color surface;
+  final Color surfaceContainer;
+  final Color surfaceContainerHigh;
+  final Color primary;
+  final Color primaryContainer;
+  final Color outlineSoft;
+  final Color outline;
+  final Color outlineStrong;
+  final Color onSurface;
+  final Color onSurfaceVariant;
+  final Color mutedText;
+  final Color onPrimary;
+  final Color onPrimaryContainer;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is GallerySchemeTokens &&
+          other.canvas == canvas &&
+          other.surface == surface &&
+          other.surfaceContainer == surfaceContainer &&
+          other.surfaceContainerHigh == surfaceContainerHigh &&
+          other.primary == primary &&
+          other.primaryContainer == primaryContainer &&
+          other.outlineSoft == outlineSoft &&
+          other.outline == outline &&
+          other.outlineStrong == outlineStrong &&
+          other.onSurface == onSurface &&
+          other.onSurfaceVariant == onSurfaceVariant &&
+          other.mutedText == mutedText &&
+          other.onPrimary == onPrimary &&
+          other.onPrimaryContainer == onPrimaryContainer;
+
+  @override
+  int get hashCode => Object.hash(
+    canvas,
+    surface,
+    surfaceContainer,
+    surfaceContainerHigh,
+    primary,
+    primaryContainer,
+    outlineSoft,
+    outline,
+    outlineStrong,
+    onSurface,
+    onSurfaceVariant,
+    mutedText,
+    onPrimary,
+    onPrimaryContainer,
+  );
+
+  /// Compatibility path for tests and callers that only have a [ColorScheme].
+  /// Production themes are built from [GalleryLightTokens] or the Monet
+  /// generator so the three outline tiers stay distinct.
+  factory GallerySchemeTokens.fromScheme(ColorScheme scheme) =>
+      GallerySchemeTokens(
+        canvas: scheme.surface,
+        surface: scheme.surfaceContainerLow,
+        surfaceContainer: scheme.surfaceContainer,
+        surfaceContainerHigh: scheme.surfaceContainerHigh,
+        primary: scheme.primary,
+        primaryContainer: scheme.primaryContainer,
+        outlineSoft: scheme.outlineVariant,
+        outline: scheme.outline,
+        outlineStrong: scheme.outline,
+        onSurface: scheme.onSurface,
+        onSurfaceVariant: scheme.onSurfaceVariant,
+        mutedText: scheme.onSurfaceVariant,
+        onPrimary: scheme.onPrimary,
+        onPrimaryContainer: scheme.onPrimaryContainer,
+      );
+
+  GallerySchemeTokens copyWith({
+    Color? canvas,
+    Color? surface,
+    Color? surfaceContainer,
+    Color? surfaceContainerHigh,
+    Color? primary,
+    Color? primaryContainer,
+    Color? outlineSoft,
+    Color? outline,
+    Color? outlineStrong,
+    Color? onSurface,
+    Color? onSurfaceVariant,
+    Color? mutedText,
+    Color? onPrimary,
+    Color? onPrimaryContainer,
+  }) => GallerySchemeTokens(
+    canvas: canvas ?? this.canvas,
+    surface: surface ?? this.surface,
+    surfaceContainer: surfaceContainer ?? this.surfaceContainer,
+    surfaceContainerHigh: surfaceContainerHigh ?? this.surfaceContainerHigh,
+    primary: primary ?? this.primary,
+    primaryContainer: primaryContainer ?? this.primaryContainer,
+    outlineSoft: outlineSoft ?? this.outlineSoft,
+    outline: outline ?? this.outline,
+    outlineStrong: outlineStrong ?? this.outlineStrong,
+    onSurface: onSurface ?? this.onSurface,
+    onSurfaceVariant: onSurfaceVariant ?? this.onSurfaceVariant,
+    mutedText: mutedText ?? this.mutedText,
+    onPrimary: onPrimary ?? this.onPrimary,
+    onPrimaryContainer: onPrimaryContainer ?? this.onPrimaryContainer,
+  );
+
+  static GallerySchemeTokens lerp(
+    GallerySchemeTokens a,
+    GallerySchemeTokens b,
+    double t,
+  ) => GallerySchemeTokens(
+    canvas: Color.lerp(a.canvas, b.canvas, t)!,
+    surface: Color.lerp(a.surface, b.surface, t)!,
+    surfaceContainer: Color.lerp(a.surfaceContainer, b.surfaceContainer, t)!,
+    surfaceContainerHigh: Color.lerp(
+      a.surfaceContainerHigh,
+      b.surfaceContainerHigh,
+      t,
+    )!,
+    primary: Color.lerp(a.primary, b.primary, t)!,
+    primaryContainer: Color.lerp(a.primaryContainer, b.primaryContainer, t)!,
+    outlineSoft: Color.lerp(a.outlineSoft, b.outlineSoft, t)!,
+    outline: Color.lerp(a.outline, b.outline, t)!,
+    outlineStrong: Color.lerp(a.outlineStrong, b.outlineStrong, t)!,
+    onSurface: Color.lerp(a.onSurface, b.onSurface, t)!,
+    onSurfaceVariant: Color.lerp(a.onSurfaceVariant, b.onSurfaceVariant, t)!,
+    mutedText: Color.lerp(a.mutedText, b.mutedText, t)!,
+    onPrimary: Color.lerp(a.onPrimary, b.onPrimary, t)!,
+    onPrimaryContainer: Color.lerp(
+      a.onPrimaryContainer,
+      b.onPrimaryContainer,
+      t,
+    )!,
+  );
+}
+
+/// OKLCH color engine shared by the six preset themes and Monet extraction
+/// (TrafArch monet design V1.0). Presets and card seeds run through the same
+/// surface pipeline: seed validation → surface tokens → Material scheme.
 abstract final class GalleryColorEngine {
   static const _white = Color(0xffffffff);
+
+  // Fixed neutrals (spec §7). Text roles are re-checked against the lightest
+  // dark surface / darkest light surface before they are exposed.
+  static const _lightOnSurface = Color(0xff202a35);
+  static const _lightOnSurfaceVariant = Color(0xff65717e);
+  static const _lightMutedText = Color(0xff89939d);
+  static const _darkOnSurface = Color(0xffeef2f6);
+  static const _darkOnSurfaceVariant = Color(0xffb1bcc7);
+  static const _darkMutedText = Color(0xff8995a1);
+  static const _darkOnPrimary = Color(0xff18212b);
 
   /// sRGB transfer -> linear.
   static double _toLinear(double c) =>
@@ -149,6 +345,102 @@ abstract final class GalleryColorEngine {
     return (container: containerColor, onContainer: onContainer);
   }
 
+  /// The documented preset tokens for light mode, plus the fixed neutrals.
+  static GallerySchemeTokens preset(GalleryLightTokens light, Color seed) {
+    final seedOklch = oklch(seed);
+    return GallerySchemeTokens(
+      canvas: light.canvas,
+      surface: light.surface,
+      surfaceContainer: light.surfaceContainer,
+      surfaceContainerHigh: light.surfaceContainerHigh,
+      primary: light.primary,
+      primaryContainer: light.primaryContainer,
+      outlineSoft: light.outlineSoft,
+      outline: light.outline,
+      outlineStrong: light.outlineStrong,
+      onSurface: _lightOnSurface,
+      onSurfaceVariant: _lightOnSurfaceVariant,
+      mutedText: _lightMutedText,
+      onPrimary: _white,
+      onPrimaryContainer: readable(
+        color(0.42, seedOklch.c, seedOklch.h),
+        light.primaryContainer,
+      ),
+    );
+  }
+
+  /// Monet Adaptive Canvas generation (spec §4.3–§4.5).
+  ///
+  /// Light and dark are generated independently. Only the hue (and a capped
+  /// amount of chroma) comes from the seed; surfaces never use the raw color.
+  static GallerySchemeTokens tokens(Color seed, {required bool dark}) {
+    final s = oklch(seed);
+    final neutral = s.c < 0.008;
+
+    double chroma(double factor, double min, double max) =>
+        neutral ? 0 : (s.c * factor).clamp(min, max).toDouble();
+
+    if (dark) {
+      final primary = _darkPrimary(seed);
+      final containerColor = color(0.30, math.min(s.c, 0.05), s.h);
+      return GallerySchemeTokens(
+        canvas: color(0.19, chroma(0.08, 0.006, 0.015), s.h),
+        surface: color(0.23, chroma(0.08, 0.008, 0.018), s.h),
+        surfaceContainer: color(0.26, chroma(0.12, 0.010, 0.020), s.h),
+        surfaceContainerHigh: color(0.30, chroma(0.14, 0.010, 0.022), s.h),
+        primary: primary,
+        primaryContainer: containerColor,
+        outlineSoft: color(0.355, chroma(0.08, 0.006, 0.014), s.h),
+        outline: color(0.40, chroma(0.10, 0.008, 0.018), s.h),
+        outlineStrong: color(0.48, chroma(0.12, 0.010, 0.020), s.h),
+        onSurface: _darkOnSurface,
+        onSurfaceVariant: _darkOnSurfaceVariant,
+        mutedText: _darkMutedText,
+        onPrimary: _darkOnPrimary,
+        onPrimaryContainer: readable(
+          color(0.85, s.c * 0.6, s.h),
+          containerColor,
+        ),
+      );
+    }
+
+    final primary = actionFill(seed, dark: false);
+    final containerColor = container(seed, dark: false).container;
+    return GallerySchemeTokens(
+      canvas: color(0.975, chroma(0.10, 0.006, 0.014), s.h),
+      surface: _white,
+      surfaceContainer: color(0.945, chroma(0.18, 0.010, 0.022), s.h),
+      surfaceContainerHigh: color(0.925, chroma(0.20, 0.012, 0.026), s.h),
+      primary: primary,
+      primaryContainer: containerColor,
+      outlineSoft: color(0.925, chroma(0.12, 0.006, 0.016), s.h),
+      outline: color(0.890, chroma(0.12, 0.008, 0.018), s.h),
+      outlineStrong: color(0.855, chroma(0.14, 0.010, 0.022), s.h),
+      onSurface: _lightOnSurface,
+      onSurfaceVariant: _lightOnSurfaceVariant,
+      mutedText: _lightMutedText,
+      onPrimary: _white,
+      onPrimaryContainer: readable(color(0.42, s.c, s.h), containerColor),
+    );
+  }
+
+  /// Dark actions are intentionally lighter than the seed so the fixed near-
+  /// black label keeps 4.5:1 contrast without washing out the hue.
+  static Color _darkPrimary(Color seed) {
+    final s = oklch(seed);
+    final neutral = s.c < 0.008;
+    final base = color(
+      0.72,
+      neutral ? 0 : math.min(math.max(s.c * 0.55, 0.035), 0.10),
+      s.h,
+    );
+    return _adjust(
+      base,
+      (c) => contrast(c, _darkOnPrimary) >= 4.5,
+      increase: true,
+    );
+  }
+
   // Data palette hue offsets and lightness/chroma targets, calibrated against
   // the Indigo reference (spec 2.2 §5). Other themes and Monet seeds rotate
   // these offsets around their own hue instead of copying the reference HEX.
@@ -179,55 +471,120 @@ abstract final class GalleryColorEngine {
   }
 }
 
-/// The five preset themes (spec 2.2 §2). Indigo keeps the app-icon anchor.
+/// The six preset themes from the Monet Adaptive Canvas spec §3.
 @immutable
 class GalleryThemeSpec {
-  const GalleryThemeSpec(
-    this.id,
-    this.name,
-    this.primary,
-    this.tint,
-    this.dark,
-  );
+  const GalleryThemeSpec(this.id, this.name, this.seed, this.light);
+
   final String id, name;
-  final Color primary, tint, dark;
+  final Color seed;
+  final GalleryLightTokens light;
+
+  Color get primary => light.primary;
+  Color get tint => light.primaryContainer;
+
+  GallerySchemeTokens tokens(bool dark) => dark
+      ? GalleryColorEngine.tokens(seed, dark: true)
+      : GalleryColorEngine.preset(light, seed);
 
   static const indigo = GalleryThemeSpec(
     'blue',
     '靛蓝',
     Color(0xff4E7098),
-    Color(0xffD5E4F1),
-    Color(0xff344B68),
+    GalleryLightTokens(
+      canvas: Color(0xffF3F7FB),
+      surface: Color(0xFFFFFFFF),
+      surfaceContainer: Color(0xffEAF1F8),
+      surfaceContainerHigh: Color(0xffE3ECF5),
+      primary: Color(0xff496B91),
+      primaryContainer: Color(0xffE5EDF7),
+      outlineSoft: Color(0xffE4EBF2),
+      outline: Color(0xffDCE7F1),
+      outlineStrong: Color(0xffC9D8E7),
+    ),
   );
+
   static const values = [
     indigo,
     GalleryThemeSpec(
       'teal',
       '青绿',
-      Color(0xff4F8F87),
-      Color(0xffDCEFEA),
-      Color(0xff315F5A),
+      Color(0xff568276),
+      GalleryLightTokens(
+        canvas: Color(0xffF3F8F5),
+        surface: Color(0xFFFFFFFF),
+        surfaceContainer: Color(0xffEAF2ED),
+        surfaceContainerHigh: Color(0xffE2EEE7),
+        primary: Color(0xff477365),
+        primaryContainer: Color(0xffE4EFE8),
+        outlineSoft: Color(0xffE3ECE6),
+        outline: Color(0xffDCE8E1),
+        outlineStrong: Color(0xffC9DCD1),
+      ),
     ),
     GalleryThemeSpec(
       'violet',
       '藤紫',
-      Color(0xff8275A8),
-      Color(0xffE9E3F2),
-      Color(0xff51466F),
+      Color(0xff806C98),
+      GalleryLightTokens(
+        canvas: Color(0xffF7F4F9),
+        surface: Color(0xFFFFFFFF),
+        surfaceContainer: Color(0xffEFEAF4),
+        surfaceContainerHigh: Color(0xffE8E1F0),
+        primary: Color(0xff6E5A86),
+        primaryContainer: Color(0xffEBE5F1),
+        outlineSoft: Color(0xffEAE5EF),
+        outline: Color(0xffE3DCEA),
+        outlineStrong: Color(0xffD7CDE1),
+      ),
     ),
     GalleryThemeSpec(
       'rose',
       '蔷薇',
-      Color(0xffB87583),
-      Color(0xffF4E3E7),
-      Color(0xff794653),
+      Color(0xffA96878),
+      GalleryLightTokens(
+        canvas: Color(0xffFAF5F6),
+        surface: Color(0xFFFFFFFF),
+        surfaceContainer: Color(0xffF3E9EC),
+        surfaceContainerHigh: Color(0xffEEDFE4),
+        primary: Color(0xff925363),
+        primaryContainer: Color(0xffF2E5E9),
+        outlineSoft: Color(0xffF0E5E8),
+        outline: Color(0xffE9DADF),
+        outlineStrong: Color(0xffE2CCD3),
+      ),
     ),
     GalleryThemeSpec(
       'amber',
       '麦金',
-      Color(0xffB58A4A),
-      Color(0xffF4EBD8),
-      Color(0xff72562E),
+      Color(0xffA18450),
+      GalleryLightTokens(
+        canvas: Color(0xffF8F6F0),
+        surface: Color(0xFFFFFFFF),
+        surfaceContainer: Color(0xffF0EBDD),
+        surfaceContainerHigh: Color(0xffEAE2CC),
+        primary: Color(0xff806637),
+        primaryContainer: Color(0xffEFE8D7),
+        outlineSoft: Color(0xffEEE9DC),
+        outline: Color(0xffE5DDCA),
+        outlineStrong: Color(0xffDCCFB4),
+      ),
+    ),
+    GalleryThemeSpec(
+      'mist',
+      '雾灰',
+      Color(0xff687887),
+      GalleryLightTokens(
+        canvas: Color(0xffF5F7F8),
+        surface: Color(0xFFFFFFFF),
+        surfaceContainer: Color(0xffEBEFF2),
+        surfaceContainerHigh: Color(0xffE6ECEF),
+        primary: Color(0xff526675),
+        primaryContainer: Color(0xffE8EDF1),
+        outlineSoft: Color(0xffE5EAED),
+        outline: Color(0xffDDE4E8),
+        outlineStrong: Color(0xffCBD6DD),
+      ),
     ),
   ];
 
@@ -235,66 +592,23 @@ class GalleryThemeSpec {
       values.firstWhere((spec) => spec.id == id, orElse: () => indigo);
 }
 
-/// Shared neutral surfaces (spec 2.2 §3). Dark mode uses its own surface
-/// ladder rather than inverting the light values (spec 2.2 §21).
-abstract final class GalleryNeutrals {
-  static const lightCanvas = Color(0xffF7F8FA);
-  static const lightCard = Color(0xffFFFFFF);
-  static const lightSecondary = Color(0xffF0F2F5);
-  static const lightTertiary = Color(0xffE9EDF2);
-  static const lightBorder = Color(0xffE3E7EC);
-  static const lightBorderStrong = Color(0xffCDD4DD);
-  static const lightText = Color(0xff29313D);
-  static const lightTextSecondary = Color(0xff66717F);
-
-  static const darkCanvas = Color(0xff0C1119);
-  static const darkCard = Color(0xff151E2B);
-  static const darkSecondary = Color(0xff1B2636);
-  static const darkTertiary = Color(0xff101722);
-  static const darkRaised = Color(0xff223047);
-  static const darkBorder = Color(0xff3D4E65);
-  static const darkBorderStrong = Color(0xff75859C);
-  static const darkText = Color(0xffE8EEF7);
-  static const darkTextSecondary = Color(0xffA6B4C7);
-}
-
-/// Global semantic colors (spec 2.2 §6), independent of the theme hue.
+/// Global semantic colors (spec §7.3), independent of the theme hue. Dark mode
+/// derives readable variants through [GalleryColorEngine.readable].
 abstract final class GallerySemantic {
-  static const success = Color(0xff4E9A75);
-  static const warning = Color(0xffD5A04E);
-  static const error = Color(0xffC66C72);
-  static const info = Color(0xff6288BB);
+  static const success = Color(0xff347864);
+  static const warning = Color(0xff9A6A25);
+  static const error = Color(0xffB45353);
+  static const info = Color(0xff4F7098);
 }
 
-/// Build a full Material scheme from a theme seed through the shared engine.
-/// Presets pass their documented tint/dark anchors; Monet passes only a seed.
-ColorScheme buildGalleryScheme(
-  Color seed, {
+/// Build a full Material scheme from the four-layer tokens. `surface` is the
+/// Canvas; white content cards live in `surfaceContainerLow`, matching the
+/// existing Gallery role mapping.
+ColorScheme buildGalleryColorScheme(
+  GallerySchemeTokens tokens, {
   required bool dark,
-  Color? tint,
-  Color? darkAnchor,
-  Color? actionOverride,
-  Color? onActionOverride,
 }) {
-  final primary =
-      actionOverride ?? GalleryColorEngine.actionFill(seed, dark: dark);
-  final tone = dark
-      ? GalleryColorEngine.container(seed, dark: true)
-      : (
-          container:
-              tint ?? GalleryColorEngine.container(seed, dark: false).container,
-          onContainer:
-              darkAnchor ??
-              GalleryColorEngine.container(seed, dark: false).onContainer,
-        );
-  final surface2 = dark
-      ? GalleryNeutrals.darkTertiary
-      : GalleryNeutrals.lightTertiary;
-  // Text must read on the extreme surface: the darkest light surface, or the
-  // lightest dark surface (dark mode does not invert the light ladder).
-  final textSurface = dark
-      ? GalleryNeutrals.darkRaised
-      : GalleryNeutrals.lightTertiary;
+  final textSurface = tokens.surfaceContainerHigh;
   final error = GalleryColorEngine.readable(GallerySemantic.error, textSurface);
   final errorPair = GalleryColorEngine.container(
     GallerySemantic.error,
@@ -302,53 +616,36 @@ ColorScheme buildGalleryScheme(
   );
   return ColorScheme(
     brightness: dark ? Brightness.dark : Brightness.light,
-    primary: primary,
-    onPrimary:
-        onActionOverride ?? GalleryColorEngine.actionLabel(primary, dark: dark),
-    primaryContainer: tone.container,
-    onPrimaryContainer: tone.onContainer,
-    // Secondary/tertiary stay the established teal/amber UI accents; chart
-    // categories use the separate data palette instead of these roles.
-    secondary: Color(dark ? 0xff8ed2c5 : 0xff087f78),
-    onSecondary: Color(dark ? 0xff003831 : 0xffffffff),
-    secondaryContainer: Color(dark ? 0xff163d38 : 0xffdef3ec),
-    onSecondaryContainer: Color(dark ? 0xffb4eddb : 0xff145747),
-    tertiary: Color(dark ? 0xffe5c07b : 0xff9e640a),
-    onTertiary: Color(dark ? 0xff3c2b0b : 0xffffffff),
-    tertiaryContainer: Color(dark ? 0xff463820 : 0xffffedce),
-    onTertiaryContainer: Color(dark ? 0xfff4d59b : 0xff76500d),
+    primary: tokens.primary,
+    onPrimary: tokens.onPrimary,
+    primaryContainer: tokens.primaryContainer,
+    onPrimaryContainer: tokens.onPrimaryContainer,
+    secondary: tokens.primary,
+    onSecondary: tokens.onPrimary,
+    secondaryContainer: tokens.primaryContainer,
+    onSecondaryContainer: tokens.onPrimaryContainer,
+    tertiary: tokens.primary,
+    onTertiary: tokens.onPrimary,
+    tertiaryContainer: tokens.primaryContainer,
+    onTertiaryContainer: tokens.onPrimaryContainer,
     error: error,
-    onError: dark ? const Color(0xff690005) : Colors.white,
+    onError: dark ? const Color(0xff2b0b0b) : Colors.white,
     errorContainer: errorPair.container,
     onErrorContainer: errorPair.onContainer,
-    surface: dark ? GalleryNeutrals.darkCanvas : GalleryNeutrals.lightCanvas,
-    onSurface: dark ? GalleryNeutrals.darkText : GalleryNeutrals.lightText,
+    surface: tokens.canvas,
+    onSurface: GalleryColorEngine.readable(tokens.onSurface, textSurface),
     onSurfaceVariant: GalleryColorEngine.readable(
-      dark
-          ? GalleryNeutrals.darkTextSecondary
-          : GalleryNeutrals.lightTextSecondary,
+      tokens.onSurfaceVariant,
       textSurface,
     ),
-    outline: dark
-        ? GalleryNeutrals.darkBorderStrong
-        : GalleryNeutrals.lightBorderStrong,
-    outlineVariant: dark
-        ? GalleryNeutrals.darkBorder
-        : GalleryNeutrals.lightBorder,
-    surfaceDim: dark ? GalleryNeutrals.darkCanvas : const Color(0xffdee6f0),
-    surfaceBright: dark ? GalleryNeutrals.darkRaised : Colors.white,
-    surfaceContainerLowest: dark
-        ? GalleryNeutrals.darkTertiary
-        : const Color(0xffe8eef6),
-    surfaceContainerLow: dark
-        ? GalleryNeutrals.darkCard
-        : GalleryNeutrals.lightCard,
-    surfaceContainer: dark
-        ? GalleryNeutrals.darkSecondary
-        : GalleryNeutrals.lightSecondary,
-    surfaceContainerHigh: dark
-        ? GalleryNeutrals.darkRaised
-        : GalleryNeutrals.lightSecondary,
-    surfaceContainerHighest: surface2,
+    outline: tokens.outlineStrong,
+    outlineVariant: tokens.outlineSoft,
+    surfaceDim: dark ? tokens.canvas : tokens.surfaceContainerHigh,
+    surfaceBright: dark ? tokens.surfaceContainerHigh : tokens.surface,
+    surfaceContainerLowest: dark ? tokens.canvas : tokens.surface,
+    surfaceContainerLow: tokens.surface,
+    surfaceContainer: tokens.surfaceContainer,
+    surfaceContainerHigh: tokens.surfaceContainerHigh,
+    surfaceContainerHighest: tokens.surfaceContainerHigh,
   );
 }

@@ -1176,7 +1176,9 @@ extension _GalleryPages on _GalleryViewState {
             c.monet,
             (value) => c.update(() => c.monet = value),
             subtitle: c.monet
-                ? (t.dynamic ? '当前使用系统莫奈配色' : '系统取色不可用，使用靛蓝配色')
+                ? (t.dynamic
+                      ? '跟随当前首页卡片的取色生成界面，更换卡面后自动更新'
+                      : '当前卡片暂无有效取色，使用${GalleryPalette.byId(c.palette).name}配色')
                 : '使用手动选择的主题配色',
           ),
           _collapse(
@@ -1185,9 +1187,8 @@ extension _GalleryPages on _GalleryViewState {
               padding: const EdgeInsets.fromLTRB(10, 0, 10, 14),
               child: Row(
                 children: GalleryPalette.values.map((palette) {
-                  final swatch = t.dark
-                      ? palette.darkPrimary
-                      : palette.lightPrimary;
+                  final roles = palette.tokens(t.dark);
+                  final swatch = roles.primary;
                   return Expanded(
                     child: Semantics(
                       selected: c.palette == palette.id,
@@ -1216,9 +1217,9 @@ extension _GalleryPages on _GalleryViewState {
                                 shape: BoxShape.circle,
                               ),
                               child: c.palette == palette.id
-                                  ? const Icon(
+                                  ? Icon(
                                       Icons.check_rounded,
-                                      color: Colors.white,
+                                      color: roles.onPrimary,
                                       size: 18,
                                     )
                                   : null,

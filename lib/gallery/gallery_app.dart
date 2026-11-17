@@ -11,7 +11,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:dynamic_color/dynamic_color.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../app/app_info.dart';
@@ -29,6 +28,7 @@ import 'gallery_data.dart';
 import 'gallery_theme.dart';
 import 'gallery_design.dart';
 import 'gallery_layout.dart';
+import 'gallery_monet.dart';
 import 'gallery_preferences.dart';
 import 'gallery_feedback.dart';
 import 'gallery_spending.dart';
@@ -112,16 +112,21 @@ class _GalleryAppState extends State<GalleryApp> {
       }
       return AnimatedBuilder(
         animation: c,
-        builder: (context, _) => _GallerySystemColors(
-          builder: (lightDynamic, darkDynamic) => MaterialApp(
+        builder: (context, _) {
+          // Monet follows the home card. Until a newly chosen photo has been
+          // sampled, use the user's preset instead of flashing an old theme.
+          final monetSeed = c.monet && c.hasCardSeed ? c.themeSeed : null;
+          return MaterialApp(
             title: 'TrafArch',
             debugShowCheckedModeBanner: false,
             locale: const Locale('zh', 'CN'),
             supportedLocales: const [Locale('zh', 'CN'), Locale('en')],
             localizationsDelegates: GlobalMaterialLocalizations.delegates,
             themeMode: c.themeMode,
-            theme: _appearance.theme(c, lightDynamic, false),
-            darkTheme: _appearance.theme(c, darkDynamic, true),
+            themeAnimationDuration: const Duration(milliseconds: 240),
+            themeAnimationCurve: Curves.easeInOut,
+            theme: _appearance.theme(c, false, monetSeed),
+            darkTheme: _appearance.theme(c, true, monetSeed),
             builder: (context, child) {
               final tokens = Theme.of(context).extension<GalleryTokens>()!;
               return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -133,11 +138,11 @@ class _GalleryAppState extends State<GalleryApp> {
                           statusBarColor: Colors.transparent,
                           systemNavigationBarColor: c.docked && c.isMainPage
                               ? tokens.dockedNavigationSurface
-                              : tokens.bg,
+                              : tokens.canvas,
                           systemNavigationBarDividerColor: Colors.transparent,
                         ),
                 child: ColoredBox(
-                  color: tokens.bg,
+                  color: tokens.canvas,
                   child: GalleryWindow(
                     child: GalleryFeedbackHost(
                       key: ValueKey(c.generation),
@@ -157,91 +162,35 @@ class _GalleryAppState extends State<GalleryApp> {
               openWebLink: widget.openWebLink,
               openEmail: widget.openEmail,
             ),
-          ),
-        ),
+          );
+        },
       );
     },
   );
 }
 
-/// Gallery theme inputs are stable between notifications, so the same
-/// [ThemeData] instance is reused. MaterialApp animates a 200ms cross-fade
-/// whenever the incoming theme differs; a fresh instance per notification
-/// restarts that fade and rebuilds every Theme-dependent widget each frame
-/// of a page transition.
+/// Theme inputs are stable between notifications, so the same [ThemeData]
+/// instance is reused. MaterialApp animates a cross-fade whenever the incoming
+/// theme differs; a fresh instance per notification restarts that fade and
+/// rebuilds every Theme-dependent widget on each frame of a transition.
 class _GalleryAppearance {
-  final _tokens = <(int, bool, String, bool, ColorScheme?), GalleryTokens>{};
-  final _themes = <(int, bool, String, bool, ColorScheme?), ThemeData>{};
+  final _themes = <(int, bool, String, Color?), ThemeData>{};
 
-  (int, bool, String, bool, ColorScheme?) _key(
-    GalleryController controller,
-    bool dark,
-    ColorScheme? dynamic,
-  ) => (
-    identityHashCode(controller.data),
-    dark,
-    controller.palette,
-    controller.monet,
-    controller.monet ? dynamic : null,
-  );
-
-  GalleryTokens tokens(
-    GalleryController controller,
-    ColorScheme? dynamic,
-    bool dark,
-  ) => _tokens.putIfAbsent(
-    _key(controller, dark, dynamic),
-    () => GalleryTokens.from(
-      controller.data,
-      dark,
-      controller.monet ? 'blue' : controller.palette,
-      dynamicScheme: controller.monet ? dynamic : null,
-    ),
-  );
-
-  ThemeData theme(
-    GalleryController controller,
-    ColorScheme? dynamic,
-    bool dark,
-  ) => _themes.putIfAbsent(
-    _key(controller, dark, dynamic),
-    () => tokens(controller, dynamic, dark).theme(),
-  );
-}
-
-/// Refresh the wallpaper palette on returning from Android's wallpaper settings.
-class _GallerySystemColors extends StatefulWidget {
-  const _GallerySystemColors({required this.builder});
-  final Widget Function(ColorScheme?, ColorScheme?) builder;
-  @override
-  State<_GallerySystemColors> createState() => _GallerySystemColorsState();
-}
-
-class _GallerySystemColorsState extends State<_GallerySystemColors>
-    with WidgetsBindingObserver {
-  final _builder = GlobalKey<DynamicColorBuilderState>();
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _builder.currentState?.initPlatformState();
-    }
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) =>
-      DynamicColorBuilder(key: _builder, builder: widget.builder);
+  ThemeData theme(GalleryController controller, bool dark, Color? monetSeed) =>
+      _themes.putIfAbsent(
+        (
+          identityHashCode(controller.data),
+          dark,
+          controller.palette,
+          monetSeed,
+        ),
+        () => GalleryTokens.from(
+          controller.data,
+          dark,
+          controller.palette,
+          monetSeed: monetSeed,
+        ).theme(),
+      );
 }
 
 class _GalleryView extends StatefulWidget {
@@ -344,15 +293,27 @@ class _GalleryViewState extends State<_GalleryView> {
           final data = await frame.image.toByteData(
             format: ImageByteFormat.png,
           );
-          if (data != null && active()) {
+          if (data != null) {
             // The native picker clears its previous cache on each selection.
             // The bytes stay in a crop session until the sheet's 完成 commits
-            // them (spec 2.4 §8.2).
-            c.beginFaceCrop(
-              card.id,
-              data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
-              Size(frame.image.width.toDouble(), frame.image.height.toDouble()),
+            // them (spec 2.4 §8.2). Sample the Monet seed now, while the picker
+            // is still busy, so the committed theme switches exactly once.
+            final bytes = data.buffer.asUint8List(
+              data.offsetInBytes,
+              data.lengthInBytes,
             );
+            final seed = await GalleryMonet.seedFromImage(bytes);
+            if (active()) {
+              c.beginFaceCrop(
+                card.id,
+                bytes,
+                Size(
+                  frame.image.width.toDouble(),
+                  frame.image.height.toDouble(),
+                ),
+                seed: seed,
+              );
+            }
           }
         } finally {
           frame.image.dispose();
@@ -543,7 +504,7 @@ class _GalleryViewState extends State<_GalleryView> {
             statusBarColor: Colors.transparent,
             systemNavigationBarColor: c.docked && _isMain
                 ? t.dockedNavigationSurface
-                : t.bg,
+                : t.canvas,
             systemNavigationBarDividerColor: Colors.transparent,
           ),
       child: Shortcuts(
@@ -560,7 +521,9 @@ class _GalleryViewState extends State<_GalleryView> {
             ),
           },
           child: Scaffold(
-            backgroundColor: _entry.overlay != null ? Colors.transparent : t.bg,
+            backgroundColor: _entry.overlay != null
+                ? Colors.transparent
+                : t.canvas,
             resizeToAvoidBottomInset: true,
             body: SafeArea(
               bottom: false,

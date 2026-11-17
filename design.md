@@ -4,28 +4,31 @@
 
 ## 色彩
 
-按 `TrafArch_spec_2.2` 采用统一 Token 结构：五套预设主题各定义 Primary／Tint／Dark，主题色只负责交互与局部视觉表达，不铺满整页；正文与表面共享中性色阶，语义色独立于主题。靛蓝保留 App Icon 锚点（底 #D5E4F1、前景 #4E7098）。
+按 `TrafArch_monet_design`（V1.0，2026-11-17）采用四层表面体系：Canvas（页面背景）→ Surface（内容卡片、弹窗、悬浮导航）→ Surface Container／High（次级区域、选中态、辅助容器）→ Outline Soft／Outline／Outline Strong（分割与边界）。主题色只负责交互与局部表达，不铺满整页；正文与表面共享固定中性色，语义色独立于主题。靛蓝保留 App Icon 锚点（底 #D5E4F1、前景 #4E7098）。
 
-| 主题 | Primary | Tint | Dark |
-| --- | --- | --- | --- |
-| 靛蓝 blue | #4E7098 | #D5E4F1 | #344B68 |
-| 青绿 teal | #4F8F87 | #DCEFEA | #315F5A |
-| 藤紫 violet | #8275A8 | #E9E3F2 | #51466F |
-| 蔷薇 rose | #B87583 | #F4E3E7 | #794653 |
-| 麦金 amber | #B58A4A | #F4EBD8 | #72562E |
+亮色六套预设的 Surface 固定 #FFFFFF；Canvas 及以下三层由种子色相轻微着色：
 
-共享中性色（亮色）：页面背景 #F7F8FA、普通卡片 #FFFFFF、次要表面 #F0F2F5、凹陷控件 #E9EDF2、细边线 #E3E7EC、强边线 #CDD4DD、主要文字 #29313D、次要文字 #66717F、弱化文字 #929BA6、禁用文字 #B4BBC4。暗色采用独立表面阶梯（背景 #0C1119、卡片 #151E2B、次要 #1B2636、悬浮 #223047、凹陷 #101722、文字 #E8EEF7／#A6B4C7、边线 #3D4E65／#75859C），不直接反转亮色。
+| 主题 | Seed | Canvas | Container | Container High | Primary | Primary Container | Outline Soft／Outline／Strong |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 靛蓝 blue | #4E7098 | #F3F7FB | #EAF1F8 | #E3ECF5 | #496B91 | #E5EDF7 | #E4EBF2／#DCE7F1／#C9D8E7 |
+| 青绿 teal | #568276 | #F3F8F5 | #EAF2ED | #E2EEE7 | #477365 | #E4EFE8 | #E3ECE6／#DCE8E1／#C9DCD1 |
+| 藤紫 violet | #806C98 | #F7F4F9 | #EFEAF4 | #E8E1F0 | #6E5A86 | #EBE5F1 | #EAE5EF／#E3DCEA／#D7CDE1 |
+| 蔷薇 rose | #A96878 | #FAF5F6 | #F3E9EC | #EEDFE4 | #925363 | #F2E5E9 | #F0E5E8／#E9DADF／#E2CCD3 |
+| 麦金 amber | #A18450 | #F8F6F0 | #F0EBDD | #EAE2CC | #806637 | #EFE8D7 | #EEE9DC／#E5DDCA／#DCCFB4 |
+| 雾灰 mist | #687887 | #F5F7F8 | #EBEFF2 | #E6ECEF | #526675 | #E8EDF1 | #E5EAED／#DDE4E8／#CBD6DD |
 
-语义色独立于主题 hue：成功 #4E9A75、警告 #D5A04E、错误 #C66C72、信息 #6288BB。Snackbar、表单反馈与状态提示统一使用语义 Token；文字角色按最极端表面自动校正对比，不改变语义。
+暗色不反转亮色，按种子色相独立生成：Canvas／Surface／Container／High 的 OKLCH 明度约为 0.19／0.23／0.26／0.30，Outline 约 0.40；避免纯黑和大面积高饱和色，Primary 提亮并使用深色标签。亮暗中性色固定：On Surface #202A35／#EEF2F6、On Surface Variant #65717E／#B1BCC7、Muted Text #89939D／#8995A1、Disabled Text #A6AFB8／#697582；文字角色按最极端表面校正到 ≥4.5:1。
+
+语义色独立于主题 hue：成功 #347864、警告 #9A6A25、错误 #B45353、信息 #4F7098，暗色提供可读的浅色变体。Snackbar、表单反馈与状态提示统一使用语义 Token，不随主题改变含义。
 
 数据色与 UI 主题分离：data-1..5 与 chart-track／chart-surface 由 OKLCH 引擎从种子 hue 旋转生成。靛蓝参考 data-1 #5966A6、data-2 #5E9F9A、data-3 #D5A45E、data-4 #C98282、data-5 #9A8BC3、chart-track #E6E5EF；其他主题与莫奈不得复制这组 HEX。分类映射固定：轨道交通→data-1、公共汽车→data-2、其他交通→data-3，主题切换只换色不换映射。环形图纯色分类段、柱状图用对应分类色、图例严格对应、图表轨道用独立浅轨，不用彩虹渐变，颜色不作唯一信息编码。
 
-- 运行时配色集中在 `GalleryPalette`、`GalleryTokens` 与 OKLCH 颜色引擎 `gallery_color_engine.dart`；页面使用角色，不从冻结 fixtures 读取样式。
-- 五套手动主题保留 blue／teal／violet／rose／amber ID。交互主色 action 由引擎按白字（亮）／深字（暗）≥4.5 对比自动压暗或提亮，预设 Primary 作为品牌锚点保留在色板。
-- 莫奈与预设共用同一引擎生成表面、tint 与数据色。莫奈由锁定的 dynamic_color 1.9.x 只读获取系统颜色；Android 系统核心调色板已由上游校正，保留其 primary／onPrimary 作为 action，不再二次 clamp；系统不可用时回退靛蓝。应用恢复前台时重新读取系统配色。
-- 莫奈开关关闭后恢复手动主题；设置准确说明系统取色或回退状态。选择只影响当前 Gallery 会话。
+- 运行时配色集中在 `GalleryPalette`、`GalleryTokens`、`GallerySchemeTokens` 与 OKLCH 引擎 `gallery_color_engine.dart`；页面只使用角色，不从冻结 fixtures 读取样式。`gallery_monet.dart` 负责从卡面图片采样种子。
+- 六套手动主题保留 blue／teal／violet／rose／amber ID，并新增 mist。亮色使用上表固定 Token；暗色与莫奈同路由 OKLCH 生成。交互主色保证白字（亮）／深字（暗）≥4.5:1。
+- 莫奈跟随当前首页卡片：预设渐变卡面直接提供种子；自选图片在相册选择完成时采样，`完成` 保存后一次性切换主题，裁切拖动不触发重算，取消裁切不改主题。取色失败或无有效颜色时回退用户当前预设（默认靛蓝），不从行程、车站或运营商 Logo 取色。
+- 莫奈开关关闭后恢复手动主题；设置准确说明当前卡片取色或回退状态。选择只影响当前 Gallery 会话。
 - 所有实际使用的小字号文字／背景配对验收对比度至少 4.5:1。状态不得只靠颜色表达。
-- 主题切换逐角色插值，包含成功和警告色，禁止中途整套跳色。
+- 主题切换使用 MaterialApp 240ms／easeInOut 全局过渡，逐角色插值，禁止页面闪白或局部旧色停留；状态栏图标随 Canvas 亮暗同步。
 - 行程线路徽章不跟随本颜色引擎，冻结改造前配色（轨道浅靛蓝底深字、公交深靛蓝底白字、上海 1 号线红，含暗色变体），见行程章节。
 
 ## 排版与布局
@@ -149,7 +152,7 @@
 
 卡片信息底部不再重复管理按钮，管理和导出使用详情标题栏既有入口。原始数据的复制与反馈图标放在本区标题右侧，有 Tooltip 与读屏名称；没有原始数据时只显示缺失说明。
 
-首页左上角品牌标志复用原 SVG 轮廓，线条绑定主色，底色绑定主色容器；跟随亮暗、手动与系统莫奈同步变化。启动图标与官方交通联合标识不跟随页面配色重染。
+首页左上角品牌标志复用原 SVG 轮廓，线条绑定主色，底色绑定主色容器；跟随亮暗、手动与卡片莫奈同步变化。启动图标与官方交通联合标识不跟随页面配色重染。
 
 ## 验收边界
 

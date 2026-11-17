@@ -1,12 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
-import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/gallery/gallery_app.dart';
+import 'package:transit_card_analyzer/gallery/gallery_color_engine.dart';
 import 'package:transit_card_analyzer/gallery/gallery_controller.dart';
 import 'package:transit_card_analyzer/gallery/gallery_data.dart';
 import 'package:transit_card_analyzer/gallery/gallery_design.dart';
@@ -26,14 +25,11 @@ void main() {
         final tokens = light.lerp(dark, progress);
         final shadows = tokens.floatingNavigationShadows;
         expect(shadows, hasLength(2));
-        final tint = Color.alphaBlend(
-          tokens.action.withValues(alpha: .12),
-          Color.lerp(
-            const Color(0xff152d4a),
-            const Color(0xff00030a),
-            progress,
-          )!,
-        );
+        final tint = Color.lerp(
+          const Color(0xff14202e),
+          const Color(0xff000000),
+          progress,
+        )!;
         for (var index = 0; index < shadows.length; index++) {
           final shadow = shadows[index];
           expect(shadow.blurRadius, index == 0 ? 10 : 24);
@@ -311,27 +307,18 @@ void main() {
     },
   );
   testWidgets(
-    'Monet source, brand artwork and manual overrides share the effective scheme',
+    'card Monet source, brand artwork and manual overrides share the scheme',
     (tester) async {
-      var accent = 0xff7c3679;
-      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-        DynamicColorPlugin.channel,
-        (call) async => call.method == DynamicColorPlugin.accentColorMethodName
-            ? accent
-            : null,
-      );
-      addTearDown(
-        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-          DynamicColorPlugin.channel,
-          null,
-        ),
-      );
       await mount(tester);
       GalleryTokens tokens() => Theme.of(
         tester.element(find.byKey(const ValueKey('gallery-brand-mark'))),
       ).extension<GalleryTokens>()!;
       final initial = tokens().action;
       expect(tokens().dynamic, isTrue);
+      expect(
+        initial,
+        GalleryColorEngine.tokens(c.themeSeed, dark: false).primary,
+      );
       final mark = tester.widget<SvgPicture>(
         find.byKey(const ValueKey('gallery-brand-mark')),
       );
@@ -350,11 +337,6 @@ void main() {
       c.update(() => c.monet = true);
       await tester.pumpAndSettle();
       expect(tokens().action, initial);
-      accent = 0xffd15c16;
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      await tester.pumpAndSettle();
-      expect(tokens().action, isNot(initial));
     },
   );
 
@@ -390,56 +372,39 @@ void main() {
       }
     },
   );
-  testWidgets(
-    'Android core palette preserves the OS light and dark primary colors',
-    (tester) async {
-      const tones = [
-        0xff000000,
-        0xff1b1b1b,
-        0xff303030,
-        0xff474747,
-        0xff5e5e5e,
-        0xff777777,
-        0xff919191,
-        0xffababab,
-        0xffc6c6c6,
-        0xffe2e2e2,
-        0xfff1f1f1,
-        0xfffcfcfc,
-        0xffffffff,
-      ];
-      var accentRequests = 0;
-      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-        DynamicColorPlugin.channel,
-        (call) async {
-          if (call.method == DynamicColorPlugin.methodName) {
-            return Int32List.fromList(
-              List<int>.generate(65, (index) => tones[index % tones.length]),
-            );
-          }
-          accentRequests++;
-          return null;
-        },
-      );
-      addTearDown(
-        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-          DynamicColorPlugin.channel,
-          null,
-        ),
-      );
-      c.themeMode = ThemeMode.light;
-      await mount(tester);
-      GalleryTokens tokens() => Theme.of(
-        tester.element(find.byKey(const ValueKey('gallery-brand-mark'))),
-      ).extension<GalleryTokens>()!;
-      expect(tokens().dynamic, isTrue);
-      expect(tokens().action, const Color(0xff5e5e5e));
-      c.update(() => c.themeMode = ThemeMode.dark);
-      await tester.pumpAndSettle();
-      expect(tokens().action, const Color(0xffc6c6c6));
-      expect(accentRequests, 0);
-    },
-  );
+  testWidgets('home card seed drives independent light and dark schemes', (
+    tester,
+  ) async {
+    c.themeMode = ThemeMode.light;
+    await mount(tester);
+    final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(app.themeAnimationDuration, const Duration(milliseconds: 240));
+    expect(app.themeAnimationCurve, Curves.easeInOut);
+    GalleryTokens tokens() => Theme.of(
+      tester.element(find.byKey(const ValueKey('gallery-brand-mark'))),
+    ).extension<GalleryTokens>()!;
+    expect(tokens().dynamic, isTrue);
+    expect(
+      tokens().action,
+      GalleryColorEngine.tokens(c.themeSeed, dark: false).primary,
+    );
+    final lightCanvas = tokens().canvas;
+    c.update(() => c.themeMode = ThemeMode.dark);
+    await tester.pumpAndSettle();
+    expect(
+      tokens().action,
+      GalleryColorEngine.tokens(c.themeSeed, dark: true).primary,
+    );
+    expect(tokens().canvas, isNot(lightCanvas));
+    final blueAction = tokens().action;
+    c.update(() => c.current.face = 'teal');
+    await tester.pumpAndSettle();
+    expect(tokens().action, isNot(blueAction));
+    expect(
+      tokens().action,
+      GalleryColorEngine.tokens(c.themeSeed, dark: true).primary,
+    );
+  });
   testWidgets(
     'all content pages and long balances fit 320dp at twice the font size',
     (tester) async {

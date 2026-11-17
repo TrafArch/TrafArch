@@ -32,7 +32,8 @@ void main() {
           expect(contrast(pair.$1, pair.$2), greaterThanOrEqualTo(4.5));
         }
         expect(t.action, isNot(palette.scheme(!dark).primary));
-        expect(t.raised, isNot(t.surface));
+        expect(t.canvas, isNot(t.surface));
+        expect(t.surface2, isNot(t.surface));
       });
     }
   }

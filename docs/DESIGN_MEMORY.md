@@ -20,6 +20,13 @@
 
 后续优化请先读根 design.md 和本文，不再要求用户重复解释以上原则。带日期的历史设计与交接文档保留原状。
 
+2026-11-17 按 `TrafArch_monet_design` V1.0 重建 2.x 颜色体系（覆盖 2026-11-14 条目的五套色板、系统莫奈与中性表面值）：
+
+- 四层表面：Canvas（页面背景）／Surface（内容卡片、弹窗、悬浮导航，亮色固定 #FFFFFF）／Surface Container 与 High（次级区域、选中态）／Outline Soft、Outline、Strong（分割与边界）。亮色六套预设使用 spec 固定 Token：靛蓝、青绿、藤紫、蔷薇、麦金、新增雾灰；暗色按种子色相独立生成（L 0.19／0.23／0.26／0.30，Outline 0.40），不反转亮色。
+- 莫奈改为跟随当前首页卡片：预设渐变卡面直接给种子；自选图片在相册选择完成时用 `gallery_monet.dart` 有界采样（96px，色相桶按彩度加权），`完成` 保存后一次性切换；裁切拖动不重算，取消不改主题。取色失败或无有效颜色回退当前预设（默认靛蓝），不再读取系统 dynamic_color 壁纸色。
+- 固定中性色 On Surface #202A35／#EEF2F6、On Surface Variant #65717E／#B1BCC7、Muted Text #89939D／#8995A1、Disabled Text #A6AFB8／#697582；语义色 Success #347864、Warning #9A6A25、Error #B45353、Info #4F7098。文字按最极端表面校正到 ≥4.5:1。
+- 主题切换改用 MaterialApp 240ms／easeInOut 全局过渡；阴影中性化，不再混入 action 色；输入框背景 Surface、边框 Outline Soft、聚焦 Primary；弹窗／半模态使用 Surface。数据色与行程徽章冻结规则不变。
+
 2026-11-14 按 `TrafArch_spec_2.2` 重写颜色管理体系与卡片详情（覆盖下文与之冲突的旧配色/胶囊记录）：
 
 - 颜色引擎：新增 `lib/gallery/gallery_color_engine.dart`（OKLCH）。五套预设主题改用规范 Primary／Tint／Dark：靛蓝 #4E7098／#D5E4F1／#344B68、青绿 #4F8F87／#DCEFEA／#315F5A、藤紫 #8275A8／#E9E3F2／#51466F、蔷薇 #B87583／#F4E3E7／#794653、麦金 #B58A4A／#F4EBD8／#72562E；靛蓝保留 App Icon 锚点。共享中性色亮色 canvas #F7F8FA／card #FFFFFF／secondary #F0F2F5／tertiary #E9EDF2／border #E3E7EC、#CDD4DD／text #29313D、#66717F；暗色用独立表面阶梯，不反转亮色。

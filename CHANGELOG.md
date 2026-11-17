@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-11-17 — 2.x Monet Adaptive Canvas 颜色体系
+
+- 按 `TrafArch_monet_design` V1.0 重建独立 2.x Gallery 的颜色管理：新增四层表面 Token（Canvas／Surface／Surface Container／Container High 与三级 Outline），六套预设改为 spec 固定亮色值并新增雾灰；暗色按种子色相独立生成，不再反转亮色。
+- 莫奈改为跟随当前首页卡片：预设渐变卡面直接提供种子；自选图片在相册选择完成时有界采样（96px、色相桶按彩度加权），`完成` 保存后一次性切换；裁切拖动不重算，取消不改主题。取色失败或无有效颜色回退当前预设（默认靛蓝），不再读取系统壁纸色。
+- 同步更新主操作、卡片、导航、弹窗、输入框、提示与状态栏角色；文字与语义色重新校正到 ≥4.5:1，主题切换改为 240ms／easeInOut 全局过渡，阴影中性化。`design.md` 与 `docs/DESIGN_MEMORY.md` 已回写新规则。
+- 回归：`gallery_monet_theme_test`、`gallery_motion_test`、`gallery_navigation_design_test`、`gallery_wallet_interactions_test`、`gallery_design_test`、`gallery_ui_test`、`gallery_face_crop_test`、`gallery_home_flow_test`、`gallery_balance_presentation_test` 逐文件通过；`flutter analyze` 无 error／warning，仅保留既有 Material 弃用与样式 info。未改数据库与参考数据资产。
+- 构建开发者原签名 arm64-v8a Release APK `1.0.8-beta.2+2192`（33.7 MiB，入口 `lib/main_gallery.dart`）：包名 `com.kajolno.TrafArch`、显示名 `TrafArch`、Android `versionCode` `2192`、仅 `arm64-v8a`、非 debuggable；证书 SHA-256 `3b86c431…1312b5` 与既有原签名一致。AppInfo 保留 `2192`，pubspec 自动预留 `2193`。APK 位于 `build/gallery/release-2192/`，SHA-256 `cc809592…43f40a`；TU／CU／manifest 包内哈希与源码一致；未连接设备安装。此前误按 4xxx 记录的构建号已作废，旧产物副本移至 `build/gallery/discarded-4192/`，不得安装。
+- 旧 1.x 界面与 `dynamic_color` 依赖保留，本次只替换 2.x Gallery 的取色来源。
+- 修复 2.x 滑动／转场掉帧：Monet 改写中保留上游 `885c511` 的掉帧修复并适配新主题体系——`GalleryTokens`／`GallerySchemeTokens` 增加值相等（含新增 `roles`）、按（数据源、明暗、调色板、种子色）复用同一 `ThemeData`、被不透明路由遮挡的页面保留上次构建、半模态下滑转场补 `RepaintBoundary`，避免 240 ms 主题交叉淡化被每次通知反复重启。回归：`gallery_motion_test`（含两项掉帧断言）、`gallery_monet_theme_test`、`gallery_wallet_interactions_test`、`gallery_navigation_design_test`、`gallery_design_test` 全部通过；`flutter analyze` 无 error／warning。
+
 ## 2026-11-16 — 致谢页调整贡献者顺序与赞助商称谓
 
 - 2.x 设置致谢贡献者名单中 Makitoid 由第五位调整为第三位（kajolno、Nightingale0504 之后）；设置页收起态叠放的头像仍取名单前三位。

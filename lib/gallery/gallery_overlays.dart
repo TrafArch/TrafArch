@@ -514,6 +514,7 @@ extension _GalleryOverlays on _GalleryViewState {
                             _selectedCard.imageSize = null;
                             _selectedCard.detailCrop = const GalleryFaceCrop();
                             _selectedCard.listCrop = const GalleryFaceCrop();
+                            _selectedCard.monetSeed = null;
                             c.faceCrop = null;
                           }),
                           style: TextButton.styleFrom(
