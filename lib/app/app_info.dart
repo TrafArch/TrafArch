@@ -12,7 +12,7 @@ class AppInfo {
   static String get appName => appNameZh.isEmpty ? appNameEn : appNameZh;
 
   static const String version = '1.0.8-beta.2';
-  static const String buildNumber = '4190';
+  static const String buildNumber = '4199';
 
   /// Flutter arm64 拆包追加到 Android versionCode 的 ABI 偏移。
   static const int _splitAbiVersionCodeOffset = 2000;

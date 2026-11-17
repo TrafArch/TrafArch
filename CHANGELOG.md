@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-11-17 — 依赖升级、第三方 SDK 披露与贡献者网址修正
+
+- 升级可解析依赖：`flutter_svg` 2.3.4→2.4.0（直接依赖）；锁文件内 `cupertino_ui` 1.1.6→1.1.7、`material_ui` 1.11.0→1.11.1、`url_launcher_android` 6.3.33→6.3.35。`dynamic_color` 保持 1.9.x（AGENTS 锁定内置 Material，迁移 material_ui 是整体性工作，不逐点升级）；`built_collection`、`equatable`、`xml`、`material_color_utilities`、`test_api` 仍受当前 Flutter／Dart SDK 或上游约束（motor、vector_graphics_compiler、flutter_test）限制，未用 dependency_overrides 强推。
+- 第三方 SDK 披露：1.x 关于页与 2.x 设置“关于 TrafArch”新增“第三方 SDK”入口，列明 Translucent Component Kit 的提供方、使用目的、处理的个人信息与所需权限（均不涉及）及隐私声明／合规说明链接；2.x 同步新增 `GalleryOverlay.sdkDisclosure` 弹层。仓库内没有 `trafarch.top` 隐私政策站点源码，线上隐私政策页仍需站点侧同步同一段披露。
+- 致谢：DearVa 的网址修正为 `https://github.com/DearVa`。
+- 回归：`gallery_ui_test` 因新增设置行在滚动后补 `ensureVisible`；新增 `gallery_sdk_disclosure_test`；全量 2900 项通过、2 项跳过；`flutter analyze` 无 error／warning（159 条既有 info）。
+- 构建原签名 arm64-v8a Release（入口 `lib/main_gallery.dart`）：构建号 `2199`、Android `versionCode` `4199`、版本名 `1.0.8-beta.2`、包名 `com.kajolno.TrafArch`、显示名 `TrafArch`、非 debuggable、仅 `arm64-v8a`；开发者原签名、ZIP CRC、ZIP 与原生库 16KiB 对齐、Firebase 自动组件缺席、Gallery 资产齐全均通过。APK 35,482,002 字节，SHA-256 `a25e5129…5e3589ca31`，位于 `build/gallery/release-2199/`；AppInfo 保留 `4199`，pubspec 预留 `4200`。未安装设备。
+
+## 2026-11-17 — 2.x 底栏振动、荣耀通透原生玻璃与行程交易后余额
+
+- 悬浮与下沉两种底栏切换主页面时统一调用系统振动 `HapticFeedback.selectionClick`；重复点击当前页不振动、不产生切换。两种底栏共用同一导航项实现。
+- 适配 MagicOS 通透组件：新增只读通道 `transit_card_analyzer/translucency` 的 `getSupport`，原生优先调用 SDK 的 `TransparencyCompat.isSupportTransparencyView()`，并以系统资源 `androidhnext:launcher_transparency_mode`（3 表示支持）兜底；会话内只探测一次。支持通透时，底栏通过平台视图 `trafarch/translucent_glass` 承载原生 `HnVisualEffectLayout`（SMALL + GENERAL、跟随系统、关闭原生交互动效、按 dp 圆角），Flutter 仅叠加约 24%／28%（悬浮）或 30%／34%（下沉）的可读染色，标签、胶囊动画与手势仍由 Flutter 负责；平台视图创建失败或非通透设备回退 Flutter 材质（悬浮 62%／52% + sigma 22、顶部高光，下沉 70%／58% + sigma 18、1dp 顶线），无支持时保持 `design.md` 的 78%／sigma 14dp 与贴底表面。系统导航区取同色不透明混合值，避免透明色被系统二次处理。
+- 引入荣耀 Translucent Component Kit `11.0.0.134`：AAR 位于 `android/app/libs/hnvisualeffect-11.0.0.134.aar`，由 `android/app/build.gradle.kts` 引用，并在 Release 产物中确认 `HnVisualEffectLayout` 已打包。官网页面标注 SHA256 `3146aff0…cd5352` 与 CDN 实际文件 `60fda147…42f4d8fc` 不一致（文件 MD5 与 CDN ETag 一致、压缩包校验通过），已记录待荣耀确认。AAR 无权限、无网络、无后台服务；按 SDK 合规说明，正式分发前需在应用隐私政策中披露 Translucent Component Kit（不收集个人信息、无权限），隐私政策站点在仓库外，需另行更新。
+- 行程详情弹层在“交易金额”下新增“交易后余额”，样例值写入 `assets/gallery/fixtures.json`（上海样例与卡片余额 86.50 连续）；进站事件不显示该行，缺失值显示“未知”，不据此推算真实余额。
+- 回归：新增 `gallery_navigation_glass_test`（8 项：两种底栏振动、材质、原生探测与原生材质）与 `gallery_trip_sheet_test`（2 项）；`gallery_navigation_design_test`、`gallery_navigation_refinements_test`、`gallery_design_test`、`gallery_ui_test`、`gallery_motion_test`、`gallery_window_layout_test` 逐文件通过；全量 2899 项通过、2 项跳过；`flutter analyze` 无 error／warning（158 条既有 Material 弃用 info）。
+- 构建原签名 arm64-v8a Release APK（入口 `lib/main_gallery.dart`）：构建号 `2198`、Android `versionCode` `4198`、版本名 `1.0.8-beta.2`、包名 `com.kajolno.TrafArch`、显示名 `TrafArch`、非 debuggable、仅 `arm64-v8a`；开发者原签名校验通过，ZIP CRC、ZIP 与全部原生库的 16KiB 对齐通过，Firebase 自动组件缺席，Gallery 资产齐全。APK 35,481,866 字节，SHA-256 `8bb67059…04e497d9`，位于 `build/gallery/release-2198/`；AppInfo 保留 `4198`，pubspec 自动预留 `4199`。TU／CU／manifest SHA256 未变（`517c59f3…ada6c53`／`77ba3ad4…1580c6ed3`／`37cfdbdc…cc04f23c0`）。未安装设备；原生玻璃在荣耀真机上的实际观感仍待验收。
+
 ## 2026-11-17 — 2.x Monet Adaptive Canvas 颜色体系
 
 - 按 `TrafArch_monet_design` V1.0 重建独立 2.x Gallery 的颜色管理：新增四层表面 Token（Canvas／Surface／Surface Container／Container High 与三级 Outline），六套预设改为 spec 固定亮色值并新增雾灰；暗色按种子色相独立生成，不再反转亮色。
