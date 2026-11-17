@@ -37,6 +37,7 @@ enum GalleryOverlay {
   rawFeedback,
   contributors,
   licenseDetail,
+  sdkDisclosure,
 }
 
 enum GalleryReadState { unread, reading, success, failed }

@@ -3,6 +3,8 @@ package com.kajolno.TrafArch
 import android.content.Intent
 import com.kajolno.TrafArch.browser.CustomTabsHandler
 import com.kajolno.TrafArch.nfc.NfcChannelHandler
+import com.kajolno.TrafArch.platform.TranslucencyChannelHandler
+import com.kajolno.TrafArch.platform.TranslucentGlassViewFactory
 import com.kajolno.TrafArch.qr.QrImageHandler
 import com.kajolno.TrafArch.storage.FileExportHandler
 import com.kajolno.TrafArch.storage.ArchiveDocumentHandler
@@ -16,6 +18,7 @@ class MainActivity : FlutterActivity() {
     private var fileExport: FileExportHandler? = null
     private var browser: CustomTabsHandler? = null
     private var archiveDocuments: ArchiveDocumentHandler? = null
+    private var translucency: TranslucencyChannelHandler? = null
     private var foreground = false
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -28,6 +31,10 @@ class MainActivity : FlutterActivity() {
         fileExport = FileExportHandler(this, messenger)
         browser = CustomTabsHandler(this, messenger)
         archiveDocuments = ArchiveDocumentHandler(this, messenger)
+        translucency = TranslucencyChannelHandler(this, messenger)
+        flutterEngine.platformViewsController.registry.registerViewFactory(
+            "trafarch/translucent_glass", TranslucentGlassViewFactory(),
+        )
         if (foreground) nfc?.onResume()
     }
 
@@ -74,10 +81,12 @@ class MainActivity : FlutterActivity() {
         fileExport?.dispose()
         browser?.dispose()
         archiveDocuments?.dispose()
+        translucency?.dispose()
         nfc = null
         qrImage = null
         fileExport = null
         browser = null
         archiveDocuments = null
+        translucency = null
     }
 }

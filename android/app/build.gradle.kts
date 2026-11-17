@@ -240,6 +240,8 @@ flutter {
 }
 
 dependencies {
+    // Honor Translucent Component Kit (MagicOS 通透) — see CHANGELOG 2026-11-17.
+    implementation(files("libs/hnvisualeffect-11.0.0.134.aar"))
     // Match url_launcher_android's version; the application directly uses this API.
     implementation("androidx.browser:browser:1.9.0")
     testImplementation("junit:junit:4.13.2")

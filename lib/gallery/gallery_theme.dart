@@ -351,3 +351,65 @@ class GalleryTokens extends ThemeExtension<GalleryTokens> {
           elevationDarkness: _depth + (other._depth - _depth) * t,
         );
 }
+
+/// Material for the two 2.x bottom bars on devices that expose MagicOS
+/// translucent components.
+///
+/// Honor's Translucent Component Kit paints `HnVisualEffectLayout` with
+/// `HnGlassEffect` natively; a widget painted by Flutter cannot be wrapped by
+/// that container, so the bars approximate the same idea: a lighter fill, a
+/// stronger backdrop blur and a top sheen, while keeping the frozen bar
+/// geometry, radius, shadow and border rules from `design.md`. Callers only
+/// use it when [translucent] is true, so every other device keeps the exact
+/// material asserted by the design tests.
+class GalleryGlass {
+  const GalleryGlass({
+    required this.fill,
+    required this.blurSigma,
+    required this.sheen,
+    this.native = false,
+  });
+
+  final Color fill;
+  final double blurSigma;
+
+  /// Top highlight of the glass; fades out before the labels.
+  final Color sheen;
+
+  /// True when the bar hosts Honor's native `HnVisualEffectLayout`; the
+  /// Flutter layer then only adds a readable tint and no second blur.
+  final bool native;
+
+  static GalleryGlass? forBar(
+    GalleryTokens t, {
+    required bool translucent,
+    required bool docked,
+    bool native = false,
+  }) {
+    if (!translucent) return null;
+    final light = !t.dark;
+    if (native) {
+      // The native material supplies blur and tint; this fill only keeps the
+      // labels readable if a device degrades the effect to a solid layer.
+      return GalleryGlass(
+        fill: t.surface.withValues(
+          alpha: docked ? (light ? .30 : .34) : (light ? .24 : .28),
+        ),
+        blurSigma: 0,
+        sheen: light
+            ? Colors.white.withValues(alpha: .32)
+            : Colors.white.withValues(alpha: .06),
+        native: true,
+      );
+    }
+    return GalleryGlass(
+      fill: t.surface.withValues(
+        alpha: docked ? (light ? .70 : .58) : (light ? .62 : .52),
+      ),
+      blurSigma: docked ? 18 : 22,
+      sheen: light
+          ? Colors.white.withValues(alpha: .38)
+          : Colors.white.withValues(alpha: .07),
+    );
+  }
+}

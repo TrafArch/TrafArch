@@ -48,6 +48,33 @@ class _AboutPageState extends State<AboutPage> {
     }
   }
 
+  Future<void> _openSdkDisclosure() => showDialog<void>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('第三方 SDK'),
+      content: const SingleChildScrollView(
+        child: Text(
+          'Translucent Component Kit\n'
+          '提供方：荣耀终端股份有限公司\n'
+          '使用目的：提供通透控件能力（底栏玻璃材质）\n'
+          '处理的个人信息：不涉及\n'
+          '所需权限：不涉及\n\n'
+          '仅在设备支持 MagicOS 通透时调用该 SDK 绘制底栏玻璃，不采集、不上传任何数据。\n\n'
+          'SDK 隐私声明：\n'
+          'https://developer.honor.com/cn/docs/translucent/guides/sdk-privacy-policy\n\n'
+          'SDK 合规使用说明：\n'
+          'https://developer.honor.com/cn/docs/translucent/guides/sdk-security-compliance',
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(),
+          child: const Text('关闭'),
+        ),
+      ],
+    ),
+  );
+
   Future<void> _checkUpdates() async {
     if (_checking || !widget.updates.isConfigured) return;
     setState(() => _checking = true);
@@ -162,6 +189,16 @@ class _AboutPageState extends State<AboutPage> {
                     title: const Text('隐私政策'),
                     enabled: !_openingPrivacy,
                     onTap: _openingPrivacy ? null : _openPrivacyPolicy,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.extension_outlined),
+                    title: const Text('第三方 SDK'),
+                    subtitle: const Text('查看荣耀通透控件能力的信息披露'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: _openSdkDisclosure,
                   ),
                 ),
                 const SizedBox(height: 24),

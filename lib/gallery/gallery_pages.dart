@@ -1354,6 +1354,13 @@ extension _GalleryPages on _GalleryViewState {
             link: AppSupport.privacy,
           ),
           const Divider(),
+          _settingRow(
+            '第三方 SDK',
+            () => c.showOverlay(GalleryOverlay.sdkDisclosure),
+            subtitle: '荣耀通透控件能力的信息披露',
+            icon: Icons.extension_outlined,
+          ),
+          const Divider(),
           _contributorRow(),
         ],
       ),

@@ -20,6 +20,12 @@
 
 后续优化请先读根 design.md 和本文，不再要求用户重复解释以上原则。带日期的历史设计与交接文档保留原状。
 
+2026-11-17 2.x 底栏振动与荣耀通透材质（在 `TrafArch_monet_design` V1.0 之后追加）：
+
+- 悬浮与下沉两种底栏切换主页面时统一调用系统振动接口 `HapticFeedback.selectionClick`；点击当前页不振动、不产生切换。
+- 通过只读探测 `androidhnext:launcher_transparency_mode == 3` 判断 MagicOS 通透支持；支持时两种底栏换成更透的玻璃材质与更强背景模糊（悬浮约 62%／52%、sigma 22dp 并带顶部高光；下沉约 70%／58%、sigma 18dp、顶部 1dp 细线），其余设备严格保持 design.md 的 78% 不透明度与 sigma 14dp。
+- 荣耀 `HnVisualEffectLayout`／`HnGlassEffect` 所属的 Translucent Component Kit `11.0.0.134` AAR 已放入 `android/app/libs` 并由 Gradle 引用；原生探测优先用 SDK 的 `TransparencyCompat.isSupportTransparencyView()`，系统资源仅作兜底。支持通透时底栏用平台视图承载原生玻璃，Flutter 只保留可读染色、标签与交互；平台视图失败或非通透设备回退 Flutter 近似材质。原生玻璃的真机效果仍需荣耀设备验收。
+
 2026-11-17 按 `TrafArch_monet_design` V1.0 重建 2.x 颜色体系（覆盖 2026-11-14 条目的五套色板、系统莫奈与中性表面值）：
 
 - 四层表面：Canvas（页面背景）／Surface（内容卡片、弹窗、悬浮导航，亮色固定 #FFFFFF）／Surface Container 与 High（次级区域、选中态）／Outline Soft、Outline、Strong（分割与边界）。亮色六套预设使用 spec 固定 Token：靛蓝、青绿、藤紫、蔷薇、麦金、新增雾灰；暗色按种子色相独立生成（L 0.19／0.23／0.26／0.30，Outline 0.40），不反转亮色。

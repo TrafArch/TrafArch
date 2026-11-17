@@ -70,6 +70,8 @@ void main() {
           )
           .last,
     );
+    await tester.ensureVisible(find.text('启用新界面（beta）'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('启用新界面（beta）'));
     await tester.pump();
     expect(disabled, isTrue);

@@ -924,13 +924,22 @@ extension _GalleryComponents on _GalleryViewState {
     ];
     final selectedIndex = pages.indexOf(c.mainPage);
     final layout = _navLayout;
+    final glass = GalleryGlass.forBar(
+      t,
+      translucent: GalleryTranslucency.of(context),
+      native: GalleryTranslucency.nativeOf(context),
+      docked: c.docked,
+    );
+    final nativeGlass = glass?.native ?? false;
     final windowWidth =
         MediaQuery.sizeOf(context).width -
         MediaQuery.paddingOf(context).horizontal;
     // 4 * 48dp targets + 10dp track padding + three 5dp gaps.
     final side = ((windowWidth - 217) / 2).clamp(0.0, 16.0);
-    final floatingRadius = BorderRadius.circular(31 + _extraTextScale * 10);
-    final bar = Container(
+    final radiusDp = c.docked ? 0.0 : 31 + _extraTextScale * 10;
+    final floatingRadius = BorderRadius.circular(radiusDp);
+    final barBody = Container(
+      key: const ValueKey('nav-bar'),
       height: layout.contentHeight,
       padding: EdgeInsets.fromLTRB(
         c.docked ? 8 : 5,
@@ -939,10 +948,15 @@ extension _GalleryComponents on _GalleryViewState {
         c.docked ? 0 : 5,
       ),
       decoration: BoxDecoration(
-        color: c.docked
-            ? t.dockedNavigationSurface
-            : t.surface.withValues(alpha: .78),
+        color: nativeGlass
+            ? null
+            : c.docked
+            ? (glass?.fill ?? t.dockedNavigationSurface)
+            : (glass?.fill ?? t.surface.withValues(alpha: .78)),
         borderRadius: c.docked ? null : floatingRadius,
+        border: c.docked && glass != null && !nativeGlass
+            ? Border(top: BorderSide(color: t.line))
+            : null,
       ),
       foregroundDecoration: c.docked
           ? null
@@ -950,72 +964,144 @@ extension _GalleryComponents on _GalleryViewState {
               borderRadius: floatingRadius,
               border: t.floatingNavigationBorder,
             ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final gap = c.docked ? 0.0 : 5.0;
-          final itemWidth =
-              (constraints.maxWidth - gap * (pages.length - 1)) / pages.length;
-          final showLabels = names.every(
-            (name) =>
-                _measureTextWidth(name, GalleryTypography.navigation) + 8 <=
-                itemWidth,
-          );
-          return Stack(
-            children: [
-              if (!c.docked && selectedIndex >= 0)
-                AnimatedPositioned(
-                  duration: _reduceMotion
-                      ? Duration.zero
-                      : _GalleryMotion.capsule,
-                  curve: _GalleryMotion.curve,
-                  left: selectedIndex * (itemWidth + gap),
-                  top: 0,
-                  bottom: 0,
-                  width: itemWidth,
-                  child: IgnorePointer(
-                    child: DecoratedBox(
-                      key: const ValueKey('nav-capsule'),
-                      decoration: BoxDecoration(
-                        color: t.tone,
-                        borderRadius: BorderRadius.circular(
-                          25 + _extraTextScale * 10,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Glass sheen sits behind the labels; a foreground gradient would
+          // tint the icons in both themes.
+          if (!c.docked && glass != null)
+            IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [glass.sheen, glass.sheen.withValues(alpha: 0)],
+                    stops: const [0, .55],
+                  ),
+                ),
+              ),
+            ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final gap = c.docked ? 0.0 : 5.0;
+              final itemWidth =
+                  (constraints.maxWidth - gap * (pages.length - 1)) /
+                  pages.length;
+              final showLabels = names.every(
+                (name) =>
+                    _measureTextWidth(name, GalleryTypography.navigation) + 8 <=
+                    itemWidth,
+              );
+              return Stack(
+                children: [
+                  if (!c.docked && selectedIndex >= 0)
+                    AnimatedPositioned(
+                      duration: _reduceMotion
+                          ? Duration.zero
+                          : _GalleryMotion.capsule,
+                      curve: _GalleryMotion.curve,
+                      left: selectedIndex * (itemWidth + gap),
+                      top: 0,
+                      bottom: 0,
+                      width: itemWidth,
+                      child: IgnorePointer(
+                        child: DecoratedBox(
+                          key: const ValueKey('nav-capsule'),
+                          decoration: BoxDecoration(
+                            color: t.tone,
+                            borderRadius: BorderRadius.circular(
+                              25 + _extraTextScale * 10,
+                            ),
+                          ),
                         ),
                       ),
                     ),
+                  Row(
+                    children: [
+                      for (var i = 0; i < pages.length; i++) ...[
+                        if (i > 0 && !c.docked) const SizedBox(width: 5),
+                        Expanded(
+                          child: _GalleryNavigationItem(
+                            key: ValueKey('nav-${pages[i].name}'),
+                            label: names[i],
+                            icon: icons[i],
+                            selected: selectedIndex == i,
+                            docked: c.docked,
+                            tokens: t,
+                            reduceMotion: _reduceMotion,
+                            showLabel: showLabels,
+                            onTap: () {
+                              // Page switches acknowledge through the system
+                              // haptic API; re-tapping the current page is inert.
+                              if (pages[i] != c.mainPage) {
+                                HapticFeedback.selectionClick();
+                              }
+                              c.navigate(pages[i]);
+                            },
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                ),
-              Row(
-                children: [
-                  for (var i = 0; i < pages.length; i++) ...[
-                    if (i > 0 && !c.docked) const SizedBox(width: 5),
-                    Expanded(
-                      child: _GalleryNavigationItem(
-                        key: ValueKey('nav-${pages[i].name}'),
-                        label: names[i],
-                        icon: icons[i],
-                        selected: selectedIndex == i,
-                        docked: c.docked,
-                        tokens: t,
-                        reduceMotion: _reduceMotion,
-                        showLabel: showLabels,
-                        onTap: () => c.navigate(pages[i]),
-                      ),
-                    ),
-                  ],
                 ],
-              ),
-            ],
-          );
-        },
+              );
+            },
+          ),
+        ],
       ),
     );
+    final bar = nativeGlass
+        ? Stack(
+            fit: StackFit.passthrough,
+            children: [
+              // The native glass sits below a thin readable tint; Flutter
+              // labels are composited in the layer above the platform view.
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: AndroidView(
+                    viewType: 'trafarch/translucent_glass',
+                    creationParams: {'radius': radiusDp},
+                    creationParamsCodec: const StandardMessageCodec(),
+                  ),
+                ),
+              ),
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: glass!.fill,
+                      borderRadius: c.docked ? null : floatingRadius,
+                      border: c.docked
+                          ? Border(top: BorderSide(color: t.line))
+                          : null,
+                    ),
+                  ),
+                ),
+              ),
+              barBody,
+            ],
+          )
+        : barBody;
     if (c.docked) {
+      final dockedFill = glass?.fill ?? t.dockedNavigationSurface;
+      final content = glass == null || nativeGlass
+          ? bar
+          : ClipRect(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(
+                  sigmaX: glass.blurSigma,
+                  sigmaY: glass.blurSigma,
+                ),
+                child: bar,
+              ),
+            );
       return ColoredBox(
         key: const ValueKey('gallery-docked-bar'),
-        color: t.dockedNavigationSurface,
+        color: dockedFill,
         child: Padding(
           padding: EdgeInsets.only(bottom: layout.bottomSpace),
-          child: GalleryReadingSurface(child: bar),
+          child: GalleryReadingSurface(child: content),
         ),
       );
     }
@@ -1032,13 +1118,19 @@ extension _GalleryComponents on _GalleryViewState {
             borderRadius: floatingRadius,
             boxShadow: t.floatingNavigationShadows,
           ),
-          child: ClipRRect(
-            borderRadius: floatingRadius,
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-              child: bar,
-            ),
-          ),
+          child: nativeGlass
+              ? bar
+              : ClipRRect(
+                  borderRadius: floatingRadius,
+                  child: BackdropFilter(
+                    key: const ValueKey('nav-glass'),
+                    filter: ImageFilter.blur(
+                      sigmaX: glass?.blurSigma ?? 14,
+                      sigmaY: glass?.blurSigma ?? 14,
+                    ),
+                    child: bar,
+                  ),
+                ),
         ),
       ),
     );
