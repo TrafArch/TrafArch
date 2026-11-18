@@ -68,7 +68,7 @@
 
 主界面与弹窗的文字／确认／取消按钮共用 14dp 圆角定义，禁用状态也保持相同轮廓。按钮按压继续使用平面反馈；底栏文字与图标保持单层绘制，不给字形加投影。悬浮底栏亮色模式无框线，使用接触影 y=2、blur=10、alpha=.16 与扩散影 y=8、blur=24、alpha=.14，加强外轮廓层次；暗色模式无阴影，使用 1dp 主题细边线。两种模式均保留 78% 不透明度表面及 sigmaX／sigmaY 均为 14dp 的背景模糊，主题切换时平滑过渡边线和阴影强度。下沉底栏保持贴底表面，两种底栏点击均无黑色涟漪；键盘焦点仍有清晰描边。
 
-在支持 MagicOS 通透的设备上（SDK `TransparencyCompat.isSupportTransparencyView()`，系统资源 `androidhnext:launcher_transparency_mode` 为 3 时兜底），两种底栏改用更透的玻璃材质：优先由原生 `HnVisualEffectLayout` 平台视图绘制玻璃背景（悬浮栏圆角随底栏，下沉栏直角），Flutter 在其上叠加约 24%／28%（悬浮）或 30%／34%（下沉）的可读染色，并保留图标、文字、胶囊动画与全部点击交互；PlatformView 不可用或原生效果创建失败时回退 Flutter 材质——悬浮栏表面约 62%／52%（亮／暗）、sigma 22dp，顶部加一道随主题的玻璃高光；下沉栏表面约 70%／58%、sigma 18dp，顶部 1dp 细线。底部系统导航区取同色混合后的不透明值。无通透支持的设备保持上述 78%／14dp 与贴底表面。荣耀 `HnVisualEffectLayout`／`HnGlassEffect` 的原生 AAR（`android/app/libs/hnvisualeffect-11.0.0.134.aar`）已随工程内置；能力探测只读，不联网、不改系统设置。两种底栏的页面切换统一调用系统振动 `HapticFeedback.selectionClick`，重复点击当前页不振动。
+两种底栏的页面切换统一调用系统振动 `HapticFeedback.selectionClick`，重复点击当前页不振动。
 
 ## 菜单与主页面交互
 

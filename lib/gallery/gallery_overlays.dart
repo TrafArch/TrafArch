@@ -156,7 +156,6 @@ extension _GalleryOverlays on _GalleryViewState {
     GalleryOverlay.rawFeedback => '反馈内容预览',
     GalleryOverlay.contributors => '贡献者',
     GalleryOverlay.licenseDetail => '许可证详情',
-    GalleryOverlay.sdkDisclosure => '第三方 SDK',
   };
 
   Widget _overlayBody(
@@ -248,42 +247,6 @@ extension _GalleryOverlays on _GalleryViewState {
     ),
     GalleryOverlay.contributors => _contributorSheetBody(scrollController!),
     GalleryOverlay.licenseDetail => _licenseDetailSheetBody(scrollController!),
-    GalleryOverlay.sdkDisclosure => Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _text(
-          'Translucent Component Kit',
-          role: GalleryTypography.card,
-          weight: FontWeight.w600,
-        ),
-        _gap(4),
-        _text('荣耀终端股份有限公司', role: GalleryTypography.caption, color: t.muted),
-        _gap(12),
-        _kv('使用目的', '提供通透控件能力（底栏玻璃材质）'),
-        _kv('处理的个人信息', '不涉及'),
-        _kv('所需权限', '不涉及'),
-        _gap(14),
-        _text(
-          '仅在设备支持 MagicOS 通透时调用该 SDK 绘制底栏玻璃，不采集、不上传任何数据。',
-          role: GalleryTypography.caption,
-          color: t.muted,
-        ),
-        _gap(12),
-        _text('SDK 隐私声明', role: GalleryTypography.label, color: t.muted),
-        _text(
-          'https://developer.honor.com/cn/docs/translucent/guides/sdk-privacy-policy',
-          role: GalleryTypography.caption,
-          mono: true,
-        ),
-        _gap(10),
-        _text('SDK 合规使用说明', role: GalleryTypography.label, color: t.muted),
-        _text(
-          'https://developer.honor.com/cn/docs/translucent/guides/sdk-security-compliance',
-          role: GalleryTypography.caption,
-          mono: true,
-        ),
-      ],
-    ),
   };
 
   Widget _gallerySheet(GalleryOverlay type) => _GallerySheet(

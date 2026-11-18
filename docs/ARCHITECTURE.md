@@ -40,10 +40,6 @@ Android 主 Activity 显式声明 `resizeableActivity=true`，沿用 Flutter emb
 
 `AppDependencies` 将 TRIM 与 `WidgetsBindingObserver.didHaveMemoryPressure` 统一为可重建缓存清理；不销毁借给当前展示的参考库连接，不删除原始帧／日志／未保存结果。KILL 同步失效当前读卡代次，发起但不等待物理 NFC 关闭；现场写入、诊断及已接受档案操作使用独立 1.8 秒等待预算，超时如实返回失败。恢复启动就绪前不自动扫描。恢复主 Tab、设置／二维码／档案详情入口及行程筛选；临时弹窗返回父页面，不恢复相机或 NFC 句柄。交通卡沿用捕获快照的历史展示器，FeliCa 保留已读字段与物理证据，不重跑协议、匹配或自动归档。恢复文件保留快照原文；待保存内容由恢复面板显式确认，沿用原读取时间和捕获解析版本，新档案继续执行既有保存观察元数据策略。
 
-## 通透材质能力探测
-
-2.x 底栏经独立通道 `transit_card_analyzer/translucency` 的 `getSupport` 询问设备是否暴露 MagicOS 通透组件。工程内置荣耀 Translucent Component Kit `11.0.0.134`（`android/app/libs/hnvisualeffect-11.0.0.134.aar`），原生优先调用 SDK 的 `TransparencyCompat.isSupportTransparencyView()`，并以系统资源 `androidhnext:launcher_transparency_mode`（3 表示支持）兜底；资源缺失或类型异常时回落为 false。探测不初始化渲染、不联网、不写系统设置。Dart 侧 `TranslucencyPlatform` 只在 Android 调用该通道，`GalleryApp` 每会话探测一次，通过 `GalleryTranslucency` 下发给悬浮与下沉两种底栏。支持时底栏通过平台视图 `trafarch/translucent_glass` 承载原生 `HnVisualEffectLayout`（SMALL + GENERAL、跟随系统、关闭原生交互动效、按 dp 传入圆角），Flutter 只叠加可读染色并保留标签、动画与手势；平台视图创建失败或非 Android 时回退 Flutter 材质。页面切换振动直接调用系统 `HapticFeedback.selectionClick`，不经过原生通道，也不新增权限。
-
 ## JSON 档案与文件交换
 
 `CardArchiveDocument` v1 是按卡片保存的完整 JSON 表示；数据库 v7 的 `archive_documents` 保存文档，原摘要、批次和观察时间表继续承担索引及事务写入。升级在同一事务内补齐旧档案，保留读取快照 v1/v2/v3 原文；文档格式版本、SQLite schema 与解析版本分别演进。旧调用方直接写索引时由触发器标记文档过期，仓库读取前事务刷新，保留导入行和未知扩展。

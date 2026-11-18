@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-18 — 移除荣耀通透组件
+
+- 移除荣耀通透组件整条链路：删除内置 `hnvisualeffect-11.0.0.134.aar` 与 Gradle 引用、原生 `transit_card_analyzer/translucency` 通道与 `trafarch/translucent_glass` 平台视图、Dart `TranslucencyPlatform`／`GalleryTranslucency` 探测、`GalleryGlass` 与底栏原生玻璃分支、2.x 设置与 1.x 关于页的第三方 SDK 披露入口及相关测试；底栏恢复 `design.md` 的 78% 表面与 sigma 14dp 背景模糊，下沉底栏恢复贴底表面。底栏振动、行程交易后余额与贡献者改动保留。
+- 回归：`gallery_navigation_glass_test` 3 项、`gallery_navigation_design_test` 13 项、`gallery_ui_test` 12 项、`gallery_settings_sheet_test` 5 项、`gallery_design_test` 17 项、`gallery_trip_sheet_test` 2 项、`gallery_motion_test` 28 项、`gallery_navigation_refinements_test` 4 项、`gallery_window_layout_test` 8 项、`updates_test` 20 项、`feedback_page_test` 17 项逐文件通过；`flutter analyze` 无 error／warning（158 条既有 info）。未改数据库与参考数据资产。
+
 ## 2026-11-17 — 依赖升级、第三方 SDK 披露与贡献者网址修正
 
 - 升级可解析依赖：`flutter_svg` 2.3.4→2.4.0（直接依赖）；锁文件内 `cupertino_ui` 1.1.6→1.1.7、`material_ui` 1.11.0→1.11.1、`url_launcher_android` 6.3.33→6.3.35。`dynamic_color` 保持 1.9.x（AGENTS 锁定内置 Material，迁移 material_ui 是整体性工作，不逐点升级）；`built_collection`、`equatable`、`xml`、`material_color_utilities`、`test_api` 仍受当前 Flutter／Dart SDK 或上游约束（motor、vector_graphics_compiler、flutter_test）限制，未用 dependency_overrides 强推。

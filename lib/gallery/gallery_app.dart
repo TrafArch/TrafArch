@@ -19,7 +19,6 @@ import '../features/trips/trip_filters.dart';
 import '../platform/browser/feedback_browser.dart';
 import '../platform/qr/qr_image_picker.dart';
 import '../platform/storage/archive_document_store.dart';
-import '../platform/translucency/translucency_platform.dart';
 import '../shared/app_support.dart';
 import 'gallery_controller.dart';
 import 'gallery_balance_presentation.dart';
@@ -54,17 +53,12 @@ class GalleryApp extends StatefulWidget {
     this.openWebLink,
     this.openEmail,
     this.preferences,
-    this.translucencyPlatform,
   });
   final GalleryController? controller;
   final VoidCallback? onDisableBeta;
   final Future<void> Function(Uri)? openWebLink;
   final Future<bool> Function(String)? openEmail;
   final GalleryPreferences? preferences;
-
-  /// Capability probe for MagicOS translucent components; injectable so the
-  /// bar material can be exercised without an Honor device.
-  final TranslucencyPlatform? translucencyPlatform;
 
   @override
   State<GalleryApp> createState() => _GalleryAppState();
@@ -75,13 +69,11 @@ class _GalleryAppState extends State<GalleryApp> {
   GalleryController? _owned;
   late final GalleryPreferences _preferences;
   final _appearance = _GalleryAppearance();
-  var _translucency = TranslucencyCapability.none;
 
   @override
   void initState() {
     super.initState();
     _preferences = widget.preferences ?? GalleryPreferences();
-    _probeTranslucency();
     _ready = widget.controller != null
         ? Future.value(widget.controller!)
         : GalleryData.load().then((data) {
@@ -93,15 +85,6 @@ class _GalleryAppState extends State<GalleryApp> {
             }
             return controller;
           });
-  }
-
-  /// Ask once per session; the answer cannot change without a reboot.
-  Future<void> _probeTranslucency() async {
-    final platform =
-        widget.translucencyPlatform ?? TranslucencyPlatform.create();
-    final capability = await platform.probe();
-    if (!mounted || !capability.supported || _translucency.supported) return;
-    setState(() => _translucency = capability);
   }
 
   @override
@@ -146,42 +129,26 @@ class _GalleryAppState extends State<GalleryApp> {
             darkTheme: _appearance.theme(c, true, monetSeed),
             builder: (context, child) {
               final tokens = Theme.of(context).extension<GalleryTokens>()!;
-              final docked = c.docked && c.isMainPage;
-              final glass = GalleryGlass.forBar(
-                tokens,
-                translucent: _translucency.supported,
-                native: _translucency.nativeGlass,
-                docked: true,
-              );
-              // The gesture area keeps an opaque SDK colour; alpha belongs to
-              // the Flutter surface only.
-              final navigationBarColor = docked
-                  ? (glass == null
-                        ? tokens.dockedNavigationSurface
-                        : Color.alphaBlend(glass.fill, tokens.canvas))
-                  : tokens.canvas;
-              return GalleryTranslucency(
-                supported: _translucency.supported,
-                native: _translucency.nativeGlass,
-                child: AnnotatedRegion<SystemUiOverlayStyle>(
-                  value:
-                      (tokens.dark
-                              ? SystemUiOverlayStyle.light
-                              : SystemUiOverlayStyle.dark)
-                          .copyWith(
-                            statusBarColor: Colors.transparent,
-                            systemNavigationBarColor: navigationBarColor,
-                            systemNavigationBarDividerColor: Colors.transparent,
-                          ),
-                  child: ColoredBox(
-                    color: tokens.canvas,
-                    child: GalleryWindow(
-                      child: GalleryFeedbackHost(
-                        key: ValueKey(c.generation),
-                        mainPage: c.isMainPage,
-                        docked: c.docked,
-                        child: child!,
-                      ),
+              return AnnotatedRegion<SystemUiOverlayStyle>(
+                value:
+                    (tokens.dark
+                            ? SystemUiOverlayStyle.light
+                            : SystemUiOverlayStyle.dark)
+                        .copyWith(
+                          statusBarColor: Colors.transparent,
+                          systemNavigationBarColor: c.docked && c.isMainPage
+                              ? tokens.dockedNavigationSurface
+                              : tokens.canvas,
+                          systemNavigationBarDividerColor: Colors.transparent,
+                        ),
+                child: ColoredBox(
+                  color: tokens.canvas,
+                  child: GalleryWindow(
+                    child: GalleryFeedbackHost(
+                      key: ValueKey(c.generation),
+                      mainPage: c.isMainPage,
+                      docked: c.docked,
+                      child: child!,
                     ),
                   ),
                 ),
@@ -224,40 +191,6 @@ class _GalleryAppearance {
           monetSeed: monetSeed,
         ).theme(),
       );
-}
-
-/// Whether this session can use MagicOS translucent (通透) materials.
-///
-/// Provided once above the navigator so every main-page bar reads the same
-/// answer. Defaults to false when no ancestor exists (tests, desktop).
-class GalleryTranslucency extends InheritedWidget {
-  const GalleryTranslucency({
-    super.key,
-    required this.supported,
-    required this.native,
-    required super.child,
-  });
-
-  final bool supported;
-
-  /// The bar may host the native Honor glass platform view.
-  final bool native;
-
-  static bool of(BuildContext context) =>
-      context
-          .dependOnInheritedWidgetOfExactType<GalleryTranslucency>()
-          ?.supported ??
-      false;
-
-  static bool nativeOf(BuildContext context) =>
-      context
-          .dependOnInheritedWidgetOfExactType<GalleryTranslucency>()
-          ?.native ??
-      false;
-
-  @override
-  bool updateShouldNotify(GalleryTranslucency oldWidget) =>
-      supported != oldWidget.supported || native != oldWidget.native;
 }
 
 class _GalleryView extends StatefulWidget {
@@ -565,22 +498,13 @@ class _GalleryViewState extends State<_GalleryView> {
         ),
       );
     }
-    final dockedGlass = _isMain && c.docked
-        ? GalleryGlass.forBar(
-            t,
-            translucent: GalleryTranslucency.of(context),
-            native: GalleryTranslucency.nativeOf(context),
-            docked: true,
-          )
-        : null;
-    final navigationColor = dockedGlass != null
-        ? Color.alphaBlend(dockedGlass.fill, t.canvas)
-        : (c.docked && _isMain ? t.dockedNavigationSurface : t.canvas);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: (t.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
           .copyWith(
             statusBarColor: Colors.transparent,
-            systemNavigationBarColor: navigationColor,
+            systemNavigationBarColor: c.docked && _isMain
+                ? t.dockedNavigationSurface
+                : t.canvas,
             systemNavigationBarDividerColor: Colors.transparent,
           ),
       child: Shortcuts(
