@@ -207,7 +207,7 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('privacy policy opens the web link without a copy button', (
+  testWidgets('both legal documents open web links without copy buttons', (
     tester,
   ) async {
     final opened = <String>[];
@@ -225,20 +225,20 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.text('隐私政策'),
-      150,
-      scrollable: galleryVerticalScroll(),
-    );
-    await Scrollable.ensureVisible(
-      tester.element(find.text('隐私政策')),
-      alignment: .5,
-    );
-    await tester.pumpAndSettle();
-    expect(find.byTooltip('复制隐私政策链接'), findsNothing);
-    await tester.tap(find.text('隐私政策'));
-    await tester.pumpAndSettle();
-    expect(opened, [AppSupport.privacy]);
+    for (final label in ['隐私政策', AppSupport.eulaLabel]) {
+      final entry = find.text(label);
+      await tester.scrollUntilVisible(
+        entry,
+        150,
+        scrollable: galleryVerticalScroll(),
+      );
+      await Scrollable.ensureVisible(tester.element(entry), alignment: .5);
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('复制$label链接'), findsNothing);
+      await tester.tap(entry);
+      await tester.pumpAndSettle();
+    }
+    expect(opened, [AppSupport.privacy, AppSupport.eula]);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 

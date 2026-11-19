@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show File;
 import 'dart:math' as math;
-import 'dart:ui' show ImageFilter, ImageByteFormat, Size, instantiateImageCodec;
+import 'dart:ui'
+    show ImageFilter, ImageByteFormat, Size, instantiateImageCodec, lerpDouble;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';

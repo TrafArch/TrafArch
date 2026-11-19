@@ -4,6 +4,8 @@ import 'package:path_provider/path_provider.dart';
 
 /// 设置键名。
 abstract final class SettingsKeys {
+  static const legalConsent = 'accepted_eula_and_privacy';
+
   /// 2.x 预览界面的预测性返回偏好，缺省开启；与样例重置无关。
   static const galleryPredictiveBackEnabled = 'gallery_predictive_back_enabled';
 

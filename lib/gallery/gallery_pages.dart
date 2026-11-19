@@ -1355,6 +1355,13 @@ extension _GalleryPages on _GalleryViewState {
             link: AppSupport.privacy,
           ),
           const Divider(),
+          _contactRow(
+            AppSupport.eulaLabel,
+            '查看 TrafArch 的使用条款',
+            Icons.description_outlined,
+            link: AppSupport.eula,
+          ),
+          const Divider(),
           _contributorRow(),
         ],
       ),

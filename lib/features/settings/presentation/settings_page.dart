@@ -307,7 +307,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         MaterialPageRoute(
                           builder: (_) => AboutPage(
                             updates: app.updates,
-                            openPrivacyPolicy: app.openPrivacyPolicy,
+                            openWebLink: app.openWebLink,
                           ),
                         ),
                       ),

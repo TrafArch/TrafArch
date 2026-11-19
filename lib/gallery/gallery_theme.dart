@@ -141,6 +141,12 @@ class GalleryTokens extends ThemeExtension<GalleryTokens> {
     bool dark,
     String palette, {
     Color? monetSeed,
+  }) => forPalette(palette, dark: dark, monetSeed: monetSeed);
+
+  static GalleryTokens forPalette(
+    String palette, {
+    required bool dark,
+    Color? monetSeed,
   }) {
     final preset = GalleryPalette.byId(palette);
     final roles = monetSeed != null

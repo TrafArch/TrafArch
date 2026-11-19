@@ -4,7 +4,6 @@ import '../../../platform/browser/feedback_browser.dart';
 import '../../../platform/storage/settings_store.dart';
 import '../../../platform/storage/app_logger.dart';
 import '../../../shared/application/owned_notifier.dart';
-import '../../../shared/app_support.dart';
 import '../../../shared/domain/archive_conflict_policy.dart';
 
 class SettingsController extends OwnedNotifier {
@@ -79,8 +78,7 @@ class SettingsController extends OwnedNotifier {
     return false;
   }
 
-  Future<void> openPrivacyPolicy() =>
-      _browser.open(Uri.parse(AppSupport.privacy));
+  Future<void> openWebLink(Uri url) => _browser.open(url);
 
   Future<void> openFeedbackSurvey(Uri url) async {
     if (disposed || openingFeedbackSurvey) return;
