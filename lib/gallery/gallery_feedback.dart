@@ -5,9 +5,10 @@ import 'package:flutter/material.dart';
 
 import 'gallery_design.dart';
 import 'gallery_layout.dart';
+import 'gallery_motion.dart';
 import 'gallery_theme.dart';
 
-enum GalleryFeedbackType { success, error, info }
+enum GalleryFeedbackType { success, error, info, warning }
 
 /// One window-level queue keeps feedback visible when a dialog or page closes.
 class GalleryFeedbackHost extends StatefulWidget {
@@ -53,26 +54,29 @@ typedef _Message = ({
 
 class _GalleryFeedbackHostState extends State<GalleryFeedbackHost>
     with SingleTickerProviderStateMixin {
-  static const _motion = Duration(milliseconds: 240);
-  static const _exitMotion = Duration(milliseconds: 180);
   late final _animation = AnimationController(
     vsync: this,
-    duration: _motion,
-    reverseDuration: _exitMotion,
+    duration: GalleryMotion.feedbackIn,
+    reverseDuration: GalleryMotion.feedbackOut,
   );
   late final _curve = CurvedAnimation(
     parent: _animation,
-    curve: Curves.easeOutCubic,
-    reverseCurve: Curves.easeInCubic,
+    curve: GalleryMotion.decelerate,
+    reverseCurve: GalleryMotion.accelerate.flipped,
   );
-  late final _position = Tween(
-    begin: const Offset(1.08, 0),
-    end: Offset.zero,
-  ).animate(_curve);
   final _pending = <_Message>[];
   _Message? _current;
   Timer? _timer;
   bool _dismissing = false;
+  double _exitProgress = 1;
+  double _exitOffset = 0;
+
+  double get _offset => _dismissing
+      ? _exitOffset +
+            (GalleryMotion.small - _exitOffset) *
+                (1 - (_exitProgress == 0 ? 0 : _curve.value / _exitProgress))
+                    .clamp(0, 1)
+      : GalleryMotion.distance * (1 - _curve.value);
 
   bool get _reduceMotion => MediaQuery.disableAnimationsOf(context);
 
@@ -118,16 +122,21 @@ class _GalleryFeedbackHostState extends State<GalleryFeedbackHost>
           );
     _timer = Timer(
       Duration(milliseconds: duration) +
-          (_reduceMotion ? Duration.zero : _motion),
+          (_reduceMotion ? Duration.zero : GalleryMotion.feedbackIn),
       _dismiss,
     );
   }
 
   void _dismiss() {
     if (_current == null || _dismissing) return;
+    _exitOffset = _offset;
+    _exitProgress = _curve.value;
     _dismissing = true;
     _timer?.cancel();
-    _animation.reverseDuration = _reduceMotion ? Duration.zero : _exitMotion;
+    _animation.reverseDuration = GalleryMotion.duration(
+      context,
+      GalleryMotion.feedbackOut,
+    );
     _animation.reverse().whenCompleteOrCancel(() {
       if (!mounted) return;
       setState(() => _current = null);
@@ -168,25 +177,29 @@ class _GalleryFeedbackHostState extends State<GalleryFeedbackHost>
             top: top,
             child: Align(
               alignment: Alignment.topRight,
-              child: FadeTransition(
-                opacity: _reduceMotion
-                    ? const AlwaysStoppedAnimation(1)
-                    : _curve,
-                child: SlideTransition(
-                  position: _reduceMotion
-                      ? const AlwaysStoppedAnimation(Offset.zero)
-                      : _position,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxWidth: 560,
-                      maxHeight: math.max(0, media.size.height - top - bottom),
+              child: AnimatedBuilder(
+                animation: _curve,
+                builder: (context, child) => IgnorePointer(
+                  ignoring: _dismissing || !_reduceMotion && _curve.value == 0,
+                  child: Opacity(
+                    opacity: _reduceMotion ? 1 : _curve.value,
+                    child: Transform.translate(
+                      offset: Offset(0, _reduceMotion ? 0 : _offset),
+                      child: child,
                     ),
-                    child: _FeedbackSurface(
-                      message: message,
-                      onAction: _dismissing || message.onAction == null
-                          ? null
-                          : () => _performAction(message),
-                    ),
+                  ),
+                ),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: 560,
+                    maxHeight: math.max(0, media.size.height - top - bottom),
+                  ),
+                  child: _FeedbackSurface(
+                    message: message,
+                    onAction: message.onAction == null
+                        ? null
+                        : () => _performAction(message),
+                    onDismiss: _dismiss,
                   ),
                 ),
               ),
@@ -198,9 +211,14 @@ class _GalleryFeedbackHostState extends State<GalleryFeedbackHost>
 }
 
 class _FeedbackSurface extends StatelessWidget {
-  const _FeedbackSurface({required this.message, this.onAction});
+  const _FeedbackSurface({
+    required this.message,
+    this.onAction,
+    required this.onDismiss,
+  });
   final _Message message;
   final VoidCallback? onAction;
+  final VoidCallback onDismiss;
 
   @override
   Widget build(BuildContext context) {
@@ -220,9 +238,21 @@ class _FeedbackSurface extends StatelessWidget {
       ),
       GalleryFeedbackType.info => (
         Icons.info_outline_rounded,
-        tokens.tone,
-        tokens.onTone,
+        Color.alphaBlend(
+          tokens.info.withValues(alpha: .12),
+          tokens.feedbackSurface,
+        ),
+        tokens.info,
         '提示',
+      ),
+      GalleryFeedbackType.warning => (
+        Icons.warning_amber_rounded,
+        Color.alphaBlend(
+          tokens.warn.withValues(alpha: .12),
+          tokens.feedbackSurface,
+        ),
+        tokens.warn,
+        '警告',
       ),
     };
     final title = message.title;
@@ -230,6 +260,7 @@ class _FeedbackSurface extends StatelessWidget {
       container: true,
       liveRegion: true,
       explicitChildNodes: true,
+      onDismiss: onDismiss,
       label: '${title ?? status}，${message.message}',
       child: DefaultTextStyle(
         style: Theme.of(context).textTheme.bodyMedium!,
@@ -312,6 +343,19 @@ class _FeedbackSurface extends StatelessWidget {
                           child: Text(message.actionLabel!),
                         ),
                       ],
+                      Semantics(
+                        label: '关闭提示',
+                        child: IconButton(
+                          key: const ValueKey('gallery-feedback-dismiss'),
+                          onPressed: onDismiss,
+                          visualDensity: VisualDensity.compact,
+                          icon: Icon(
+                            Icons.close,
+                            size: 18,
+                            color: tokens.muted,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),

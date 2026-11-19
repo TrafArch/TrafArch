@@ -371,16 +371,22 @@ extension _GalleryComponents on _GalleryViewState {
       shape: const WidgetStatePropertyAll(GalleryGeometry.buttonShape),
       textStyle: const WidgetStatePropertyAll(GalleryTypography.button),
     );
-    return TextButton(
-      onPressed: action,
-      style: style,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[Icon(icon, size: 17), const SizedBox(width: 8)],
-          Flexible(child: Text(label, textAlign: TextAlign.center)),
-        ],
+    return GalleryPressFeedback(
+      enabled: action != null,
+      child: TextButton(
+        onPressed: action,
+        style: style,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 17),
+              const SizedBox(width: 8),
+            ],
+            Flexible(child: Text(label, textAlign: TextAlign.center)),
+          ],
+        ),
       ),
     );
   }
@@ -1084,33 +1090,36 @@ extension _GalleryComponents on _GalleryViewState {
     final body = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        InkWell(
-          onTap: () => c.update(() {
-            if (open) {
-              c.expanded.remove(id);
-              c.expanded.add('closed:$id');
-            } else {
-              c.expanded.remove('closed:$id');
-              c.expanded.add(id);
-            }
-          }),
-          borderRadius: BorderRadius.circular(18),
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: surface ? 16 : 2,
-              vertical: 14,
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _text(
-                    title,
-                    role: GalleryTypography.label,
-                    weight: FontWeight.w600,
+        Semantics(
+          expanded: open,
+          child: InkWell(
+            onTap: () => c.update(() {
+              if (open) {
+                c.expanded.remove(id);
+                c.expanded.add('closed:$id');
+              } else {
+                c.expanded.remove('closed:$id');
+                c.expanded.add(id);
+              }
+            }),
+            borderRadius: BorderRadius.circular(18),
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: surface ? 16 : 2,
+                vertical: 14,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _text(
+                      title,
+                      role: GalleryTypography.label,
+                      weight: FontWeight.w600,
+                    ),
                   ),
-                ),
-                _expandArrow(open),
-              ],
+                  _expandArrow(open),
+                ],
+              ),
             ),
           ),
         ),

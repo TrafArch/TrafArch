@@ -129,7 +129,7 @@ void main() {
   });
 
   testWidgets(
-    'capsule accelerates while pages slide directly to the selected destination',
+    'capsule moves while pages crossfade directly to the selected destination',
     (tester) async {
       tester.view.physicalSize = const Size(360, 892);
       tester.view.devicePixelRatio = 1;
@@ -172,7 +172,16 @@ void main() {
         of: find.byKey(const ValueKey(GalleryPage.cards)),
         matching: find.byType(CustomScrollView),
       );
-      expect(tester.getTopLeft(incoming).dx, closeTo(360, .1));
+      expect(tester.getTopLeft(incoming).dx, 0);
+      final fade = find.ancestor(
+        of: incoming,
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Opacity &&
+              widget.key == const ValueKey(GalleryPage.cards),
+        ),
+      );
+      expect(tester.widget<Opacity>(fade).opacity, 0);
       expect(find.byKey(const ValueKey(GalleryPage.trips)), findsNothing);
       await tester.pump(const Duration(milliseconds: 100));
       final midway = tester.getRect(capsule);
@@ -183,7 +192,8 @@ void main() {
       expect(midway.center.dx, lessThan(target));
       expect(tester.element(capsule), same(originalElement));
       expect(tester.getTopLeft(find.text('卡包').first).dy, headerY);
-      expect(tester.getTopLeft(incoming).dx, inExclusiveRange(0, 360));
+      expect(tester.getTopLeft(incoming).dx, 0);
+      expect(tester.widget<Opacity>(fade).opacity, inExclusiveRange(0, 1));
 
       // A new tap redirects the existing moving capsule without replacing it.
       await tester.tap(find.byKey(const ValueKey('nav-trips')));

@@ -33,11 +33,14 @@ import 'gallery_layout.dart';
 import 'gallery_monet.dart';
 import 'gallery_preferences.dart';
 import 'gallery_feedback.dart';
+import 'gallery_knowledge_index.dart';
+import 'gallery_motion.dart';
 import 'gallery_spending.dart';
 
 part 'gallery_components.dart';
 part 'gallery_pages.dart';
 part 'gallery_inspection.dart';
+part 'gallery_knowledge_search.dart';
 part 'gallery_overlays.dart';
 part 'gallery_information.dart';
 part 'gallery_navigation.dart';
@@ -55,12 +58,14 @@ class GalleryApp extends StatefulWidget {
     this.openWebLink,
     this.openEmail,
     this.preferences,
+    this.loadKnowledgeIndex = GalleryKnowledgeIndex.load,
   });
   final GalleryController? controller;
   final VoidCallback? onDisableBeta;
   final Future<void> Function(Uri)? openWebLink;
   final Future<bool> Function(String)? openEmail;
   final GalleryPreferences? preferences;
+  final Future<GalleryKnowledgeIndex> Function() loadKnowledgeIndex;
 
   @override
   State<GalleryApp> createState() => _GalleryAppState();
@@ -71,6 +76,16 @@ class _GalleryAppState extends State<GalleryApp> {
   GalleryController? _owned;
   late final GalleryPreferences _preferences;
   final _appearance = _GalleryAppearance();
+  Future<GalleryKnowledgeIndex>? _knowledgeIndex;
+
+  Future<GalleryKnowledgeIndex> _loadKnowledge() =>
+      _knowledgeIndex ??= Future.sync(widget.loadKnowledgeIndex).then(
+        (index) => index,
+        onError: (Object error, StackTrace stack) {
+          _knowledgeIndex = null;
+          Error.throwWithStackTrace(error, stack);
+        },
+      );
 
   @override
   void initState() {
@@ -125,8 +140,11 @@ class _GalleryAppState extends State<GalleryApp> {
             supportedLocales: const [Locale('zh', 'CN'), Locale('en')],
             localizationsDelegates: GlobalMaterialLocalizations.delegates,
             themeMode: c.themeMode,
-            themeAnimationDuration: const Duration(milliseconds: 240),
-            themeAnimationCurve: Curves.easeInOut,
+            themeAnimationDuration: GalleryMotion.duration(
+              context,
+              GalleryMotion.theme,
+            ),
+            themeAnimationCurve: GalleryMotion.standard,
             theme: _appearance.theme(c, false, monetSeed),
             darkTheme: _appearance.theme(c, true, monetSeed),
             builder: (context, child) {
@@ -160,6 +178,7 @@ class _GalleryAppState extends State<GalleryApp> {
               key: ValueKey(c.generation),
               controller: c,
               preferences: _preferences,
+              loadKnowledge: _loadKnowledge,
               onDisableBeta: widget.onDisableBeta,
               openWebLink: widget.openWebLink,
               openEmail: widget.openEmail,
@@ -202,6 +221,7 @@ class _GalleryView extends StatefulWidget {
     required this.entry,
     required this.preferences,
     required this.anchors,
+    required this.loadKnowledge,
     this.visible = true,
     this.onDisableBeta,
     this.openWebLink,
@@ -211,6 +231,7 @@ class _GalleryView extends StatefulWidget {
   final GalleryRouteEntry entry;
   final GalleryPreferences preferences;
   final _GalleryAnchorRegistry anchors;
+  final Future<GalleryKnowledgeIndex> Function() loadKnowledge;
   final bool visible;
   final VoidCallback? onDisableBeta;
   final Future<void> Function(Uri)? openWebLink;
@@ -455,22 +476,17 @@ class _GalleryViewState extends State<_GalleryView> {
     child: child,
   );
 
-  Widget _collapse(
-    bool open,
-    WidgetBuilder builder, {
-    bool adaptiveDuration = false,
-  }) => _GalleryCollapse(
+  Widget _collapse(bool open, WidgetBuilder builder) => _GalleryCollapse(
     open: open,
     builder: builder,
     reduceMotion: _reduceMotion,
-    adaptiveDuration: adaptiveDuration,
   );
 
   Widget _expandArrow(bool open, {double size = 18}) => AnimatedRotation(
-    turns: open ? .25 : 0,
-    duration: _reduceMotion ? Duration.zero : _GalleryMotion.expand,
-    curve: _GalleryMotion.curve,
-    child: Icon(Icons.chevron_right_rounded, size: size),
+    turns: open ? .5 : 0,
+    duration: GalleryMotion.duration(context, GalleryMotion.arrow),
+    curve: GalleryMotion.standard,
+    child: Icon(Icons.keyboard_arrow_down_rounded, size: size),
   );
 
   @override
@@ -632,6 +648,14 @@ class _GalleryViewState extends State<_GalleryView> {
     GalleryPage.detail => _detail(),
     GalleryPage.settings => _settings(),
     GalleryPage.knowledge => _knowledge(),
+    GalleryPage.knowledgeSearch => _GalleryKnowledgeSearch(
+      load: widget.loadKnowledge,
+      onBack: c.back,
+      onResult: c.openKnowledgeResult,
+    ),
+    GalleryPage.knowledgeCity ||
+    GalleryPage.knowledgeLine ||
+    GalleryPage.knowledgeStation => _knowledgeDetails(_entry.knowledgeResult!),
     GalleryPage.qr => _qr(),
     GalleryPage.feedback => _feedback(),
     GalleryPage.acknowledgements => _acknowledgements(),

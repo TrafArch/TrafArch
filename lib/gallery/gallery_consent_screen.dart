@@ -6,6 +6,7 @@ import '../app/legal_consent_gate.dart';
 import 'gallery_design.dart';
 import 'gallery_feedback.dart';
 import 'gallery_layout.dart';
+import 'gallery_motion.dart';
 import 'gallery_theme.dart';
 
 class GalleryConsentScreen extends StatelessWidget {
@@ -24,8 +25,11 @@ class GalleryConsentScreen extends StatelessWidget {
     localizationsDelegates: GlobalMaterialLocalizations.delegates,
     theme: _light,
     darkTheme: _dark,
-    themeAnimationDuration: const Duration(milliseconds: 240),
-    themeAnimationCurve: Curves.easeInOut,
+    themeAnimationDuration: GalleryMotion.duration(
+      context,
+      GalleryMotion.theme,
+    ),
+    themeAnimationCurve: GalleryMotion.standard,
     builder: (context, child) => GalleryWindow(
       child: GalleryFeedbackHost(mainPage: false, docked: false, child: child!),
     ),
@@ -54,8 +58,8 @@ class _ConsentDialogState extends State<_ConsentDialog>
   );
   late final _progress = CurvedAnimation(
     parent: _motion,
-    curve: Curves.easeOutCubic,
-    reverseCurve: Curves.easeInCubic,
+    curve: GalleryMotion.decelerate,
+    reverseCurve: GalleryMotion.accelerate.flipped,
   );
   late final _scale = Tween<double>(
     begin: GalleryDialogMotion.initialScale,

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import 'gallery_data.dart';
 import 'gallery_design.dart';
+import 'gallery_knowledge_index.dart';
 
 enum GalleryPage {
   home,
@@ -21,6 +22,10 @@ enum GalleryPage {
   feedback,
   acknowledgements,
   licenses,
+  knowledgeSearch,
+  knowledgeCity,
+  knowledgeLine,
+  knowledgeStation,
 }
 
 enum GalleryOverlay {
@@ -56,6 +61,7 @@ class GalleryRouteEntry {
     this.overlay,
     this.trip,
     this.license,
+    this.knowledgeResult,
     this.exportText = '',
     this.exportTitle = '',
     this.anchor,
@@ -69,6 +75,7 @@ class GalleryRouteEntry {
   final GalleryOverlay? overlay;
   final GalleryRecord? trip;
   final LicenseEntry? license;
+  final GalleryKnowledgeResult? knowledgeResult;
   final String exportText, exportTitle;
   final Rect? anchor;
   final String? anchorId;
@@ -152,6 +159,7 @@ class GalleryController extends ChangeNotifier {
   String knowledgeTab = 'tu';
   bool knowledgeMetadata = false;
   final Set<String> knowledgeExpanded = {};
+  GalleryKnowledgeResult? _knowledgeResult;
   final Set<String> expanded = {};
   final List<String> logs = [];
   GalleryRecord? selectedTrip;
@@ -262,6 +270,12 @@ class GalleryController extends ChangeNotifier {
             license: d.overlay == GalleryOverlay.licenseDetail
                 ? selectedLicense
                 : null,
+            knowledgeResult: switch (d.page) {
+              GalleryPage.knowledgeCity ||
+              GalleryPage.knowledgeLine ||
+              GalleryPage.knowledgeStation => _knowledgeResult,
+              _ => null,
+            },
             exportText: exportText,
             exportTitle: exportTitle,
             anchor: _overlayAnchor,
@@ -352,6 +366,7 @@ class GalleryController extends ChangeNotifier {
     knowledgeTab = 'tu';
     knowledgeMetadata = false;
     knowledgeExpanded.clear();
+    _knowledgeResult = null;
     expanded.clear();
     logs.clear();
     selectedTrip = null;
@@ -435,6 +450,16 @@ class GalleryController extends ChangeNotifier {
     selectedCardId = card.id;
     detailTab = 0;
     navigate(GalleryPage.detail);
+  }
+
+  void openKnowledgeResult(GalleryKnowledgeResult result) {
+    _knowledgeResult = result;
+    navigate(switch (result.kind) {
+      GalleryKnowledgeKind.city => GalleryPage.knowledgeCity,
+      GalleryKnowledgeKind.line => GalleryPage.knowledgeLine,
+      GalleryKnowledgeKind.station ||
+      GalleryKnowledgeKind.code => GalleryPage.knowledgeStation,
+    });
   }
 
   void cancelRead() {

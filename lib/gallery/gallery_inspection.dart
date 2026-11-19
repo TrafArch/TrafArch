@@ -217,6 +217,10 @@ extension _GalleryInspection on _GalleryViewState {
     return _list(
       [
         _header('知识库', back: true),
+        _GalleryKnowledgeSearchBar(
+          onOpen: () => c.navigate(GalleryPage.knowledgeSearch),
+        ),
+        _gap(12),
         _tabs(
           ['交通联合 TU', '城市一卡通 CU'],
           c.knowledgeTab == 'tu' ? 0 : 1,
@@ -326,38 +330,41 @@ extension _GalleryInspection on _GalleryViewState {
                 child: _panel(
                   Column(
                     children: [
-                      ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        title: _text(
-                          r['name'] as String,
-                          role: GalleryTypography.body,
-                          weight: FontWeight.w600,
-                        ),
-                        subtitle: _text(
-                          '${r['lineCount']} 条线路 · ${_groupNumber(r['entries'] as int)} 条编码\n${r['province'] ?? ''}',
-                          role: GalleryTypography.caption,
-                          color: t.muted,
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _text(
-                              r['code'] as String,
-                              role: GalleryTypography.caption,
-                              mono: true,
-                              color: t.muted,
-                            ),
-                            const SizedBox(width: 8),
-                            _expandArrow(open, size: 18),
-                          ],
-                        ),
-                        onTap: () => c.update(
-                          () => open
-                              ? c.knowledgeExpanded.remove(key)
-                              : c.knowledgeExpanded.add(key),
+                      Semantics(
+                        expanded: open,
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          title: _text(
+                            r['name'] as String,
+                            role: GalleryTypography.body,
+                            weight: FontWeight.w600,
+                          ),
+                          subtitle: _text(
+                            '${r['lineCount']} 条线路 · ${_groupNumber(r['entries'] as int)} 条编码\n${r['province'] ?? ''}',
+                            role: GalleryTypography.caption,
+                            color: t.muted,
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _text(
+                                r['code'] as String,
+                                role: GalleryTypography.caption,
+                                mono: true,
+                                color: t.muted,
+                              ),
+                              const SizedBox(width: 8),
+                              _expandArrow(open, size: 18),
+                            ],
+                          ),
+                          onTap: () => c.update(
+                            () => open
+                                ? c.knowledgeExpanded.remove(key)
+                                : c.knowledgeExpanded.add(key),
+                          ),
                         ),
                       ),
                       _collapse(
@@ -382,36 +389,44 @@ extension _GalleryInspection on _GalleryViewState {
                                     crossAxisAlignment:
                                         CrossAxisAlignment.stretch,
                                     children: [
-                                      InkWell(
-                                        onTap: () => c.update(
-                                          () => lineOpen
-                                              ? c.knowledgeExpanded.remove(
-                                                  lineKey,
-                                                )
-                                              : c.knowledgeExpanded.add(
-                                                  lineKey,
-                                                ),
-                                        ),
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            vertical: 14,
+                                      Semantics(
+                                        expanded: lineOpen,
+                                        child: InkWell(
+                                          onTap: () => c.update(
+                                            () => lineOpen
+                                                ? c.knowledgeExpanded.remove(
+                                                    lineKey,
+                                                  )
+                                                : c.knowledgeExpanded.add(
+                                                    lineKey,
+                                                  ),
                                           ),
-                                          child: Row(
-                                            children: [
-                                              Expanded(
-                                                child: _text(
-                                                  line['name'] as String,
-                                                  role: GalleryTypography.label,
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 14,
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                Expanded(
+                                                  child: _text(
+                                                    line['name'] as String,
+                                                    role:
+                                                        GalleryTypography.label,
+                                                  ),
                                                 ),
-                                              ),
-                                              _text(
-                                                '${stations.length} 站',
-                                                role: GalleryTypography.caption,
-                                                color: t.muted,
-                                              ),
-                                              const SizedBox(width: 8),
-                                              _expandArrow(lineOpen, size: 16),
-                                            ],
+                                                _text(
+                                                  '${stations.length} 站',
+                                                  role:
+                                                      GalleryTypography.caption,
+                                                  color: t.muted,
+                                                ),
+                                                const SizedBox(width: 8),
+                                                _expandArrow(
+                                                  lineOpen,
+                                                  size: 16,
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -445,7 +460,6 @@ extension _GalleryInspection on _GalleryViewState {
                                                 .toList(),
                                           ),
                                         ),
-                                        adaptiveDuration: true,
                                       ),
                                       const Divider(),
                                     ],
@@ -455,7 +469,6 @@ extension _GalleryInspection on _GalleryViewState {
                             ),
                           ],
                         ),
-                        adaptiveDuration: true,
                       ),
                     ],
                   ),

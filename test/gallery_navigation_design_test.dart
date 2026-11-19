@@ -104,7 +104,7 @@ void main() {
     },
   );
   testWidgets(
-    'navigation clicks retain horizontal motion and can reverse mid transition',
+    'navigation clicks crossfade in place and can reverse mid transition',
     (tester) async {
       await mount(tester);
       Finder surface(GalleryPage page) => find
@@ -120,16 +120,25 @@ void main() {
           .first;
       final home = surface(GalleryPage.home);
       final cards = surface(GalleryPage.cards);
+      double opacity(GalleryPage page) => tester
+          .widget<Opacity>(
+            find.byWidgetPredicate(
+              (widget) => widget is Opacity && widget.key == ValueKey(page),
+            ),
+          )
+          .opacity;
       await tester.tap(find.byKey(const ValueKey('nav-cards')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 60));
-      expect(tester.getTopLeft(home).dx, inExclusiveRange(-412, 0));
-      expect(tester.getTopLeft(cards).dx, inExclusiveRange(0, 412));
-      final beforeReverse = tester.getTopLeft(home).dx;
+      expect(tester.getTopLeft(home).dx, 0);
+      expect(tester.getTopLeft(cards).dx, 0);
+      final beforeReverse = opacity(GalleryPage.home);
+      expect(beforeReverse, inExclusiveRange(0, 1));
+      expect(opacity(GalleryPage.cards), inExclusiveRange(0, 1));
       await tester.tap(find.byKey(const ValueKey('nav-home')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 30));
-      expect(tester.getTopLeft(home).dx, greaterThan(beforeReverse));
+      expect(opacity(GalleryPage.home), greaterThan(beforeReverse));
       await tester.pumpAndSettle();
       expect(c.page, GalleryPage.home);
       expect(tester.getTopLeft(home).dx, 0);
@@ -407,8 +416,8 @@ void main() {
     c.themeMode = ThemeMode.light;
     await mount(tester);
     final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
-    expect(app.themeAnimationDuration, const Duration(milliseconds: 240));
-    expect(app.themeAnimationCurve, Curves.easeInOut);
+    expect(app.themeAnimationDuration, const Duration(milliseconds: 200));
+    expect(app.themeAnimationCurve, Curves.easeInOutCubic);
     GalleryTokens tokens() => Theme.of(
       tester.element(find.byKey(const ValueKey('gallery-brand-mark'))),
     ).extension<GalleryTokens>()!;

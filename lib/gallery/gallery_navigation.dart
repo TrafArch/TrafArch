@@ -108,34 +108,21 @@ class _GalleryMenuAnchorState extends State<_GalleryMenuAnchor> {
   }
 }
 
-abstract final class _GalleryMotion {
-  static const main = Duration(milliseconds: 240);
-  static const page = Duration(milliseconds: 280);
-  static const back = Duration(milliseconds: 220);
-  static const sheet = Duration(milliseconds: 300);
-  static const sheetBack = Duration(milliseconds: 240);
-  static const dialog = GalleryDialogMotion.enter;
-  static const dialogBack = GalleryDialogMotion.exit;
-  static const menu = Duration(milliseconds: 180);
-  static const menuBack = Duration(milliseconds: 120);
-  static const expand = Duration(milliseconds: 180);
-  static const readResult = Duration(milliseconds: 560);
-  static const content = Duration(milliseconds: 160);
-  static const capsule = Duration(milliseconds: 180);
-  static const curve = Curves.easeOutCubic;
-}
+typedef _GalleryMotion = GalleryMotion;
 
 class _GalleryNavigator extends StatefulWidget {
   const _GalleryNavigator({
     super.key,
     required this.controller,
     required this.preferences,
+    required this.loadKnowledge,
     this.onDisableBeta,
     this.openWebLink,
     this.openEmail,
   });
   final GalleryController controller;
   final GalleryPreferences preferences;
+  final Future<GalleryKnowledgeIndex> Function() loadKnowledge;
   final VoidCallback? onDisableBeta;
   final Future<void> Function(Uri)? openWebLink;
   final Future<bool> Function(String)? openEmail;
@@ -294,6 +281,7 @@ class _GalleryNavigatorState extends State<_GalleryNavigator>
                     entry: entry,
                     controller: widget.controller,
                     preferences: widget.preferences,
+                    loadKnowledge: widget.loadKnowledge,
                     anchors: _anchors,
                     visible: _isVisible(entry),
                     onDisableBeta: widget.onDisableBeta,
@@ -353,7 +341,7 @@ mixin _GalleryPredictiveRoute on ModalRoute<void> {
       () => CurvedAnimation(
         parent: parent,
         curve: _GalleryMotion.curve,
-        reverseCurve: Curves.easeInCubic,
+        reverseCurve: GalleryMotion.accelerate.flipped,
       ),
     );
     return popGestureInProgress ? parent.value : eased.value;
@@ -477,10 +465,9 @@ class _GalleryPageRoute extends PageRoute<void> with _GalleryPredictiveRoute {
   ) {
     if (configuration.reduceMotion) return interactive(child);
     final primary = motionProgress(animation);
-    // 只让当前页跟随手势位移：下层页保持静止，避免两层同时移动产生的
-    // 抖动；位移放在 RepaintBoundary 外，让重页面复用已绘制的内容。
+    final secondary = motionProgress(secondaryAnimation);
     return FractionalTranslation(
-      translation: Offset(isFirst ? 0 : 1 - primary, 0),
+      translation: Offset((isFirst ? 0 : 1 - primary) - .06 * secondary, 0),
       child: RepaintBoundary(child: interactive(child)),
     );
   }
@@ -488,6 +475,8 @@ class _GalleryPageRoute extends PageRoute<void> with _GalleryPredictiveRoute {
 
 class _GalleryPopupRoute extends PopupRoute<void> with _GalleryPredictiveRoute {
   _GalleryPopupRoute(_GalleryRoutePage page) : super(settings: page);
+  final _dragVisibility = ValueNotifier(1.0);
+  bool _menuEntered = false;
   bool get _menu => [
     GalleryOverlay.cardMenu,
     GalleryOverlay.source,
@@ -505,20 +494,24 @@ class _GalleryPopupRoute extends PopupRoute<void> with _GalleryPredictiveRoute {
   @override
   bool get barrierDismissible => true;
   @override
-  Color get barrierColor =>
-      _menu ? Colors.transparent : const Color(0x99000000);
+  Color get barrierColor => _menu
+      ? Colors.transparent
+      : _sheet
+      ? GalleryMotion.sheetScrim
+      : const Color(0x99000000);
   @override
   String get barrierLabel => _menu ? '关闭菜单' : '关闭弹层';
   @override
   Curve get barrierCurve => _GalleryMotion.curve;
   @override
   Widget buildModalBarrier() => AnimatedBuilder(
-    animation: animation!,
+    animation: Listenable.merge([animation!, _dragVisibility]),
     builder: (context, _) => ModalBarrier(
       color: Color.lerp(
         Colors.transparent,
         barrierColor,
-        configuration.reduceMotion ? 1 : motionProgress(animation!),
+        _dragVisibility.value *
+            (configuration.reduceMotion ? 1 : motionProgress(animation!)),
       ),
       dismissible: barrierDismissible,
       onDismiss: () {
@@ -539,7 +532,7 @@ class _GalleryPopupRoute extends PopupRoute<void> with _GalleryPredictiveRoute {
       ? _GalleryMotion.menu
       : _sheet
       ? _GalleryMotion.sheet
-      : _GalleryMotion.dialog;
+      : GalleryDialogMotion.enter;
   @override
   Duration get reverseTransitionDuration => configuration.reduceMotion
       ? Duration.zero
@@ -547,7 +540,7 @@ class _GalleryPopupRoute extends PopupRoute<void> with _GalleryPredictiveRoute {
       ? _GalleryMotion.menuBack
       : _sheet
       ? _GalleryMotion.sheetBack
-      : _GalleryMotion.dialogBack;
+      : GalleryDialogMotion.exit;
   @override
   Widget buildPage(
     BuildContext context,
@@ -571,7 +564,10 @@ class _GalleryPopupRoute extends PopupRoute<void> with _GalleryPredictiveRoute {
       // or slides away, matching the page route's boundary placement.
       return FractionalTranslation(
         translation: Offset(0, 1 - value),
-        child: RepaintBoundary(child: content),
+        child: Opacity(
+          opacity: const Interval(0, .35).transform(value),
+          child: RepaintBoundary(child: content),
+        ),
       );
     }
     if (_menu) return content;
@@ -631,6 +627,7 @@ class _GalleryPopupRoute extends PopupRoute<void> with _GalleryPredictiveRoute {
   void dispose() {
     controller?.removeStatusListener(_cropGestureSettled);
     super.dispose();
+    _dragVisibility.dispose();
   }
 }
 
@@ -672,7 +669,7 @@ class _GalleryMainTransitionState extends State<_GalleryMainTransition>
   @override
   void initState() {
     super.initState();
-    _slots[widget.page] = _GalleryMainSlot(widget.builder(widget.page), 0, 0);
+    _slots[widget.page] = _GalleryMainSlot(widget.builder(widget.page), 1, 1);
   }
 
   @override
@@ -681,26 +678,21 @@ class _GalleryMainTransitionState extends State<_GalleryMainTransition>
     if (widget.reduceMotion) {
       _animation.stop();
       _slots.clear();
-      _slots[widget.page] = _GalleryMainSlot(widget.builder(widget.page), 0, 0);
+      _slots[widget.page] = _GalleryMainSlot(widget.builder(widget.page), 1, 1);
       _animation.value = 1;
     } else if (widget.page != oldWidget.page) {
       final progress = _value;
       _animation.stop();
       for (final item in _slots.entries) {
         item.value.begin = item.value.position(progress);
-        item.value.end = item.key.index < widget.page.index ? -1 : 1;
+        item.value.end = 0;
       }
       final incoming = _slots.putIfAbsent(
         widget.page,
-        () => _GalleryMainSlot(
-          widget.builder(widget.page),
-          _slots[oldWidget.page]!.begin +
-              (widget.page.index > oldWidget.page.index ? 1 : -1),
-          0,
-        ),
+        () => _GalleryMainSlot(widget.builder(widget.page), 0, 1),
       );
       incoming.child = widget.builder(widget.page);
-      incoming.end = 0;
+      incoming.end = 1;
       _animation.forward(from: 0);
     } else {
       for (final item in _slots.entries) {
@@ -723,9 +715,9 @@ class _GalleryMainTransitionState extends State<_GalleryMainTransition>
         fit: StackFit.expand,
         children: [
           for (final item in _slots.entries)
-            FractionalTranslation(
+            Opacity(
               key: ValueKey(item.key),
-              translation: Offset(item.value.position(_value), 0),
+              opacity: item.value.position(_value),
               child: IgnorePointer(
                 ignoring: item.key != widget.page,
                 child: ExcludeFocus(
@@ -789,9 +781,8 @@ class _GalleryCollapse extends StatefulWidget {
     required this.open,
     required this.builder,
     required this.reduceMotion,
-    this.adaptiveDuration = false,
   });
-  final bool open, reduceMotion, adaptiveDuration;
+  final bool open, reduceMotion;
   final WidgetBuilder builder;
   @override
   State<_GalleryCollapse> createState() => _GalleryCollapseState();
@@ -803,44 +794,53 @@ class _GalleryCollapseState extends State<_GalleryCollapse>
       AnimationController(
         vsync: this,
         duration: _GalleryMotion.expand,
-        value: widget.open ? 1 : 0,
+        value: 1,
       )..addStatusListener((status) {
-        if (status == AnimationStatus.dismissed && mounted) {
+        if (status == AnimationStatus.completed && !widget.open && mounted) {
           setState(() => _content = null);
         }
       });
   Widget? _content;
-  final _measureKey = GlobalKey();
+  late double _from = widget.open ? 1 : 0;
+  late double _to = _from;
+  double _offsetFrom = 0;
+  double _offsetTo = 0;
+  Curve _curve = GalleryMotion.decelerate;
+  double get _progress => _curve.transform(_animation.value);
+  double get _reveal => lerpDouble(_from, _to, _progress)!;
+  double get _offset => lerpDouble(_offsetFrom, _offsetTo, _progress)!;
+
   @override
   void initState() {
     super.initState();
     // Initialize against the initial open state, before didUpdateWidget can
     // receive the first expansion.
     _animation;
+    _to;
   }
 
   @override
   void didUpdateWidget(_GalleryCollapse oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.reduceMotion) {
-      _animation.value = widget.open ? 1 : 0;
+      _to = widget.open ? 1 : 0;
+      _offsetTo = 0;
+      _animation.value = 1;
     } else if (widget.open != oldWidget.open) {
-      if (widget.adaptiveDuration) {
-        _animation.stop();
-        final opening = widget.open;
-        // Even at heightFactor=0 the child gets its full natural layout. Measure
-        // that height once, then animate without rebuilding the long contents.
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted || widget.open != opening || widget.reduceMotion) return;
-          final height = _measureKey.currentContext?.size?.height ?? 0;
-          _animation.duration = Duration(
-            milliseconds: (280 + height * .35).round().clamp(280, 1200),
-          );
-          opening ? _animation.forward() : _animation.reverse();
-        });
-      } else {
-        widget.open ? _animation.forward() : _animation.reverse();
-      }
+      final offset = _offset;
+      _from = _reveal;
+      _to = widget.open ? 1 : 0;
+      _offsetFrom = widget.open && _from == 0
+          ? GalleryMotion.expandDistance
+          : offset;
+      _offsetTo = widget.open ? 0 : -GalleryMotion.micro;
+      _curve = widget.open
+          ? GalleryMotion.decelerate
+          : GalleryMotion.accelerate;
+      _animation.duration =
+          (widget.open ? GalleryMotion.expand : GalleryMotion.collapse) *
+          (_to - _from).abs();
+      _animation.forward(from: 0);
     }
   }
 
@@ -853,7 +853,7 @@ class _GalleryCollapseState extends State<_GalleryCollapse>
   @override
   Widget build(BuildContext context) {
     if (widget.open) _content = widget.builder(context);
-    if (_content == null || !widget.open && _animation.value == 0) {
+    if (_content == null || !widget.open && _reveal == 0) {
       return const SizedBox.shrink();
     }
     return ClipRect(
@@ -861,8 +861,14 @@ class _GalleryCollapseState extends State<_GalleryCollapse>
         animation: _animation,
         builder: (context, child) => Align(
           alignment: Alignment.topCenter,
-          heightFactor: _GalleryMotion.curve.transform(_animation.value),
-          child: child,
+          heightFactor: _reveal,
+          child: Opacity(
+            opacity: _reveal,
+            child: Transform.translate(
+              offset: Offset(0, _offset),
+              child: child,
+            ),
+          ),
         ),
         child: IgnorePointer(
           ignoring: !widget.open,
@@ -870,9 +876,7 @@ class _GalleryCollapseState extends State<_GalleryCollapse>
             excluding: !widget.open,
             child: ExcludeSemantics(
               excluding: !widget.open,
-              child: RepaintBoundary(
-                child: SizedBox(key: _measureKey, child: _content!),
-              ),
+              child: RepaintBoundary(child: _content!),
             ),
           ),
         ),
