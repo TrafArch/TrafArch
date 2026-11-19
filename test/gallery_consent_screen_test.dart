@@ -19,6 +19,16 @@ Widget _gate(SettingsStore store, {bool gallery = true}) => LegalConsentGate(
 );
 
 void main() {
+  const analytics = MethodChannel('transit_card_analyzer/analytics');
+  final messenger =
+      TestWidgetsFlutterBinding.ensureInitialized().defaultBinaryMessenger;
+  setUp(() {
+    messenger.setMockMethodCallHandler(
+      analytics,
+      (call) async => call.method == 'isAvailable' ? true : null,
+    );
+  });
+  tearDown(() => messenger.setMockMethodCallHandler(analytics, null));
   for (final brightness in Brightness.values) {
     testWidgets('2.x $brightness：窄窗大字下使用主题模态表面、可滚动按钮和减少动画', (tester) async {
       final dispatcher = tester.platformDispatcher;

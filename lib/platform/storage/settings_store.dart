@@ -40,7 +40,7 @@ abstract class SettingsStore {
 /// 文件实现：应用私有文档目录下的 app_settings.txt。
 class FileSettingsStore implements SettingsStore {
   static const fileName = 'app_settings.txt';
-  Future<void> _writes = Future.value();
+  static Future<void> _writes = Future.value();
 
   Future<File> _file() async {
     final dir = await getApplicationDocumentsDirectory();

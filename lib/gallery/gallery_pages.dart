@@ -1290,6 +1290,8 @@ extension _GalleryPages on _GalleryViewState {
       ),
       padding: EdgeInsets.zero,
     ),
+    _sectionTitle('隐私'),
+    _panel(const FirebaseAnalyticsTile(), padding: EdgeInsets.zero),
     _sectionTitle('日志'),
     _panel(
       Column(

@@ -15,6 +15,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../app/app_info.dart';
+import '../features/settings/presentation/firebase_analytics_tile.dart';
 import '../features/trips/journey_transport_icon.dart';
 import '../features/trips/trip_filters.dart';
 import '../platform/browser/feedback_browser.dart';
