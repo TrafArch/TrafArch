@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-11-19 — 2.x 预览警告原签名测试包（2212）
+
+- 从 `3a9803b` 加当前工作树改动构建，使用 `lib/main_gallery.dart`。包内核验了 2.x 预览及新版红色警告文案；每次尝试开启都须等待 10 秒后手动确认，取消与系统返回保持关闭。
+- 成品 APK：`TrafArch-1.0.8-beta.2-2212-2x-arm64-release.apk`，36,661,051 字节；显示名 `TrafArch`，包名 `com.kajolno.TrafArch`，版本名 `1.0.8-beta.2`，Android `versionCode` `2212`，仅 `arm64-v8a`，非 debuggable。APK v2 验签与 `2211` 的开发者原证书一致；ZIP CRC、APK 及八个原生库的 16 KiB 对齐均通过。
+- 本轮 4 项开关回归通过，静态检查无 error／warning（4 条既有 info）。构建前后及包内的三份数据库、两份清单和六份预览资产 SHA-256 一致，依赖锁文件已按原字节恢复；AppInfo 为 `2212`，pubspec 自动预留 `2213`。
+- APK SHA-256：`02c0b8c7afd6e515b6648028bff2ef92fe237f093dfb717e9abcd3fcc126c92c`。产物与核验报告位于 `C:/Users/captu/Documents/Codex/outputs/TrafArch-2x-20261119-2212/`。未安装设备或做实卡验证。
+
+## 2026-11-19 — 2.x 界面预览开启确认
+
+- 每次尝试开启「启用新界面（beta）」时，先显示红色警告，强调「UI预览」和「模拟数据」，明确预览不会读取实体卡或写入真实档案。
+- 「确认开启」在 10 秒倒计时结束后才可点击，不会自动切换；点「不开启」或按系统返回均保持关闭，关闭预览不受影响。新增倒计时临界点、取消后重新计时和实际切换的组件回归；本轮不编译 APK。
+
+## 2026-11-19 — 2.x 界面预览原签名测试包（2211）
+
+- 使用 `3a9803b` 的 `lib/main_gallery.dart` 入口构建。默认进入现有界面；在“设置 → 外观 → 启用新界面（beta）”切换到 2.x，预览内使用内置样例，不读取实卡；新版设置末尾“预览”区可切回。未修改功能代码。
+- 成品 APK 核验：应用名 `TrafArch`，包名 `com.kajolno.TrafArch`，`1.0.8-beta.2`，Android `versionCode` 为 `2211`，仅 `arm64-v8a`，非 debuggable；APK v2 验签证书与 `2210` 一致。包内 AOT 核对切换开关、雾灰配色、行程交易后余额及样例加载，六份预览资产与源码 SHA256 一致。
+- 全量 Flutter 测试 3,204 项通过，静态检查无 error／warning、4 条 info；原依赖锁已逐字节恢复。APK ZIP CRC、16 KiB 对齐及八个原生库对齐通过；TU／CU／Suica 数据库和两份清单 SHA256 构建前后及包内未变。AppInfo 为 `2211`，pubspec 自动预留 `2212`。未安装设备、未实卡验证。
+- APK SHA256：`436ff6b04f35edda4fb060c7c14003c89baf0a1bf22b2fc2a5b16ba0cab9a336`。产物与核验报告位于仓库外 `C:/Users/captu/Documents/Codex/outputs/TrafArch-2x-20261119-2211/`。
+
+## 2026-11-19 — 主线原签名测试包（2210）
+
+- 基于开发分支当前源码 `3a9803b` 从 `lib/main.dart` 构建 ARM64 Release。原先预留号 `2200` 低于已交付的 `2209`，本次使用 `2210`；AppInfo 同步为 `2210`，Gradle 构建后将 pubspec 自动预留为 `2211`。未修改功能代码。
+- 实际 APK 清单核验：`TrafArch`、`com.kajolno.TrafArch`、`1.0.8-beta.2`、Android `versionCode 2210`、仅 `arm64-v8a`、非 debuggable；开发者原证书与 `2209` 一致，APK v2 验签、ZIP CRC、APK 和 8 个原生库的 16 KiB 对齐均通过。TU／CU／Suica 三份数据库及两份清单构建前后与包内 SHA256 完全一致。
+- 全量 Flutter 测试 3,204 项通过，静态检查无 error／warning、4 条 info。本机 Flutter 固定的测试依赖与锁文件不同；临时解析只变动测试／未使用条目，86 个正式依赖版本不变，构建结束后锁文件已按原字节恢复。未安装设备、未做实卡验证。
+- APK SHA256：`d3b3b5d2b05aa49f6fa23ab78665fbbbfb2421c42e4506005029114fa74e0187`。产物与核验报告位于仓库外 `C:/Users/captu/Documents/Codex/outputs/TrafArch-20261119-2210/`。
+
 ## 2026-11-18 — 移除荣耀通透组件
 
 - 移除荣耀通透组件整条链路：删除内置 `hnvisualeffect-11.0.0.134.aar` 与 Gradle 引用、原生 `transit_card_analyzer/translucency` 通道与 `trafarch/translucent_glass` 平台视图、Dart `TranslucencyPlatform`／`GalleryTranslucency` 探测、`GalleryGlass` 与底栏原生玻璃分支、2.x 设置与 1.x 关于页的第三方 SDK 披露入口及相关测试；底栏恢复 `design.md` 的 78% 表面与 sigma 14dp 背景模糊，下沉底栏恢复贴底表面。底栏振动、行程交易后余额与贡献者改动保留。
