@@ -8,6 +8,9 @@ import 'tunion_process_parser.dart';
 import '../local/apdu_exchange.dart';
 import '../local/local_card_models.dart';
 
+/// Whether an interleaved application probe changed the current TU selection.
+enum TuProcessReadAction { unchanged, restoreApplication, stopSession }
+
 /// 交通联合通用单元（TU）：SELECT + JT/T 978.2 完整识读（新模块主体）。
 ///
 /// 本单元已内联原 `TUnionParser` 的全部读取实现（老模块移除）：
@@ -113,6 +116,9 @@ class CommonUnitTu {
   ParsedCard? parsedCard;
   bool _transactionFileObserved = false;
 
+  /// Another application terminated the session before TU process reads.
+  bool processRecordsSkipped = false;
+
   /// 最近一次读取到的交通联合卡信息（含应用序列号 / 发卡机构标识）。
   ///
   /// 即使 [read] 因应用序列号校验失败返回 null 也会保留，供上海交通卡
@@ -139,10 +145,20 @@ class CommonUnitTu {
 
   /// 完整识读：卡信息 → 余额 → 交易明细 → 过程记录。
   /// 应用未选择时返回 null（由调用方转入下一个卡型模块）。
-  Future<ParsedCard?> read(CardInfo info, List<ApduRecord> records) async {
+  /// [beforeProcessRecords] may read another application using the immutable
+  /// wallet prefix. After a selection attempt, request explicit TU restoration
+  /// before process reads. A stopped session skips both restoration and process
+  /// reads; the caller retains the other application's failure independently.
+  Future<ParsedCard?> read(
+    CardInfo info,
+    List<ApduRecord> records, {
+    Future<TuProcessReadAction> Function(ParsedCard wallet)?
+    beforeProcessRecords,
+  }) async {
     if (_selectedAid == null) return null;
 
     parsedCard = null;
+    processRecordsSkipped = false;
     _lastCardInfo = null;
     TUnionCardInfo? merged;
     final transactions = <TUnionTransaction>[];
@@ -164,10 +180,29 @@ class CommonUnitTu {
       _report(0.4);
       await _readTransactions(transactions);
       _report(0.6);
-      await _readVarProcessRecords(variableRecords);
-      _report(0.8);
-      await _readCycleProcessRecords(cycleRecords);
-      _report(1);
+      if (beforeProcessRecords != null) {
+        final aid = List<int>.of(_selectedAid!);
+        final wallet = ParsedCard(
+          parserId: CardParserIds.tunion,
+          parserName: moduleName,
+          info: merged,
+          transactions: List.unmodifiable(transactions),
+          transactionFileObserved: _transactionFileObserved,
+          selectedAidHex: TUnionCodec.hexBytes(aid)!,
+        );
+        final action = await beforeProcessRecords(wallet);
+        processRecordsSkipped = action == TuProcessReadAction.stopSession;
+        if (action == TuProcessReadAction.restoreApplication &&
+            !await _selectApplication([aid])) {
+          throw const FormatException('未能恢复交通联合应用，未继续读取过程记录');
+        }
+      }
+      if (!processRecordsSkipped) {
+        await _readVarProcessRecords(variableRecords);
+        _report(0.8);
+        await _readCycleProcessRecords(cycleRecords);
+        _report(1);
+      }
     } finally {
       // Publish the observed prefix even if a later physical exchange fails.
       // The caller retains the exception independently from this partial card.

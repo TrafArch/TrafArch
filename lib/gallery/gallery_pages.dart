@@ -577,7 +577,7 @@ extension _GalleryPages on _GalleryViewState {
                       const SizedBox(width: 6),
                     ],
                     _text(
-                      trip['amount'] as String,
+                      galleryDisplayAmount(trip['amount'] as String),
                       role: GalleryJourneyTypography.amount,
                     ),
                   ],
@@ -656,7 +656,8 @@ extension _GalleryPages on _GalleryViewState {
     return interactive
         ? Semantics(
             button: true,
-            label: '${trip['title']}，${trip['sub']}，${trip['amount']}',
+            label:
+                '${trip['title']}，${trip['sub']}，${galleryDisplayAmount(trip['amount'] as String)}',
             child: InkWell(
               onTap: () => c.showOverlay(GalleryOverlay.trip, trip: trip),
               child: body,

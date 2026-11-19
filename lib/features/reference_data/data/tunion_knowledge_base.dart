@@ -8,6 +8,7 @@ import '../domain/station_codes.dart';
 import 'tu_station_repository.dart';
 import 'tu_region_live_source.dart';
 import 'tu_database.dart';
+import 'suica_station_repository.dart';
 
 import '../domain/card_catalog.dart';
 import '../domain/tu_lookup_service.dart';
@@ -24,6 +25,7 @@ class KnowledgeBase {
   final Map<String, String> packageHashes;
   final List<void Function()> closers;
   final CityUnionRegionKnowledgeDb? cuRepository;
+  final SuicaStationRepository? suicaStations;
   final IssuerTable issuers;
   final TerminalRuleSet terminalRules;
 
@@ -66,6 +68,7 @@ class KnowledgeBase {
     this.packageHashes = const {},
     this.closers = const [],
     this.cuRepository,
+    this.suicaStations,
     required this.issuers,
     required this.terminalRules,
     this.cardPrefixes = CardPrefixTable.empty,
@@ -114,9 +117,17 @@ class KnowledgeBase {
     final issues = <String, String>{};
     TuDatabase? tu;
     CityUnionRegionDatabaseContent? cu;
+    SuicaStationRepository? suica;
     final tuDocuments = <String, Object?>{};
     Object? cuCatalog;
     await Future.wait([
+      () async {
+        try {
+          suica = await SuicaStationRepository.load(bundle);
+        } catch (e) {
+          issues['SUICA'] = '$e';
+        }
+      }(),
       () async {
         try {
           tu = await TuDatabase.open(bundle: bundle);
@@ -175,6 +186,7 @@ class KnowledgeBase {
         cityUnionCards: CityUnionCardTable.fromJson(cuCatalog),
         cuTerminals: cu?.terminalMatcher ?? CityUnionTerminalMatcher.empty,
         cuRepository: cu?.live,
+        suicaStations: suica,
         stationCodes: (stationCodes ?? StationCodeTable.empty).withLiveSources([
           if (tu != null) TuRegionLiveSource(tu!.repository),
         ]),
@@ -191,11 +203,13 @@ class KnowledgeBase {
           if (cu?.live != null) 'CU': cu!.live!.package.version,
         },
         packageHashes: {
+          if (suica != null) 'SUICA': suica!.hash,
           if (tu != null) 'TU': tu!.package.hash,
           if (cu?.live != null) 'CU': cu!.live!.package.hash,
         },
         loadIssues: Map.unmodifiable(issues),
         closers: [
+          if (suica != null) suica!.close,
           if (tu != null) tu!.close,
           if (cu?.live != null) cu!.live!.close,
         ],
@@ -203,6 +217,7 @@ class KnowledgeBase {
     } catch (_) {
       tu?.close();
       cu?.live?.close();
+      suica?.close();
       rethrow;
     }
   }

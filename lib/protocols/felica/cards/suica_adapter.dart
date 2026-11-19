@@ -17,7 +17,7 @@ import 'felica_card_profiles.dart';
 /// 读取顺序与边界：
 /// 1. Request Service 验证 SF 服务 0x090F，不通过则不读取任何块；
 /// 2. 读取余额块 0：格式未通过校验时只展示「疑似 Suica」，不解析历史；
-/// 3. 余额有效后按 [SuicaServiceCodes.historyChunk] 分批读取块 1..20，
+/// 3. 余额有效后按 [SuicaServiceCodes.historyChunk] 分批读取其余块 1..19，
 ///    某批失败只标记部分成功，不把缺失块补成 0；
 /// 4. 记录解析失败保留原始字节，金额 / 时间字段保持 null。
 class SuicaAdapter implements FelicaCardAdapter {
@@ -47,7 +47,7 @@ class SuicaAdapter implements FelicaCardAdapter {
   Future<FelicaScanResult> read(FelicaCardContext context) async {
     final statuses = <FelicaReadStatus>[];
     final rawBlocks = <FelicaRawBlock>[];
-    final transactions = <FelicaTransaction>[];
+    final records = <SuicaHistoryRecord>[];
 
     if (context.idmBytes.length != FelicaCommand.idmLength) {
       return _genericFallback(
@@ -112,6 +112,9 @@ class SuicaAdapter implements FelicaCardAdapter {
       } else {
         final block = result.blocks.first;
         rawBlocks.add(FelicaRawBlock(label: '余额块 0', bytes: block));
+        // Block zero is also the newest history entry. Keep its independently
+        // valid fields even if the balance gate or a later request fails.
+        records.add(recordParser.parseBlock(blockNumber: 0, bytes: block));
         if (block.length != FelicaCommand.blockSize) {
           walletState = FelicaWalletReadState.failed;
           walletError = '余额块长度异常：${block.length} 字节（期望 16）';
@@ -166,7 +169,7 @@ class SuicaAdapter implements FelicaCardAdapter {
         context,
         statuses: statuses,
         rawBlocks: rawBlocks,
-        transactions: transactions,
+        records: records,
       );
     }
 
@@ -198,7 +201,7 @@ class SuicaAdapter implements FelicaCardAdapter {
           errorMessage: walletError,
         ),
       ],
-      transactions: transactions,
+      transactions: recordParser.toTransactions(records),
       statuses: statuses,
       rawBlocks: rawBlocks,
       frames: context.protocol.frames,
@@ -221,15 +224,16 @@ class SuicaAdapter implements FelicaCardAdapter {
     FelicaCardContext context, {
     required List<FelicaReadStatus> statuses,
     required List<FelicaRawBlock> rawBlocks,
-    required List<FelicaTransaction> transactions,
+    required List<SuicaHistoryRecord> records,
   }) async {
     const first = SuicaServiceCodes.historyFirstBlock;
     const last = SuicaServiceCodes.historyLastBlock;
     const chunk = SuicaServiceCodes.historyChunk;
     var ok = true;
-    var recordCount = 0;
+    var recordCount = records.where((record) => !record.isBlank).length;
 
-    for (var start = first; start <= last; start += chunk) {
+    // Block zero was read for the wallet above; do not read or append it twice.
+    for (var start = first + 1; start <= last; start += chunk) {
       final end = start + chunk - 1 > last ? last : start + chunk - 1;
       final elements = [
         for (var block = start; block <= end; block++)
@@ -277,9 +281,8 @@ class SuicaAdapter implements FelicaCardAdapter {
             blockNumber: blockNumber,
             bytes: bytes,
           );
-          if (record.isBlank) continue;
-          transactions.add(record.toTransaction());
-          recordCount++;
+          records.add(record);
+          if (!record.isBlank) recordCount++;
         }
       } on FelicaProtocolException catch (e) {
         ok = false;

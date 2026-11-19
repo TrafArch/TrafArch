@@ -501,7 +501,7 @@ void main() {
       expect(merged.sessionDataJson, newest.sessionDataJson);
       final history = await ArchiveHistory(repo).load(first.id);
       expect(history.batches.map((b) => b.readAt).toList(), [300, 200, 100]);
-      expect(history.balanceText, 'JPY 0');
+      expect(history.balanceText, 'JP￥0');
       expect(history.latestObservedFields['balanceFen'], isFalse);
       expect(history.latestObservedFields['transactionCount'], isTrue);
       final late = history.batches
@@ -532,7 +532,7 @@ void main() {
       expect(finalCard.currencyCode, 'JPY');
       expect(finalCard.transactionCount, 30);
       expect(finalCard.customName, '我的零余额卡');
-      expect((await ArchiveHistory(repo).load(first.id)).balanceText, 'JPY 0');
+      expect((await ArchiveHistory(repo).load(first.id)).balanceText, 'JP￥0');
     });
 
     test('observed zero count persists; new balance with unknown currency clears label', () async {

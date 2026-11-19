@@ -89,6 +89,7 @@ Map<String, Object?> captureReadResult(CardReadOutcome result) =>
         'systemCodes': card.systemCodes,
         'scannedAt': card.scannedAt.toIso8601String(),
         'transitCapability': card.transitCapability,
+        if (card.amusementIc case final data?) 'amusementIc': data.toJson(),
         'wallets': [
           for (final wallet in card.wallets)
             {
@@ -118,6 +119,7 @@ Map<String, Object?> captureReadResult(CardReadOutcome result) =>
               'note': tx.note,
               'walletKind': tx.walletKind.name,
               'amountIsBalance': tx.amountIsBalance,
+              if (tx.suica != null) 'suica': tx.suica!.toJson(),
               'crossBorder': tx.crossBorder,
             },
         ],

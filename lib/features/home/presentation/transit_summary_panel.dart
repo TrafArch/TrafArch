@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../protocols/felica/models/felica_card_type.dart';
 import '../../../protocols/transit/card_parser.dart';
 import '../../../protocols/transit/local/cards/shanghai_transit_union_models.dart';
 import '../../transit_analysis/balance_interpretation.dart';
@@ -29,9 +30,26 @@ class TransitSummaryPanel extends StatelessWidget {
     final result = app.lastResult;
     final parsed = app.parsedCard;
     final felica = app.felicaResult;
+    final isOctopus = app.isOctopusCard;
     // FeliCa（NFC-F）结果：与 TU / CU 卡片视图并列，使用同一版式。
     if (felica != null && parsed == null) {
-      return [FelicaSummaryPanel(felica: felica)];
+      return [
+        FelicaSummaryPanel(
+          // The current bound result supplies the HKD balance below. Preserve
+          // independent RMB wallets and the original NFC evidence unchanged.
+          felica: isOctopus
+              ? felica.copyWith(
+                  wallets: felica.wallets
+                      .where(
+                        (wallet) => wallet.kind != FelicaWalletKind.octopusHkd,
+                      )
+                      .toList(growable: false),
+                )
+              : felica,
+          stations: app.suicaStations,
+        ),
+        if (isOctopus) ..._octopusFields(context, app),
+      ];
     }
     final identified = app.lastIdentified;
     final isTUnion = CardParserIds.isTUnionFamily(parsed?.parserId);
@@ -140,7 +158,8 @@ class TransitSummaryPanel extends StatelessWidget {
               : '${app.cardCurrency.symbol}'
                     '${(local.info.balance / 100).toStringAsFixed(2)}',
         ),
-      if (separateObservation) ...[
+      if (isOctopus) ..._octopusFields(context, app),
+      if (!isOctopus && separateObservation) ...[
         summaryField(context, '余额', interpretation!.accountBalanceText),
         if (interpretation.observedBalanceText case final observed?)
           summaryField(context, interpretation.observationLabel, observed),
@@ -149,6 +168,7 @@ class TransitSummaryPanel extends StatelessWidget {
       ],
       // Direct non-Octopus cards retain the existing currency policy.
       if ((isTUnion || isCityUnion) &&
+          !isOctopus &&
           !separateObservation &&
           balanceText != null)
         summaryField(context, '余额', balanceText),
@@ -231,4 +251,9 @@ class TransitSummaryPanel extends StatelessWidget {
       ],
     ];
   }
+
+  List<Widget> _octopusFields(BuildContext context, AppDependencies app) => [
+    summaryField(context, '余额', app.octopusBalanceText ?? '港币余额未读取'),
+    if (app.octopusReadNotice case final notice?) summaryHint(context, notice),
+  ];
 }

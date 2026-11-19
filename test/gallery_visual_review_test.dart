@@ -4,19 +4,18 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/gallery/gallery_app.dart';
 import 'package:transit_card_analyzer/gallery/gallery_controller.dart';
 import 'package:transit_card_analyzer/gallery/gallery_data.dart';
 
 import 'support/gallery_scroll.dart';
+import 'support/gallery_capture.dart';
 
-/// Opt-in artifact capture; normal CI does not depend on installed desktop fonts.
+/// Review scenarios always run; artifact export and local fonts are opt-in.
 void main() {
   final output = Platform.environment['GALLERY_CAPTURE_DIR'];
-  testWidgets('capture the full design review with readable local fonts', (
+  testWidgets('render the full design review with optional artifact export', (
     tester,
   ) async {
     final previousShadows = debugDisableShadows;
@@ -39,33 +38,13 @@ void main() {
       tester.view.padding = const FakeViewPadding(top: 24, bottom: 24);
       addTearDown(tester.view.reset);
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-      await tester.runAsync(() async {
-        final sans = FontLoader('sans-serif')
-          ..addFont(
-            Future.value(
-              ByteData.sublistView(
-                await File('C:/Windows/Fonts/msyh.ttc').readAsBytes(),
-              ),
-            ),
-          );
-        final mono = FontLoader('monospace')
-          ..addFont(
-            Future.value(
-              ByteData.sublistView(
-                await File('C:/Windows/Fonts/consola.ttf').readAsBytes(),
-              ),
-            ),
-          );
-        final icons = FontLoader('MaterialIcons')
-          ..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'));
-        await Future.wait([sans.load(), mono.load(), icons.load()]);
-        await Directory(output!).create(recursive: true);
-      });
+      await prepareGalleryCapture(tester, outputDirectory: output);
       LicenseRegistry.addLicense(
         () => Stream.value(
-          const LicenseEntryWithLineBreaks([
-            'design-review-package',
-          ], 'Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction.'),
+          const LicenseEntryWithLineBreaks(
+            ['design-review-package'],
+            'Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction.',
+          ),
         ),
       );
       addTearDown(LicenseRegistry.reset);
@@ -83,16 +62,12 @@ void main() {
           await tester.pump();
         }
         expect(tester.takeException(), isNull, reason: name);
-        final render =
-            boundary.currentContext!.findRenderObject()!
-                as RenderRepaintBoundary;
-        await tester.runAsync(() async {
-          final image = await render.toImage(pixelRatio: 2);
-          final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-          await File('$output/$name.png')
-              .writeAsBytes(bytes!.buffer.asUint8List());
-          image.dispose();
-        });
+        await captureGalleryFrame(
+          tester,
+          boundary: boundary,
+          name: name,
+          outputDirectory: output,
+        );
       }
 
       for (final dark in [false, true]) {
@@ -280,5 +255,5 @@ void main() {
     } finally {
       debugDisableShadows = previousShadows;
     }
-  }, skip: output == null);
+  });
 }

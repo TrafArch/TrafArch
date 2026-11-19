@@ -5,8 +5,8 @@ void main() {
   test('explicit currencies use the requested code and symbol', () {
     for (final (code, amount, expected) in [
       ('CNY', '¥31.20', 'CNY ¥31.20'),
-      ('JPY', '1,240 JPY', 'JPY ¥1,240'),
-      ('HKD', r'HK$52.00', r'HKD $52.00'),
+      ('JPY', '1,240 JPY', 'JP￥1,240'),
+      ('HKD', r'HK$52.00', r'HK$52.00'),
       ('USD', r'$0.00', r'USD $0.00'),
       ('MOP', '18.50', 'MOP ¥18.50'),
     ]) {
@@ -24,8 +24,8 @@ void main() {
   test('explicit codes in original text also identify all five currencies', () {
     for (final (original, expected) in [
       ('CNY 31.20', 'CNY ¥31.20'),
-      ('1,240 JPY', 'JPY ¥1,240'),
-      (r'HKD $52.00', r'HKD $52.00'),
+      ('1,240 JPY', 'JP￥1,240'),
+      (r'HKD $52.00', r'HK$52.00'),
       ('0.00 usd', r'USD $0.00'),
       ('mop 18.50', 'MOP ¥18.50'),
     ]) {
@@ -43,7 +43,7 @@ void main() {
           '¥120',
           currencyCode: 'JPY',
         ).displayText,
-        'JPY ¥120',
+        'JP￥120',
       );
       expect(
         GalleryBalancePresentation.parse(
@@ -57,7 +57,7 @@ void main() {
           r'$52.00',
           currencyCode: 'HKD',
         ).displayText,
-        r'HKD $52.00',
+        r'HK$52.00',
       );
       expect(
         GalleryBalancePresentation.parse(
@@ -84,6 +84,20 @@ void main() {
       expect(value.known, isTrue);
       expect(value.number, expectedNumber);
       expect(value.displayText, expectedText);
+    }
+  });
+
+  test('explicit yen text keeps whole yen across signs and display forms', () {
+    for (final (original, expected) in [
+      ('−157 JPY', '-JP￥157'),
+      ('JPY ¥0', 'JP￥0'),
+      ('+1,240 JPY', '+JP￥1,240'),
+      ('JP￥15,000', 'JP￥15,000'),
+      ('1,240.00 JPY', 'JP￥1,240'),
+    ]) {
+      final value = GalleryBalancePresentation.parse(original);
+      expect(value.displayText, expected);
+      expect(value.currencyLabel, 'JP￥');
     }
   });
 

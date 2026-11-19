@@ -127,7 +127,7 @@ void main() {
       debit('2027-01-01', amount: '−180 JPY'),
     ]);
     expect(years.buckets.map((entry) => entry.amount), [157, 0, 180]);
-    expect(years.format(years.total), '337 JPY');
+    expect(years.format(years.total), 'JP￥337');
   });
 
   test('undated frozen Suica and Octopus history remains visible in all', () {

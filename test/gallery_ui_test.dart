@@ -465,7 +465,7 @@ void main() {
 
   for (final sample in [
     ('shanghai', '¥12.00', '周一，¥8.00'),
-    ('suica', '337 JPY', '周一，337 JPY'),
+    ('suica', 'JP￥337', '周一，JP￥337'),
     ('octopus', 'HK\$10.60', '周一，HK\$10.60'),
   ]) {
     testWidgets('weekly totals and chart semantics use ${sample.$1} currency', (

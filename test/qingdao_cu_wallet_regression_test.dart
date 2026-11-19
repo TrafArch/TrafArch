@@ -8,6 +8,7 @@ import 'package:transit_card_analyzer/features/transit_analysis/cu_transaction_a
 import 'package:transit_card_analyzer/features/trips/cu_trip_presenter.dart';
 import 'package:transit_card_analyzer/features/trips/journey_presentation.dart';
 import 'package:transit_card_analyzer/protocols/transit/city_union/city_union_models.dart';
+import 'package:transit_card_analyzer/protocols/transit/multiapp/application_evidence.dart';
 import 'package:transit_card_analyzer/protocols/transport/transport_failure.dart';
 
 const _cuWithLe = '00A4040009A0000000038698070100';
@@ -22,8 +23,204 @@ const _zeroDebit = '0009000000000000000912345678000320261114164713';
 const _recharge = '000A000000000003E80200000000000020261114092739';
 const _validCuPublic =
     '019845200001000001014520019845200000000120240101203012310101';
+const _tuSelect = '00A4040008A00000063201010500';
+// The 2026-11-16 capture stops at TU 0x1E slot 24, before any CU probe.
+// This TU slot follows the captured layout without a card identifier. The CU
+// rows/clocks above are synthetic: they verify scheduling and retention, not
+// the real card's unobserved CU response.
+const _tuCycle =
+    '060000413101538504020000000000000000000064000002BC20261114132051456012104560FFFFFFFF000000000000';
 
 void main() {
+  for (final serial in [
+    '03104770000000000001',
+    '03104970200000000001',
+    '03104870400000000001',
+  ]) {
+    test(
+      'dedicated TU identity $serial does not enter the early Qingdao probe',
+      () async {
+        final chip = _Chip(processTail: true, interruptAt: '00B218F400');
+        final result = (await LocalCardReader((apdu) async {
+          final response = await chip.call(apdu);
+          if (apdu.length == 5 &&
+              apdu[1] == 0xB0 &&
+              apdu[2] == 0x95 &&
+              apdu[4] == 0) {
+            response.setRange(10, 20, chip._hex(serial));
+          }
+          return response;
+        }).read())!;
+        expect(result.parsedCard.transactions, hasLength(1));
+        expect(
+          result.readResult.transportFailure?.kind,
+          TransportFailureKind.tagLost,
+        );
+        expect(chip.commands, isNot(contains(_cuWithLe)));
+        expect(chip.commands, isNot(contains(_cuWithoutLe)));
+        expect(chip.commands.last, '00B218F400');
+      },
+    );
+  }
+
+  test('Qingdao CU journey survives a later TU process disconnect', () async {
+    final chip = _Chip(
+      metroPair: true,
+      processTail: true,
+      interruptAt: '00B218F400',
+    );
+    final result = (await LocalCardReader(chip.call).read())!;
+    final card = result.parsedCard;
+    expect(card.transactions.single.rawHex, _tuBus);
+    final views = analyzeCuTransactions(
+      card.cityUnionFiles,
+      KnowledgeBase.empty(),
+    );
+    final journey = projectJourneys([
+      for (final view in views) describeCuTrip(view).journeyEvent!,
+    ]).singleWhere((item) => item.state == JourneyState.completed);
+    expect(journey.amountText, '-¥1.80');
+    expect(journey.start?.station, isNull);
+    expect(journey.end?.station, isNull);
+    expect(
+      card.transitProcessRecords.where((r) => r.sfi == 0x1E),
+      hasLength(1),
+    );
+    expect(
+      result.readResult.transportFailure?.kind,
+      TransportFailureKind.tagLost,
+    );
+    expect(
+      chip.commands,
+      containsAllInOrder([
+        _cuWithoutLe,
+        _cuFirstRecord,
+        '00B207CC20',
+        _tuSelect,
+        '00B201D400',
+        '00B201F500',
+        '00B218F400',
+      ]),
+    );
+    expect(chip.commands.last, '00B218F400');
+    expect(
+      result.applications.where((a) => a.appId == 'cu').single.recordCount,
+      3,
+    );
+  });
+
+  test('Qingdao resumes sparse TU process records after CU reading', () async {
+    final chip = _Chip(metroPair: true, processTail: true);
+    final result = (await LocalCardReader(chip.call).read())!;
+    final cycles = result.parsedCard.transitProcessRecords.where(
+      (r) => r.sfi == 0x1E,
+    );
+    expect(cycles.map((r) => r.recordNumber), [1, 24]);
+    expect(
+      result.parsedCard.cityUnionFiles.whereType<CityUnionWalletTransaction>(),
+      hasLength(3),
+    );
+    expect(result.readResult.readError, isNull);
+    expect(
+      chip.commands,
+      containsAllInOrder([
+        _cuFirstRecord,
+        _tuSelect,
+        '00B201D400',
+        '00B218F400',
+        '00B219F400',
+      ]),
+    );
+  });
+
+  test(
+    'Qingdao TU restore rejection preserves CU and skips process reads',
+    () async {
+      final chip = _Chip(metroPair: true, rejectTuRestore: true);
+      final result = (await LocalCardReader(chip.call).read())!;
+      expect(result.parsedCard.transactions, hasLength(1));
+      expect(
+        result.parsedCard.cityUnionFiles
+            .whereType<CityUnionWalletTransaction>(),
+        hasLength(3),
+      );
+      expect(result.readResult.readError, isNotNull);
+      expect(chip.commands, isNot(contains('00B201D400')));
+      expect(chip.commands, isNot(contains('00B201F500')));
+    },
+  );
+
+  test(
+    'Qingdao restore disconnect retains both wallets and stops APDUs',
+    () async {
+      final chip = _Chip(metroPair: true, loseOnTuRestore: true);
+      final result = (await LocalCardReader(chip.call).read())!;
+      expect(result.parsedCard.transactions, hasLength(1));
+      expect(
+        result.parsedCard.cityUnionFiles
+            .whereType<CityUnionWalletTransaction>(),
+        hasLength(3),
+      );
+      expect(
+        result.readResult.transportFailure?.kind,
+        TransportFailureKind.tagLost,
+      );
+      expect(chip.commands.last, _tuSelect);
+      expect(chip.commands, isNot(contains('00B201D400')));
+      final cu = result.applications.where((a) => a.appId == 'cu').single;
+      expect(cu.readError, isNull);
+      expect(cu.recordCount, 3);
+    },
+  );
+
+  test(
+    'Qingdao rejected CU data still restores and finishes TU process scan',
+    () async {
+      final chip = _Chip(validPublic: false, processTail: true);
+      final result = (await LocalCardReader(chip.call).read())!;
+      expect(result.parsedCard.transactions, hasLength(1));
+      expect(result.parsedCard.cityUnionFiles, isEmpty);
+      expect(
+        result.parsedCard.transitProcessRecords
+            .where((r) => r.sfi == 0x1E)
+            .map((r) => r.recordNumber),
+        [1, 24],
+      );
+      expect(result.readResult.readError, isNull);
+      expect(
+        chip.commands,
+        containsAllInOrder([_cuPublic, _tuSelect, '00B201D400', '00B218F400']),
+      );
+      expect(
+        chip.commands.where((command) => command == _cuWithoutLe),
+        hasLength(1),
+      );
+    },
+  );
+
+  test(
+    'Qingdao CU rejection then TU disconnect sends no later probes',
+    () async {
+      final chip = _Chip(
+        validPublic: false,
+        processTail: true,
+        interruptAt: '00B218F400',
+      );
+      final result = (await LocalCardReader(chip.call).read())!;
+      expect(result.parsedCard.transactions, hasLength(1));
+      expect(result.parsedCard.cityUnionFiles, isEmpty);
+      expect(
+        result.readResult.transportFailure?.kind,
+        TransportFailureKind.tagLost,
+      );
+      expect(chip.commands.last, '00B218F400');
+      expect(
+        chip.commands.where((command) => command == _cuWithoutLe),
+        hasLength(1),
+      );
+    },
+  );
+
   test(
     'Qingdao CU fallback adds only independently supported transactions',
     () async {
@@ -152,6 +349,10 @@ void main() {
     expect(card.transactions, hasLength(1));
     expect(card.cityUnionFiles, isEmpty);
     expect(chip.commands, isNot(contains(_cuWithoutLe)));
+    expect(
+      chip.commands,
+      containsAllInOrder(['00B201D400', '00B201F500', _cuWithLe]),
+    );
   });
 
   test(
@@ -189,6 +390,13 @@ void main() {
         TransportFailureKind.tagLost,
       );
       expect(chip.commands.last, _cuWithoutLe);
+      final tu = result.applications.where((a) => a.appId == 'tu').single;
+      final cu = result.applications.where((a) => a.appId == 'cu').single;
+      expect(tu.state, ApplicationProbeState.partial);
+      expect(tu.readError, isNull);
+      expect(tu.transportFailure, isNull);
+      expect(tu.notes, isNotEmpty);
+      expect(cu.transportFailure?.kind, TransportFailureKind.tagLost);
     },
   );
 
@@ -207,6 +415,12 @@ void main() {
         TransportFailureKind.tagLost,
       );
       expect(chip.commands.last, '00B202C417');
+      final tu = result.applications.where((a) => a.appId == 'tu').single;
+      final cu = result.applications.where((a) => a.appId == 'cu').single;
+      expect(tu.state, ApplicationProbeState.partial);
+      expect(tu.readError, isNull);
+      expect(tu.transportFailure, isNull);
+      expect(cu.transportFailure?.kind, TransportFailureKind.tagLost);
     },
   );
 }
@@ -233,6 +447,9 @@ class _Chip {
     this.interruptAt,
     this.metroPair = false,
     this.cuFci = '',
+    this.processTail = false,
+    this.rejectTuRestore = false,
+    this.loseOnTuRestore = false,
   });
 
   final String city;
@@ -240,7 +457,12 @@ class _Chip {
   final String? interruptAt;
   final bool metroPair;
   final String cuFci;
+  final bool processTail;
+  final bool rejectTuRestore;
+  final bool loseOnTuRestore;
   final commands = <String>[];
+  var _tuSelections = 0;
+  var _selected = '';
 
   Future<List<int>> call(List<int> apdu) async {
     final command = apdu
@@ -253,6 +475,34 @@ class _Chip {
         kind: TransportFailureKind.tagLost,
         message: 'fixture lost tag',
       );
+    }
+    if (command == _tuSelect || command == '80A4040008A00000063201010500') {
+      _tuSelections++;
+      if (loseOnTuRestore && _tuSelections > 1) {
+        throw const TransportFailure(
+          kind: TransportFailureKind.tagLost,
+          message: 'fixture lost tag restoring TU',
+        );
+      }
+      if (rejectTuRestore && _tuSelections > 1) return [0x6A, 0x82];
+      _selected = 'tu';
+    } else if (command == _cuWithoutLe) {
+      _selected = 'cu';
+    }
+    if (apdu[1] == 0xB2 &&
+        (apdu[3] == 0xD4 || apdu[3] == 0xF4 || apdu[3] == 0xF5)) {
+      expect(_selected, 'tu', reason: 'Process files must be read in TU');
+      if (processTail && apdu[3] == 0xF4 && apdu[2] <= 24) {
+        final raw = apdu[2] == 1
+            ? _tuCycle
+            : apdu[2] == 24
+            ? _tuCycle.replaceFirst('132051', '132052')
+            : '00' * 48;
+        return _hex(
+          '$raw'
+          '9000',
+        );
+      }
     }
     final response = switch (command) {
       '00A40000023F0000' || _mfWithoutLe => '9000',
@@ -285,9 +535,11 @@ class _Chip {
         '${'00' * 7}20261114165240${'00' * 8}00002710${'00' * 6}9000',
       _ => '6A82',
     };
-    return [
-      for (var i = 0; i < response.length; i += 2)
-        int.parse(response.substring(i, i + 2), radix: 16),
-    ];
+    return _hex(response);
   }
+
+  List<int> _hex(String response) => [
+    for (var i = 0; i < response.length; i += 2)
+      int.parse(response.substring(i, i + 2), radix: 16),
+  ];
 }

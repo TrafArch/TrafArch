@@ -70,7 +70,7 @@ node dev/gallery/extract_demo.cjs '<TrafArch-UI-Redesign 目录>'
 flutter build apk --release -t lib/main_gallery.dart --target-platform android-arm64 --split-per-abi
 ```
 
-内部 target 排除 Google Services 和 Firebase Analytics，现有界面关闭自动更新检查。名称固定 TrafArch，包名固定 `com.kajolno.TrafArch`，主版本名沿用源码，每次生成安装包预留下一构建号；当前 Gradle 使用 `force-version-code-ignoring-abi=true`，Android versionCode 与源码本次构建号一致，不叠加 ABI 偏移。最终仍核验 APK 实际清单、证书、对齐和 SHA256。
+内部 target 默认应用 Google Services 并包含 Firebase Analytics，可在确实需要离线预览包时通过 `--android-project-arg galleryAnalytics=false` 显式关闭。现有界面关闭自动更新检查。名称固定 TrafArch，包名固定 `com.kajolno.TrafArch`，主版本名沿用源码，每次生成安装包预留下一构建号；当前 Gradle 使用 `force-version-code-ignoring-abi=true`，Android versionCode 与源码本次构建号一致，不叠加 ABI 偏移。最终仍核验 AAB/APK 实际清单、证书、对齐和 SHA256。
 
 打包前检查各分支已消耗的构建号及可用交付／设备记录，选择尚未使用的新号。核验时明确传入本次源码构建号与最新已消耗 Android 版本码基线，不以历史固定版本码代替升级比较：
 
@@ -78,7 +78,7 @@ flutter build apk --release -t lib/main_gallery.dart --target-platform android-a
 python -X utf8 dev/gallery/verify_apk.py '<APK路径>' --build-tools '<Android build-tools目录>' --output '<核验输出目录>' --expected-build-number <本次构建号> --min-version-code <已消耗版本码基线>
 ```
 
-脚本核验版本名、名称、包名、arm64 ABI、构建号与实际 versionCode 一致、原签名、Release 标记、Gallery 资产、Firebase 自动组件缺席、ZIP CRC／16KiB 对齐及每个原生库的 ELF LOAD 对齐。调用时通过 `--expected-version-name` 传入当前版本名。输出 `apk-verification.json` 与 `SHA256SUMS.txt`，任一检查失败均以非零状态退出；核验报告不代表已完成设备安装。
+脚本核验版本名、名称、包名、arm64 ABI、构建号与实际 versionCode 一致、原签名、Release 标记、Gallery 资产、Firebase 自动初始化与 Analytics 组件存在、ZIP CRC／16KiB 对齐及每个原生库的 ELF LOAD 对齐。调用时通过 `--expected-version-name` 传入当前版本名。输出 `apk-verification.json` 与 `SHA256SUMS.txt`，任一检查失败均以非零状态退出；核验报告不代表已完成设备安装。
 
 ```powershell
 flutter test

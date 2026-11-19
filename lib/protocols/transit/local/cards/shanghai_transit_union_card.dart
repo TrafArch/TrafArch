@@ -40,15 +40,32 @@ class ShanghaiTransitUnionCardParser implements CardParser {
   void _report(double progress) => onProgress?.call(progress.clamp(0.0, 1.0));
 
   /// 先确认城市 TU，再读取 CU；未命中时保留真实的 CU 未探测状态。
-  Future<ShanghaiTransitUnionResult> read({bool probeCu = true}) async {
+  Future<ShanghaiTransitUnionResult> read({
+    bool probeCu = true,
+    Future<TuProcessReadAction> Function(ParsedCard wallet)?
+    beforeTuProcessRecords,
+  }) async {
     final apdu = ApduExchange(transceive: _transceive);
     _report(0);
 
-    final tu = await _readTu(apdu);
+    var stoppedBySecondary = false;
+    final tu = await _readTu(
+      apdu,
+      beforeProcessRecords: !probeCu || beforeTuProcessRecords == null
+          ? null
+          : (wallet) async {
+              final action = await beforeTuProcessRecords(wallet);
+              stoppedBySecondary = action == TuProcessReadAction.stopSession;
+              return action;
+            },
+    );
     _report(0.5);
 
     final cu =
-        probeCu && tu.isDualCityTu && tu.transportFailure?.stopsSession != true
+        probeCu &&
+            !stoppedBySecondary &&
+            tu.isDualCityTu &&
+            tu.transportFailure?.stopsSession != true
         ? await _readCu(
             apdu,
             moduleName: tu.isHarbinTu
@@ -70,7 +87,11 @@ class ShanghaiTransitUnionCardParser implements CardParser {
   Future<ParsedCard?> parse() async => (await read()).mergedCard;
 
   /// 交通联合应用识读（TU）。
-  Future<ShanghaiTransitApplication> _readTu(ApduExchange apdu) async {
+  Future<ShanghaiTransitApplication> _readTu(
+    ApduExchange apdu, {
+    Future<TuProcessReadAction> Function(ParsedCard wallet)?
+    beforeProcessRecords,
+  }) async {
     onStage?.call(CommonUnitTu.moduleName);
     final info = CardInfo();
     final records = <ApduRecord>[];
@@ -86,7 +107,11 @@ class ShanghaiTransitUnionCardParser implements CardParser {
       if (!confirmed) {
         errors.add('TU 应用未确认（AID 选择失败）');
       } else {
-        card = await unit.read(info, records);
+        card = await unit.read(
+          info,
+          records,
+          beforeProcessRecords: beforeProcessRecords,
+        );
         if (card == null) {
           errors.add('TU 应用已选中，但卡信息 / 应用序列号未通过校验');
         }
@@ -101,12 +126,16 @@ class ShanghaiTransitUnionCardParser implements CardParser {
     final serial = card?.info.applicationSerial;
     final dataComplete =
         errors.isEmpty &&
+        !unit.processRecordsSkipped &&
         card != null &&
         serial != null &&
         serial.isNotEmpty &&
         card.info.balanceFen != null;
     if (card != null && card.info.balanceFen == null) {
       warnings.add('TU 钱包余额未读到');
+    }
+    if (unit.processRecordsSkipped) {
+      warnings.add('其他应用读取终止，TU 过程记录未读取');
     }
 
     return ShanghaiTransitApplication(

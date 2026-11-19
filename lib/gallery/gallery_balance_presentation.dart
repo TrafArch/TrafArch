@@ -1,3 +1,5 @@
+import '../protocols/felica/models/jpy_amount_formatter.dart';
+
 /// The wallet's display form, independent of stored balances and ledger money.
 class GalleryBalancePresentation {
   const GalleryBalancePresentation._({
@@ -45,13 +47,37 @@ class GalleryBalancePresentation {
     final suppliedCode = currencyCode?.trim().toUpperCase();
     final explicitCode = suppliedCode == null || suppliedCode.isEmpty
         ? RegExp(
-            r'(^|[^A-Za-z])(CNY|JPY|HKD|USD|MOP)(?=$|[^A-Za-z])',
-            caseSensitive: false,
-          ).firstMatch(original)?.group(2)?.toUpperCase()
+                r'(^|[^A-Za-z])(CNY|JPY|HKD|USD|MOP)(?=$|[^A-Za-z])',
+                caseSensitive: false,
+              ).firstMatch(original)?.group(2)?.toUpperCase() ??
+              (RegExp(r'JP[￥¥]').hasMatch(original) ? 'JPY' : null)
         : suppliedCode;
+    if (explicitCode == 'JPY') {
+      final yen = int.tryParse(
+        number
+            .replaceAll(',', '')
+            .replaceAll('−', '-')
+            .replaceFirst(RegExp(r'\.0+$'), ''),
+      );
+      if (yen != null) {
+        final showPositiveSign = number.startsWith('+');
+        final formatted = formatJpyAmount(
+          yen,
+          showPositiveSign: showPositiveSign,
+        );
+        return GalleryBalancePresentation._(
+          known: true,
+          currencyLabel: 'JP￥',
+          number: formatted.replaceFirst('JP￥', ''),
+          displayText: formatted,
+          prefix: 'JP￥',
+          suffix: '',
+        );
+      }
+    }
     final symbol = _symbols[explicitCode];
     if (symbol != null) {
-      final label = '$explicitCode $symbol';
+      final label = explicitCode == 'HKD' ? r'HK$' : '$explicitCode $symbol';
       return GalleryBalancePresentation._(
         known: true,
         currencyLabel: label,
@@ -98,4 +124,13 @@ class GalleryBalancePresentation {
   /// Unrecognized markers keep their position for callers needing split text.
   /// Recognized currencies always use [prefix], with an empty [suffix].
   final String prefix, suffix;
+}
+
+/// Adapts explicitly identified yen at rendering boundaries; captured records
+/// and all other currencies retain their original text.
+String galleryDisplayAmount(String original) {
+  final presentation = GalleryBalancePresentation.parse(original);
+  return presentation.currencyLabel == 'JP￥'
+      ? presentation.displayText
+      : original;
 }

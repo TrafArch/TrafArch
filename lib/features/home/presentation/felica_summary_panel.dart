@@ -1,13 +1,20 @@
 import 'package:flutter/material.dart';
 
+import '../../../protocols/felica/models/felica_card_type.dart';
 import '../../../protocols/felica/models/felica_models.dart';
+import '../../../shared/presentation/amusement_ic_summary.dart';
+import '../../../shared/presentation/suica_identity_summary.dart';
+import '../../archive/domain/suica_archive_identity.dart';
+import '../../reference_data/data/suica_station_repository.dart';
+import '../../trips/suica_trip_presenter.dart';
 
 import 'summary_widgets.dart';
 import 'summary_formatters.dart';
 
 class FelicaSummaryPanel extends StatelessWidget {
-  const FelicaSummaryPanel({super.key, required this.felica});
+  const FelicaSummaryPanel({super.key, required this.felica, this.stations});
   final FelicaScanResult felica;
+  final SuicaStationRepository? stations;
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -17,11 +24,16 @@ class FelicaSummaryPanel extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final crossBorder = felica.crossBorder;
-    final now = DateTime.now();
     return [
       ...summaryNameLine(context, felica.displayName),
       summaryField(context, '识别状态', felica.stateText),
-      if (felica.idm != null) summaryField(context, 'IDm', felica.idm!),
+      if (felica.cardProductType == FelicaCardType.suica)
+        SuicaIdentitySummary(idm: SuicaArchiveIdentity.normalizeIdm(felica.idm))
+      else if (felica.idm != null)
+        summaryField(context, 'IDm', felica.idm!),
+      if (felica.cardProductType == FelicaCardType.amusementIc ||
+          felica.amusementIc != null)
+        AmusementIcSummary(data: felica.amusementIc),
       if (felica.systemCodes.isNotEmpty)
         summaryField(context, '系统码', felica.systemCodeText),
       if (felica.transitCapability != null)
@@ -42,16 +54,6 @@ class FelicaSummaryPanel extends StatelessWidget {
               '（按发卡方汇率折算，不是独立 '
               '${crossBorder.targetCurrency} 钱包）',
         ),
-        if (crossBorder.hasVerifiedExchangeRate &&
-            !crossBorder.isExpiredAt(now))
-          summaryField(
-            context,
-            '汇率',
-            '1 ${crossBorder.sourceCurrency} = '
-                '${crossBorder.exchangeRateText} '
-                '${crossBorder.targetCurrency}'
-                '${crossBorder.rateUpdatedAt == null ? '' : '（更新于 ${summaryDate(crossBorder.rateUpdatedAt!)}）'}',
-          ),
       ],
       if (felica.wallets.length > 1)
         summaryHint(
@@ -68,6 +70,7 @@ class FelicaSummaryPanel extends StatelessWidget {
             child: Text(
               '块 ${tx.sequence ?? '-'} · ${felicaTime(tx)} · '
               '${felicaAmountText(tx, felica.wallets)}'
+              '${tx.suica == null ? '' : ' · ${suicaTransactionSummary(tx, stations: stations)}'}'
               '${tx.locationCode == null ? '' : ' · 终端 ${tx.locationCode}'}'
               '${tx.crossBorder ? ' · 跨境交易' : ''}'
               '${tx.decoded ? '' : ' · 未解析'}',
@@ -78,7 +81,12 @@ class FelicaSummaryPanel extends StatelessWidget {
             ),
           ),
         if (felica.transactions.length > 5)
-          summaryHint(context, '仅展示最近 5 条，完整记录见原始数据块'),
+          summaryHint(
+            context,
+            felica.transactions.any((tx) => tx.suica != null)
+                ? '仅展示最近 5 条，完整记录见行程页'
+                : '仅展示最近 5 条，完整记录见原始数据块',
+          ),
       ],
       if (felica.statuses.isNotEmpty) ...[
         const SizedBox(height: 4),

@@ -107,8 +107,12 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.text('版本 ${AppInfo.version} (${AppInfo.buildNumber})'),
-      findsNothing,
+      AppInfo.displayBuildNumber,
+      AppInfo.buildNumber,
+    );
+    expect(
+      AppInfo.androidVersionCode,
+      AppInfo.buildNumber,
     );
     expect(await service.checkNow(), isNull);
     expect(await service.checkOnce(), isNull);
@@ -345,6 +349,10 @@ void main() {
       files['assets/data/$name'] = await File('assets/data/$name')
           .readAsBytes();
     }
+    for (final name in ['manifest.json', 'suica_stationcode.db']) {
+      files['assets/suica/$name'] = await File('assets/suica/$name')
+          .readAsBytes();
+    }
     final bundle = FixtureBundle(files);
     final manifest = jsonDecode(
       utf8.decode(files['assets/data/reference_manifest.json']!),
@@ -361,6 +369,11 @@ void main() {
     try {
       await controller.initialize();
       final tuHash = controller.knowledge!.packageHashes['TU'];
+      final suicaHash = controller.knowledge!.packageHashes['SUICA'];
+      expect(
+        suicaHash,
+        '57d4fe1af5154e9adab0a4a38619fe8095c7f509ac28c743bf554ba199a43abd',
+      );
       await controller.installUpdate(
         'CU',
         update,
@@ -368,9 +381,17 @@ void main() {
       );
       expect(controller.knowledge!.loadIssues, isEmpty);
       expect(controller.knowledge!.packageHashes['TU'], tuHash);
+      expect(controller.knowledge!.packageHashes['SUICA'], suicaHash);
       await restart.initialize();
       expect(restart.knowledge!.packageHashes['CU'], spec['sha256']);
       expect(restart.knowledge!.packageHashes['TU'], tuHash);
+      expect(restart.knowledge!.packageHashes['SUICA'], suicaHash);
+      expect(
+        restart.knowledge!.suicaStations!
+            .lookup(areaCode: 0, lineCode: 1, stationCode: 1)
+            ?.stationName,
+        '東京',
+      );
     } finally {
       restart.dispose();
       controller.dispose();

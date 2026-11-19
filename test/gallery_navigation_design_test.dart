@@ -228,7 +228,7 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
-  testWidgets('wallet centers numeric portions independently of currency', (
+  testWidgets('wallet aligns currency groups with a tight leading number gap', (
     tester,
   ) async {
     c.navigate(GalleryPage.cards);
@@ -240,15 +240,44 @@ void main() {
         addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
         c.update(() {});
         await tester.pumpAndSettle();
-        final centers = [
-          for (final card in c.savedCards)
+        final currencyLeftEdges = <double>[];
+        for (final card in c.savedCards) {
+          final currencyFinder = find.byKey(
+            ValueKey('wallet-currency-${card.id}'),
+          );
+          final numberFinder = find.byKey(ValueKey('wallet-number-${card.id}'));
+          final currency = tester.getRect(currencyFinder);
+          final number = tester.getRect(numberFinder);
+          final panel = tester.getRect(
+            find.byKey(ValueKey('wallet-card-${card.id}')),
+          );
+          final appliedScale =
+              currency.width / tester.getSize(currencyFinder).width;
+          currencyLeftEdges.add(currency.left);
+          expect(
+            number.left - currency.right,
+            closeTo(4 * appliedScale, .1),
+            reason: '${card.id}, width=$width, scale=$scale',
+          );
+          expect(tester.widget<Text>(numberFinder).textAlign, TextAlign.left);
+          expect(currency.left, greaterThanOrEqualTo(panel.left));
+          expect(number.right, lessThanOrEqualTo(panel.right));
+        }
+        for (final (id, label) in [
+          ('shenzhen', 'CNY ¥'),
+          ('suica', 'JP￥'),
+          ('octopus', r'HK$'),
+        ]) {
+          expect(
             tester
-                .getCenter(find.byKey(ValueKey('wallet-number-${card.id}')))
-                .dx,
-        ];
+                .widget<Text>(find.byKey(ValueKey('wallet-currency-$id')))
+                .data,
+            label,
+          );
+        }
         expect(
-          centers.reduce((a, b) => a > b ? a : b) -
-              centers.reduce((a, b) => a < b ? a : b),
+          currencyLeftEdges.reduce((a, b) => a > b ? a : b) -
+              currencyLeftEdges.reduce((a, b) => a < b ? a : b),
           lessThan(.1),
         );
         expect(tester.takeException(), isNull);
