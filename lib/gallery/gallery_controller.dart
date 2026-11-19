@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/material.dart';
 
 import 'gallery_data.dart';
+import 'gallery_design.dart';
 
 enum GalleryPage {
   home,
@@ -88,6 +89,7 @@ class GalleryFaceCropSession {
     required this.cardId,
     required this.image,
     required this.sourceSize,
+    this.seed,
     this.detail = const GalleryFaceCrop(),
     this.list = const GalleryFaceCrop(),
     this.editing = true,
@@ -96,6 +98,10 @@ class GalleryFaceCropSession {
   final String cardId;
   final Uint8List image;
   final Size sourceSize;
+
+  /// Seed sampled when the photo was chosen; the crop rectangle does not change
+  /// it, so the theme can switch once when 完成 commits the image.
+  final Color? seed;
   GalleryFaceCrop detail;
   GalleryFaceCrop list;
   bool editing;
@@ -167,6 +173,13 @@ class GalleryController extends ChangeNotifier {
   GalleryCard get current => cards.firstWhere((c) => c.id == 'shanghai');
   GalleryCard get selectedCard =>
       cards.firstWhere((c) => c.id == selectedCardId, orElse: () => current);
+
+  /// Monet follows the card currently shown on the home page (spec §5.2).
+  /// Preset gradient faces derive a seed immediately; a custom photo uses the
+  /// seed extracted when the crop is committed.
+  Color get themeSeed =>
+      current.monetSeed ?? GalleryCardFace.byId(current.face).seed;
+  bool get hasCardSeed => current.image == null || current.monetSeed != null;
   List<GalleryCard> get savedCards => cards.where((c) => c.saved).toList();
   List<GalleryScene> get visibleScenes => data.scenes
       .where((scene) => scene.query['screen'] != 'footprints')
@@ -273,11 +286,17 @@ class GalleryController extends ChangeNotifier {
     super.notifyListeners();
   }
 
-  void beginFaceCrop(String cardId, Uint8List image, Size sourceSize) {
+  void beginFaceCrop(
+    String cardId,
+    Uint8List image,
+    Size sourceSize, {
+    Color? seed,
+  }) {
     faceCrop = GalleryFaceCropSession(
       cardId: cardId,
       image: image,
       sourceSize: sourceSize,
+      seed: seed,
     );
     record('选择卡面图片');
     notifyListeners();

@@ -366,7 +366,7 @@ extension _GalleryComponents on _GalleryViewState {
             : t.onTone,
       ),
       side: WidgetStatePropertyAll(
-        BorderSide(color: primary ? Colors.transparent : t.line),
+        BorderSide(color: primary ? Colors.transparent : t.outline),
       ),
       shape: const WidgetStatePropertyAll(GalleryGeometry.buttonShape),
       textStyle: const WidgetStatePropertyAll(GalleryTypography.button),
@@ -931,6 +931,7 @@ extension _GalleryComponents on _GalleryViewState {
     final side = ((windowWidth - 217) / 2).clamp(0.0, 16.0);
     final floatingRadius = BorderRadius.circular(31 + _extraTextScale * 10);
     final bar = Container(
+      key: const ValueKey('nav-bar'),
       height: layout.contentHeight,
       padding: EdgeInsets.fromLTRB(
         c.docked ? 8 : 5,
@@ -998,7 +999,14 @@ extension _GalleryComponents on _GalleryViewState {
                         tokens: t,
                         reduceMotion: _reduceMotion,
                         showLabel: showLabels,
-                        onTap: () => c.navigate(pages[i]),
+                        onTap: () {
+                          // Page switches acknowledge through the system
+                          // haptic API; re-tapping the current page is inert.
+                          if (pages[i] != c.mainPage) {
+                            HapticFeedback.selectionClick();
+                          }
+                          c.navigate(pages[i]);
+                        },
                       ),
                     ),
                   ],

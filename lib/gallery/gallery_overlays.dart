@@ -461,12 +461,9 @@ extension _GalleryOverlays on _GalleryViewState {
               (trip['kind'] == 'rail' ? '城市轨道交通' : '公共汽电车'),
         ),
         _kv('受理城市', trip['city'] as String? ?? '未记录'),
-        _kv(
-          '交易金额',
-          trip['amount'] == null
-              ? null
-              : galleryDisplayAmount(trip['amount'] as String),
-        ),
+        _kv('交易金额', trip['amount'] as String?),
+        if (trip['kind'] != 'event')
+          _kv('交易后余额', trip['balanceAfter'] as String?),
         _gap(16),
         _text(
           '本行程为内置样例摘要。未保留各侧原始字段，不据此补造记录。',
@@ -519,6 +516,7 @@ extension _GalleryOverlays on _GalleryViewState {
                             _selectedCard.imageSize = null;
                             _selectedCard.detailCrop = const GalleryFaceCrop();
                             _selectedCard.listCrop = const GalleryFaceCrop();
+                            _selectedCard.monetSeed = null;
                             c.faceCrop = null;
                           }),
                           style: TextButton.styleFrom(
