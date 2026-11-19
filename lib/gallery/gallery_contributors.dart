@@ -64,6 +64,6 @@ const galleryContributors = <GalleryContributor>[
     role: '全能开发者，为 2.0 新界面提供指导',
     initial: 'D',
     asset: 'assets/contributors/dearva.jpg',
-    url: 'https://makitoid.github.io/',
+    url: 'https://github.com/DearVa',
   ),
 ];
