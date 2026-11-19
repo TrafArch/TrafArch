@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../shared/presentation/adaptive_layout.dart';
 
 import '../../../app/app_info.dart';
-import '../../../platform/browser/feedback_browser.dart';
+import 'legal_document_links.dart';
 import '../../updates/update_prompt.dart';
 import '../../updates/update_service.dart';
 import 'acknowledgements_page.dart';
@@ -12,11 +12,11 @@ class AboutPage extends StatefulWidget {
   const AboutPage({
     super.key,
     required this.updates,
-    required this.openPrivacyPolicy,
+    required this.openWebLink,
     this.openUrl,
   });
 
-  final Future<void> Function() openPrivacyPolicy;
+  final Future<void> Function(Uri) openWebLink;
 
   final UpdateService updates;
   final Future<bool> Function(Uri)? openUrl;
@@ -27,26 +27,6 @@ class AboutPage extends StatefulWidget {
 
 class _AboutPageState extends State<AboutPage> {
   bool _checking = false;
-  bool _openingPrivacy = false;
-
-  Future<void> _openPrivacyPolicy() async {
-    if (_openingPrivacy) return;
-    setState(() => _openingPrivacy = true);
-    try {
-      await widget.openPrivacyPolicy();
-    } on FeedbackBrowserException catch (error) {
-      // 浏览器层已按情况给出可展示文案（含复制链接气泡）。
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(error.message)));
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('无法打开隐私政策，请稍后重试。')));
-    } finally {
-      if (mounted) setState(() => _openingPrivacy = false);
-    }
-  }
 
   Future<void> _checkUpdates() async {
     if (_checking || !widget.updates.isConfigured) return;
@@ -156,14 +136,7 @@ class _AboutPageState extends State<AboutPage> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.privacy_tip_outlined),
-                    title: const Text('隐私政策'),
-                    enabled: !_openingPrivacy,
-                    onTap: _openingPrivacy ? null : _openPrivacyPolicy,
-                  ),
-                ),
+                LegalDocumentLinks(openWebLink: widget.openWebLink),
                 const SizedBox(height: 24),
                 Text(
                   AppInfo.copyright,

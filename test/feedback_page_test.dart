@@ -9,6 +9,7 @@ import 'package:transit_card_analyzer/features/settings/presentation/about_page.
 import 'package:transit_card_analyzer/features/settings/presentation/survey_page.dart';
 import 'package:transit_card_analyzer/platform/storage/app_logger.dart';
 import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
+import 'package:transit_card_analyzer/shared/app_support.dart';
 
 import 'support/test_database.dart';
 
@@ -54,8 +55,13 @@ void main() {
     expect(find.text('暂时无法打开问卷'), findsNothing);
   });
 
-  for (final privacyPolicy in [false, true]) {
-    testWidgets('默认浏览器打开成功后不复制链接（隐私政策：$privacyPolicy）', (tester) async {
+  for (final (label, url) in [
+    ('填写反馈问卷', AppSupport.survey),
+    ('隐私政策', AppSupport.privacy),
+    (AppSupport.eulaLabel, AppSupport.eula),
+  ]) {
+    testWidgets('默认浏览器打开$label成功后不复制链接', (tester) async {
+      final about = label != '填写反馈问卷';
       final calls = <MethodCall>[];
       var clipboardWrites = 0;
       messenger.setMockMethodCallHandler(browserChannel, (call) async {
@@ -69,28 +75,29 @@ void main() {
       final app = createApp();
       await tester.pumpWidget(
         MaterialApp(
-          home: privacyPolicy
+          home: about
               ? AboutPage(
                   updates: app.updates,
-                  openPrivacyPolicy: app.openPrivacyPolicy,
+                  openWebLink: app.openWebLink,
                 )
               : FeedbackPage(app: app),
         ),
       );
-      final entry = find.text(privacyPolicy ? '隐私政策' : '填写反馈问卷');
-      if (privacyPolicy) await tester.scrollUntilVisible(entry, 150);
+      final entry = find.text(label);
+      if (about) {
+        await tester.scrollUntilVisible(entry, 150);
+        await tester.pumpAndSettle();
+      }
       await tester.tap(entry);
       await tester.pumpAndSettle();
 
       expect(calls, hasLength(1));
       expect(calls.single.method, 'openCustomTab');
-      expect(calls.single.arguments, {
-        'url': privacyPolicy ? 'https://www.trafarch.top/privacy.html' : 'https://trafarch.feishu.cn/share/base/form/shrcniZ6QaPgqGazU1bpdmZyNPh',
-      });
+      expect(calls.single.arguments, {'url': url});
       expect(clipboardWrites, 0);
       expect(find.text('链接已复制到剪贴板，请前往浏览器打开'), findsNothing);
       expect(
-        find.byType(privacyPolicy ? AboutPage : FeedbackPage),
+        find.byType(about ? AboutPage : FeedbackPage),
         findsOneWidget,
       );
     });
@@ -209,7 +216,7 @@ void main() {
       MaterialApp(
         home: AboutPage(
           updates: app.updates,
-          openPrivacyPolicy: app.openPrivacyPolicy,
+          openWebLink: app.openWebLink,
         ),
       ),
     );
@@ -249,7 +256,7 @@ void main() {
       MaterialApp(
         home: AboutPage(
           updates: app.updates,
-          openPrivacyPolicy: app.openPrivacyPolicy,
+          openWebLink: app.openWebLink,
         ),
       ),
     );

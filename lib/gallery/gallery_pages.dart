@@ -1290,6 +1290,8 @@ extension _GalleryPages on _GalleryViewState {
       ),
       padding: EdgeInsets.zero,
     ),
+    _sectionTitle('隐私'),
+    _panel(const FirebaseAnalyticsTile(), padding: EdgeInsets.zero),
     _sectionTitle('日志'),
     _panel(
       Column(
@@ -1353,6 +1355,13 @@ extension _GalleryPages on _GalleryViewState {
             '了解数据与隐私保护',
             Icons.privacy_tip_outlined,
             link: AppSupport.privacy,
+          ),
+          const Divider(),
+          _contactRow(
+            AppSupport.eulaLabel,
+            '查看 TrafArch 的使用条款',
+            Icons.description_outlined,
+            link: AppSupport.eula,
           ),
           const Divider(),
           _contributorRow(),

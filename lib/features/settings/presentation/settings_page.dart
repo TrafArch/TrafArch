@@ -10,6 +10,7 @@ import '../../../app/app_dependencies.dart';
 import '../../../app/beta_ui_scope.dart';
 import 'about_page.dart';
 import 'feedback_page.dart';
+import 'firebase_analytics_tile.dart';
 import 'diagnostic_export_dialog.dart';
 import '../../reference_data/presentation/knowledge_base_page.dart';
 
@@ -232,6 +233,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ),
                 ]),
+                section('隐私', [const Card(child: FirebaseAnalyticsTile())]),
                 section('日志', [
                   Card(
                     child: Column(
@@ -307,7 +309,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         MaterialPageRoute(
                           builder: (_) => AboutPage(
                             updates: app.updates,
-                            openPrivacyPolicy: app.openPrivacyPolicy,
+                            openWebLink: app.openWebLink,
                           ),
                         ),
                       ),

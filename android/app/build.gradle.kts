@@ -24,8 +24,8 @@ val unsignedApk = providers.gradleProperty("unsignedApk").orNull == "true"
 val hasGoogleServicesConfig = fileTree(projectDir) {
     include("google-services.json", "src/**/google-services.json")
 }.files.isNotEmpty()
-if (hasGoogleServicesConfig && !repairBuild &&
-    (!galleryBuild || galleryAnalyticsEnabled)) {
+val analyticsConfigured = hasGoogleServicesConfig && !repairBuild && (!galleryBuild || galleryAnalyticsEnabled)
+if (analyticsConfigured) {
     apply(plugin = "com.google.gms.google-services")
 }
 
@@ -173,6 +173,7 @@ if (!unsignedApk && (signingPropertiesPath != null || keystorePropertiesFile.exi
 }
 
 android {
+    sourceSets.getByName("main").java.srcDir(if (analyticsConfigured) "src/analytics/java" else "src/noAnalytics/java")
     namespace = "com.kajolno.TrafArch"
     compileSdk = 37
     ndkVersion = "30.0.16248370"

@@ -4,6 +4,12 @@ import 'gallery_color_engine.dart';
 
 enum GalleryElevation { flat, card, floating, modal }
 
+abstract final class GalleryDialogMotion {
+  static const enter = Duration(milliseconds: 180);
+  static const exit = Duration(milliseconds: 140);
+  static const initialScale = .96;
+}
+
 abstract final class GalleryGeometry {
   static const buttonShape = RoundedRectangleBorder(
     borderRadius: BorderRadius.all(Radius.circular(14)),

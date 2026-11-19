@@ -114,8 +114,8 @@ abstract final class _GalleryMotion {
   static const back = Duration(milliseconds: 220);
   static const sheet = Duration(milliseconds: 300);
   static const sheetBack = Duration(milliseconds: 240);
-  static const dialog = Duration(milliseconds: 180);
-  static const dialogBack = Duration(milliseconds: 140);
+  static const dialog = GalleryDialogMotion.enter;
+  static const dialogBack = GalleryDialogMotion.exit;
   static const menu = Duration(milliseconds: 180);
   static const menuBack = Duration(milliseconds: 120);
   static const expand = Duration(milliseconds: 180);
@@ -577,7 +577,10 @@ class _GalleryPopupRoute extends PopupRoute<void> with _GalleryPredictiveRoute {
     if (_menu) return content;
     return Opacity(
       opacity: value,
-      child: Transform.scale(scale: .96 + .04 * value, child: content),
+      child: Transform.scale(
+        scale: lerpDouble(GalleryDialogMotion.initialScale, 1, value)!,
+        child: content,
+      ),
     );
   }
 

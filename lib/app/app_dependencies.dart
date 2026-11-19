@@ -616,7 +616,7 @@ class AppDependencies extends OwnedNotifier {
       settings.openFeedbackEmail(address);
   Future<bool> openFeedbackQqGroup(String groupNumber, Uri joinUrl) =>
       settings.openFeedbackQqGroup(groupNumber, joinUrl);
-  Future<void> openPrivacyPolicy() => settings.openPrivacyPolicy();
+  Future<void> openWebLink(Uri url) => settings.openWebLink(url);
   Future<void> openFeedbackSurvey(Uri url) => settings.openFeedbackSurvey(url);
   Future<void> exportLog({Set<String>? sessionIds}) =>
       diagnostics.exportLog(sessionIds: sessionIds);
