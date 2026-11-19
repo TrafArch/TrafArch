@@ -1,13 +1,14 @@
 import 'package:drift/drift.dart';
 
-/// 卡片读取批次表：一次"读取 + 保存"累积一行原始记录快照，历史不覆盖。
+/// 卡片读取批次表：一次"读取 + 保存"保存一行原始记录快照；稳定内容重读时
+/// 替换对应批次，内容不同的读取继续保留。
 ///
 /// - [payloadJson] 为 CardSessionSnapshot v1/v2/v3 的 JSON（原始 HEX + 解析版本
 ///   + 0x1E 关联证据），详情和导出使用 ArchiveHistory 的同一投影；
 /// - [parseVersion] 为该批次的解析口径版本（kTripParseVersion），解析器
 ///   升级后据此识别旧批次并支持按批次重新解析；
-/// - 去重规则：同卡且 payload 内容完全一致（同一内容重复读取）时不重复
-///   入库，由 CardRepository.saveIdentity 保证。
+/// - 去重规则：同卡且捕获内容一致时，以新的读取替换旧批次；读取会话 ID、
+///   物理帧会话 ID 和帧捕获时间不参与内容身份，由 CardRepository 保证。
 @DataClassName('CardReadBatch')
 class CardReadBatches extends Table {
   /// 新捕获为 uuid v4；旧标量回填使用 `legacy-scalar-v6:<timeSource>:<random>`。

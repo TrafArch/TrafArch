@@ -639,6 +639,63 @@ void main() {
       expect(row.sessionDataJson, '{"trips":[{"sequence":1},{"sequence":2}]}');
     });
 
+    test('相同捕获内容替换原文，迟到读取不能覆盖新批次时间', () async {
+      String capture(String attempt, String capturedAt) => CardSessionSnapshot(
+        parseVersion: 12,
+        context: const ArchiveContext(
+          systemId: 'TU',
+          applicationId: 'A000000632010105',
+          currencyCode: 'CNY',
+          minorUnitDigits: 2,
+          clockBasis: 'device-local-card-time-unverified',
+        ),
+        extensions: {'captureAttemptId': attempt},
+        rawEvidence: [
+          {
+            'kind': 'physical_frame',
+            'sessionId': attempt,
+            'capturedAt': capturedAt,
+            'command': [0, 164],
+            'response': [144, 0],
+          },
+        ],
+      ).encode();
+
+      await repository.saveIdentity(
+        fingerprint: 'tunion:1:2',
+        identity: const CardArchiveIdentity(cardType: CardTypes.chinaTunion),
+        sessionDataJson: capture('read-a', '2026-01-01T00:00:00Z'),
+        readAt: DateTime(2026, 1, 1),
+      );
+      final first = (await db.select(db.cardReadBatches).get()).single;
+
+      await repository.saveIdentity(
+        fingerprint: 'tunion:1:2',
+        identity: const CardArchiveIdentity(cardType: CardTypes.chinaTunion),
+        sessionDataJson: capture('read-b', '2026-01-01T00:01:00Z'),
+        readAt: DateTime(2026, 1, 2),
+      );
+      var batches = await db.select(db.cardReadBatches).get();
+      expect(batches, hasLength(1));
+      expect(batches.single.id, first.id);
+      expect(
+        batches.single.readAt,
+        DateTime(2026, 1, 1).millisecondsSinceEpoch,
+      );
+      expect(batches.single.payloadJson, contains('read-b'));
+      expect(batches.single.payloadJson, isNot(contains('read-a')));
+
+      await repository.saveIdentity(
+        fingerprint: 'tunion:1:2',
+        identity: const CardArchiveIdentity(cardType: CardTypes.chinaTunion),
+        sessionDataJson: capture('read-c', '2026-01-01T00:02:00Z'),
+        readAt: DateTime(2026, 1, 1, 12),
+      );
+      batches = await db.select(db.cardReadBatches).get();
+      expect(batches, hasLength(1));
+      expect(batches.single.payloadJson, contains('read-b'));
+    });
+
     test('watchCards：最近读取的卡片在前', () async {
       await repository.saveIdentity(
         fingerprint: 'tunion:1:1',

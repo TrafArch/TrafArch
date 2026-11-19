@@ -32,7 +32,7 @@ class SnapshotDecodeResult {
 /// v2 升级（历史存储）：
 /// - 完整保存 0x1E 过程记录集合与 0x1A 记录集合（含原始 HEX），
 ///   不再只保存最近一次单条展示快照；批次经 [mergeHistories] 按记录
-///   身份累积去重，新读取追加批次、不覆盖旧数据；
+///   身份累积去重，稳定内容重读替换旧批次，不同读取继续追加；
 /// - 交易条目随快照保存原始 HEX、站点匹配置信与配对的 0x1E 记录
 ///   （关联证据入档，历史展示仍可"逐条关联、确认重复才合并"）；
 /// - [parseVersion] 记录产出批次的解析口径版本（[kTripParseVersion]），
@@ -314,6 +314,46 @@ class CardSessionSnapshot {
       );
     }
   }
+
+  /// Stable identity for a captured read when deciding whether a newer batch
+  /// replaces an older replay. Session bookkeeping is not card content: a
+  /// retry gets a new attempt/session ID and every physical frame has a new
+  /// capture timestamp. All protocol fields, observations and unknown fields
+  /// remain part of the identity.
+  static String? contentIdentity(String json) {
+    final decoded = decodeResult(json);
+    if (decoded.status != SnapshotDecodeStatus.supported &&
+        decoded.status != SnapshotDecodeStatus.legacy) {
+      return null;
+    }
+    try {
+      final value = jsonDecode(json);
+      if (value is! Map) return null;
+      return jsonEncode(_stableContent(value));
+    } on FormatException {
+      return null;
+    }
+  }
+
+  static Object? _stableContent(Object? value) {
+    if (value is Map) {
+      final keys =
+          value.keys
+              .whereType<String>()
+              .where((key) => !_volatileCaptureFields.contains(key))
+              .toList()
+            ..sort();
+      return {for (final key in keys) key: _stableContent(value[key])};
+    }
+    if (value is List) return [for (final item in value) _stableContent(item)];
+    return value;
+  }
+
+  static const _volatileCaptureFields = {
+    'captureAttemptId',
+    'sessionId',
+    'capturedAt',
+  };
 
   /// 历史批次合并：多份快照按记录身份累积去重（交易按 序号+时间+金额+
   /// 终端，0x1A 按 时间+站点+终端，0x1E 按 原始 HEX / 四要素），

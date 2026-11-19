@@ -29,7 +29,7 @@ import 'support/test_database.dart';
 typedef _Journey = JourneyPresentation<TripCardPresentation<ArchiveRecordKind>>;
 
 void main() {
-  test('同一张卡覆盖保存两次保留两批证据且汇总为一段行程', () async {
+  test('同一张卡覆盖保存两次只保留最新等价批次', () async {
     final database = testDatabase();
     final repository = CardRepository(database);
     final controller = ArchiveController(
@@ -95,20 +95,19 @@ void main() {
     final history = await ArchiveHistory(repository).load(card.id);
     final journeys = _journeys(history);
 
-    expect(history.batches, hasLength(2));
+    expect(history.batches, hasLength(1));
     expect(history.records, hasLength(1));
-    expect(history.records.single.sources, hasLength(2));
+    expect(history.records.single.sources, hasLength(1));
     expect(journeys, hasLength(1));
-    // Each retained batch keeps its own two side-detail evidence rows.
-    expect(journeys.single.events, hasLength(4));
+    expect(journeys.single.events, hasLength(2));
     expect(journeys.single.events.expand((event) => event.sourceIds).toSet(), {
-      for (final batch in history.batches) batch.id,
+      history.batches.single.id,
     });
     expect(
       history.batches.map(
         (batch) => batch.decoded.snapshot?.extensions['captureAttemptId'],
       ),
-      containsAll(['overwrite-read-1', 'overwrite-read-2']),
+      contains('overwrite-read-2'),
     );
   });
 

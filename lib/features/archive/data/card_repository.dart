@@ -26,8 +26,9 @@ class CardRepository {
   /// 读取快照（余额 / 货币 / 交易条数）与最近读取时间（不触碰
   /// [SavedCards.customName]）；未命中时新建档案。
   /// [sessionDataJson] 为本次读取的原始记录快照（CardSessionSnapshot v3）；
-  /// 作为**读取批次**累积写入 [CardReadBatches]（同卡同内容去重），保存
-  /// 新读取不会删除已有历史；[parseVersion] 记录产出批次的解析口径版本。
+  /// 作为**读取批次**写入 [CardReadBatches]。同卡稳定捕获内容的重读会
+  /// 替换旧批次，不同记录、余额、应用或解析上下文仍会累积；[parseVersion]
+  /// 记录产出批次的解析口径版本。
   Future<void> saveIdentity({
     required String fingerprint,
     required CardArchiveIdentity identity,
@@ -161,41 +162,91 @@ class CardRepository {
         if (identity.cityName != null) 'cityName': at,
         if (hasIdentityObservation) 'identity': at,
       });
-      // 读取批次累积：本次有记录快照时追加一行；同卡内容完全一致
-      // （同一记录集重复读取）时去重跳过。历史批次不会被保存操作删除。
+      // 读取批次按稳定捕获内容去重。重复读取会替换旧的等价批次，
+      // 但不同记录、余额、应用或解析上下文仍保留为独立批次。
       {
-        final duplicate =
-            await (db.select(db.cardReadBatches)
-                  ..where(
-                    (t) =>
-                        t.cardId.equals(cardId) & t.payloadJson.equals(payload),
-                  )
-                  ..limit(1))
-                .getSingleOrNull();
-        if (duplicate == null) {
-          await db
-              .into(db.cardReadBatches)
-              .insert(
-                CardReadBatchesCompanion.insert(
-                  id: const Uuid().v4(),
-                  cardId: cardId,
-                  cardFingerprint: fingerprint,
-                  readAt: at,
-                  parseVersion: Value(
-                    parseVersion ??
-                        CardSessionSnapshot.decodeResult(payload)
-                            .snapshot
-                            ?.parseVersion ??
-                        1,
-                  ),
-                  payloadJson: payload,
-                ),
-              );
+        final duplicates = await _equivalentBatches(cardId, payload);
+        final parser =
+            parseVersion ??
+            CardSessionSnapshot.decodeResult(payload).snapshot?.parseVersion ??
+            1;
+        if (duplicates.isEmpty) {
+          await _insertBatch(
+            id: const Uuid().v4(),
+            cardId: cardId,
+            fingerprint: fingerprint,
+            readAt: at,
+            parseVersion: parser,
+            payload: payload,
+          );
+        } else if (at > duplicates.first.readAt &&
+            (existing?.lastReadAt == null || at >= existing!.lastReadAt!)) {
+          // Keep the newest existing ID and its original capture time so
+          // retained balance sources and JSON batch extensions continue to
+          // point at the replaced capture. SavedCards.lastReadAt carries the
+          // newer observation time; the immutable batch chronology does not
+          // get relabelled by a replay.
+          for (final duplicate in duplicates) {
+            await (db.delete(
+              db.cardReadBatches,
+            )..where((t) => t.id.equals(duplicate.id))).go();
+          }
+          await _insertBatch(
+            id: duplicates.first.id,
+            cardId: cardId,
+            fingerprint: fingerprint,
+            readAt: duplicates.first.readAt,
+            parseVersion: parser,
+            payload: payload,
+          );
         }
       }
       await ArchiveDocumentStore(db).refresh(cardId);
     });
   }
+
+  Future<List<CardReadBatch>> _equivalentBatches(
+    String cardId,
+    String payload,
+  ) async {
+    final incoming = CardSessionSnapshot.contentIdentity(payload);
+    final batches =
+        await (db.select(db.cardReadBatches)
+              ..where((t) => t.cardId.equals(cardId))
+              ..orderBy([
+                (t) => OrderingTerm.desc(t.readAt),
+                (t) => OrderingTerm.desc(t.id),
+              ]))
+            .get();
+    return [
+      for (final batch in batches)
+        if (batch.payloadJson == payload ||
+            incoming != null &&
+                CardSessionSnapshot.contentIdentity(batch.payloadJson) ==
+                    incoming)
+          batch,
+    ];
+  }
+
+  Future<void> _insertBatch({
+    required String id,
+    required String cardId,
+    required String fingerprint,
+    required int readAt,
+    required int parseVersion,
+    required String payload,
+  }) => db
+      .into(db.cardReadBatches)
+      .insert(
+        CardReadBatchesCompanion.insert(
+          id: id,
+          cardId: cardId,
+          cardFingerprint: fingerprint,
+          readAt: readAt,
+          parseVersion: Value(parseVersion),
+          payloadJson: payload,
+        ),
+      );
 
   Future<void> _rememberObservationTimes(
     String cardId,
