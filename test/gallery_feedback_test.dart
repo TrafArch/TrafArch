@@ -283,6 +283,27 @@ void main() {
     },
   );
 
+  testWidgets('warning slides a short vertical distance and can be dismissed', (
+    tester,
+  ) async {
+    await mount(tester);
+    GalleryFeedbackHost.show(
+      pageContext,
+      '请检查数据来源',
+      type: GalleryFeedbackType.warning,
+    );
+    await tester.pump();
+    final initial = tester.getTopRight(surface);
+    await tester.pumpAndSettle();
+    final resting = tester.getTopRight(surface);
+    expect(initial.dx, resting.dx);
+    expect(initial.dy - resting.dy, closeTo(8, .1));
+    expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('gallery-feedback-dismiss')));
+    await tester.pumpAndSettle();
+    expect(surface, findsNothing);
+  });
+
   testWidgets(
     'feedback action is readable at large text, announced and invoked once',
     (tester) async {

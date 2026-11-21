@@ -21,11 +21,17 @@ class PendingSavePresenter extends StatefulWidget {
     required this.app,
     required this.active,
     required this.child,
+    this.manualRequest,
+    this.onNotice,
+    this.canPresent,
   });
 
   final AppDependencies app;
   final bool active;
   final Widget child;
+  final int? manualRequest;
+  final void Function(String message, bool failed)? onNotice;
+  final bool Function()? canPresent;
 
   @override
   State<PendingSavePresenter> createState() => _PendingSavePresenterState();
@@ -39,10 +45,24 @@ class _PendingSavePresenterState extends State<PendingSavePresenter> {
   AppDependencies? _dialogOwner;
   DialogRoute<bool>? _route;
   NavigatorState? _navigator;
+  int _handledRequest = 0;
+  bool _manualDialog = false;
+  bool get _active => widget.active && (widget.canPresent?.call() ?? true);
+
+  void _notice(String message, {bool failed = false}) {
+    final onNotice = widget.onNotice;
+    if (onNotice != null) {
+      onNotice(message, failed);
+    } else {
+      ScaffoldMessenger.maybeOf(context)
+          ?.showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
 
   @override
   void initState() {
     super.initState();
+    _handledRequest = widget.manualRequest ?? 0;
     widget.app.addListener(_schedule);
     _schedule();
   }
@@ -71,8 +91,9 @@ class _PendingSavePresenterState extends State<PendingSavePresenter> {
   bool _isCurrent(AppDependencies owner, String id) =>
       mounted &&
       identical(widget.app, owner) &&
-      widget.active &&
-      (!owner.autoSaveEnabled ||
+      _active &&
+      (_manualDialog ||
+          !owner.autoSaveEnabled ||
           owner.archiveConflictPolicy == ArchiveConflictPolicy.ask) &&
       !owner.scanning &&
       owner.pendingCardSave?.pendingSaveId == id;
@@ -96,47 +117,62 @@ class _PendingSavePresenterState extends State<PendingSavePresenter> {
       }
       return;
     }
-    if (!widget.active) return;
+    if (!_active) return;
     final app = widget.app;
+    final request = widget.manualRequest;
+    final manual = request != null && request != _handledRequest;
     if (app.autoSaveEnabled) {
       final notice = app.autoSaveNotice;
       if (notice != null) {
         app.clearAutoSaveNotice();
-        ScaffoldMessenger.maybeOf(context)
-            ?.showSnackBar(SnackBar(content: Text(notice)));
+        _notice(notice, failed: notice.startsWith('自动保存失败'));
       }
-      if (app.archiveConflictPolicy != ArchiveConflictPolicy.ask) return;
+      if (!manual && app.archiveConflictPolicy != ArchiveConflictPolicy.ask) {
+        return;
+      }
+    } else if (request != null && !manual) {
+      return;
     }
     final pending = app.pendingCardSave;
-    if (pending == null) return;
+    if (pending == null || app.scanning) return;
     final exists = await app.archiveCardExists(pending.fingerprint);
     if (!mounted ||
+        !identical(app, widget.app) ||
         app.pendingCardSave?.pendingSaveId != pending.pendingSaveId ||
-        !widget.active) {
+        !_active) {
       return;
     }
-    if (app.autoSaveEnabled && !exists) return;
+    if (app.autoSaveEnabled && !exists && !manual) return;
+    if (manual) {
+      if (request == _handledRequest || request != widget.manualRequest) return;
+      _handledRequest = request;
+      _shownId = null;
+    }
     if (exists && app.archiveConflictPolicy == ArchiveConflictPolicy.skip) {
       app.declinePendingSave(pending.pendingSaveId);
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        SnackBar(content: Text('已跳过已存在的记录：${pending.displayName}')),
-      );
+      _notice('已跳过已存在的记录：${pending.displayName}');
       return;
     }
-    if (pending.pendingSaveId == _shownId ||
-        !_isCurrent(app, pending.pendingSaveId)) {
+    if (_inFlight ||
+        pending.pendingSaveId == _shownId ||
+        app.scanning ||
+        (!manual &&
+            app.autoSaveEnabled &&
+            app.archiveConflictPolicy != ArchiveConflictPolicy.ask)) {
       return;
     }
-    await _show(app, pending, exists: exists);
+    await _show(app, pending, exists: exists, manual: manual);
   }
 
   Future<void> _show(
     AppDependencies owner,
     PendingCardSave pending, {
     required bool exists,
+    required bool manual,
   }) async {
     final id = pending.pendingSaveId;
     _inFlight = true;
+    _manualDialog = manual;
     _shownId = id;
     _dialogId = id;
     _dialogOwner = owner;
@@ -163,10 +199,10 @@ class _PendingSavePresenterState extends State<PendingSavePresenter> {
           conflictPolicy: exists ? ArchiveConflictPolicy.overwrite : null,
         );
         if (!ok && mounted && _isCurrent(owner, id)) {
-          _shownId =
-              null; // The restored pending capture can be confirmed again.
-          ScaffoldMessenger.maybeOf(context)
-              ?.showSnackBar(const SnackBar(content: Text('卡片保存失败')));
+          if (widget.manualRequest == null) _shownId = null;
+          _notice('卡片保存失败', failed: true);
+        } else if (ok && mounted && widget.manualRequest != null) {
+          _notice('本次读取已保存');
         }
       } else {
         owner.declinePendingSave(id);
@@ -177,6 +213,7 @@ class _PendingSavePresenterState extends State<PendingSavePresenter> {
       _dialogId = null;
       _dialogOwner = null;
       _inFlight = false;
+      _manualDialog = false;
       _schedule();
     }
   }

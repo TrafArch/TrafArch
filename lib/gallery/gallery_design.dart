@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 
 import 'gallery_color_engine.dart';
+import 'gallery_motion.dart';
 
 enum GalleryElevation { flat, card, floating, modal }
 
 abstract final class GalleryDialogMotion {
-  static const enter = Duration(milliseconds: 180);
-  static const exit = Duration(milliseconds: 140);
-  static const initialScale = .96;
+  static const enter = GalleryMotion.menu;
+  static const exit = GalleryMotion.menuBack;
+  static const initialScale = GalleryMotion.menuScale;
 }
 
 abstract final class GalleryGeometry {

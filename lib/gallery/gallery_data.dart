@@ -39,6 +39,8 @@ class GalleryFaceCrop {
 /// A frozen design snapshot. This loader never opens production reference DBs.
 class GalleryData {
   GalleryData(this.json);
+  GalleryData.empty()
+    : json = const {'cards': [], 'trips': [], 'footprints': []};
 
   final GalleryRecord json;
 

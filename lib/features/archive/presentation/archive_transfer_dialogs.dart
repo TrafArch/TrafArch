@@ -6,10 +6,13 @@ import '../data/app_database.dart';
 import '../domain/card_name_extension.dart';
 import '../domain/archive_export_options.dart';
 
+typedef ArchiveTransferNotice = void Function(String message, bool failed);
+
 /// Import is available even when the card list is empty.
 class ArchiveTransferButtons extends StatefulWidget {
-  const ArchiveTransferButtons({super.key, required this.app});
+  const ArchiveTransferButtons({super.key, required this.app, this.onNotice});
   final AppDependencies app;
+  final ArchiveTransferNotice? onNotice;
 
   @override
   State<ArchiveTransferButtons> createState() => _ArchiveTransferButtonsState();
@@ -60,18 +63,20 @@ class _ArchiveTransferButtonsState extends State<ArchiveTransferButtons> {
       if (!mounted || confirmed != true) return;
       final result = await widget.app.archiveTransfer.confirmImport(preview);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '导入完成：新增 ${result.insertedCards} 张卡片，合并 ${result.mergedCards} 张卡片；'
-            '新增 ${result.addedBatches} 个读取批次、${result.addedRecords} 条导入记录。',
-          ),
-        ),
+      _showNotice(
+        context,
+        widget.onNotice,
+        '导入完成：新增 ${result.insertedCards} 张卡片，合并 ${result.mergedCards} 张卡片；'
+        '新增 ${result.addedBatches} 个读取批次、${result.addedRecords} 条导入记录。',
       );
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('导入失败：${_errorText(error)}')));
+        _showNotice(
+          context,
+          widget.onNotice,
+          '导入失败：${_errorText(error)}',
+          failed: true,
+        );
       }
     } finally {
       if (mounted) setState(() => _interacting = false);
@@ -82,7 +87,7 @@ class _ArchiveTransferButtonsState extends State<ArchiveTransferButtons> {
     if (_interacting || widget.app.archiveTransfer.busy) return;
     setState(() => _interacting = true);
     try {
-      await exportArchiveJson(context, widget.app);
+      await exportArchiveJson(context, widget.app, onNotice: widget.onNotice);
     } finally {
       if (mounted) setState(() => _interacting = false);
     }
@@ -116,6 +121,7 @@ Future<void> exportArchiveJson(
   BuildContext context,
   AppDependencies app, {
   SavedCard? card,
+  ArchiveTransferNotice? onNotice,
 }) async {
   if (app.archiveTransfer.busy) return;
   final options = await showArchiveExportDialog(
@@ -129,13 +135,25 @@ Future<void> exportArchiveJson(
       cardIds: card == null ? null : {card.id},
     );
     if (!context.mounted || name == null) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text('已保存：$name')));
+    _showNotice(context, onNotice, '已保存：$name');
   } catch (error) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('导出失败：${_errorText(error)}')));
+      _showNotice(context, onNotice, '导出失败：${_errorText(error)}', failed: true);
     }
+  }
+}
+
+void _showNotice(
+  BuildContext context,
+  ArchiveTransferNotice? callback,
+  String message, {
+  bool failed = false,
+}) {
+  if (callback != null) {
+    callback(message, failed);
+  } else {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 }
 

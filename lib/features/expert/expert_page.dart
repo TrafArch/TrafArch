@@ -5,6 +5,7 @@ import '../../shared/presentation/application_evidence_panel.dart';
 import '../qr/presentation/qr_action_button.dart';
 import '../../app/app_dependencies.dart';
 import '../home/presentation/felica_summary_panel.dart';
+import '../home/presentation/transit_summary_panel.dart';
 import '../settings/presentation/settings_action_button.dart';
 import 'city_union_panel.dart';
 import 'compliance_panel.dart';
@@ -39,18 +40,12 @@ class ExpertPage extends StatelessWidget {
         ),
       );
     }
-    final isTUnion = CardParserIds.isTUnionFamily(app.parsedCard?.parserId);
-    final tabs = <Tab>[
-      const Tab(text: '信息获取'),
-      const Tab(text: '交通数据解析'),
-      if (isTUnion) const Tab(text: 'JT/T 978 符合性'),
-      const Tab(text: 'APDU / Raw Data'),
-    ];
+    final sections = ExpertReadSections(app);
     return SafeArea(
       top: false,
       child: DefaultTabController(
-        key: ValueKey('expert-tabs-${tabs.length}'),
-        length: tabs.length,
+        key: ValueKey('expert-tabs-${sections.tabs.length}'),
+        length: sections.tabs.length,
         child: NestedScrollView(
           headerSliverBuilder: (context, _) => [
             SliverAppBar(
@@ -63,54 +58,82 @@ class ExpertPage extends StatelessWidget {
               bottom: TabBar(
                 isScrollable: true,
                 tabAlignment: TabAlignment.start,
-                tabs: tabs,
+                tabs: [
+                  for (final section in sections.tabs) Tab(text: section.label),
+                ],
               ),
             ),
           ],
           body: TabBarView(
             children: [
-              _information(),
-              _tab('expert-parsed', _transitPanels(context)),
-              if (isTUnion)
-                _tab('expert-compliance', [
-                  CompliancePanel(
-                    analysis: app.analysis,
-                    balanceDisplay: app.balanceDisplay,
-                  ),
-                ]),
-              _tab('expert-apdu', [
-                RawDataPanel(
-                  apduLog: app.apduLog,
-                  processRecords: app.transitProcessRecords,
+              for (final section in sections.tabs)
+                ExpertTabBody(
+                  storageKey: section.storageKey,
+                  hasResult: app.lastResult != null,
+                  showReadHint: section != ExpertReadTab.information,
+                  children: sections.content(context, section),
                 ),
-              ]),
             ],
           ),
         ),
       ),
     );
   }
+}
 
-  Widget _tab(String key, List<Widget> children, {bool showReadHint = true}) =>
-      ExpertTabBody(
-        storageKey: key,
-        hasResult: app.lastResult != null,
-        showReadHint: showReadHint,
-        children: children,
-      );
+enum ExpertReadTab {
+  information('信息获取', 'expert-info-get'),
+  transit('交通数据解析', 'expert-parsed'),
+  compliance('JT/T 978 符合性', 'expert-compliance'),
+  raw('APDU / Raw Data', 'expert-apdu');
 
-  Widget _information() {
+  const ExpertReadTab(this.label, this.storageKey);
+  final String label;
+  final String storageKey;
+}
+
+class ExpertReadSections {
+  const ExpertReadSections(this.app);
+  final AppDependencies app;
+
+  List<ExpertReadTab> get tabs => [
+    ExpertReadTab.information,
+    ExpertReadTab.transit,
+    if (CardParserIds.isTUnionFamily(app.parsedCard?.parserId))
+      ExpertReadTab.compliance,
+    ExpertReadTab.raw,
+  ];
+
+  List<Widget> content(BuildContext context, ExpertReadTab section) =>
+      switch (section) {
+        ExpertReadTab.information => _information(),
+        ExpertReadTab.transit => _transitPanels(context),
+        ExpertReadTab.compliance => [
+          CompliancePanel(
+            analysis: app.analysis,
+            balanceDisplay: app.balanceDisplay,
+          ),
+        ],
+        ExpertReadTab.raw => [
+          RawDataPanel(
+            apduLog: app.apduLog,
+            processRecords: app.transitProcessRecords,
+          ),
+        ],
+      };
+
+  List<Widget> _information() {
     if (app.parsedCard == null &&
         app.felicaResult == null &&
         (app.parsing || app.lastResult == null)) {
-      return _tab('expert-info-get', const [
-        ExpertHomeHint('尚未读取卡片，请先在首页贴卡读取'),
-      ], showReadHint: false);
+      return const [ExpertHomeHint('尚未读取卡片，请先在首页贴卡读取')];
     }
     final felica = app.felicaResult;
     final local = app.localReadResult;
-    return _tab('expert-info-get', [
-      if (felica != null && app.parsedCard == null)
+    return [
+      if (app.isOctopusCard && felica != null && app.parsedCard == null)
+        TransitSummaryPanel(app: app)
+      else if (felica != null && app.parsedCard == null)
         FelicaSummaryPanel(felica: felica, stations: app.suicaStations)
       else if (local != null && local.info.isMacauPass)
         MacauPassPanel(result: local)
@@ -120,7 +143,7 @@ class ExpertPage extends StatelessWidget {
         const Divider(height: 32),
         ApplicationEvidencePanel(applications: app.applications),
       ],
-    ], showReadHint: false);
+    ];
   }
 
   List<Widget> _transitPanels(BuildContext context) {

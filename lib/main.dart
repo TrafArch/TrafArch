@@ -11,5 +11,7 @@ Future<void> main() async {
   registerThirdPartyLicenses();
   await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   installReleaseErrorPresentation();
-  runApp(const LegalConsentGate(child: TransitCardAnalyzerApp()));
+  runApp(
+    const LegalConsentGate(child: TransitCardAnalyzerApp(enableLiveBeta: true)),
+  );
 }

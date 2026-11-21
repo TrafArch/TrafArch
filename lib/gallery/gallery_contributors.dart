@@ -27,7 +27,7 @@ const galleryContributors = <GalleryContributor>[
   ),
   GalleryContributor(
     name: 'Nightingale0504',
-    role: 'TrafArch 主开发者',
+    role: '钻石赞助商\nTrafArch 主开发者',
     initial: 'N',
     asset: 'assets/contributors/nightingale0504.jpg',
     url: 'https://github.com/Nightingale0504',
@@ -54,14 +54,20 @@ const galleryContributors = <GalleryContributor>[
     url: 'https://www.mitkimi.com/',
   ),
   GalleryContributor(
+    name: '倒是哥哥BG7LLA',
+    role: '钻石赞助商，赞助了腾讯云边缘安全加速EO',
+    initial: '倒',
+    asset: 'assets/contributors/daoshige.png',
+  ),
+  GalleryContributor(
     name: '鳄鱼宝宝',
-    role: '热心网友，为 2.0 界面设计提供指导',
+    role: '热心网友，2.0界面设计顾问',
     initial: '鳄',
     asset: 'assets/contributors/eyu.jpg',
   ),
   GalleryContributor(
     name: 'DearVa',
-    role: '全能开发者，为 2.0 新界面提供指导',
+    role: '全栈开发者，为2.0界面设计提供大量帮助',
     initial: 'D',
     asset: 'assets/contributors/dearva.jpg',
     url: 'https://github.com/DearVa',

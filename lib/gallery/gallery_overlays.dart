@@ -628,6 +628,13 @@ class _GallerySheetState extends State<_GallerySheet> {
   bool _closing = false;
 
   bool _onExtent(DraggableScrollableNotification notification) {
+    final route = ModalRoute.of(context);
+    if (route is _GalleryPopupRoute && !_closing) {
+      route._dragVisibility.value = (notification.extent / medium).clamp(
+        0.0,
+        1.0,
+      );
+    }
     if (_closing || notification.extent > notification.minExtent + .001) {
       return false;
     }
@@ -651,6 +658,7 @@ class _GallerySheetState extends State<_GallerySheet> {
         minChildSize: minimum,
         maxChildSize: expanded,
         snap: !widget.reduceMotion,
+        snapAnimationDuration: GalleryMotion.normal,
         snapSizes: const [medium, expanded],
         builder: (context, scrollController) => DecoratedBox(
           decoration: BoxDecoration(
@@ -849,15 +857,27 @@ class _GalleryMenuTransition extends StatelessWidget {
       animation: route.animation!,
       child: RepaintBoundary(child: child),
       builder: (context, child) {
+        if (route.animation!.isCompleted) route._menuEntered = true;
         final value = route.configuration.reduceMotion
             ? 1.0
             : route.motionProgress(route.animation!);
         return Opacity(
           opacity: value,
           child: Transform.translate(
-            offset: Offset(0, (geometry.opensUp ? 4 : -4) * (1 - value)),
+            offset: Offset(
+              0,
+              GalleryMotion.menuDistance *
+                  (geometry.opensUp ? 1 : -1) *
+                  (1 - value),
+            ),
             child: Transform.scale(
-              scale: .96 + .04 * value,
+              scale: lerpDouble(
+                route._menuEntered
+                    ? GalleryMotion.menuExitScale
+                    : GalleryMotion.menuScale,
+                1,
+                value,
+              )!,
               alignment: geometry.opensUp
                   ? (geometry.alignEnd
                         ? Alignment.bottomRight

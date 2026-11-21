@@ -91,25 +91,27 @@ extension _GalleryComponents on _GalleryViewState {
       GalleryPage.cards => '卡包',
       _ => '足迹',
     };
-    final extra = switch (page) {
-      GalleryPage.home => _icon(
-        Icons.qr_code_scanner_rounded,
-        '扫码',
-        () => c.navigate(GalleryPage.qr),
-        outlined: false,
-        grouped: true,
-        color: t.text,
-      ),
-      GalleryPage.expert => _icon(
-        Icons.download_outlined,
-        '导出卡片记录',
-        () => c.export(),
-        outlined: false,
-        grouped: true,
-        color: t.text,
-      ),
-      _ => null,
-    };
+    final extra = _GalleryLiveScope.of(context) != null
+        ? null
+        : switch (page) {
+            GalleryPage.home => _icon(
+              Icons.qr_code_scanner_rounded,
+              '扫码',
+              () => c.navigate(GalleryPage.qr),
+              outlined: false,
+              grouped: true,
+              color: t.text,
+            ),
+            GalleryPage.expert => _icon(
+              Icons.download_outlined,
+              '导出卡片记录',
+              () => c.export(),
+              outlined: false,
+              grouped: true,
+              color: t.text,
+            ),
+            _ => null,
+          };
     final extraAction = extra == null
         ? const SizedBox(key: ValueKey('no-header-extra'), height: 44)
         : Row(
@@ -371,16 +373,22 @@ extension _GalleryComponents on _GalleryViewState {
       shape: const WidgetStatePropertyAll(GalleryGeometry.buttonShape),
       textStyle: const WidgetStatePropertyAll(GalleryTypography.button),
     );
-    return TextButton(
-      onPressed: action,
-      style: style,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[Icon(icon, size: 17), const SizedBox(width: 8)],
-          Flexible(child: Text(label, textAlign: TextAlign.center)),
-        ],
+    return GalleryPressFeedback(
+      enabled: action != null,
+      child: TextButton(
+        onPressed: action,
+        style: style,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 17),
+              const SizedBox(width: 8),
+            ],
+            Flexible(child: Text(label, textAlign: TextAlign.center)),
+          ],
+        ),
       ),
     );
   }
@@ -1084,33 +1092,36 @@ extension _GalleryComponents on _GalleryViewState {
     final body = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        InkWell(
-          onTap: () => c.update(() {
-            if (open) {
-              c.expanded.remove(id);
-              c.expanded.add('closed:$id');
-            } else {
-              c.expanded.remove('closed:$id');
-              c.expanded.add(id);
-            }
-          }),
-          borderRadius: BorderRadius.circular(18),
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: surface ? 16 : 2,
-              vertical: 14,
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _text(
-                    title,
-                    role: GalleryTypography.label,
-                    weight: FontWeight.w600,
+        Semantics(
+          expanded: open,
+          child: InkWell(
+            onTap: () => c.update(() {
+              if (open) {
+                c.expanded.remove(id);
+                c.expanded.add('closed:$id');
+              } else {
+                c.expanded.remove('closed:$id');
+                c.expanded.add(id);
+              }
+            }),
+            borderRadius: BorderRadius.circular(18),
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: surface ? 16 : 2,
+                vertical: 14,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _text(
+                      title,
+                      role: GalleryTypography.label,
+                      weight: FontWeight.w600,
+                    ),
                   ),
-                ),
-                _expandArrow(open),
-              ],
+                  _expandArrow(open),
+                ],
+              ),
             ),
           ),
         ),

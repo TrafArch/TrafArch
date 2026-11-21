@@ -192,8 +192,8 @@ void main() {
     await tester.pumpAndSettle();
     final row = find.byKey(const ValueKey('settings-contributors'));
     expect(row, findsOneWidget);
-    expect(find.text('7 位'), findsOneWidget);
-    expect(find.text('+4'), findsOneWidget);
+    expect(find.text('8 位'), findsOneWidget);
+    expect(find.text('+5'), findsOneWidget);
     // Only the first three bundled avatars are stacked when collapsed.
     expect(
       find.descendant(of: row, matching: find.byType(Image)),
@@ -209,18 +209,29 @@ void main() {
       'Makitoid',
       '林天仪',
       'mitkimi',
-      '鳄鱼宝宝',
-      'DearVa',
+      '倒是哥哥BG7LLA',
     ]) {
       expect(find.text(name), findsOneWidget, reason: name);
     }
     double top(String name) => tester.getTopLeft(find.text(name)).dy;
     expect(top('Nightingale0504'), lessThan(top('Makitoid')));
     expect(top('Makitoid'), lessThan(top('林天仪')));
-    expect(find.textContaining('钻石赞助商'), findsNWidgets(2));
+    expect(find.textContaining('钻石赞助商'), findsNWidgets(4));
+    expect(find.text('钻石赞助商\nTrafArch 主开发者'), findsOneWidget);
+    expect(find.text('钻石赞助商，赞助了腾讯云边缘安全加速EO'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Image &&
+            widget.image is AssetImage &&
+            (widget.image as AssetImage).assetName ==
+                'assets/contributors/daoshige.png',
+      ),
+      findsOneWidget,
+    );
     expect(find.textContaining('钻石级'), findsNothing);
     // Only contributors with a verified profile show the external link.
-    expect(find.text('主页'), findsNWidgets(6));
+    expect(find.text('主页'), findsNWidgets(5));
     await tester.tap(find.text('主页').first);
     await tester.pumpAndSettle();
     expect(links, ['https://github.com/kajolno']);
@@ -235,12 +246,24 @@ void main() {
     expect(links, ['https://github.com/wanghao-create']);
     // A longer list keeps its own scroll position inside the sheet.
     final sheet = find.byKey(const ValueKey('gallery-sheet'));
+    final scrollable = find.descendant(
+      of: sheet,
+      matching: galleryVerticalScroll(),
+    );
+    await tester.scrollUntilVisible(
+      find.text('鳄鱼宝宝'),
+      120,
+      scrollable: scrollable,
+    );
+    expect(top('倒是哥哥BG7LLA'), lessThan(top('鳄鱼宝宝')));
+    expect(find.text('热心网友，2.0界面设计顾问'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('DearVa'),
       200,
-      scrollable: find.descendant(of: sheet, matching: galleryVerticalScroll()),
+      scrollable: scrollable,
     );
     expect(find.text('DearVa'), findsOneWidget);
+    expect(find.text('全栈开发者，为2.0界面设计提供大量帮助'), findsOneWidget);
     await tester.tap(find.byTooltip('关闭'));
     await tester.pumpAndSettle();
     expect(c.overlay, isNull);
@@ -275,7 +298,7 @@ void main() {
       final barrier = tester.widget<ModalBarrier>(
         find.byType(ModalBarrier).last,
       );
-      expect(barrier.color, const Color(0x99000000));
+      expect(barrier.color, const Color(0x66000000));
 
       final material = find
           .descendant(of: sheet, matching: find.byType(Material))

@@ -50,7 +50,7 @@ class TripsPage extends StatelessWidget {
                     12,
                     AdaptiveWindowScope.bottomClearanceOf(context),
                   ),
-                  child: _TripsBody(app: app),
+                  child: CurrentTripsBody(app: app),
                 ),
               ),
             ),
@@ -61,9 +61,14 @@ class TripsPage extends StatelessWidget {
   }
 }
 
-class _TripsBody extends StatelessWidget {
+class CurrentTripsBody extends StatelessWidget {
   final AppDependencies app;
-  const _TripsBody({required this.app});
+  final bool showSummary;
+  const CurrentTripsBody({
+    super.key,
+    required this.app,
+    this.showSummary = true,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -151,10 +156,11 @@ class _TripsBody extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (app.isOctopusCard ||
-            analysis != null ||
-            app.cityUnionDetected ||
-            localTrips.isNotEmpty) ...[
+        if (showSummary &&
+            (app.isOctopusCard ||
+                analysis != null ||
+                app.cityUnionDetected ||
+                localTrips.isNotEmpty)) ...[
           _SessionHeader(
             analysis: analysis,
             app: app,

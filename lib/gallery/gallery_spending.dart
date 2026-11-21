@@ -117,20 +117,27 @@ enum GallerySpendingBucketUnit { day, month, year }
 /// A read-only projection of retained debits. No inferred dates or currencies.
 class GallerySpendingSummary {
   GallerySpendingSummary(
-    this.currency,
+    GalleryCurrency? currency,
     Iterable<GalleryRecord> records, {
+    GallerySpendingSelection selection = const GallerySpendingSelection.all(),
+  }) : this.fromEntries(
+         currency,
+         _sampleEntries(currency, records),
+         selection: selection,
+       );
+
+  GallerySpendingSummary.fromEntries(
+    this.currency,
+    Iterable<GallerySpendingEntry> debits, {
     this.selection = const GallerySpendingSelection.all(),
   }) {
-    var index = 0;
-    for (final record in records) {
-      final position = index++;
-      if (record['kind'] == 'event') continue;
-      final amount = currency?.debit(record['amount'] as String? ?? '');
-      if (amount == null || amount <= 0) continue;
-      final date = galleryRecordedDate(record);
+    for (final entry in debits) {
+      final record = entry.record;
+      final date = entry.date;
+      final amount = entry.amount;
+      if (currency == null || amount <= 0) continue;
       if (date == null) undatedCount++;
       if (!selection.contains(date)) continue;
-      final entry = GallerySpendingEntry(record, date, amount, position);
       entries.add(entry);
       total += amount;
       if (record['kind'] == 'rail' || record['kind'] == 'bus') rideCount++;
@@ -160,6 +167,25 @@ class GallerySpendingSummary {
     final dates = daily.keys.toList()..sort();
     firstDay = selection.start ?? (dates.isEmpty ? null : dates.first);
     lastDay = selection.end ?? (dates.isEmpty ? null : dates.last);
+  }
+
+  static Iterable<GallerySpendingEntry> _sampleEntries(
+    GalleryCurrency? currency,
+    Iterable<GalleryRecord> records,
+  ) sync* {
+    var index = 0;
+    for (final record in records) {
+      final position = index++;
+      if (record['kind'] == 'event') continue;
+      final amount = currency?.debit(record['amount'] as String? ?? '');
+      if (amount == null || amount <= 0) continue;
+      yield GallerySpendingEntry(
+        record,
+        galleryRecordedDate(record),
+        amount,
+        position,
+      );
+    }
   }
 
   final GalleryCurrency? currency;
