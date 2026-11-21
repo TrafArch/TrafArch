@@ -58,6 +58,7 @@ class _AppShellState extends State<AppShell> with RouteAware {
       setState(() => index = app.recoveryTab);
       final name = app.pendingRecoveryRoute;
       app.pendingRecoveryRoute = null;
+      app.pendingRecoveryNavigation = false;
       if (name != null && name.startsWith('/card/')) {
         Navigator.of(context).push(
           adaptiveCardDetailRoute(app, Uri.decodeComponent(name.substring(6))),

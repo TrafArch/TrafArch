@@ -34,7 +34,7 @@ void main() {
         final app = fixture.app;
         expect(fixture.native.discoveries, 0);
         expect(find.text('模拟数据'), findsNothing);
-        expect(find.byTooltip('扫码'), findsNothing);
+        expect(find.byTooltip('扫码'), findsOneWidget);
 
         await _read(tester, '开始读取');
         expect(app.hasCompletedRead, isTrue, reason: '${app.error}');
@@ -392,7 +392,13 @@ void main() {
       await tester.pump();
       await tester.tap(find.byTooltip('设置'));
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('返回现有界面'));
+      final returnToOldUi = find.text('返回现有界面');
+      await tester.scrollUntilVisible(
+        returnToOldUi,
+        250,
+        scrollable: galleryVerticalScroll(),
+      );
+      await tester.ensureVisible(returnToOldUi);
       await tester.pumpAndSettle();
       await tester.tap(find.text('返回现有界面'));
       await tester.pumpAndSettle();

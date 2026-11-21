@@ -6,17 +6,18 @@ import '../../../shared/diagnostics/diagnostic_event.dart';
 
 Future<void> showDiagnosticExportDialog(
   BuildContext context,
-  AppDependencies app,
-) async {
+  AppDependencies app, {
+  bool Function()? canPresent,
+}) async {
   try {
     final sessions = await app.diagnostics.sessions();
-    if (!context.mounted) return;
+    if (!context.mounted || canPresent?.call() == false) return;
     await showDialog<void>(
       context: context,
       builder: (_) => _DiagnosticExportDialog(app: app, sessions: sessions),
     );
   } catch (_) {
-    if (context.mounted) {
+    if (context.mounted && canPresent?.call() != false) {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('日志读取失败，请稍后重试。')));
     }

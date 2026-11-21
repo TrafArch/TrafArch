@@ -12,6 +12,7 @@ class _GalleryLiveRead extends ChangeNotifier {
     if (app.hasCompletedRead) lastCard = _LiveCardSummary.fromRead(app);
     app.addListener(_appChanged);
     navigation.addListener(_navigationChanged);
+    _restoreRoutes();
   }
 
   final AppDependencies app;
@@ -22,6 +23,8 @@ class _GalleryLiveRead extends ChangeNotifier {
   Object? _attempt;
   bool _closing = false;
   bool _disposed = false;
+  bool openingQr = false;
+  bool _routesRestored = false;
   String? _error;
 
   bool get busy => _attempt != null || (app.scanning && !app.nfcReleaseFailed);
@@ -32,6 +35,7 @@ class _GalleryLiveRead extends ChangeNotifier {
       lastCard != null;
 
   void _appChanged() {
+    _restoreRoutes();
     if (hasCurrent) lastCard = _LiveCardSummary.fromRead(app);
     notifyListeners();
   }
@@ -51,8 +55,64 @@ class _GalleryLiveRead extends ChangeNotifier {
       : GalleryReadState.unread;
 
   void _navigationChanged() {
+    app.recoveryTab = switch (navigation.mainPage) {
+      GalleryPage.trips => 1,
+      GalleryPage.cards => 2,
+      GalleryPage.expert => 3,
+      _ => 0,
+    };
+    app.recoveryRoute = switch (navigation.page) {
+      GalleryPage.qr => '/qr',
+      GalleryPage.settings => '/settings',
+      GalleryPage.detail =>
+        '/card/${Uri.encodeComponent(navigation.selectedCardId)}',
+      _ => null,
+    };
     if (navigation.page != GalleryPage.home && _attempt != null) {
       unawaited(cancel());
+    }
+  }
+
+  void _restoreRoutes() {
+    if (_routesRestored || !app.recoveryReady) return;
+    _routesRestored = true;
+    if (!app.pendingRecoveryNavigation) return;
+    final route = app.pendingRecoveryRoute;
+    app.pendingRecoveryNavigation = false;
+    app.pendingRecoveryRoute = null;
+    navigation.navigate(switch (app.recoveryTab) {
+      1 => GalleryPage.trips,
+      2 => GalleryPage.cards,
+      3 => GalleryPage.expert,
+      _ => GalleryPage.home,
+    });
+    switch (route) {
+      case '/qr':
+        navigation.navigate(GalleryPage.qr);
+      case '/settings':
+        navigation.navigate(GalleryPage.settings);
+      case final String name when name.startsWith('/card/') && name.length > 6:
+        navigation.openCardId(Uri.decodeComponent(name.substring(6)));
+    }
+  }
+
+  Future<bool> openQr() async {
+    if (_disposed || openingQr || app.qrAcquiring) return true;
+    openingQr = true;
+    notifyListeners();
+    try {
+      if (_closing) {
+        await app.stop();
+      } else {
+        await cancel();
+      }
+      if (_disposed || navigation.page != GalleryPage.home) return true;
+      if (app.nfcReleaseFailed) return false;
+      navigation.navigate(GalleryPage.qr);
+      return true;
+    } finally {
+      openingQr = false;
+      if (!_disposed) notifyListeners();
     }
   }
 
@@ -62,7 +122,12 @@ class _GalleryLiveRead extends ChangeNotifier {
   }
 
   Future<void> start() async {
-    if (_disposed || busy || _closing || navigation.page != GalleryPage.home) {
+    if (_disposed ||
+        busy ||
+        _closing ||
+        openingQr ||
+        app.qrAcquiring ||
+        navigation.page != GalleryPage.home) {
       return;
     }
     final attempt = _attempt = Object();
@@ -171,7 +236,9 @@ extension _GalleryLivePages on _GalleryViewState {
   Widget _livePage(GalleryPage page, _GalleryLiveRead live) => switch (page) {
     GalleryPage.home => _liveHome(live),
     GalleryPage.trips => _list([
-      if (live.hasCurrent) ...[
+      if (live.app.recoveredCapture != null)
+        RecoveryResultPanel(app: live.app, showSaveActions: false)
+      else if (live.hasCurrent) ...[
         _liveTripSummary(live.lastCard!),
         _gap(),
         CurrentTripsBody(app: live.app, showSummary: false),
@@ -182,6 +249,27 @@ extension _GalleryLivePages on _GalleryViewState {
     GalleryPage.cards => _liveCards(live.app),
     GalleryPage.detail => _liveArchiveDetail(live.app),
     GalleryPage.settings => _liveSettings(live.app),
+    GalleryPage.qr => _list([
+      _header('乘车码解析', back: true),
+      _panel(
+        QrReadContent(
+          app: live.app,
+          onNotice: _archiveNotice,
+          canPublish: () => c.page == GalleryPage.qr,
+        ),
+      ),
+    ]),
+    GalleryPage.knowledge => _liveKnowledge(live.app),
+    GalleryPage.knowledgeSearch => _GalleryKnowledgeSearch(
+      load: widget.loadKnowledge,
+      onBack: c.back,
+      onResult: c.openKnowledgeResult,
+      revision: live.app.knowledgeBase,
+    ),
+    GalleryPage.knowledgeCity ||
+    GalleryPage.knowledgeLine ||
+    GalleryPage.knowledgeStation => _knowledgeDetails(_entry.knowledgeResult!),
+    GalleryPage.feedback => _feedback(),
     _ => _list([_header('尚未接入', back: true), _text('请在现有界面使用此功能。')]),
   };
 
@@ -208,6 +296,14 @@ extension _GalleryLivePages on _GalleryViewState {
     manualRequest: live.manualSaveRequest,
     onNotice: _archiveNotice,
     child: _list([
+      if (live.app.recoveryNotice case final notice?) ...[
+        _panel(_text(notice, color: t.onTone)),
+        _gap(),
+      ],
+      if (live.app.recoveredCapture != null) ...[
+        RecoveryResultPanel(app: live.app),
+        _gap(),
+      ],
       _GalleryReadFlow(
         state: live.state,
         hasRead: live.lastCard != null,
@@ -289,7 +385,7 @@ extension _GalleryLivePages on _GalleryViewState {
                   : current
                   ? '再次读取'
                   : '开始读取',
-              live._closing
+              live._closing || live.openingQr || live.app.qrAcquiring
                   ? null
                   : reading
                   ? live.cancel
@@ -335,6 +431,11 @@ extension _GalleryLivePages on _GalleryViewState {
       );
 
   Widget _liveExpert(_GalleryLiveRead live) {
+    if (live.app.recoveredCapture != null) {
+      return _list([
+        RecoveryResultPanel(app: live.app, showSaveActions: false),
+      ]);
+    }
     if (!live.hasCurrent) {
       return _list([
         _liveReadHint(live, '读取卡片后展示解析字段与原始数据', Icons.science_outlined),
@@ -393,6 +494,12 @@ extension _GalleryLivePages on _GalleryViewState {
               alignment: Alignment.centerLeft,
               child: ArchiveTransferButtons(app: app, onNotice: _archiveNotice),
             ),
+            _settingRow(
+              '知识库',
+              () => c.navigate(GalleryPage.knowledge),
+              subtitle: '在当前已校验的本地 TU／CU 参考包中浏览和搜索。',
+              icon: Icons.storage_outlined,
+            ),
           ],
         ),
         padding: EdgeInsets.zero,
@@ -420,7 +527,15 @@ extension _GalleryLivePages on _GalleryViewState {
               '记录运行日志',
               app.loggingEnabled,
               app.setLoggingEnabled,
-              subtitle: '读卡日志仅存在本机。诊断导出仍在现有界面。',
+              subtitle: '读卡日志仅存在本机。',
+            ),
+            ListTile(
+              leading: const Icon(Icons.download_outlined),
+              title: const Text('导出诊断日志'),
+              subtitle: Text(app.logExportMessage ?? '选择读取会话，手动导出到本机「下载」。'),
+              onTap: _diagnosticsOpen || app.exportingLog
+                  ? null
+                  : () => _openLiveDiagnostics(app),
             ),
             const FirebaseAnalyticsTile(),
           ],
@@ -431,6 +546,16 @@ extension _GalleryLivePages on _GalleryViewState {
         _gap(),
         _text('设置未能保存到本机，请重试。', color: t.warn),
       ],
+      _sectionTitle('帮助与支持'),
+      _panel(
+        _settingRow(
+          '问题反馈',
+          () => c.navigate(GalleryPage.feedback),
+          icon: Icons.feedback_outlined,
+          subtitle: '打开反馈渠道，不会自动附加日志。',
+        ),
+        padding: EdgeInsets.zero,
+      ),
       _sectionTitle('体验'),
       _panel(
         Column(
@@ -438,7 +563,7 @@ extension _GalleryLivePages on _GalleryViewState {
           children: [
             _text('2.x 实卡体验', role: GalleryTypography.section),
             _gap(8),
-            _text('首页、行程、专家和卡包使用真实数据。扫码、知识库与诊断导出请使用现有界面。', color: t.muted),
+            _text('此界面使用真实本地数据。扫码与贴卡分别进行，诊断只在你主动导出时保存。', color: t.muted),
             if (beta?.switchError case final error?) ...[
               _gap(),
               Semantics(liveRegion: true, child: _text(error, color: t.warn)),
@@ -447,13 +572,29 @@ extension _GalleryLivePages on _GalleryViewState {
               _gap(16),
               _button(
                 beta.switching ? '正在关闭读卡连接…' : '返回现有界面',
-                beta.switching ? null : () => beta.onChanged(false),
+                beta.switching || app.qrAcquiring
+                    ? null
+                    : () => beta.onChanged(false),
               ),
             ],
           ],
         ),
       ),
     ]);
+  }
+
+  Future<void> _openLiveDiagnostics(AppDependencies app) async {
+    if (_diagnosticsOpen || app.exportingLog) return;
+    _updateDetail(() => _diagnosticsOpen = true);
+    try {
+      await showDiagnosticExportDialog(
+        context,
+        app,
+        canPresent: () => c.page == GalleryPage.settings,
+      );
+    } finally {
+      if (mounted) _updateDetail(() => _diagnosticsOpen = false);
+    }
   }
 
   Future<void> _selectLiveConflictPolicy(AppDependencies app) async {

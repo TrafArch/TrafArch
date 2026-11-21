@@ -30,7 +30,11 @@ import '../features/expert/expert_page.dart';
 import '../features/home/presentation/result_labels.dart';
 import '../features/home/presentation/pending_save_presenter.dart';
 import '../features/home/presentation/transit_summary_panel.dart';
+import '../features/qr/presentation/qr_page.dart';
+import '../features/recovery/recovery_result_panel.dart';
+import '../features/reference_data/data/tunion_knowledge_base.dart';
 import '../features/scan/application/scan_controller.dart';
+import '../features/settings/presentation/diagnostic_export_dialog.dart';
 import '../features/settings/presentation/firebase_analytics_tile.dart';
 import '../features/transit_analysis/balance_interpretation.dart';
 import '../features/trips/journey_transport_icon.dart';
@@ -73,6 +77,7 @@ part 'gallery_detail.dart';
 part 'gallery_face_crop.dart';
 part 'gallery_live_read.dart';
 part 'gallery_live_archive.dart';
+part 'gallery_live_knowledge.dart';
 
 class GalleryApp extends StatefulWidget {
   const GalleryApp({
@@ -104,15 +109,28 @@ class _GalleryAppState extends State<GalleryApp> {
   late final GalleryPreferences _preferences;
   final _appearance = _GalleryAppearance();
   Future<GalleryKnowledgeIndex>? _knowledgeIndex;
+  KnowledgeBase? _indexedKnowledge;
 
-  Future<GalleryKnowledgeIndex> _loadKnowledge() =>
-      _knowledgeIndex ??= Future.sync(widget.loadKnowledgeIndex).then(
-        (index) => index,
-        onError: (Object error, StackTrace stack) {
-          _knowledgeIndex = null;
-          Error.throwWithStackTrace(error, stack);
-        },
-      );
+  Future<GalleryKnowledgeIndex> _loadKnowledge() async {
+    Future<GalleryKnowledgeIndex> Function() load = widget.loadKnowledgeIndex;
+    if (widget.liveApp case final app?) {
+      await app.references.initialize();
+      final knowledge = app.knowledgeBase;
+      if (!identical(knowledge, _indexedKnowledge)) {
+        _indexedKnowledge = knowledge;
+        _knowledgeIndex = null;
+      }
+      load = () =>
+          GalleryKnowledgeIndex.loadPaths(knowledge?.packagePaths ?? const {});
+    }
+    final request = _knowledgeIndex ??= Future.sync(load);
+    try {
+      return await request;
+    } catch (_) {
+      if (identical(request, _knowledgeIndex)) _knowledgeIndex = null;
+      rethrow;
+    }
+  }
 
   @override
   void initState() {
@@ -321,6 +339,9 @@ class _GalleryViewState extends State<_GalleryView> {
       const GallerySpendingSelection.all();
   Stream<List<ArchiveCardSummary>>? _archiveCards;
   Stream<ArchiveHistoryResult>? _archiveHistory;
+  Future<GalleryKnowledgeIndex>? _liveKnowledgeBrowse;
+  KnowledgeBase? _browsedKnowledge;
+  bool _diagnosticsOpen = false;
   double _detailScrollDeficit = 0;
   double _detailMaxExtent = 0;
   double _detailShrinkDistance = 0;
