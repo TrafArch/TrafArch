@@ -55,11 +55,13 @@ class _GalleryKnowledgeSearch extends StatefulWidget {
     required this.load,
     required this.onBack,
     required this.onResult,
+    this.revision,
   });
 
   final Future<GalleryKnowledgeIndex> Function() load;
   final VoidCallback onBack;
   final ValueChanged<GalleryKnowledgeResult> onResult;
+  final Object? revision;
 
   @override
   State<_GalleryKnowledgeSearch> createState() =>
@@ -77,6 +79,15 @@ class _GalleryKnowledgeSearchState extends State<_GalleryKnowledgeSearch> {
   bool _failed = false;
   bool _searched = false;
   List<(GalleryKnowledgeKind, GalleryKnowledgeResult?)> _rows = [];
+
+  @override
+  void didUpdateWidget(covariant _GalleryKnowledgeSearch oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (identical(oldWidget.revision, widget.revision)) return;
+    _index = null;
+    _rows = [];
+    _changed(_field.text, immediate: true);
+  }
 
   void _changed(String input, {bool immediate = false}) {
     _debounce?.cancel();

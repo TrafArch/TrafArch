@@ -25,8 +25,13 @@ import '../trips/suica_trip_presenter.dart';
 
 /// Uses captured archive display fields, never current reference matches or NFC.
 class RecoveryResultPanel extends StatelessWidget {
-  const RecoveryResultPanel({super.key, required this.app});
+  const RecoveryResultPanel({
+    super.key,
+    required this.app,
+    this.showSaveActions = true,
+  });
   final AppDependencies app;
+  final bool showSaveActions;
 
   @override
   Widget build(BuildContext context) {
@@ -41,15 +46,16 @@ class RecoveryResultPanel extends StatelessWidget {
     final snapshot = capture.snapshotJson == null
         ? null
         : CardSessionSnapshot.decodeResult(capture.snapshotJson!);
-    final batch = snapshot == null
+    final decodedSnapshot = snapshot?.snapshot;
+    final batch = decodedSnapshot == null
         ? null
         : ArchiveBatchEvidence(
             id: capture.pending?.pendingSaveId ?? 'recovered',
             readAt: capture.readAt.millisecondsSinceEpoch,
-            storedParseVersion: snapshot.snapshot!.parseVersion,
+            storedParseVersion: decodedSnapshot.parseVersion,
             origin: 'memory_recovery',
             timeSource: 'captured',
-            decoded: snapshot,
+            decoded: snapshot!,
             issues: snapshot.issues,
           );
     final trips = batch == null
@@ -134,7 +140,7 @@ class RecoveryResultPanel extends StatelessWidget {
                       ? '请重新贴卡读取。下方保留中断前已获取的证据。'
                       : '已恢复捕获时的数据，继续读取请重新贴卡。',
                 ),
-                if (capture.canSave) ...[
+                if (capture.canSave && showSaveActions) ...[
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 12,

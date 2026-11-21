@@ -101,7 +101,10 @@ class RecoveryCapture {
       ],
       snapshotJson: snapshot,
       pending: pending,
-      canSave: json['canSave'] == true && pending != null,
+      canSave:
+          json['canSave'] == true &&
+          pending != null &&
+          json['interrupted'] != true,
       interrupted: json['interrupted'] == true,
     );
   }

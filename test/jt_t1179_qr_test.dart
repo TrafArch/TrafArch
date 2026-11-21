@@ -14,6 +14,7 @@ import 'support/published_reference_fixture.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
 import 'package:transit_card_analyzer/platform/nfc/nfc_models.dart';
 import 'package:transit_card_analyzer/platform/nfc/nfc_service.dart';
@@ -445,6 +446,10 @@ void main() {
     }
 
     testWidgets('相机路由 pop 原始 bytes 经 scanQrAndParse 回传并展示', (tester) async {
+      final previous = MobileScannerPlatform.instance;
+      final camera = _QrCamera();
+      MobileScannerPlatform.instance = camera;
+      addTearDown(() => MobileScannerPlatform.instance = previous);
       final app = _newApp();
       await _pumpPage(tester, app, QrPage(app: app));
       await tester.tap(find.text('扫描二维码'));
@@ -454,6 +459,7 @@ void main() {
           .pop<List<int>>(_sampleQr());
       await tester.pumpAndSettle();
       expect(find.byType(QrScanPage), findsNothing);
+      expect(camera.stops, 1);
       expect(find.byType(QrPage), findsOneWidget);
       expect(app.qrRaw, orderedEquals(_sampleQr()));
       expect(find.text('6225880123456789'), findsOneWidget);
@@ -467,6 +473,33 @@ void main() {
       expect(find.textContaining('使用系统扫码'), findsNothing);
     });
   });
+}
+
+class _QrCamera extends MobileScannerPlatform {
+  int stops = 0;
+
+  @override
+  Stream<BarcodeCapture?> get barcodesStream => const Stream.empty();
+  @override
+  Stream<TorchState> get torchStateStream => const Stream.empty();
+  @override
+  Stream<double> get zoomScaleStateStream => const Stream.empty();
+  @override
+  Widget buildCameraView() => const SizedBox.shrink();
+  @override
+  Future<MobileScannerViewAttributes> start(StartOptions options) async =>
+      const MobileScannerViewAttributes(
+        cameraDirection: CameraFacing.back,
+        currentTorchMode: TorchState.off,
+        size: Size(640, 480),
+      );
+  @override
+  Future<void> stop() async {
+    stops++;
+  }
+
+  @override
+  Future<void> dispose() async {}
 }
 
 Future<void> _pumpPage(

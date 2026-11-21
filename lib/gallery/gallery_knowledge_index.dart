@@ -65,9 +65,9 @@ class GalleryKnowledgeResult {
 
 class GalleryKnowledgeIndex {
   GalleryKnowledgeIndex._(
-    Iterable<GalleryKnowledgeCity> cities,
+    Iterable<GalleryKnowledgeCity> regions,
     Iterable<GalleryKnowledgeResult> codes,
-  ) {
+  ) : cities = List.unmodifiable(regions) {
     for (final city in cities) {
       _add(GalleryKnowledgeResult(GalleryKnowledgeKind.city, city), [
         city.code,
@@ -97,22 +97,24 @@ class GalleryKnowledgeIndex {
   }
 
   final _postings = <int, List<_SearchTerm>>{};
+  final List<GalleryKnowledgeCity> cities;
+
+  static Future<GalleryKnowledgeIndex> loadPaths(Map<String, String> paths) {
+    if (paths.isEmpty) throw StateError('本地参考数据包不可用');
+    return Isolate.run(() => GalleryKnowledgeIndex.fromPaths(paths));
+  }
 
   static Future<GalleryKnowledgeIndex> load() async {
     final paths = <String, String>{};
     for (final protocol in ['TU', 'CU']) {
       final package = await ReferencePackage.open(protocol);
       try {
-        paths[protocol] =
-            package.db
-                    .select('PRAGMA database_list')
-                    .firstWhere((row) => row['name'] == 'main')['file']
-                as String;
+        paths[protocol] = package.path;
       } finally {
         package.close();
       }
     }
-    return Isolate.run(() => GalleryKnowledgeIndex.fromPaths(paths));
+    return loadPaths(paths);
   }
 
   factory GalleryKnowledgeIndex.fromPaths(Map<String, String> paths) {

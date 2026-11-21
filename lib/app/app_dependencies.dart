@@ -167,6 +167,8 @@ class AppDependencies extends OwnedNotifier {
   int? _unifiedScanRequest;
   bool _completedRead = false;
   bool _gallerySave = false;
+  bool _qrAcquiring = false;
+  int _qrAcquisitionRevision = 0;
   String? _galleryCaptureId;
   ScanPresentation? _octopusView;
   OctopusBalanceResult? _octopusResult;
@@ -182,6 +184,7 @@ class AppDependencies extends OwnedNotifier {
   int recoveryTab = 0;
   String? recoveryRoute;
   String? pendingRecoveryRoute;
+  bool pendingRecoveryNavigation = false;
   final Map<String, List<String>> recoveryFilters = {};
   bool savingRecoveredCapture = false;
 
@@ -193,6 +196,7 @@ class AppDependencies extends OwnedNotifier {
     final capture = recoveredCapture;
     if (savingRecoveredCapture ||
         capture?.canSave != true ||
+        capture?.interrupted == true ||
         capture?.pending == null ||
         _preparingRecovery) {
       return;
@@ -250,8 +254,11 @@ class AppDependencies extends OwnedNotifier {
       recoveryTab = state.tab;
       recoveryRoute = state.route;
       pendingRecoveryRoute = state.route;
+      pendingRecoveryNavigation = true;
       recoveryFilters.addAll(state.filters);
-      if (state.qrBytes != null) qr.parseQrBytes(state.qrBytes!);
+      if (state.qrBytes case final bytes?) {
+        qr.parseQrBytes(bytes, recordDiagnostics: false);
+      }
       scan.autoScanConsumed = true;
       recoveryNotice = state.capture?.interrupted == true
           ? '上次读取已中断，请重新贴卡读取。已获取的原始证据已保留。'
@@ -289,8 +296,10 @@ class AppDependencies extends OwnedNotifier {
     // Never overwrite an unconsumed recovery file during cold-start loading.
     if (!recoveryReady) return false;
     _preparingRecovery = true;
+    _qrAcquisitionRevision++;
     try {
-      final interrupted = scan.scanning;
+      final interrupted =
+          scan.scanning || (_gallerySave && !_completedRead && scanning);
       final capture =
           recoveredCapture ??
           (scan.tag != null || scan.outcome != null || interrupted
@@ -300,7 +309,9 @@ class AppDependencies extends OwnedNotifier {
                       scan.tag?.timestamp ??
                       DateTime.now(),
                   summary: {
-                    if (_view?.balanceInterpretation case final balance?)
+                    if (octopusBalanceText case final octopusBalance?)
+                      'balanceText': octopusBalance
+                    else if (_view?.balanceInterpretation case final balance?)
                       'balanceText': balance.accountBalanceText,
                     if (scan.outcome case final result?) ...{
                       ...captureCardInfo(result),
@@ -555,6 +566,26 @@ class AppDependencies extends OwnedNotifier {
   List<int>? get qrRaw => qr.qrRaw;
   String? get qrError => qr.qrError;
   bool get hasQrData => qr.hasQrData;
+  bool get qrAcquiring => _qrAcquiring;
+
+  Future<bool> runQrAcquisition(
+    Future<void> Function(bool Function()) acquire,
+  ) async {
+    if (disposed || _qrAcquiring || _preparingRecovery) return false;
+    _qrAcquiring = true;
+    final revision = ++_qrAcquisitionRevision;
+    bool isCurrent() => !disposed && revision == _qrAcquisitionRevision;
+    notifyListeners();
+    try {
+      await stop();
+      if (!isCurrent() || nfcReleaseFailed) return false;
+      await acquire(isCurrent);
+      return true;
+    } finally {
+      _qrAcquiring = false;
+      notifyListeners();
+    }
+  }
 
   String? cityNameOf(String? code) => references.cityNameOf(code);
   String? cuCityNameOf(String? code) => references.cuCityNameOf(code);
@@ -636,6 +667,7 @@ class AppDependencies extends OwnedNotifier {
   Future<void> scanOnceForGallery() => _scanOnce(gallerySave: true);
 
   Future<void> _scanOnce({bool gallerySave = false}) async {
+    if (_qrAcquiring) return;
     final request = ++_scanRequest;
     if (disposed || _preparingRecovery || savingRecoveredCapture) {
       return;
@@ -716,7 +748,8 @@ class AppDependencies extends OwnedNotifier {
   }
 
   Future<void> readOctopus() async {
-    if (disposed ||
+    if (_qrAcquiring ||
+        disposed ||
         _preparingRecovery ||
         savingRecoveredCapture ||
         scanning ||

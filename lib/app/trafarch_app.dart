@@ -105,7 +105,7 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp>
   }
 
   Future<void> _switchLiveUi(bool enabled) async {
-    if (_switching || enabled == _live) return;
+    if (_switching || enabled == _live || _app.qrAcquiring) return;
     setState(() {
       _switching = true;
       _switchError = null;
@@ -144,7 +144,12 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp>
       switchError: _switchError,
       onChanged: _switchLiveUi,
       child: _live
-          ? GalleryApp(liveApp: _app, preferences: _livePreferences)
+          ? GalleryApp(
+              liveApp: _app,
+              preferences: _livePreferences,
+              openWebLink: _app.openWebLink,
+              openEmail: _app.openFeedbackEmail,
+            )
           : _legacyUi(),
     );
   }

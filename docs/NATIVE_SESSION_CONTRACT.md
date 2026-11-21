@@ -262,6 +262,16 @@ Exports whose file name ends in `.json` use the `application/json` MIME type;
 other text exports retain `text/plain`. The method name and argument keys are unchanged.
 Camera scanning uses the in-app scanner; the Google Code Scanner channel and module
 warm-up have been removed.
+
+Both UI shells use a shared acquisition owner. Before opening the camera or
+photo picker it awaits the ordinary and Octopus NFC close acknowledgements;
+NFC cannot restart while acquisition or camera teardown is pending. The
+scanner serializes camera start/stop around permission and foreground changes.
+Back or barcode detection waits for camera stop before popping; a failed stop
+keeps the camera screen open for retry. On Android the retry uses the installed
+`mobile_scanner` 7.5 channel's existing forced stop, because both the Dart
+controller and the plugin cache can already report stopped after a failed
+call. No TrafArch NFC or file method names or arguments change.
 Cancellation/failure codes/messages at these boundaries are:
 `PICK_IN_PROGRESS`, `PICKER_UNAVAILABLE`, `IMAGE_READ_FAILED`, `PICK_CANCELLED`,
 `BAD_ARGUMENT`, `PERMISSION_DENIED`, `EXPORT_FAILED`, `EXPORT_CANCELLED`.

@@ -30,12 +30,14 @@ class QrController extends OwnedNotifier {
 
   /// 解析二维码原始字节（相机扫描得到的二进制数据）。
   /// 成功时保存解析结果并清除错误；失败时保留原始字节并记录错误。
-  bool parseQrBytes(List<int> bytes) {
+  bool parseQrBytes(List<int> bytes, {bool recordDiagnostics = true}) {
     _qrRaw = List<int>.unmodifiable(bytes);
-    final sink = diagnostics?.startSession(
-      const Uuid().v4(),
-      kind: DiagnosticSessionKind.qr,
-    );
+    final sink = recordDiagnostics
+        ? diagnostics?.startSession(
+            const Uuid().v4(),
+            kind: DiagnosticSessionKind.qr,
+          )
+        : null;
     sink?.event(
       'qr_source',
       phase: DiagnosticPhase.reading,
@@ -76,7 +78,7 @@ class QrController extends OwnedNotifier {
         }
       }
       sink?.end(DiagnosticOutcome.success);
-      log('二维码解析成功：${bytes.length} 字节');
+      if (recordDiagnostics) log('二维码解析成功：${bytes.length} 字节');
       notifyListeners();
       return true;
     } catch (e) {
@@ -89,7 +91,7 @@ class QrController extends OwnedNotifier {
         data: {'parserId': 'jt_t1179_qr', 'message': _qrError},
       );
       sink?.end(DiagnosticOutcome.failed);
-      log('二维码解析失败：$e');
+      if (recordDiagnostics) log('二维码解析失败：$e');
       notifyListeners();
       return false;
     }

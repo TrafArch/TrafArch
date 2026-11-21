@@ -10,6 +10,7 @@ import 'package:sqlite3/sqlite3.dart';
 class ReferencePackage {
   ReferencePackage._(
     this.db,
+    this.path,
     this.protocol,
     this.version,
     this.hash,
@@ -17,6 +18,7 @@ class ReferencePackage {
   );
 
   final Database db;
+  final String path;
   final String protocol;
   final String version;
   final String hash;
@@ -316,7 +318,9 @@ class ReferencePackage {
             catalog['issuerNames'] is! List ||
             (catalog['issuerNames'] as List).isEmpty ||
             catalog['nameOverrides'] is! List) {
-          throw const FormatException('CU invalid card_catalog naming contract');
+          throw const FormatException(
+            'CU invalid card_catalog naming contract',
+          );
         }
       }
       final counts = <String, int>{
@@ -325,6 +329,7 @@ class ReferencePackage {
       };
       return ReferencePackage._(
         db,
+        installed.path,
         protocol,
         spec['content_version'] as String,
         hash,

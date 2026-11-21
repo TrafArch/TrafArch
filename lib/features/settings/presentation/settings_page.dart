@@ -385,7 +385,7 @@ class _BetaUiWarningDialogState extends State<_BetaUiWarningDialog> {
             ? const TextSpan(
                 text:
                     '2.x 会读取实体卡，并与现有界面共用真实卡包。'
-                    '保存及重复卡片处理沿用当前设置；不会写卡。扫码和知识库请使用现有界面。'
+                    '保存及重复卡片处理沿用当前设置；不会写卡。扫码仅在主动打开相机或选择图片后开始。'
                     '\n\n可随时在设置中切回，重启也会恢复现有界面。',
               )
             : const TextSpan(

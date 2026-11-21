@@ -91,27 +91,35 @@ extension _GalleryComponents on _GalleryViewState {
       GalleryPage.cards => '卡包',
       _ => '足迹',
     };
-    final extra = _GalleryLiveScope.of(context) != null
-        ? null
-        : switch (page) {
-            GalleryPage.home => _icon(
-              Icons.qr_code_scanner_rounded,
-              '扫码',
-              () => c.navigate(GalleryPage.qr),
-              outlined: false,
-              grouped: true,
-              color: t.text,
-            ),
-            GalleryPage.expert => _icon(
-              Icons.download_outlined,
-              '导出卡片记录',
-              () => c.export(),
-              outlined: false,
-              grouped: true,
-              color: t.text,
-            ),
-            _ => null,
-          };
+    final live = _GalleryLiveScope.of(context);
+    final extra = switch (page) {
+      GalleryPage.home => _icon(
+        Icons.qr_code_scanner_rounded,
+        '扫码',
+        live == null
+            ? () => c.navigate(GalleryPage.qr)
+            : () async {
+                if (!await live.openQr() && mounted) {
+                  _toast(
+                    'NFC 尚未关闭，无法进入扫码。请重试。',
+                    type: GalleryFeedbackType.error,
+                  );
+                }
+              },
+        outlined: false,
+        grouped: true,
+        color: t.text,
+      ),
+      GalleryPage.expert when live == null => _icon(
+        Icons.download_outlined,
+        '导出卡片记录',
+        () => c.export(),
+        outlined: false,
+        grouped: true,
+        color: t.text,
+      ),
+      _ => null,
+    };
     final extraAction = extra == null
         ? const SizedBox(key: ValueKey('no-header-extra'), height: 44)
         : Row(

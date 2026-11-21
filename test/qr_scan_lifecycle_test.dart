@@ -97,12 +97,91 @@ void main() {
     await tester.pump();
     await tester.pump();
   });
+
+  testWidgets('扫码返回等待相机关闭，失败留在原页并可重试', (tester) async {
+    final previous = MobileScannerPlatform.instance;
+    final camera = _Camera()..starting.complete(_Camera.attributes);
+    MobileScannerPlatform.instance = camera;
+    addTearDown(() => MobileScannerPlatform.instance = previous);
+    bool? released;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => Navigator.of(context).push<List<int>>(
+                MaterialPageRoute(
+                  builder: (_) =>
+                      QrScanPage(onReleased: (value) => released = value),
+                ),
+              ),
+              child: const Text('扫码'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('扫码'));
+    await tester.pumpAndSettle();
+    expect(camera.starts, 1);
+    final stop = camera.stopping = Completer<void>();
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    expect(camera.stops, 1);
+    expect(released, isNull);
+    expect(find.byType(QrScanPage), findsOneWidget);
+
+    stop.completeError(StateError('close failed'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('相机尚未确认关闭'), findsOneWidget);
+    expect(find.byType(QrScanPage), findsOneWidget);
+    expect(released, isNull);
+    camera.stopping = null;
+    await tester.tap(find.text('重试相机'));
+    await tester.pumpAndSettle();
+    expect(camera.stops, 2);
+    expect(released, isTrue);
+    expect(find.byType(QrScanPage), findsNothing);
+  });
+
+  testWidgets('相机权限启动尚未完成时返回，等待启动与关闭后才离开', (tester) async {
+    final previous = MobileScannerPlatform.instance;
+    final camera = _Camera();
+    MobileScannerPlatform.instance = camera;
+    addTearDown(() => MobileScannerPlatform.instance = previous);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => Navigator.of(context).push<List<int>>(
+                MaterialPageRoute(builder: (_) => const QrScanPage()),
+              ),
+              child: const Text('扫码'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('扫码'));
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(camera.starts, 1);
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    expect(find.byType(QrScanPage), findsOneWidget);
+    expect(camera.stops, 0);
+    camera.starting.complete(_Camera.attributes);
+    await tester.pumpAndSettle();
+    expect(camera.stops, 1);
+    expect(find.byType(QrScanPage), findsNothing);
+  });
 }
 
 class _Camera extends MobileScannerPlatform {
   final starting = Completer<MobileScannerViewAttributes>();
   int starts = 0;
   int stops = 0;
+  Completer<void>? stopping;
   static const attributes = MobileScannerViewAttributes(
     cameraDirection: CameraFacing.back,
     currentTorchMode: TorchState.off,
@@ -125,6 +204,7 @@ class _Camera extends MobileScannerPlatform {
   @override
   Future<void> stop() async {
     stops++;
+    await stopping?.future;
   }
 
   @override
