@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-21 — 2.x 首页卡面排版
+
+- 首页读取结果及更换卡面预览改为卡名左上、完整卡号居中、余额左下、官方标识右下。数字卡号从左起每四位分组，保留末组与前导零，窄窗可换行。缩小卡名与余额字号，移除卡面内的最近读取时间。
+- 首页、卡包、卡片详情和更换卡面预览的 City Union（城市一卡通）标识统一替换为用户提供的原图。
+
 ## 2026-11-21 — 2.x 实卡接入原预览界面
 
 - `lib/main_gallery.dart` 改为直接启动 2.x 实卡界面：协议确认后由同一个 `TransitCardAnalyzerApp` 创建真实业务依赖，并以 `enableLiveBeta + initialLiveUi` 进入 2.x。使用 `flutter build apk --release -t lib/main_gallery.dart --split-per-abi` 构建时不再进入样例或先停在默认旧界面，因此贴卡读取会走真实 NFC、解析、档案与参考数据链路。

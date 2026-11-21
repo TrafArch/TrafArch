@@ -39,11 +39,19 @@ void main() {
       .getTranslation()
       .x;
 
-  testWidgets('home restores the original face and retains custom artwork', (
+  testWidgets('home shows the full card number and retains custom artwork', (
     tester,
   ) async {
     c.hasRead = true;
     await mount(tester, reduced: true);
+    final cityUnion = tester.widget<Image>(
+      find.byKey(const ValueKey('face-cu-shanghai')),
+    );
+    expect(
+      cityUnion.image,
+      const AssetImage('assets/gallery/city-union-logo.png'),
+    );
+    expect(cityUnion.semanticLabel, '城市一卡通 CITY UNION');
     for (final theme in [ThemeMode.light, ThemeMode.dark]) {
       for (final width in [240.0, 320.0, 412.0]) {
         for (final scale in [1.0, 2.0]) {
@@ -61,8 +69,10 @@ void main() {
           );
           expect(find.text('当前余额'), findsOneWidget);
           expect(find.bySemanticsLabel('交通联合 CHINA T-UNION'), findsOneWidget);
-          expect(find.text('**** 6821'), findsOneWidget);
-          expect(find.text('最近读取 今天 09:41'), findsOneWidget);
+          expect(find.text('3100 0000 0000 6821'), findsOneWidget);
+          expect(find.text('**** 6821'), findsNothing);
+          expect(find.textContaining('最近读取'), findsNothing);
+          expect(find.text('今天 09:41 读取成功'), findsOneWidget);
           expect(tester.getSize(panel).height, greaterThanOrEqualTo(204));
           expect(
             tester.takeException(),
@@ -89,6 +99,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('读取失败，保留上次结果'), findsOneWidget);
     expect(find.text('当前余额'), findsOneWidget);
+    expect(find.text('3100 0000 0000 6821'), findsOneWidget);
     expect(find.bySemanticsLabel('交通联合 CHINA T-UNION'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

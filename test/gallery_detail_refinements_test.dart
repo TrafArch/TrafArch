@@ -146,7 +146,14 @@ void main() {
         expect(number.top, greaterThan(title.bottom));
         expect(
           find.descendant(of: face, matching: find.byType(SvgPicture)),
-          findsNWidgets(2),
+          findsOneWidget,
+        );
+        final cityUnion = tester.widget<Image>(
+          find.byKey(ValueKey('detail-face-cu-${c.current.id}')),
+        );
+        expect(
+          cityUnion.image,
+          const AssetImage('assets/gallery/city-union-logo.png'),
         );
         expect(tester.takeException(), isNull);
       }

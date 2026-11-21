@@ -93,8 +93,12 @@ void main() {
         of: find.byKey(ValueKey('card-face-${card.id}')),
         matching: find.byType(Image),
       );
-      if (images.evaluate().isEmpty) return null;
-      return (tester.widget<Image>(images.first).image as MemoryImage).bytes;
+      return tester
+          .widgetList<Image>(images)
+          .map((image) => image.image)
+          .whereType<MemoryImage>()
+          .firstOrNull
+          ?.bytes;
     }
 
     // 选图后先完成裁切，再由更换卡面 sheet 的完成提交。
@@ -114,6 +118,13 @@ void main() {
         c.current.saved = true;
         await mountFace(tester);
         final card = c.current;
+        final cityUnion = tester.widget<Image>(
+          find.byKey(ValueKey('face-cu-${card.id}')),
+        );
+        expect(
+          cityUnion.image,
+          const AssetImage('assets/gallery/city-union-logo.png'),
+        );
         expect(card.image, isNull);
         expect(
           tester
@@ -540,8 +551,9 @@ void main() {
   );
 
   testWidgets(
-    'wallet uses themed panels, transparent brand logos and grouped actions',
+    'wallet uses themed panels, local brand logos and grouped actions',
     (tester) async {
+      c.current.saved = true;
       c.navigate(GalleryPage.cards);
       await mount(tester);
       final group = find.byKey(const ValueKey('main-action-group'));
@@ -577,23 +589,23 @@ void main() {
           findsNothing,
         );
         for (final application in card.applications) {
-          final brand = switch (application) {
-            'tu' => 'tunion',
-            'cu' => 'city-union',
-            _ => application,
-          };
-          final logo = tester.widget<SvgPicture>(
-            find.byKey(
-              ValueKey(
-                'wallet-${application == 'tu' ? 'tunion' : application}-${card.id}',
-              ),
-            ),
-          );
-          expect(
-            (logo.bytesLoader as SvgAssetLoader).assetName,
-            'assets/gallery/$brand-logo.svg',
-          );
-          expect(logo.colorFilter, isNull);
+          final brand = application == 'tu' ? 'tunion' : application;
+          final logo = find.byKey(ValueKey('wallet-$brand-${card.id}'));
+          if (brand == 'cu') {
+            final image = tester.widget<Image>(logo);
+            expect(
+              image.image,
+              const AssetImage('assets/gallery/city-union-logo.png'),
+            );
+            expect(image.color, isNull);
+          } else {
+            final svg = tester.widget<SvgPicture>(logo);
+            expect(
+              (svg.bytesLoader as SvgAssetLoader).assetName,
+              'assets/gallery/$brand-logo.svg',
+            );
+            expect(svg.colorFilter, isNull);
+          }
         }
         expect(find.byKey(ValueKey('wallet-drag-${card.id}')), findsOneWidget);
         expect(find.byTooltip('${card.name} 管理'), findsNothing);

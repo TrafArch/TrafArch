@@ -264,8 +264,11 @@ void main() {
           of: find.byKey(const ValueKey('card-face-shanghai')),
           matching: find.byType(Image),
         );
-        if (images.evaluate().isEmpty) return null;
-        return tester.widget<Image>(images.first).image as MemoryImage;
+        return tester
+            .widgetList<Image>(images)
+            .map((image) => image.image)
+            .whereType<MemoryImage>()
+            .firstOrNull;
       }
       expect(faceImage(), isNull);
       await setImage(Colors.red);

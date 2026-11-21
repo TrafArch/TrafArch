@@ -379,7 +379,7 @@ void main() {
   );
 
   testWidgets(
-    'card face title, card number and balance remain separate at large sizes',
+    'home card centers the full number and keeps the corner fields separate',
     (tester) async {
       c.hasRead = true;
       c.current.saved = true;
@@ -389,11 +389,14 @@ void main() {
         addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
         c.update(() {});
         await tester.pumpAndSettle();
+        final face = tester.getRect(
+          find.byKey(const ValueKey('card-face-shanghai')),
+        );
         final title = tester.getRect(
           find.byKey(const ValueKey('face-title-shanghai')),
         );
-        final tail = tester.getRect(
-          find.byKey(const ValueKey('face-tail-shanghai')),
+        final number = tester.getRect(
+          find.byKey(const ValueKey('face-card-number-shanghai')),
         );
         final label = tester.getRect(
           find.byKey(const ValueKey('face-balance-label-shanghai')),
@@ -401,11 +404,19 @@ void main() {
         final balance = tester.getRect(
           find.byKey(const ValueKey('face-number-shanghai')),
         );
-        expect(tail.top, greaterThan(title.bottom));
-        expect(label.top, greaterThan(title.bottom));
+        final brand = tester.getRect(
+          find.byKey(const ValueKey('face-brand-shanghai')),
+        );
+        expect(number.center.dx, closeTo(face.center.dx, .5));
+        expect(number.center.dy, closeTo(face.center.dy, .5));
+        expect(number.top, greaterThan(title.bottom));
+        expect(label.top, greaterThan(number.bottom));
         expect(balance.top, greaterThan(label.bottom));
-        expect(balance.overlaps(title), isFalse);
-        expect(balance.overlaps(tail), isFalse);
+        expect(label.left, closeTo(title.left, .5));
+        expect(brand.left, greaterThan(balance.right));
+        expect(brand.top, greaterThan(number.bottom));
+        expect(brand.right, closeTo(face.right - (title.left - face.left), .5));
+        expect(brand.bottom, closeTo(balance.bottom, .5));
         expect(tester.takeException(), isNull);
       }
     },

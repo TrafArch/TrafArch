@@ -47,6 +47,10 @@ void main() {
           _CardKind.octopus => r'HK$50.00',
         };
         expect(find.text(balanceNumber), findsWidgets);
+        if (kind == _CardKind.tu) {
+          expect(find.text('3105 0600 1234 5678 900'), findsOneWidget);
+          expect(find.textContaining('最近读取'), findsNothing);
+        }
         expect(app.pendingCardSave, isNull);
         final saved = (await tester.runAsync(app.cardRepository.getAllCards))!;
         expect(saved, hasLength(kind == _CardKind.octopus ? 0 : 1));
