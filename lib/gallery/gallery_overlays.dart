@@ -17,13 +17,7 @@ extension _GalleryOverlays on _GalleryViewState {
         type == GalleryOverlay.mode) {
       return _dropdownOverlay(type);
     }
-    final sheet = [
-      GalleryOverlay.face,
-      GalleryOverlay.trip,
-      GalleryOverlay.export,
-      GalleryOverlay.importPreview,
-      GalleryOverlay.rawFeedback,
-    ].contains(type);
+    final sheet = type.isBottomSheet;
     return [
       LayoutBuilder(
         builder: (context, constraints) {
@@ -36,6 +30,7 @@ extension _GalleryOverlays on _GalleryViewState {
             alignment: sheet ? Alignment.bottomCenter : Alignment.center,
             child: SafeArea(
               top: true,
+              bottom: !sheet,
               child: Padding(
                 padding: EdgeInsets.fromLTRB(
                   sheet ? 0 : 16,
@@ -84,6 +79,7 @@ extension _GalleryOverlays on _GalleryViewState {
                               boxShadow: t.shadows(GalleryElevation.modal),
                             ),
                             child: Material(
+                              key: const ValueKey('gallery-modal-surface'),
                               color: t.raised,
                               shape: RoundedRectangleBorder(
                                 side: BorderSide(color: t.line),
@@ -93,38 +89,43 @@ extension _GalleryOverlays on _GalleryViewState {
                                 ),
                               ),
                               clipBehavior: Clip.antiAlias,
-                              child: SingleChildScrollView(
-                                padding: EdgeInsets.all(nameForm ? 18 : 22),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: _text(
-                                            _overlayTitle(type),
-                                            role: GalleryTypography.section,
-                                            weight: FontWeight.w600,
+                              child: SafeArea(
+                                top: false,
+                                left: false,
+                                right: false,
+                                child: SingleChildScrollView(
+                                  padding: EdgeInsets.all(nameForm ? 18 : 22),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: _text(
+                                              _overlayTitle(type),
+                                              role: GalleryTypography.section,
+                                              weight: FontWeight.w600,
+                                            ),
                                           ),
-                                        ),
-                                        IconButton(
-                                          autofocus:
-                                              type != GalleryOverlay.save &&
-                                              type != GalleryOverlay.rename,
-                                          tooltip: '关闭',
-                                          onPressed: c.back,
-                                          icon: const Icon(
-                                            Icons.close_rounded,
-                                            size: 21,
+                                          IconButton(
+                                            autofocus:
+                                                type != GalleryOverlay.save &&
+                                                type != GalleryOverlay.rename,
+                                            tooltip: '关闭',
+                                            onPressed: c.back,
+                                            icon: const Icon(
+                                              Icons.close_rounded,
+                                              size: 21,
+                                            ),
                                           ),
-                                        ),
-                                      ],
-                                    ),
-                                    _gap(nameForm ? 8 : 12),
-                                    _overlayBody(type),
-                                  ],
+                                        ],
+                                      ),
+                                      _gap(nameForm ? 8 : 12),
+                                      _overlayBody(type),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
@@ -166,18 +167,37 @@ extension _GalleryOverlays on _GalleryViewState {
       key: ValueKey('save-${c.generation}'),
       initialName: c.current.name,
       onCancel: c.back,
-      onSubmit: (name) {
-        c.save(name);
-        _toast('已保存到卡包');
+      onSubmit: (name) async {
+        final live = _GalleryLiveScope.of(context);
+        if (live == null) {
+          c.save(name);
+          _toast('已保存到卡包');
+          return;
+        }
+        live.conflictResolver = _resolveLiveConflict;
+        await live.save(name);
+        _toast(
+          live.lastSaveMessage ??
+              (live.lastSaveSucceeded == true ? '已保存到卡包' : '卡片保存未完成'),
+          type: live.lastSaveSucceeded == true
+              ? GalleryFeedbackType.success
+              : GalleryFeedbackType.error,
+        );
       },
     ),
     GalleryOverlay.rename => _GalleryNameForm(
       key: ValueKey('rename-${_selectedCard.id}-${c.generation}'),
       initialName: _selectedCard.name,
       onCancel: c.back,
-      onSubmit: (name) {
-        c.rename(name);
-        _toast('已更新模拟卡片名称');
+      onSubmit: (name) async {
+        final live = _GalleryLiveScope.of(context);
+        if (live == null) {
+          c.rename(name);
+          _toast('已更新模拟卡片名称');
+          return;
+        }
+        await live.rename(name);
+        _toast('已更新卡片名称');
       },
     ),
     GalleryOverlay.delete => Column(
@@ -185,7 +205,13 @@ extension _GalleryOverlays on _GalleryViewState {
       children: [
         _text('删除“${_selectedCard.name}”及其本次会话记录？', size: 14),
         _gap(8),
-        _text('仅影响当前内存样例。', role: GalleryTypography.caption, color: t.muted),
+        _text(
+          _GalleryLiveScope.of(context) == null
+              ? '仅影响当前内存样例。'
+              : '将删除本机档案、读取批次与保存的行程证据，且无法撤销。',
+          role: GalleryTypography.caption,
+          color: t.muted,
+        ),
         _gap(22),
         Row(
           children: [
@@ -339,6 +365,21 @@ extension _GalleryOverlays on _GalleryViewState {
     ];
   }
 
+  Future<ArchiveConflictPolicy?> _resolveLiveConflict() =>
+      showDialog<ArchiveConflictPolicy>(
+        context: context,
+        builder: (context) => SimpleDialog(
+          title: const Text('记录已存在'),
+          children: [
+            for (final policy in ArchiveConflictPolicy.values)
+              ListTile(
+                title: Text(policy.label),
+                onTap: () => Navigator.pop(context, policy),
+              ),
+          ],
+        ),
+      );
+
   Widget _dropdownFocus(Widget child) => FocusScope(
     autofocus: true,
     child: Focus(
@@ -379,8 +420,13 @@ extension _GalleryOverlays on _GalleryViewState {
     }
     final source = type == GalleryOverlay.source;
     final selected = source ? c.source : c.mode;
-    return (c.data.json[source ? 'sources' : 'modes'] as List)
-        .cast<String>()
+    final live = _GalleryLiveScope.of(context);
+    final values = live == null
+        ? (c.data.json[source ? 'sources' : 'modes'] as List).cast<String>()
+        : source
+        ? live.sources
+        : live.modes;
+    return values
         .map(
           (value) => _dropdownItem(
             value,

@@ -264,11 +264,9 @@ extension _GalleryInformation on _GalleryViewState {
     );
   }
 
-  List<LicenseParagraph> _paragraphsFor(LicenseEntry entry) =>
-      c.licenseParagraphs.putIfAbsent(
-        entry,
-        () => entry.paragraphs.toList(growable: false),
-      );
+  List<LicenseParagraph> _paragraphsFor(LicenseEntry entry) => c
+      .licenseParagraphs
+      .putIfAbsent(entry, () => entry.paragraphs.toList(growable: false));
 
   Widget _contributorSheetBody(ScrollController controller) {
     return ListView(

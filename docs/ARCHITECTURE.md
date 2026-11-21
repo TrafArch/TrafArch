@@ -1,16 +1,16 @@
 # TrafArch 架构与代码所有权
 
-## 2.x 内部界面预览
+## 2.x 界面与实卡接入
 
-`lib/main_gallery.dart` 启动 `InternalPreviewApp`，默认使用现有界面；内部宿主通过 `BetaUiScope` 向设置页提供“启用新界面（beta）”开关。开关仅保留在当前进程，重启恢复关闭。离开任一界面会释放该界面的状态；内部构建关闭自动更新检查，正式入口行为不变。
+`lib/main_gallery.dart` 协议确认后直接启动 2.x 实卡界面：`TransitCardAnalyzerApp` 以 `enableLiveBeta` 和 `initialLiveUi` 创建唯一的 `AppDependencies`，构建关闭自动更新检查。正式入口 `lib/main.dart` 仍默认现有界面，通过同一 Beta 开关切到 2.x；切换前等待 NFC 关闭。`InternalPreviewApp` 与样例 fixtures 仅保留给组件测试和设计回归，不再作为 `main_gallery.dart` 的宿主。
 
-2.x 的主题、四项导航和读取交互位于 `lib/gallery/`。正式入口在隐私确认后由 `TransitCardAnalyzerApp` 创建唯一的 `AppDependencies`；现有界面和 2.x 实卡体验只切换展示层，切换前等待 NFC 关闭。实卡模式不加载 fixtures，与现有界面共用只读 NFC、行程内容和专家字段面板。`scanOnceForGallery` 仅在结果仍属于当前会话、且 NFC 关闭已确认时准备归档；已验证的八达通余额先进入本次待保存快照，不单独回写旧档案。`PendingSavePresenter` 使用同一冲突策略处理手动确认及自动保存冲突。
+2.x 的主题、四项导航和读取交互位于 `lib/gallery/`。实卡模式不加载 fixtures，而是通过 `_GalleryLiveRead` 适配真实 `AppDependencies`：订阅 `watchAllArchiveRows` 生成卡包和历史，把当前 `CardSessionSnapshot` 投影成原预览的首页、行程与专家记录，并把保存、改名、删除、冲突策略、导入导出、诊断和设置动作委托给既有业务层。专家的「交通数据解析」直接消费 1.x 同一套解析结果：余额、币种、卡种与机构字段并入固定展开的「交通应用信息」；0x1A 轨道／公交保留各自原有展开卡，全部 0x1E 记录合并到一张卡并按记录分组，交易明细也合并到一张卡并按交易分组，两类记录整体保持过程记录在前。CU 文件字段继续按 2.x 展开卡片展示。未知值不补猜。失败重读可在首页保留上次摘要，但本次行程和专家不展示旧证据；关闭失败、取消和迟到响应仍由现有会话屏障隔离。
 
-实卡卡包使用 `watchArchiveCardSummaries` 和 `ArchiveHistory.watch`，详情共用冻结交易投影、证据和改名能力，导入导出共用 `ArchiveTransferController`。消费统计按整数最小单位汇总明确的同币种扣款，CU 复用冻结金额与镜像过滤；不估算未知时间、币种或 Suica 余额差。业务设置同用 `SettingsController`，不写参考包或改档案 schema；卡面与排序持久化未接入。
+实卡卡包与详情沿用原预览的卡面、列表、统计和冻结交易组件，档案来源是 `SavedCard` 与 `ArchiveHistory` 投影。删除走现有确认流程，导出按当前卡或完整档案写入用户选择的 SAF 位置；消费统计按整数最小单位汇总明确的同币种扣款，CU 复用冻结金额与镜像过滤，不估算未知时间、币种或 Suica 余额差。业务设置同用 `SettingsController`，不写参考包或改档案 schema；卡面与排序持久化未接入。
 
 两套 UI 共用 `QrReadContent`、`QrAcquisition` 与 `QrController`。`AppDependencies.runQrAcquisition` 先等待普通及八达通 NFC 会话关闭，并独占相机／相册获取；离开路由或内存恢复使在途结果失效。2.x 知识库以当前 `KnowledgeBase.packagePaths` 启动后台只读索引；已校验包的实例变更后废弃旧索引，独立预览加载器不参与实卡路径。2.x 的主要页、档案详情、扫码和设置映射为现有恢复路由；恢复只展示冻结读卡证据，不重查参考库或自动归档。诊断由既有 `DiagnosticsController` 写本机文件，反馈只打开用户主动选择的外部链接。
 
-独立 `main_gallery.dart` 仍由 `InternalPreviewApp` 承载样例模式：`GalleryApp` → `GalleryController` / `GalleryQrController` → 合成 fixtures，不连接真实读卡或档案。以下样例、模拟场景和独立 Gallery 构建规则只适用于该入口。
+`InternalPreviewApp` 承载样例模式：`GalleryApp` → `GalleryController` / `GalleryQrController` → 合成 fixtures，不连接真实读卡或档案。以下样例、模拟场景和设计回归说明只适用于该宿主的测试路径，不适用于 `lib/main_gallery.dart` 的实卡构建。
 
 Gallery 的关于、问题反馈、致谢与开源许可为独立页面，仍使用 Gallery 主题和导航；许可按需读取 Flutter `LicenseRegistry`。公开联系地址集中在 `shared/app_support.dart`，现有设置页复用。`InternalPreviewApp` 仅注入用户点击时打开公开网页／邮件应用的回调：网页使用既有 `FeedbackBrowser`，邮箱使用 `url_launcher`。不自动访问外链，也不传递卡片、日志或档案数据。底栏共享一个 180ms 水平滑动胶囊，主页面按底栏顺序以 240ms 左右滑动，跨项直达目标。子页面、二维码获取视图与弹层由稳定标识的只读导航栈驱动真实 Navigator 路由，退出内容保留自身展示上下文并停止交互；专家页列表和横向页签使用稳定滚动标识。
 

@@ -9,6 +9,16 @@ import 'gallery_data.dart';
 import 'gallery_design.dart';
 import 'gallery_knowledge_index.dart';
 
+abstract interface class GalleryLiveAdapter {
+  Future<void> start();
+  Future<void> cancel();
+  Future<void> save(String name);
+  Future<void> rename(String name);
+  Future<void> setAutoSave(bool value);
+  Future<void> setIncludeOverdraft(bool value);
+  Future<void> setLogs(bool value);
+}
+
 enum GalleryPage {
   home,
   trips,
@@ -42,6 +52,19 @@ enum GalleryOverlay {
   rawFeedback,
   contributors,
   licenseDetail,
+}
+
+extension GalleryOverlaySurface on GalleryOverlay {
+  bool get isBottomSheet => switch (this) {
+    GalleryOverlay.face ||
+    GalleryOverlay.trip ||
+    GalleryOverlay.export ||
+    GalleryOverlay.importPreview ||
+    GalleryOverlay.rawFeedback ||
+    GalleryOverlay.contributors ||
+    GalleryOverlay.licenseDetail => true,
+    _ => false,
+  };
 }
 
 enum GalleryReadState { unread, reading, success, failed }
@@ -177,8 +200,15 @@ class GalleryController extends ChangeNotifier {
   Timer? _readTimer;
   bool _disposed = false;
   final Map<String, GalleryCardRemoval> _removedCards = {};
+  GalleryLiveAdapter? live;
+  String currentCardId = 'shanghai';
+  Map<String, List<GalleryRecord>> liveLedgers = const {};
+  Map<String, Map<String, dynamic>> liveRaw = const {};
 
-  GalleryCard get current => cards.firstWhere((c) => c.id == 'shanghai');
+  GalleryCard get current => cards.firstWhere(
+    (card) => card.id == currentCardId,
+    orElse: () => cards.first,
+  );
   GalleryCard get selectedCard =>
       cards.firstWhere((c) => c.id == selectedCardId, orElse: () => current);
 
@@ -382,6 +412,10 @@ class GalleryController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void attachLive(GalleryLiveAdapter value) {
+    live = value;
+  }
+
   void record(String action) {
     if (!logsEnabled) return;
     logs.add('2026-10-27 09:41:00 ${page.name} $action');
@@ -465,6 +499,10 @@ class GalleryController extends ChangeNotifier {
   }
 
   void cancelRead() {
+    if (live != null) {
+      unawaited(live!.cancel());
+      return;
+    }
     _readTimer?.cancel();
     _readTimer = null;
     if (readState == GalleryReadState.reading) {
@@ -473,6 +511,10 @@ class GalleryController extends ChangeNotifier {
   }
 
   void read({bool fail = false}) {
+    if (live != null) {
+      unawaited(live!.start());
+      return;
+    }
     if (readState == GalleryReadState.reading) return;
     cancelRead();
     readState = GalleryReadState.reading;
@@ -495,6 +537,10 @@ class GalleryController extends ChangeNotifier {
   }
 
   void save(String name) {
+    if (live != null) {
+      unawaited(live!.save(name));
+      return;
+    }
     if (!hasRead || readState == GalleryReadState.reading) return;
     update(() {
       if (name.trim().isNotEmpty) current.name = name.trim();
@@ -504,6 +550,10 @@ class GalleryController extends ChangeNotifier {
   }
 
   void rename(String name) {
+    if (live != null) {
+      unawaited(live!.rename(name));
+      return;
+    }
     if (name.trim().isEmpty) return;
     update(() {
       selectedCard.name = name.trim();
@@ -562,14 +612,32 @@ class GalleryController extends ChangeNotifier {
     return true;
   }
 
-  void setAutoSave(bool value) => update(() {
-    autoSave = value;
-    if (value && hasRead && readState != GalleryReadState.reading) {
-      current.saved = true;
+  void setAutoSave(bool value) {
+    if (live != null) {
+      unawaited(live!.setAutoSave(value));
+      return;
     }
-  }, '修改自动保存');
+    update(() {
+      autoSave = value;
+      if (value && hasRead && readState != GalleryReadState.reading) {
+        current.saved = true;
+      }
+    }, '修改自动保存');
+  }
+
+  void setIncludeOverdraft(bool value) {
+    if (live != null) {
+      unawaited(live!.setIncludeOverdraft(value));
+      return;
+    }
+    update(() => includeOverdraft = value, '修改上海透支显示');
+  }
 
   void setLogs(bool value) {
+    if (live != null) {
+      unawaited(live!.setLogs(value));
+      return;
+    }
     if (value) {
       logsEnabled = true;
       record('logging-enabled');
@@ -602,9 +670,11 @@ class GalleryController extends ChangeNotifier {
     showOverlay(GalleryOverlay.export);
   }
 
-  List<GalleryRecord> ledger(GalleryCard card) => card.id == 'shanghai'
-      ? trips.where((t) => t['kind'] != 'event').toList()
-      : data.ledger(card.id);
+  List<GalleryRecord> ledger(GalleryCard card) =>
+      liveLedgers[card.id] ??
+      (card.id == 'shanghai'
+          ? trips.where((t) => t['kind'] != 'event').toList()
+          : data.ledger(card.id));
 
   List<GalleryRecord> get filteredTrips {
     if (!hasRead) return [];

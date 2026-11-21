@@ -19,32 +19,46 @@ import '../app/app_dependencies.dart';
 import '../app/beta_ui_scope.dart';
 import '../features/archive/application/archive_history.dart';
 import '../features/archive/application/archive_record_count.dart';
+import '../features/archive/application/cu_archive_projection.dart';
+import '../features/archive/application/suica_archive_projection.dart';
 import '../features/archive/data/app_database.dart';
+import '../features/archive/data/card_repository.dart';
 import '../features/archive/domain/card_name_extension.dart';
+import '../features/archive/domain/card_session_snapshot.dart';
 import '../features/archive/domain/card_types.dart';
 import '../features/archive/presentation/archive_balance_display.dart';
+import '../features/archive/presentation/archive_trip_presenter.dart';
+import '../features/archive/presentation/shanghai_archive_mirrored_records.dart';
 import '../features/archive/presentation/archive_transfer_dialogs.dart';
-import '../features/archive/presentation/card_detail_page.dart';
 import '../features/cards/cards_page.dart';
 import '../features/expert/expert_page.dart';
+import '../features/expert/expert_formatters.dart';
 import '../features/home/presentation/result_labels.dart';
-import '../features/home/presentation/pending_save_presenter.dart';
-import '../features/home/presentation/transit_summary_panel.dart';
-import '../features/qr/presentation/qr_page.dart';
-import '../features/recovery/recovery_result_panel.dart';
+import '../features/qr/presentation/jt_t1179_qr_display.dart';
+import '../features/qr/presentation/qr_acquire.dart';
+import '../features/recovery/recovery_state.dart';
+import '../features/reference_data/data/city_union_lookup_rules.dart';
 import '../features/reference_data/data/tunion_knowledge_base.dart';
 import '../features/scan/application/scan_controller.dart';
 import '../features/settings/presentation/diagnostic_export_dialog.dart';
 import '../features/settings/presentation/firebase_analytics_tile.dart';
 import '../features/transit_analysis/balance_interpretation.dart';
+import '../features/transit_analysis/tunion_analysis_models.dart';
 import '../features/trips/journey_transport_icon.dart';
+import '../features/trips/cu_trip_presenter.dart';
+import '../features/trips/journey_presentation.dart';
+import '../features/trips/local_card_trip_presenter.dart';
 import '../features/trips/trip_filters.dart';
-import '../features/trips/trips_page.dart';
+import '../features/trips/trip_entry_presenter.dart';
+import '../features/trips/trip_cards_view.dart';
 import '../platform/browser/feedback_browser.dart';
 import '../platform/qr/qr_image_picker.dart';
 import '../platform/storage/archive_document_store.dart';
 import '../protocols/felica/models/felica_card_type.dart';
+import '../protocols/felica/models/jpy_amount_formatter.dart';
 import '../protocols/transit/card_parser.dart';
+import '../protocols/transit/city_union/city_union_models.dart';
+import '../protocols/transit/tunion/tunion_models.dart';
 import '../shared/app_support.dart';
 import '../shared/domain/archive_conflict_policy.dart';
 import 'gallery_controller.dart';
@@ -137,7 +151,7 @@ class _GalleryAppState extends State<GalleryApp> {
     super.initState();
     _preferences = widget.preferences ?? GalleryPreferences();
     if (widget.liveApp case final app?) {
-      final controller = _owned = GalleryController(GalleryData.empty());
+      final controller = _owned = GalleryController(GalleryData.live());
       _liveRead = _GalleryLiveRead(app, controller);
       _ready = Future.value(controller);
       return;
@@ -337,11 +351,8 @@ class _GalleryViewState extends State<_GalleryView> {
   final Set<String> _walletArrivals = {};
   GallerySpendingSelection _spendingSelection =
       const GallerySpendingSelection.all();
-  Stream<List<ArchiveCardSummary>>? _archiveCards;
-  Stream<ArchiveHistoryResult>? _archiveHistory;
   Future<GalleryKnowledgeIndex>? _liveKnowledgeBrowse;
   KnowledgeBase? _browsedKnowledge;
-  bool _diagnosticsOpen = false;
   double _detailScrollDeficit = 0;
   double _detailMaxExtent = 0;
   double _detailShrinkDistance = 0;
@@ -564,16 +575,25 @@ class _GalleryViewState extends State<_GalleryView> {
     }
     widget.anchors.scheduleMeasure();
     if (_entry.overlay != null) {
-      return Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.viewInsetsOf(context).bottom,
-        ),
-        child: SafeArea(
-          bottom: false,
-          child: Stack(
-            key: _menuRoot,
-            fit: StackFit.expand,
-            children: _overlay(),
+      final sheet = _entry.overlay!.isBottomSheet;
+      return AnnotatedRegion<SystemUiOverlayStyle>(
+        value: (t.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
+            .copyWith(
+              statusBarColor: Colors.transparent,
+              systemNavigationBarColor: sheet ? t.raised : t.canvas,
+              systemNavigationBarDividerColor: Colors.transparent,
+            ),
+        child: Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewInsetsOf(context).bottom,
+          ),
+          child: SafeArea(
+            bottom: false,
+            child: Stack(
+              key: _menuRoot,
+              fit: StackFit.expand,
+              children: _overlay(),
+            ),
           ),
         ),
       );
@@ -702,9 +722,7 @@ class _GalleryViewState extends State<_GalleryView> {
   }
 
   Widget _page(GalleryPage page) {
-    if (_GalleryLiveScope.of(context) case final live?) {
-      return _livePage(page, live);
-    }
+    final live = _GalleryLiveScope.of(context);
     return switch (page) {
       GalleryPage.home => _home(),
       GalleryPage.trips => _trips(),
@@ -718,6 +736,7 @@ class _GalleryViewState extends State<_GalleryView> {
         load: widget.loadKnowledge,
         onBack: c.back,
         onResult: c.openKnowledgeResult,
+        revision: live?.app.knowledgeBase,
       ),
       GalleryPage.knowledgeCity ||
       GalleryPage.knowledgeLine ||

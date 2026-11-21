@@ -13,6 +13,7 @@ extension _GalleryPages on _GalleryViewState {
   );
 
   Widget _homeContent(GalleryReadState state, bool hasRead) {
+    final live = _GalleryLiveScope.of(context);
     final card = c.current;
     final reading = state == GalleryReadState.reading;
     final failed = state == GalleryReadState.failed;
@@ -54,7 +55,11 @@ extension _GalleryPages on _GalleryViewState {
                 child: Semantics(
                   liveRegion: true,
                   child: _text(
-                    failed ? '读取失败，保留上次结果' : '今天 09:41 读取成功',
+                    failed
+                        ? '读取失败，保留上次结果'
+                        : live == null
+                        ? '今天 09:41 读取成功'
+                        : '${card.when} 读取完成',
                     role: GalleryTypography.caption,
                     color: failed ? t.warn : t.onTone,
                   ),
@@ -85,7 +90,9 @@ extension _GalleryPages on _GalleryViewState {
                 width: showResult ? double.infinity : 240,
                 child: _button(
                   failed ? '重新读取' : '开始读取',
-                  () => c.read(),
+                  live?.closing == true || live?.app.qrAcquiring == true
+                      ? null
+                      : () => c.read(),
                   primary: true,
                   icon: Icons.contactless_outlined,
                 ),
@@ -143,7 +150,7 @@ extension _GalleryPages on _GalleryViewState {
                         ),
                       ),
                       _text(
-                        '今天',
+                        recent['date'] as String? ?? '今天',
                         role: GalleryTypography.caption,
                         color: t.muted,
                       ),
@@ -179,24 +186,27 @@ extension _GalleryPages on _GalleryViewState {
             ),
           ),
         ],
-        _gap(
-          showResult
-              ? 8
-              : _compactHeight
-              ? 12
-              : 32,
-        ),
-        _text(
-          '模拟数据',
-          role: GalleryTypography.caption,
-          color: t.muted,
-          align: showResult ? TextAlign.left : TextAlign.center,
-        ),
+        if (live == null) ...[
+          _gap(
+            showResult
+                ? 8
+                : _compactHeight
+                ? 12
+                : 32,
+          ),
+          _text(
+            '模拟数据',
+            role: GalleryTypography.caption,
+            color: t.muted,
+            align: showResult ? TextAlign.left : TextAlign.center,
+          ),
+        ],
       ],
     );
   }
 
   Widget _trips() {
+    final live = _GalleryLiveScope.of(context);
     final trips = c.filteredTrips;
     final grouped = <String, List<GalleryRecord>>{};
     for (final trip in trips) {
@@ -265,6 +275,15 @@ extension _GalleryPages on _GalleryViewState {
                       _filterButton(c.mode, GalleryOverlay.mode),
                     ],
                   ),
+                  if (live != null &&
+                      live.currentCard.applications.contains('suica')) ...[
+                    _gap(12),
+                    _text(
+                      'Suica 履历仅含日期时不会补造进出站时刻。',
+                      role: GalleryTypography.caption,
+                      color: t.muted,
+                    ),
+                  ],
                   if (!c.hasRead)
                     _empty(
                       '尚未读取卡片',
@@ -278,7 +297,11 @@ extension _GalleryPages on _GalleryViewState {
                     )
                   else if (trips.isEmpty)
                     _empty(
-                      c.trips.isEmpty ? '暂无行程记录' : '当前筛选下没有记录',
+                      live != null && !live.hasFreshCurrent
+                          ? '暂无本次读取结果'
+                          : c.trips.isEmpty
+                          ? '暂无行程记录'
+                          : '当前筛选下没有记录',
                       c.trips.isEmpty ? '卡内记录可能不完整' : '试试其他来源或交通方式',
                       icon: Icons.route_outlined,
                     )
@@ -669,8 +692,9 @@ extension _GalleryPages on _GalleryViewState {
   Widget _cards() {
     final cards = c.savedCards;
     final ids = cards.map((card) => card.id).toSet();
-    if (_walletCardIds != null)
+    if (_walletCardIds != null) {
       _walletArrivals.addAll(ids.difference(_walletCardIds!));
+    }
     _walletCardIds = ids;
     if (_walletArrivals.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback(
@@ -933,6 +957,24 @@ extension _GalleryPages on _GalleryViewState {
   );
 
   void _deleteWalletCard(GalleryCard card) {
+    final live = _GalleryLiveScope.of(context);
+    if (live != null) {
+      final saved = live.savedCardFor(card.id);
+      if (saved == null) return;
+      unawaited(() async {
+        final deleted = await confirmDeleteArchiveCard(
+          context,
+          live.app,
+          saved,
+        );
+        if (deleted && mounted) {
+          c.overlay = null;
+          if (c.page == GalleryPage.detail) c.back();
+          _toast('已删除“${card.name}”', type: GalleryFeedbackType.info);
+        }
+      }());
+      return;
+    }
     final removal = c.deleteCard(card);
     if (removal == null || !mounted) return;
     _toast(
@@ -1089,311 +1131,415 @@ extension _GalleryPages on _GalleryViewState {
     ),
   ]);
 
-  Widget _settings() => _list([
-    _header('设置', back: true),
-    _sectionTitle('读卡与数据'),
-    _panel(
-      Column(
-        children: [
-          _switch(
-            '读取后自动保存',
-            c.autoSave,
-            c.setAutoSave,
-            subtitle: '每次读取后保存到当前卡包',
-          ),
-          const Divider(),
-          _switch(
-            '上海交通卡可透支余额',
-            c.includeOverdraft,
-            (value) => c.update(() => c.includeOverdraft = value),
-            subtitle:
-                '总余额${c.includeOverdraft ? '包含' : '扣除'}固定 8 元额度，CU 余额不重复扣除',
-          ),
-          const Divider(),
-          _settingRow(
-            '知识库',
-            () => c.navigate(GalleryPage.knowledge),
-            subtitle: 'TU 41 个地区 / CU 7 个地区',
-            icon: Icons.menu_book_outlined,
-          ),
-        ],
+  Widget _settings() {
+    final live = _GalleryLiveScope.of(context);
+    return _list([
+      _header('设置', back: true),
+      _sectionTitle('读卡与数据'),
+      _panel(
+        Column(
+          children: [
+            _switch(
+              '读取后自动保存',
+              c.autoSave,
+              c.setAutoSave,
+              subtitle: '每次读取后保存到当前卡包',
+            ),
+            if (live != null) ...[
+              const Divider(),
+              _settingRow(
+                '已存在的记录',
+                () => _selectLiveConflictPolicy(live.app),
+                subtitle:
+                    '${live.app.archiveConflictPolicy.label} · 仅影响与当前档案相同的卡片',
+                icon: Icons.fact_check_outlined,
+              ),
+            ],
+            const Divider(),
+            _switch(
+              '上海交通卡可透支余额',
+              c.includeOverdraft,
+              c.setIncludeOverdraft,
+              subtitle:
+                  '总余额${c.includeOverdraft ? '包含' : '扣除'}固定 8 元额度，CU 余额不重复扣除',
+            ),
+            const Divider(),
+            _settingRow(
+              '知识库',
+              () => c.navigate(GalleryPage.knowledge),
+              subtitle: live == null
+                  ? 'TU 41 个地区 / CU 7 个地区'
+                  : '使用已安装并校验的本地 TU／CU 参考数据包',
+              icon: Icons.menu_book_outlined,
+            ),
+          ],
+        ),
+        padding: EdgeInsets.zero,
       ),
-      padding: EdgeInsets.zero,
-    ),
-    _sectionTitle('数据与备份'),
-    _panel(
-      Column(
-        children: [
-          _settingRow(
-            '导出卡片记录',
-            () => c.export(all: true),
-            subtitle: '预览全部已保存卡片的记录，不保存文件',
-            icon: Icons.download_outlined,
-          ),
-          const Divider(),
-          _settingRow(
-            '导入卡片记录',
-            _importCardRecords,
-            subtitle: '选择备份文件预览内容，不修改当前样例',
-            icon: Icons.upload_outlined,
-          ),
-        ],
+      _sectionTitle('数据与备份'),
+      _panel(
+        Column(
+          children: [
+            _settingRow(
+              '导出卡片记录',
+              () {
+                if (live == null) {
+                  c.export(all: true);
+                } else {
+                  unawaited(
+                    exportArchiveJson(
+                      context,
+                      live.app,
+                      onNotice: _archiveNotice,
+                    ),
+                  );
+                }
+              },
+              subtitle: live == null
+                  ? '预览全部已保存卡片的记录，不保存文件'
+                  : '选择字段或完整备份，保存到手机本地',
+              icon: Icons.download_outlined,
+            ),
+            const Divider(),
+            _settingRow(
+              '导入卡片记录',
+              () {
+                if (live == null) {
+                  _importCardRecords();
+                } else {
+                  unawaited(_importLiveArchive(live));
+                }
+              },
+              subtitle: live == null
+                  ? '选择备份文件预览内容，不修改当前样例'
+                  : '先预览字段或备份，确认后写入本机档案',
+              icon: Icons.upload_outlined,
+            ),
+          ],
+        ),
+        padding: EdgeInsets.zero,
       ),
-      padding: EdgeInsets.zero,
-    ),
-    _sectionTitle('外观'),
-    _panel(
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _text('外观主题', size: 14),
-                _gap(10),
-                _tabs(
-                  ['跟随系统', '浅色', '深色'],
-                  [
-                    ThemeMode.system,
-                    ThemeMode.light,
-                    ThemeMode.dark,
-                  ].indexOf(c.themeMode),
-                  (i) => c.update(
-                    () => c.themeMode = [
+      _sectionTitle('外观'),
+      _panel(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _text('外观主题', size: 14),
+                  _gap(10),
+                  _tabs(
+                    ['跟随系统', '浅色', '深色'],
+                    [
                       ThemeMode.system,
                       ThemeMode.light,
                       ThemeMode.dark,
-                    ][i],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Divider(),
-          _switch(
-            '莫奈取色',
-            c.monet,
-            (value) => c.update(() => c.monet = value),
-            subtitle: c.monet
-                ? (t.dynamic
-                      ? '跟随当前首页卡片的取色生成界面，更换卡面后自动更新'
-                      : '当前卡片暂无有效取色，使用${GalleryPalette.byId(c.palette).name}配色')
-                : '使用手动选择的主题配色',
-          ),
-          _collapse(
-            !c.monet,
-            (_) => Padding(
-              padding: const EdgeInsets.fromLTRB(10, 0, 10, 14),
-              child: Row(
-                children: GalleryPalette.values.map((palette) {
-                  final roles = palette.tokens(t.dark);
-                  final swatch = roles.primary;
-                  return Expanded(
-                    child: Semantics(
-                      selected: c.palette == palette.id,
-                      child: TextButton(
-                        onPressed: () => c.update(() => c.palette = palette.id),
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          minimumSize: Size.zero,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            side: BorderSide(
-                              color: c.palette == palette.id
-                                  ? t.onTone
-                                  : Colors.transparent,
-                              width: 2,
-                            ),
-                          ),
-                        ),
-                        child: Column(
-                          children: [
-                            Container(
-                              width: 30,
-                              height: 30,
-                              decoration: BoxDecoration(
-                                color: swatch,
-                                shape: BoxShape.circle,
-                              ),
-                              child: c.palette == palette.id
-                                  ? Icon(
-                                      Icons.check_rounded,
-                                      color: roles.onPrimary,
-                                      size: 18,
-                                    )
-                                  : null,
-                            ),
-                            _gap(7),
-                            _text(
-                              palette.name,
-                              role: GalleryTypography.caption,
-                              color: t.muted,
-                            ),
-                          ],
-                        ),
-                      ),
+                    ].indexOf(c.themeMode),
+                    (i) => c.update(
+                      () => c.themeMode = [
+                        ThemeMode.system,
+                        ThemeMode.light,
+                        ThemeMode.dark,
+                      ][i],
                     ),
-                  );
-                }).toList(),
-              ),
-            ),
-          ),
-          const Divider(),
-          _switch(
-            '预测性返回手势',
-            _preferences.enabled,
-            _preferences.setEnabled,
-            subtitle: _preferences.loading
-                ? '正在读取偏好…'
-                : '手势返回时预览上一页，松手返回或取消；支持的 Android 系统生效',
-          ),
-          _collapse(
-            _preferences.error != null,
-            (_) => Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _text(
-                      _preferences.error!,
-                      role: GalleryTypography.caption,
-                      color: t.warn,
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: _preferences.loading ? null : _preferences.retry,
-                    child: const Text('重试'),
                   ),
                 ],
               ),
             ),
-          ),
-          const Divider(),
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _text('底栏样式', size: 14),
-                _gap(10),
-                _tabs(
-                  ['悬浮', '下沉'],
-                  c.docked ? 1 : 0,
-                  (i) => c.update(() => c.docked = i == 1),
-                ),
-              ],
+            const Divider(),
+            _switch(
+              '莫奈取色',
+              c.monet,
+              (value) => c.update(() => c.monet = value),
+              subtitle: c.monet
+                  ? (t.dynamic
+                        ? '跟随当前首页卡片的取色生成界面，更换卡面后自动更新'
+                        : '当前卡片暂无有效取色，使用${GalleryPalette.byId(c.palette).name}配色')
+                  : '使用手动选择的主题配色',
             ),
-          ),
-        ],
-      ),
-      padding: EdgeInsets.zero,
-    ),
-    _sectionTitle('隐私'),
-    _panel(const FirebaseAnalyticsTile(), padding: EdgeInsets.zero),
-    _sectionTitle('日志'),
-    _panel(
-      Column(
-        children: [
-          _switch(
-            '启用运行日志',
-            c.logsEnabled,
-            c.setLogs,
-            subtitle: '仅记录本次会话中的界面操作',
-          ),
-          _collapse(
-            c.logsEnabled,
-            (_) => Column(
-              children: [
-                const Divider(),
-                _settingRow(
-                  '导出日志',
-                  () => c.export(log: true),
-                  subtitle: '预览模拟日志，不保存文件',
-                  icon: Icons.download_outlined,
+            _collapse(
+              !c.monet,
+              (_) => Padding(
+                padding: const EdgeInsets.fromLTRB(10, 0, 10, 14),
+                child: Row(
+                  children: GalleryPalette.values.map((palette) {
+                    final roles = palette.tokens(t.dark);
+                    final swatch = roles.primary;
+                    return Expanded(
+                      child: Semantics(
+                        selected: c.palette == palette.id,
+                        child: TextButton(
+                          onPressed: () =>
+                              c.update(() => c.palette = palette.id),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            minimumSize: Size.zero,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              side: BorderSide(
+                                color: c.palette == palette.id
+                                    ? t.onTone
+                                    : Colors.transparent,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              Container(
+                                width: 30,
+                                height: 30,
+                                decoration: BoxDecoration(
+                                  color: swatch,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: c.palette == palette.id
+                                    ? Icon(
+                                        Icons.check_rounded,
+                                        color: roles.onPrimary,
+                                        size: 18,
+                                      )
+                                    : null,
+                              ),
+                              _gap(7),
+                              _text(
+                                palette.name,
+                                role: GalleryTypography.caption,
+                                color: t.muted,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
                 ),
-              ],
+              ),
             ),
-          ),
-        ],
-      ),
-      padding: EdgeInsets.zero,
-    ),
-    _sectionTitle('帮助与支持'),
-    _panel(
-      _settingRow(
-        '问题反馈',
-        () => _openInformationPage(GalleryPage.feedback),
-        subtitle: 'QQ 群、邮箱与问卷反馈渠道',
-        icon: Icons.feedback_outlined,
-      ),
-      padding: EdgeInsets.zero,
-    ),
-    _sectionTitle('关于 TrafArch'),
-    _panel(
-      Column(
-        children: [
-          _aboutHero(),
-          const Divider(),
-          _settingRow(
-            '致谢',
-            () => _openInformationPage(GalleryPage.acknowledgements),
-            subtitle: '感谢读卡识途及数据贡献者',
-            icon: Icons.volunteer_activism_outlined,
-          ),
-          const Divider(),
-          _settingRow(
-            '开放源代码许可',
-            () => _openInformationPage(GalleryPage.licenses),
-            subtitle: '查看本应用使用的开源软件与许可',
-            icon: Icons.code_rounded,
-          ),
-          const Divider(),
-          _contactRow(
-            '隐私政策',
-            '了解数据与隐私保护',
-            Icons.privacy_tip_outlined,
-            link: AppSupport.privacy,
-          ),
-          const Divider(),
-          _contactRow(
-            AppSupport.eulaLabel,
-            '查看 TrafArch 的使用条款',
-            Icons.description_outlined,
-            link: AppSupport.eula,
-          ),
-          const Divider(),
-          _contributorRow(),
-        ],
-      ),
-      padding: EdgeInsets.zero,
-    ),
-    _gap(24),
-    _text(
-      AppInfo.copyright,
-      role: GalleryTypography.caption,
-      color: t.muted,
-      align: TextAlign.center,
-    ),
-    if (widget.onDisableBeta != null) ...[
-      _sectionTitle('预览'),
-      _panel(
-        _switch(
-          '启用新界面（beta）',
-          true,
-          (_) => widget.onDisableBeta!(),
-          subtitle: '使用模拟数据；关闭后返回现有界面',
+            const Divider(),
+            _switch(
+              '预测性返回手势',
+              _preferences.enabled,
+              _preferences.setEnabled,
+              subtitle: _preferences.loading
+                  ? '正在读取偏好…'
+                  : '手势返回时预览上一页，松手返回或取消；支持的 Android 系统生效',
+            ),
+            _collapse(
+              _preferences.error != null,
+              (_) => Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _text(
+                        _preferences.error!,
+                        role: GalleryTypography.caption,
+                        color: t.warn,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: _preferences.loading
+                          ? null
+                          : _preferences.retry,
+                      child: const Text('重试'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const Divider(),
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _text('底栏样式', size: 14),
+                  _gap(10),
+                  _tabs(
+                    ['悬浮', '下沉'],
+                    c.docked ? 1 : 0,
+                    (i) => c.update(() => c.docked = i == 1),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
         padding: EdgeInsets.zero,
       ),
-    ],
-  ]);
+      _sectionTitle('隐私'),
+      _panel(const FirebaseAnalyticsTile(), padding: EdgeInsets.zero),
+      _sectionTitle('日志'),
+      _panel(
+        Column(
+          children: [
+            _switch(
+              live == null ? '启用运行日志' : '记录运行日志',
+              c.logsEnabled,
+              c.setLogs,
+              subtitle: live == null ? '仅记录本次会话中的界面操作' : '读卡会话仅保存在本机，可在下方手动导出',
+            ),
+            _collapse(
+              c.logsEnabled || live != null,
+              (_) => Column(
+                children: [
+                  const Divider(),
+                  _settingRow(
+                    live == null ? '导出日志' : '诊断日志',
+                    () {
+                      if (live == null) {
+                        c.export(log: true);
+                      } else {
+                        unawaited(
+                          showDiagnosticExportDialog(context, live.app),
+                        );
+                      }
+                    },
+                    subtitle: live == null ? '预览模拟日志，不保存文件' : '选择读取会话并导出到本机',
+                    icon: Icons.download_outlined,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        padding: EdgeInsets.zero,
+      ),
+      _sectionTitle('帮助与支持'),
+      _panel(
+        _settingRow(
+          '问题反馈',
+          () => _openInformationPage(GalleryPage.feedback),
+          subtitle: 'QQ 群、邮箱与问卷反馈渠道',
+          icon: Icons.feedback_outlined,
+        ),
+        padding: EdgeInsets.zero,
+      ),
+      _sectionTitle('关于 TrafArch'),
+      _panel(
+        Column(
+          children: [
+            _aboutHero(),
+            const Divider(),
+            _settingRow(
+              '致谢',
+              () => _openInformationPage(GalleryPage.acknowledgements),
+              subtitle: '感谢读卡识途及数据贡献者',
+              icon: Icons.volunteer_activism_outlined,
+            ),
+            const Divider(),
+            _settingRow(
+              '开放源代码许可',
+              () => _openInformationPage(GalleryPage.licenses),
+              subtitle: '查看本应用使用的开源软件与许可',
+              icon: Icons.code_rounded,
+            ),
+            const Divider(),
+            _contactRow(
+              '隐私政策',
+              '了解数据与隐私保护',
+              Icons.privacy_tip_outlined,
+              link: AppSupport.privacy,
+            ),
+            const Divider(),
+            _contactRow(
+              AppSupport.eulaLabel,
+              '查看 TrafArch 的使用条款',
+              Icons.description_outlined,
+              link: AppSupport.eula,
+            ),
+            const Divider(),
+            _contributorRow(),
+          ],
+        ),
+        padding: EdgeInsets.zero,
+      ),
+      _gap(24),
+      _text(
+        AppInfo.copyright,
+        role: GalleryTypography.caption,
+        color: t.muted,
+        align: TextAlign.center,
+      ),
+      if (widget.onDisableBeta != null) ...[
+        _sectionTitle('预览'),
+        _panel(
+          _switch(
+            '启用新界面（beta）',
+            true,
+            BetaUiScope.maybeOf(context)?.switching == true
+                ? null
+                : (_) => widget.onDisableBeta!(),
+            subtitle:
+                BetaUiScope.maybeOf(context)?.switchError ??
+                (BetaUiScope.maybeOf(context)?.switching == true
+                    ? '正在关闭读卡连接…'
+                    : live == null
+                    ? '使用模拟数据；关闭后返回现有界面'
+                    : '当前显示实卡数据；关闭后返回现有界面'),
+          ),
+          padding: EdgeInsets.zero,
+        ),
+      ],
+    ]);
+  }
+
+  Future<void> _importLiveArchive(_GalleryLiveRead live) async {
+    try {
+      final preview = await live.app.archiveTransfer.pickImport();
+      if (!mounted || preview == null) return;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('导入卡片 JSON'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(preview.name),
+                const SizedBox(height: 12),
+                Text(preview.summary),
+                const SizedBox(height: 12),
+                Text(
+                  preview.isPartial
+                      ? '字段导入会作为独立记录保存，缺失内容保持未知。'
+                      : '相同卡片的历史记录将合并，本机自定义名称保留。',
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('导入'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || confirmed != true) return;
+      final result = await live.app.archiveTransfer.confirmImport(preview);
+      if (!mounted) return;
+      _toast('导入完成：新增 ${result.insertedCards} 张，合并 ${result.mergedCards} 张');
+    } catch (_) {
+      if (mounted) {
+        _toast('导入失败，请重试。', type: GalleryFeedbackType.error);
+      }
+    }
+  }
 
   Widget _switch(
     String label,
     bool value,
-    ValueChanged<bool> onChanged, {
+    ValueChanged<bool>? onChanged, {
     String? subtitle,
   }) => SwitchListTile(
     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),

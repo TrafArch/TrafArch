@@ -25,12 +25,14 @@ class TransitCardAnalyzerApp extends StatefulWidget {
     this.createDependencies,
     this.enableUpdateChecks = true,
     this.enableLiveBeta = false,
+    this.initialLiveUi = false,
   });
 
   /// The root widget owns the returned state's initialization and disposal.
   final AppDependencies Function()? createDependencies;
   final bool enableUpdateChecks;
   final bool enableLiveBeta;
+  final bool initialLiveUi;
 
   @override
   State<TransitCardAnalyzerApp> createState() => _TransitCardAnalyzerAppState();
@@ -60,6 +62,8 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp>
   void initState() {
     super.initState();
     _app = widget.createDependencies?.call() ?? AppDependencies();
+    _live = widget.enableLiveBeta && widget.initialLiveUi;
+    if (_live) _ensureLivePreferences();
     _routeObserver = RecoveryRouteObserver(_app);
     WidgetsBinding.instance.addObserver(this);
     _monetEnabled.value = _app.monetEnabled;
@@ -104,6 +108,17 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp>
     }
   }
 
+  void _ensureLivePreferences() {
+    final store = _app.settings.store;
+    _livePreferences ??= GalleryPreferences(
+      readEnabled: () async =>
+          await store.read(SettingsKeys.galleryPredictiveBackEnabled) !=
+          'false',
+      writeEnabled: (value) =>
+          store.write(SettingsKeys.galleryPredictiveBackEnabled, '$value'),
+    )..load();
+  }
+
   Future<void> _switchLiveUi(bool enabled) async {
     if (_switching || enabled == _live || _app.qrAcquiring) return;
     setState(() {
@@ -120,14 +135,7 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp>
       return;
     }
     _app.scan.autoScanConsumed = true;
-    final store = _app.settings.store;
-    _livePreferences ??= GalleryPreferences(
-      readEnabled: () async =>
-          await store.read(SettingsKeys.galleryPredictiveBackEnabled) !=
-          'false',
-      writeEnabled: (value) =>
-          store.write(SettingsKeys.galleryPredictiveBackEnabled, '$value'),
-    )..load();
+    _ensureLivePreferences();
     setState(() {
       _switching = false;
       _live = enabled;
@@ -147,6 +155,7 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp>
           ? GalleryApp(
               liveApp: _app,
               preferences: _livePreferences,
+              onDisableBeta: () => _switchLiveUi(false),
               openWebLink: _app.openWebLink,
               openEmail: _app.openFeedbackEmail,
             )
