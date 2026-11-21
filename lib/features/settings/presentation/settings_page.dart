@@ -216,7 +216,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         subtitle: Text(
                           beta.switchError ??
                               (beta.live
-                                  ? '体验真实 NFC 读取、行程和专家分析，仅本次运行生效'
+                                  ? '体验真实 NFC 读取、行程、专家分析与卡包，仅本次运行生效'
                                   : '预览全新界面与模拟数据，仅本次运行生效'),
                         ),
                         value: beta.enabled,
@@ -384,8 +384,8 @@ class _BetaUiWarningDialogState extends State<_BetaUiWarningDialog> {
         widget.live
             ? const TextSpan(
                 text:
-                    '2.x 会读取实体卡，当前仅接入首页、行程和专家分析。'
-                    '不会保存档案或写卡；卡包、扫码及完整设置请使用现有界面。'
+                    '2.x 会读取实体卡，并与现有界面共用真实卡包。'
+                    '保存及重复卡片处理沿用当前设置；不会写卡。扫码和知识库请使用现有界面。'
                     '\n\n可随时在设置中切回，重启也会恢复现有界面。',
               )
             : const TextSpan(

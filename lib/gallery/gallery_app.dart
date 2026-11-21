@@ -17,8 +17,18 @@ import 'package:url_launcher/url_launcher.dart';
 import '../app/app_info.dart';
 import '../app/app_dependencies.dart';
 import '../app/beta_ui_scope.dart';
+import '../features/archive/application/archive_history.dart';
+import '../features/archive/application/archive_record_count.dart';
+import '../features/archive/data/app_database.dart';
+import '../features/archive/domain/card_name_extension.dart';
+import '../features/archive/domain/card_types.dart';
+import '../features/archive/presentation/archive_balance_display.dart';
+import '../features/archive/presentation/archive_transfer_dialogs.dart';
+import '../features/archive/presentation/card_detail_page.dart';
+import '../features/cards/cards_page.dart';
 import '../features/expert/expert_page.dart';
 import '../features/home/presentation/result_labels.dart';
+import '../features/home/presentation/pending_save_presenter.dart';
 import '../features/home/presentation/transit_summary_panel.dart';
 import '../features/scan/application/scan_controller.dart';
 import '../features/settings/presentation/firebase_analytics_tile.dart';
@@ -32,6 +42,7 @@ import '../platform/storage/archive_document_store.dart';
 import '../protocols/felica/models/felica_card_type.dart';
 import '../protocols/transit/card_parser.dart';
 import '../shared/app_support.dart';
+import '../shared/domain/archive_conflict_policy.dart';
 import 'gallery_controller.dart';
 import 'gallery_balance_presentation.dart';
 import 'gallery_color_engine.dart';
@@ -46,6 +57,7 @@ import 'gallery_feedback.dart';
 import 'gallery_knowledge_index.dart';
 import 'gallery_motion.dart';
 import 'gallery_spending.dart';
+import 'gallery_archive_spending.dart';
 
 part 'gallery_components.dart';
 part 'gallery_pages.dart';
@@ -60,6 +72,7 @@ part 'gallery_wallet_item.dart';
 part 'gallery_detail.dart';
 part 'gallery_face_crop.dart';
 part 'gallery_live_read.dart';
+part 'gallery_live_archive.dart';
 
 class GalleryApp extends StatefulWidget {
   const GalleryApp({
@@ -306,6 +319,8 @@ class _GalleryViewState extends State<_GalleryView> {
   final Set<String> _walletArrivals = {};
   GallerySpendingSelection _spendingSelection =
       const GallerySpendingSelection.all();
+  Stream<List<ArchiveCardSummary>>? _archiveCards;
+  Stream<ArchiveHistoryResult>? _archiveHistory;
   double _detailScrollDeficit = 0;
   double _detailMaxExtent = 0;
   double _detailShrinkDistance = 0;

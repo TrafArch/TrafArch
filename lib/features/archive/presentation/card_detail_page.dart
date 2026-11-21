@@ -118,7 +118,7 @@ class _CardDetailPageState extends State<CardDetailPage> {
               if (history == null || history.missing) {
                 return const Center(child: Text('卡片不存在或已删除'));
               }
-              return _CardDetailBody(
+              return ArchiveDetailContent(
                 history: history,
                 repository: widget.repository,
                 includeShanghaiOverdraft:
@@ -133,16 +133,21 @@ class _CardDetailPageState extends State<CardDetailPage> {
   );
 }
 
-class _CardDetailBody extends StatelessWidget {
+enum ArchiveDetailSection { all, records, information }
+
+class ArchiveDetailContent extends StatelessWidget {
   final ArchiveHistoryResult history;
   final CardRepository repository;
   final bool includeShanghaiOverdraft;
   final Map<String, List<String>>? recoveryFilters;
-  const _CardDetailBody({
+  final ArchiveDetailSection section;
+  const ArchiveDetailContent({
+    super.key,
     required this.history,
     required this.repository,
     required this.includeShanghaiOverdraft,
     this.recoveryFilters,
+    this.section = ArchiveDetailSection.all,
   });
 
   @override
@@ -216,9 +221,8 @@ class _CardDetailBody extends StatelessWidget {
               record.cardType == 'shenzhenTong',
         )
         .toList();
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 28),
-      children: [
+    final children = <Widget>[
+      if (section != ArchiveDetailSection.records)
         _ArchiveHeader(
           card: history.card!,
           recordCount: ArchiveRecordCount.fromHistory(history),
@@ -241,6 +245,7 @@ class _CardDetailBody extends StatelessWidget {
               ? '无法确认档案身份，暂不能编辑卡面编号；原始资料已保留。'
               : null,
         ),
+      if (section != ArchiveDetailSection.information) ...[
         const SizedBox(height: 12),
         Text(
           '${isAmusementIc ? '读取记录' : '行程记录'} · $readBatchCount 个已保存批次'
@@ -322,6 +327,8 @@ class _CardDetailBody extends StatelessWidget {
           const SizedBox(height: 12),
           ImportedArchiveRecords(records: history.importedRecords),
         ],
+      ],
+      if (section != ArchiveDetailSection.records) ...[
         const SizedBox(height: 16),
         TextButton.icon(
           onPressed: () => Navigator.of(context).push(
@@ -333,7 +340,16 @@ class _CardDetailBody extends StatelessWidget {
           label: Text(_archiveDiagnosticsTitle(history)),
         ),
       ],
-    );
+    ];
+    return section == ArchiveDetailSection.all
+        ? ListView(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 28),
+            children: children,
+          )
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: children,
+          );
   }
 }
 
@@ -652,9 +668,15 @@ class _ArchiveHeader extends StatelessWidget {
       ),
     );
     if (name == null) return;
-    await repository.renameCard(card.id, name);
-    if (messenger.mounted) {
-      messenger.showSnackBar(const SnackBar(content: Text('已更新卡片名称')));
+    try {
+      await repository.renameCard(card.id, name);
+      if (messenger.mounted) {
+        messenger.showSnackBar(const SnackBar(content: Text('已更新卡片名称')));
+      }
+    } catch (_) {
+      if (messenger.mounted) {
+        messenger.showSnackBar(const SnackBar(content: Text('名称未保存，请重试。')));
+      }
     }
   }
 }

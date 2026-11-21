@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/app/app_dependencies.dart';
 import 'package:transit_card_analyzer/app/trafarch_app.dart';
+import 'package:transit_card_analyzer/features/archive/domain/card_name_extension.dart';
+import 'package:transit_card_analyzer/features/home/presentation/pending_save_presenter.dart';
 import 'package:transit_card_analyzer/features/expert/raw_data_panel.dart';
 import 'package:transit_card_analyzer/features/octopus/octopus_balance_controller.dart';
 import 'package:transit_card_analyzer/features/trips/trip_cards_view.dart';
@@ -13,10 +15,12 @@ import 'package:transit_card_analyzer/platform/nfc/felica_channel.dart';
 import 'package:transit_card_analyzer/platform/nfc/nfc_models.dart';
 import 'package:transit_card_analyzer/platform/nfc/nfc_service.dart';
 import 'package:transit_card_analyzer/platform/nfc/octopus_channel.dart';
+import 'package:transit_card_analyzer/platform/storage/archive_document_store.dart';
 import 'package:transit_card_analyzer/platform/storage/app_logger.dart';
 import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
 import 'package:transit_card_analyzer/protocols/felica/models/jpy_amount_formatter.dart';
 import 'package:transit_card_analyzer/protocols/octopus/octopus_balance.dart';
+import 'package:transit_card_analyzer/shared/domain/archive_conflict_policy.dart';
 
 import 'support/gallery_scroll.dart';
 import 'support/test_database.dart';
@@ -24,7 +28,7 @@ import 'support/test_database.dart';
 void main() {
   for (final kind in _CardKind.values) {
     testWidgets(
-      '2.x uses one read-only ${kind.name} result across three pages',
+      '2.x uses one ${kind.name} result across three pages and saves supported cards',
       (tester) async {
         final fixture = await _showGallery(tester, kind);
         final app = fixture.app;
@@ -41,7 +45,10 @@ void main() {
         };
         expect(find.text(balance), findsWidgets);
         expect(app.pendingCardSave, isNull);
-        expect(await tester.runAsync(app.cardRepository.getAllCards), isEmpty);
+        final saved = (await tester.runAsync(app.cardRepository.getAllCards))!;
+        expect(saved, hasLength(kind == _CardKind.octopus ? 0 : 1));
+        await tester.pump(const Duration(seconds: 4));
+        await tester.pumpAndSettle();
 
         await _navigate(tester, 'trips');
         expect(find.text(balance), findsWidgets);
@@ -71,11 +78,78 @@ void main() {
         expect(find.byTooltip('导出卡片记录'), findsNothing);
 
         await _navigate(tester, 'cards');
-        expect(find.text('卡包尚未接入'), findsOneWidget);
+        await _settleIo(tester);
+        expect(find.byTooltip('导入卡片 JSON'), findsOneWidget);
+        expect(
+          find.text(saved.firstOrNull?.displayName ?? '暂无已保存卡片'),
+          findsOneWidget,
+        );
         await _unmount(tester);
       },
     );
   }
+
+  testWidgets(
+    '2.x manually saves, shows frozen history, renames and confirms delete',
+    (tester) async {
+      final fixture = await _showGallery(tester, _CardKind.tu, autoSave: false);
+      final app = fixture.app;
+      await _read(tester, '开始读取');
+      expect(find.byType(SaveCardDialog), findsNothing);
+      expect(await tester.runAsync(app.cardRepository.getAllCards), isEmpty);
+      await tester.tap(find.text('保存卡片'));
+      await _settleIo(tester);
+      expect(find.byType(SaveCardDialog), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, '保存'));
+      await _settleIo(tester);
+      expect(app.pendingCardSave, isNull);
+      final card = (await tester.runAsync(app.cardRepository.getAllCards))!
+          .single;
+
+      await _navigate(tester, 'cards');
+      await _settleIo(tester);
+      await tester.tap(find.text(card.displayName));
+      await _settleIo(tester);
+      expect(find.text('最近交易'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate((widget) => widget is TripCardsView),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('消费统计'));
+      await tester.pumpAndSettle();
+      expect(find.text('总消费'), findsOneWidget);
+      expect(find.text('¥10.00'), findsWidgets);
+
+      await tester.tap(find.text('卡片信息'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('自定义名称'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextFormField), '阶段二档案');
+      await tester.tap(find.widgetWithText(FilledButton, '保存'));
+      await _settleIo(tester);
+      final renamed = (await tester.runAsync(app.cardRepository.getAllCards))!
+          .single;
+      expect(renamed.id, card.id);
+      expect(renamed.sessionDataJson, card.sessionDataJson);
+      expect(renamed.displayName, '阶段二档案');
+
+      await tester.tap(find.byTooltip('删除卡片'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, '取消'));
+      await tester.pumpAndSettle();
+      expect(
+        await tester.runAsync(app.cardRepository.getAllCards),
+        hasLength(1),
+      );
+      await tester.tap(find.byTooltip('删除卡片'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, '删除'));
+      await _settleIo(tester);
+      expect(await tester.runAsync(app.cardRepository.getAllCards), isEmpty);
+      expect(find.text('暂无已保存卡片'), findsOneWidget);
+      await _unmount(tester);
+    },
+  );
 
   testWidgets(
     'failed repeat retains the previous summary without exposing stale trips',
@@ -93,6 +167,131 @@ void main() {
       await _unmount(tester);
     },
   );
+
+  test(
+    'gallery auto-save cannot stage or write before NFC close succeeds',
+    () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      final fixture = _Fixture(_CardKind.tu);
+      final app = fixture.app;
+      addTearDown(app.dispose);
+      await app.init();
+      final reached = fixture.native.closeReached = Completer<void>();
+      final close = fixture.native.close = Completer<void>();
+      fixture.native.closeFails = true;
+      final reading = app.scanOnceForGallery();
+      await reached.future;
+      expect(app.pendingCardSave, isNull);
+      expect(await app.cardRepository.getAllCards(), isEmpty);
+      close.complete();
+      await reading;
+      expect(app.hasCompletedRead, isFalse);
+      expect(app.pendingCardSave, isNull);
+      expect(await app.cardRepository.getAllCards(), isEmpty);
+    },
+  );
+
+  testWidgets(
+    '2.x settings persist and apply ask/skip/overwrite to the same archive',
+    (tester) async {
+      final fixture = await _showGallery(tester, _CardKind.tu);
+      final app = fixture.app;
+      await _read(tester, '开始读取');
+      final original = (await tester.runAsync(app.cardRepository.getAllCards))!
+          .single;
+      await tester.tap(find.byTooltip('设置'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('已存在的记录'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('每次询问'));
+      await tester.pumpAndSettle();
+      expect(app.archiveConflictPolicy, ArchiveConflictPolicy.ask);
+      expect(
+        await app.settings.store.read(SettingsKeys.archiveConflictPolicy),
+        'ask',
+      );
+      await tester.tap(find.byTooltip('返回'));
+      await tester.pumpAndSettle();
+
+      fixture.native.balanceFen = 8000;
+      fixture.native.readAt = _readAt.add(const Duration(minutes: 1));
+      await _read(tester, '再次读取');
+      await _settleIo(tester);
+      expect(find.text('记录已存在'), findsOneWidget);
+      expect(
+        (await tester.runAsync(app.cardRepository.getAllCards))!.single,
+        original,
+      );
+      await tester.tap(find.widgetWithText(TextButton, '跳过'));
+      await tester.pumpAndSettle();
+      expect(app.pendingCardSave, isNull);
+
+      await app.setArchiveConflictPolicy(ArchiveConflictPolicy.skip);
+      await _read(tester, '再次读取');
+      expect(find.text('记录已存在'), findsNothing);
+      expect(
+        (await tester.runAsync(app.cardRepository.getAllCards))!.single,
+        original,
+      );
+      await app.setArchiveConflictPolicy(ArchiveConflictPolicy.overwrite);
+      await _read(tester, '再次读取');
+      final updated = (await tester.runAsync(app.cardRepository.getAllCards))!
+          .single;
+      expect(updated.id, original.id);
+      expect(updated.balanceFen, 8000);
+      await _unmount(tester);
+    },
+  );
+
+  testWidgets('2.x local backup supports export and import cancel/confirm', (
+    tester,
+  ) async {
+    final fixture = await _showGallery(tester, _CardKind.suica);
+    final app = fixture.app;
+    await _read(tester, '开始读取');
+    final card = (await tester.runAsync(app.cardRepository.getAllCards))!
+        .single;
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+    await _navigate(tester, 'cards');
+    await _settleIo(tester);
+    await tester.tap(find.byTooltip('导入卡片 JSON'));
+    await _settleIo(tester);
+    expect(fixture.documents.opens, 1);
+    expect(find.byType(AlertDialog), findsNothing);
+
+    await tester.tap(find.byTooltip('导出卡片 JSON'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('完整备份'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('选择保存位置'));
+    await _settleIo(tester);
+    expect(fixture.documents.file!.content, contains('trafarch.archive'));
+    await tester.runAsync(() => app.cardRepository.deleteCard(card.id));
+    await _settleIo(tester);
+    expect(find.text('暂无已保存卡片'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pumpAndSettle();
+
+    Future<void> preview() async {
+      await tester.tap(find.byTooltip('导入卡片 JSON'));
+      await _settleIo(tester);
+      expect(find.text('导入卡片 JSON'), findsOneWidget);
+    }
+
+    await preview();
+    await tester.tap(find.widgetWithText(TextButton, '取消'));
+    await _settleIo(tester);
+    expect(await tester.runAsync(app.cardRepository.getAllCards), isEmpty);
+    await preview();
+    await tester.tap(find.widgetWithText(FilledButton, '导入'));
+    await _settleIo(tester);
+    final restored = (await tester.runAsync(app.cardRepository.getAllCards))!
+        .single;
+    expect(restored.sessionDataJson, card.sessionDataJson);
+    expect(find.text(card.displayName), findsOneWidget);
+    await _unmount(tester);
+  });
 
   testWidgets('Octopus close failure stops progress and permits a retry', (
     tester,
@@ -193,6 +392,8 @@ void main() {
       await tester.pump();
       await tester.tap(find.byTooltip('设置'));
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('返回现有界面'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('返回现有界面'));
       await tester.pumpAndSettle();
       expect(find.text('NFC 尚未关闭，无法切换。请重试。'), findsOneWidget);
@@ -200,6 +401,8 @@ void main() {
 
       fixture.native.closeFails = false;
       final close = fixture.native.close = Completer<void>();
+      await tester.ensureVisible(find.text('返回现有界面'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('返回现有界面'));
       await tester.pumpAndSettle();
       expect(find.text('正在关闭读卡连接…'), findsOneWidget);
@@ -236,6 +439,14 @@ Future<void> _navigate(WidgetTester tester, String page) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> _settleIo(WidgetTester tester) async {
+  await tester.pumpAndSettle();
+  await tester.runAsync(
+    () async => Future<void>.delayed(const Duration(milliseconds: 30)),
+  );
+  await tester.pumpAndSettle();
+}
+
 void _size(WidgetTester tester) {
   tester.view.physicalSize = const Size(412, 892);
   tester.view.devicePixelRatio = 1;
@@ -243,12 +454,16 @@ void _size(WidgetTester tester) {
   addTearDown(tester.view.resetDevicePixelRatio);
 }
 
-Future<_Fixture> _showGallery(WidgetTester tester, _CardKind kind) async {
+Future<_Fixture> _showGallery(
+  WidgetTester tester,
+  _CardKind kind, {
+  bool autoSave = true,
+}) async {
   _size(tester);
-  final fixture = _Fixture(kind);
+  final fixture = _Fixture(kind, autoSave: autoSave);
   addTearDown(fixture.app.dispose);
   await tester.runAsync(fixture.app.init);
-  expect(fixture.app.autoSaveEnabled, isTrue);
+  expect(fixture.app.autoSaveEnabled, autoSave);
   await tester.pumpWidget(GalleryApp(liveApp: fixture.app));
   await tester.pumpAndSettle();
   return fixture;
@@ -261,15 +476,16 @@ const _idmBytes = [1, 2, 3, 4, 5, 6, 7, 8];
 const _idm = '0102030405060708';
 
 class _Fixture {
-  _Fixture(_CardKind kind) : native = _Reader(kind) {
+  _Fixture(_CardKind kind, {bool autoSave = true}) : native = _Reader(kind) {
     app = AppDependencies(
       database: testDatabase(),
       bundle: MissingTestAssets(),
       channel: native,
       felicaChannel: native,
       logger: AppLogger(store: MemoryLogStore()),
+      archiveDocumentStore: documents,
       settingsStore: MemorySettingsStore({
-        SettingsKeys.autoSaveEnabled: 'true',
+        SettingsKeys.autoSaveEnabled: '$autoSave',
       }),
       octopusController: OctopusBalanceController(
         channel: octopusChannel,
@@ -288,6 +504,7 @@ class _Fixture {
   }
 
   final _Reader native;
+  final documents = _ArchiveFiles();
   final octopusChannel = _OctopusChannel();
   late final AppDependencies app;
 }
@@ -303,6 +520,9 @@ class _Reader implements NfcChannel, FelicaChannel {
   int closes = 0;
   Completer<NfcScanResult?>? response;
   Completer<void>? close;
+  Completer<void>? closeReached;
+  DateTime readAt = _readAt;
+  int balanceFen = 10000;
 
   NfcScanResult get tag => NfcScanResult(
     uid: _idm,
@@ -314,7 +534,7 @@ class _Reader implements NfcChannel, FelicaChannel {
         : kind == _CardKind.suica
         ? '0003'
         : '8008',
-    timestamp: _readAt,
+    timestamp: readAt,
   );
 
   @override
@@ -326,6 +546,9 @@ class _Reader implements NfcChannel, FelicaChannel {
   @override
   Future<void> stopScan() async {
     closes++;
+    if (closeReached case final reached? when !reached.isCompleted) {
+      reached.complete();
+    }
     await close?.future;
     if (closeFails) throw StateError('close failed');
   }
@@ -349,7 +572,9 @@ class _Reader implements NfcChannel, FelicaChannel {
       return _selected || frame[2] == 0 ? _ok(const []) : rejected;
     }
     if (!_selected) return rejected;
-    if (frame[1] == 0x5C) return _ok([0, 0, 0x27, 0x10]);
+    if (frame[1] == 0x5C) {
+      return _ok([0, 0, balanceFen >> 8, balanceFen & 0xFF]);
+    }
     if (frame[1] == 0xB0) {
       return switch (frame[2] & 0x1F) {
         0x15 => _ok(cu ? _cuPublic : _tuPublic),
@@ -509,5 +734,22 @@ class _OctopusChannel implements OctopusNfcChannel {
   @override
   Future<void> closeSession(String sessionId) async {
     if (closeFails) throw StateError('close failed');
+  }
+}
+
+class _ArchiveFiles implements ArchiveDocumentStore {
+  PickedArchiveDocument? file;
+  int opens = 0;
+
+  @override
+  Future<PickedArchiveDocument?> openJson() async {
+    opens++;
+    return file;
+  }
+
+  @override
+  Future<String?> saveJson(String fileName, String content) async {
+    file = PickedArchiveDocument(name: fileName, content: content);
+    return fileName;
   }
 }

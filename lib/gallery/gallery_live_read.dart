@@ -10,7 +10,7 @@ class _GalleryLiveScope extends InheritedNotifier<_GalleryLiveRead> {
 class _GalleryLiveRead extends ChangeNotifier {
   _GalleryLiveRead(this.app, this.navigation) {
     if (app.hasCompletedRead) lastCard = _LiveCardSummary.fromRead(app);
-    app.addListener(notifyListeners);
+    app.addListener(_appChanged);
     navigation.addListener(_navigationChanged);
   }
 
@@ -18,6 +18,7 @@ class _GalleryLiveRead extends ChangeNotifier {
   final GalleryController navigation;
   _LiveCardSummary? lastCard;
   ExpertReadTab expertTab = ExpertReadTab.information;
+  int manualSaveRequest = 0;
   Object? _attempt;
   bool _closing = false;
   bool _disposed = false;
@@ -29,6 +30,17 @@ class _GalleryLiveRead extends ChangeNotifier {
       !app.nfcReleaseFailed &&
       app.hasCompletedRead &&
       lastCard != null;
+
+  void _appChanged() {
+    if (hasCurrent) lastCard = _LiveCardSummary.fromRead(app);
+    notifyListeners();
+  }
+
+  void requestSave() {
+    manualSaveRequest++;
+    notifyListeners();
+  }
+
   String? get error => app.nfcReleaseFailed ? 'NFC 连接未确认关闭，请重试。' : _error;
   GalleryReadState get state => busy
       ? GalleryReadState.reading
@@ -57,7 +69,7 @@ class _GalleryLiveRead extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
-      await app.scanOnceReadOnly();
+      await app.scanOnceForGallery();
       if (_disposed || !identical(_attempt, attempt)) return;
       if (app.hasCompletedRead) {
         lastCard = _LiveCardSummary.fromRead(app);
@@ -89,7 +101,7 @@ class _GalleryLiveRead extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
-    app.removeListener(notifyListeners);
+    app.removeListener(_appChanged);
     navigation.removeListener(_navigationChanged);
     super.dispose();
   }
@@ -167,10 +179,9 @@ extension _GalleryLivePages on _GalleryViewState {
         _liveReadHint(live, '读取卡片后展示本次行程记录', Icons.route_outlined),
     ]),
     GalleryPage.expert => _liveExpert(live),
-    GalleryPage.cards => _list([
-      _empty('卡包尚未接入', '请切回现有界面查看已保存的卡片。', icon: Icons.credit_card_outlined),
-    ]),
-    GalleryPage.settings => _liveSettings(),
+    GalleryPage.cards => _liveCards(live.app),
+    GalleryPage.detail => _liveArchiveDetail(live.app),
+    GalleryPage.settings => _liveSettings(live.app),
     _ => _list([_header('尚未接入', back: true), _text('请在现有界面使用此功能。')]),
   };
 
@@ -190,13 +201,20 @@ extension _GalleryLivePages on _GalleryViewState {
     radius: 24,
   );
 
-  Widget _liveHome(_GalleryLiveRead live) => _list([
-    _GalleryReadFlow(
-      state: live.state,
-      hasRead: live.lastCard != null,
-      builder: (state, hasRead) => _liveHomeStage(live, state),
-    ),
-  ]);
+  Widget _liveHome(_GalleryLiveRead live) => PendingSavePresenter(
+    app: live.app,
+    active: live.hasCurrent,
+    canPresent: () => c.page == GalleryPage.home && live.hasCurrent,
+    manualRequest: live.manualSaveRequest,
+    onNotice: _archiveNotice,
+    child: _list([
+      _GalleryReadFlow(
+        state: live.state,
+        hasRead: live.lastCard != null,
+        builder: (state, hasRead) => _liveHomeStage(live, state),
+      ),
+    ]),
+  );
 
   Widget _liveHomeStage(_GalleryLiveRead live, GalleryReadState state) {
     final reading = state == GalleryReadState.reading;
@@ -282,6 +300,15 @@ extension _GalleryLivePages on _GalleryViewState {
           ),
         ),
         if (current) ...[
+          if (live.app.pendingCardSave != null) ...[
+            _gap(),
+            _button(
+              '保存卡片',
+              live.requestSave,
+              icon: Icons.save_outlined,
+              primary: true,
+            ),
+          ],
           _gap(16),
           _panel(TransitSummaryPanel(app: live.app)),
           _gap(),
@@ -337,17 +364,81 @@ extension _GalleryLivePages on _GalleryViewState {
     ], positionId: tab.storageKey);
   }
 
-  Widget _liveSettings() {
+  Widget _liveSettings(AppDependencies app) {
     final beta = BetaUiScope.maybeOf(context);
     return _list([
       _header('设置', back: true),
+      _sectionTitle('读卡与数据'),
+      _panel(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _switch(
+              '自动保存卡片',
+              app.autoSaveEnabled,
+              app.setAutoSaveEnabled,
+              subtitle: '读取完成并关闭 NFC 后，按下方策略保存。',
+            ),
+            _settingRow(
+              '已存在的记录',
+              () => _selectLiveConflictPolicy(app),
+              subtitle: app.archiveConflictPolicy.label,
+            ),
+            _switch(
+              '显示上海交通卡透支额度',
+              app.includeShanghaiOverdraft,
+              app.setIncludeShanghaiOverdraft,
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: ArchiveTransferButtons(app: app, onNotice: _archiveNotice),
+            ),
+          ],
+        ),
+        padding: EdgeInsets.zero,
+      ),
+      _sectionTitle('外观'),
+      _panel(
+        _switch(
+          '预测性返回手势',
+          _preferences.enabled,
+          _preferences.setEnabled,
+          subtitle: _preferences.error ?? '支持的 Android 设备上可预览返回目标。',
+        ),
+        padding: EdgeInsets.zero,
+      ),
+      if (_preferences.error != null)
+        TextButton(
+          onPressed: _preferences.loading ? null : _preferences.retry,
+          child: const Text('重试'),
+        ),
+      _sectionTitle('隐私与日志'),
+      _panel(
+        Column(
+          children: [
+            _switch(
+              '记录运行日志',
+              app.loggingEnabled,
+              app.setLoggingEnabled,
+              subtitle: '读卡日志仅存在本机。诊断导出仍在现有界面。',
+            ),
+            const FirebaseAnalyticsTile(),
+          ],
+        ),
+        padding: EdgeInsets.zero,
+      ),
+      if (app.settings.persistenceError != null) ...[
+        _gap(),
+        _text('设置未能保存到本机，请重试。', color: t.warn),
+      ],
+      _sectionTitle('体验'),
       _panel(
         Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _text('2.x 实卡体验', role: GalleryTypography.section),
             _gap(8),
-            _text('首页、行程和专家分析读取真实数据，不会保存档案。卡包、扫码和完整设置请使用现有界面。', color: t.muted),
+            _text('首页、行程、专家和卡包使用真实数据。扫码、知识库与诊断导出请使用现有界面。', color: t.muted),
             if (beta?.switchError case final error?) ...[
               _gap(),
               Semantics(liveRegion: true, child: _text(error, color: t.warn)),
@@ -363,5 +454,34 @@ extension _GalleryLivePages on _GalleryViewState {
         ),
       ),
     ]);
+  }
+
+  Future<void> _selectLiveConflictPolicy(AppDependencies app) async {
+    final selected = await showDialog<ArchiveConflictPolicy>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('已存在的记录'),
+        children: [
+          RadioGroup<ArchiveConflictPolicy>(
+            groupValue: app.archiveConflictPolicy,
+            onChanged: (value) => Navigator.pop(dialogContext, value),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final policy in ArchiveConflictPolicy.values)
+                  RadioListTile(value: policy, title: Text(policy.label)),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('取消'),
+          ),
+        ],
+      ),
+    );
+    if (mounted && selected != null) {
+      await app.setArchiveConflictPolicy(selected);
+    }
   }
 }

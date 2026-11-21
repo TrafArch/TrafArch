@@ -322,25 +322,27 @@ extension _GalleryDetail on _GalleryViewState {
     ];
   }
 
-  Future<void> _selectSpendingPeriod(GallerySpendingPeriod period) async {
+  Future<void> _selectSpendingPeriod(
+    GallerySpendingPeriod period,
+    DateTime now,
+  ) async {
     if (period != GallerySpendingPeriod.custom) {
       _updateDetail(
         () => _spendingSelection = GallerySpendingSelection.forPeriod(
           period,
-          GalleryController.clock,
+          now,
         ),
       );
       return;
     }
-    final first =
-        _spendingSelection.start ?? galleryCalendarDay(GalleryController.clock);
+    final first = _spendingSelection.start ?? galleryCalendarDay(now);
     final last = _spendingSelection.end ?? first;
     final selected = await showDialog<DateTimeRange>(
       context: context,
       builder: (_) => _GalleryRangePickerDialog(
         initialStart: first,
         initialEnd: last,
-        today: GalleryController.clock,
+        today: now,
       ),
     );
     if (!mounted || selected == null) return;
@@ -355,7 +357,11 @@ extension _GalleryDetail on _GalleryViewState {
   String _spendingDate(DateTime date) =>
       '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
-  Widget _spendingPeriodButton(GallerySpendingPeriod period, String label) {
+  Widget _spendingPeriodButton(
+    GallerySpendingPeriod period,
+    String label,
+    DateTime now,
+  ) {
     final selected = _spendingSelection.period == period;
     return Semantics(
       button: true,
@@ -371,7 +377,7 @@ extension _GalleryDetail on _GalleryViewState {
           type: MaterialType.transparency,
           child: InkWell(
             borderRadius: BorderRadius.circular(20),
-            onTap: () => _selectSpendingPeriod(period),
+            onTap: () => _selectSpendingPeriod(period, now),
             child: SizedBox(
               height: 40,
               child: Center(
@@ -396,12 +402,19 @@ extension _GalleryDetail on _GalleryViewState {
     );
   }
 
-  List<Widget> _spendingChildren(GalleryCard card) {
-    final summary = GallerySpendingSummary(
+  List<Widget> _spendingChildren(GalleryCard card) => _spendingWidgets(
+    GallerySpendingSummary(
       card.currency,
       c.ledger(card),
       selection: _spendingSelection,
-    );
+    ),
+    now: GalleryController.clock,
+  );
+
+  List<Widget> _spendingWidgets(
+    GallerySpendingSummary summary, {
+    required DateTime now,
+  }) {
     final range = _spendingSelection.start == null
         ? '全部已保留记录'
         : '${_spendingDate(_spendingSelection.start!)} ～ ${_spendingDate(_spendingSelection.end!)}';
@@ -417,7 +430,7 @@ extension _GalleryDetail on _GalleryViewState {
             (GallerySpendingPeriod.custom, '自定义'),
           ].indexed) ...[
             if (index > 0) const SizedBox(width: 8),
-            Expanded(child: _spendingPeriodButton(period, label)),
+            Expanded(child: _spendingPeriodButton(period, label, now)),
           ],
         ],
       ),

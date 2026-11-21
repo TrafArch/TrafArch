@@ -488,6 +488,7 @@ class ArchiveController extends OwnedNotifier {
     required DateTime readAt,
     required int balanceMinor,
     required String evidenceSource,
+    bool persistSaved = true,
   }) async {
     if (disposed || fingerprint != this.fingerprint) return;
     final verified = VerifiedAccountBalance(
@@ -516,6 +517,7 @@ class ArchiveController extends OwnedNotifier {
         notifyListeners();
       }
     }
+    if (!persistSaved) return;
     try {
       final saved = await (repository.db.select(
         repository.db.savedCards,

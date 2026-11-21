@@ -4,7 +4,9 @@
 
 `lib/main_gallery.dart` 启动 `InternalPreviewApp`，默认使用现有界面；内部宿主通过 `BetaUiScope` 向设置页提供“启用新界面（beta）”开关。开关仅保留在当前进程，重启恢复关闭。离开任一界面会释放该界面的状态；内部构建关闭自动更新检查，正式入口行为不变。
 
-2.x 的主题、四项导航和读取交互位于 `lib/gallery/`。正式入口在隐私确认后由 `TransitCardAnalyzerApp` 创建唯一的 `AppDependencies`；现有界面和 2.x 实卡体验只切换展示层，切换前等待 NFC 关闭。实卡模式不加载 fixtures，调用统一的只读 NFC 入口，并与现有界面共用行程内容和专家字段面板；仅发布仍属于当前会话且关闭已确认的结果。归档控制器仍提供卡片识别，但不创建待保存项，不自动保存，也不写入八达通余额。本阶段卡包、扫码、知识库和完整设置仍使用现有界面。
+2.x 的主题、四项导航和读取交互位于 `lib/gallery/`。正式入口在隐私确认后由 `TransitCardAnalyzerApp` 创建唯一的 `AppDependencies`；现有界面和 2.x 实卡体验只切换展示层，切换前等待 NFC 关闭。实卡模式不加载 fixtures，与现有界面共用只读 NFC、行程内容和专家字段面板。`scanOnceForGallery` 仅在结果仍属于当前会话、且 NFC 关闭已确认时准备归档；已验证的八达通余额先进入本次待保存快照，不单独回写旧档案。`PendingSavePresenter` 使用同一冲突策略处理手动确认及自动保存冲突。
+
+实卡卡包使用 `watchArchiveCardSummaries` 和 `ArchiveHistory.watch`，详情共用冻结交易投影、证据和改名能力，导入导出共用 `ArchiveTransferController`。消费统计按整数最小单位汇总明确的同币种扣款，CU 复用冻结金额与镜像过滤；不估算未知时间、币种或 Suica 余额差。业务设置同用 `SettingsController`，不写参考包或改档案 schema。扫码、知识库、诊断导出及卡面与排序持久化不在本阶段。
 
 独立 `main_gallery.dart` 仍由 `InternalPreviewApp` 承载样例模式：`GalleryApp` → `GalleryController` / `GalleryQrController` → 合成 fixtures，不连接真实读卡或档案。以下样例、模拟场景和独立 Gallery 构建规则只适用于该入口。
 

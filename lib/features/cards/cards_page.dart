@@ -359,43 +359,58 @@ class _SavedCardTile extends StatelessWidget {
 
   /// 删除确认：删除档案与全部读取批次（含行程快照），不可恢复；
   /// 删除后列表随数据流自动刷新，成功 / 失败以 SnackBar 反馈。
-  Future<void> _delete(BuildContext context) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final scheme = Theme.of(context).colorScheme;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('删除卡片'),
-        content: Text(
-          '确定要删除「${card.displayName}」吗？\n'
-          '该卡的档案与全部读取记录（含行程快照）将一并删除，且无法恢复。\n'
-          '删除后再次读取该卡可重新加入。',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: scheme.error,
-              foregroundColor: scheme.onError,
-            ),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('删除'),
-          ),
-        ],
+  Future<void> _delete(BuildContext context) =>
+      confirmDeleteArchiveCard(context, app, card);
+}
+
+Future<bool> confirmDeleteArchiveCard(
+  BuildContext context,
+  AppDependencies app,
+  SavedCard card,
+) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final scheme = Theme.of(context).colorScheme;
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('删除卡片'),
+      content: Text(
+        '确定要删除「${card.displayName}」吗？\n'
+        '该卡的档案与全部读取记录（含行程快照）将一并删除，且无法恢复。\n'
+        '删除后再次读取该卡可重新加入。',
       ),
-    );
-    if (confirmed != true) return;
-    try {
-      await app.cardRepository.deleteCard(card.id);
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: scheme.error,
+            foregroundColor: scheme.onError,
+          ),
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: const Text('删除'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true || !context.mounted) return false;
+  try {
+    final deleted = await app.cardRepository.deleteCard(card.id);
+    if (messenger.mounted) {
       messenger.showSnackBar(
-        SnackBar(content: Text('已删除：${card.displayName}')),
+        SnackBar(
+          content: Text(deleted ? '已删除：${card.displayName}' : '卡片不存在或已删除'),
+        ),
       );
-    } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('删除失败：$e')));
     }
+    return deleted;
+  } catch (_) {
+    if (messenger.mounted) {
+      messenger.showSnackBar(const SnackBar(content: Text('删除失败，请重试。')));
+    }
+    return false;
   }
 }
 

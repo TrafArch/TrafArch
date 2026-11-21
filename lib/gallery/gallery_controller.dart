@@ -446,8 +446,10 @@ class GalleryController extends ChangeNotifier {
     showOverlay(GalleryOverlay.licenseDetail);
   }
 
-  void openCard(GalleryCard card) {
-    selectedCardId = card.id;
+  void openCard(GalleryCard card) => openCardId(card.id);
+
+  void openCardId(String id) {
+    selectedCardId = id;
     detailTab = 0;
     navigate(GalleryPage.detail);
   }

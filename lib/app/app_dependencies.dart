@@ -125,6 +125,7 @@ class AppDependencies extends OwnedNotifier {
       _discardRecoveryFile();
       _view = null;
       _completedRead = false;
+      _galleryCaptureId = null;
       recoveredCapture = null;
       _completedCapture = null;
       recoveryNotice = null;
@@ -165,7 +166,8 @@ class AppDependencies extends OwnedNotifier {
   int _scanRequest = 0;
   int? _unifiedScanRequest;
   bool _completedRead = false;
-  bool _readOnlyScan = false;
+  bool _gallerySave = false;
+  String? _galleryCaptureId;
   ScanPresentation? _octopusView;
   OctopusBalanceResult? _octopusResult;
   bool _octopusAttempted = false;
@@ -364,6 +366,7 @@ class AppDependencies extends OwnedNotifier {
       references.knowledge ?? KnowledgeBase.empty(),
     );
     _view = view;
+    if (_gallerySave) _galleryCaptureId = id;
     for (final trip in view.suicaTrips) {
       scan.addStructuredDiagnostic(id, 'parser_record', {
         'parserId': 'felica.suica',
@@ -377,7 +380,7 @@ class AppDependencies extends OwnedNotifier {
       readAt,
       scan.frames,
       metadataIssues: scan.tag?.metadataIssues ?? const [],
-      prepareSave: !_readOnlyScan,
+      prepareSave: !_gallerySave,
     );
     _completedCapture = archive.pending;
     final capturedCard = view.parsedCard;
@@ -431,7 +434,7 @@ class AppDependencies extends OwnedNotifier {
       );
     }
     notifyListeners();
-    if (!_readOnlyScan && settings.autoSaveEnabled && isCurrent()) {
+    if (!_gallerySave && settings.autoSaveEnabled && isCurrent()) {
       await archive.autoSave(policy: settings.archiveConflictPolicy);
     }
   }
@@ -628,11 +631,11 @@ class AppDependencies extends OwnedNotifier {
   Future<void> exportLog({Set<String>? sessionIds}) =>
       diagnostics.exportLog(sessionIds: sessionIds);
   Future<String> exportCards() => archive.exportCards();
-  Future<void> scanOnce() => _scanOnce(readOnly: false);
+  Future<void> scanOnce() => _scanOnce();
 
-  Future<void> scanOnceReadOnly() => _scanOnce(readOnly: true);
+  Future<void> scanOnceForGallery() => _scanOnce(gallerySave: true);
 
-  Future<void> _scanOnce({required bool readOnly}) async {
+  Future<void> _scanOnce({bool gallerySave = false}) async {
     final request = ++_scanRequest;
     if (disposed || _preparingRecovery || savingRecoveredCapture) {
       return;
@@ -652,7 +655,7 @@ class AppDependencies extends OwnedNotifier {
       // Keep the initialized ordinary reader's synchronous discovery start.
       if (!settings.initialized) await settings.initialize();
       if (disposed || request != _scanRequest) return;
-      _readOnlyScan = readOnly;
+      _gallerySave = gallerySave;
       // scanOnce completes only after its physical NFC close barrier.
       await scan.scanOnce();
       if (disposed || request != _scanRequest || scan.releaseError != null) {
@@ -667,12 +670,48 @@ class AppDependencies extends OwnedNotifier {
           scan.phase == ScanPhase.complete &&
           identical(_view, view)) {
         _completedRead = true;
+        if (_galleryCaptureId case final id? when gallerySave) {
+          await _stageGalleryCapture(view, id, request);
+        }
       }
     } finally {
       if (_unifiedScanRequest == request) {
         _unifiedScanRequest = null;
         if (!disposed) notifyListeners();
       }
+    }
+  }
+
+  Future<void> _stageGalleryCapture(
+    ScanPresentation view,
+    String id,
+    int request,
+  ) async {
+    final readAt = scan.tag!.timestamp;
+    archive.stage(
+      view,
+      id,
+      readAt,
+      scan.frames,
+      metadataIssues: scan.tag!.metadataIssues,
+    );
+    _completedCapture = archive.pending;
+    final pending = archive.pending;
+    if (currentOctopusResult case final result? when pending != null) {
+      await archive.attachVerifiedAccountBalance(
+        fingerprint: pending.fingerprint,
+        readAt: readAt,
+        balanceMinor: result.balanceMinor,
+        evidenceSource:
+            'octopus.nfc-f:${result.idmHex}:${result.readAt.toUtc().toIso8601String()}',
+        persistSaved: false,
+      );
+      if (!disposed && id == _galleryCaptureId) {
+        _completedCapture = archive.pending;
+      }
+    }
+    if (!disposed && request == _scanRequest && settings.autoSaveEnabled) {
+      await archive.autoSave(policy: settings.archiveConflictPolicy);
     }
   }
 
@@ -724,7 +763,7 @@ class AppDependencies extends OwnedNotifier {
     if (octopus.lastAttemptSucceeded) {
       final result = _octopusResult = octopus.result;
       final capture = _completedCapture;
-      if (!_readOnlyScan && result != null && capture != null) {
+      if (!_gallerySave && result != null && capture != null) {
         await archive.attachVerifiedAccountBalance(
           fingerprint: capture.fingerprint,
           readAt: capture.readAt ?? DateTime.now(),
