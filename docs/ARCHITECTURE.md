@@ -4,7 +4,9 @@
 
 `lib/main_gallery.dart` 启动 `InternalPreviewApp`，默认使用现有界面；内部宿主通过 `BetaUiScope` 向设置页提供“启用新界面（beta）”开关。开关仅保留在当前进程，重启恢复关闭。离开任一界面会释放该界面的状态；内部构建关闭自动更新检查，正式入口行为不变。
 
-新版前端从零构建于 `lib/gallery/`，不复用旧页面、旧主题或旧导航。`GalleryApp` → `GalleryController` / `GalleryQrController` → 合成 fixtures，页面消费展示状态与回调，不创建 `AppDependencies` 或访问真实档案、NFC、相机、相册与文件导出通道。现有界面继续使用原业务层，新版模拟数据不会写入或覆盖真实档案。
+2.x 的主题、四项导航和读取交互位于 `lib/gallery/`。正式入口在隐私确认后由 `TransitCardAnalyzerApp` 创建唯一的 `AppDependencies`；现有界面和 2.x 实卡体验只切换展示层，切换前等待 NFC 关闭。实卡模式不加载 fixtures，调用统一的只读 NFC 入口，并与现有界面共用行程内容和专家字段面板；仅发布仍属于当前会话且关闭已确认的结果。归档控制器仍提供卡片识别，但不创建待保存项，不自动保存，也不写入八达通余额。本阶段卡包、扫码、知识库和完整设置仍使用现有界面。
+
+独立 `main_gallery.dart` 仍由 `InternalPreviewApp` 承载样例模式：`GalleryApp` → `GalleryController` / `GalleryQrController` → 合成 fixtures，不连接真实读卡或档案。以下样例、模拟场景和独立 Gallery 构建规则只适用于该入口。
 
 Gallery 的关于、问题反馈、致谢与开源许可为独立页面，仍使用 Gallery 主题和导航；许可按需读取 Flutter `LicenseRegistry`。公开联系地址集中在 `shared/app_support.dart`，现有设置页复用。`InternalPreviewApp` 仅注入用户点击时打开公开网页／邮件应用的回调：网页使用既有 `FeedbackBrowser`，邮箱使用 `url_launcher`。不自动访问外链，也不传递卡片、日志或档案数据。底栏共享一个 180ms 水平滑动胶囊，主页面按底栏顺序以 240ms 左右滑动，跨项直达目标。子页面、二维码获取视图与弹层由稳定标识的只读导航栈驱动真实 Navigator 路由，退出内容保留自身展示上下文并停止交互；专家页列表和横向页签使用稳定滚动标识。
 

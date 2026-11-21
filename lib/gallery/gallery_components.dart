@@ -91,25 +91,27 @@ extension _GalleryComponents on _GalleryViewState {
       GalleryPage.cards => '卡包',
       _ => '足迹',
     };
-    final extra = switch (page) {
-      GalleryPage.home => _icon(
-        Icons.qr_code_scanner_rounded,
-        '扫码',
-        () => c.navigate(GalleryPage.qr),
-        outlined: false,
-        grouped: true,
-        color: t.text,
-      ),
-      GalleryPage.expert => _icon(
-        Icons.download_outlined,
-        '导出卡片记录',
-        () => c.export(),
-        outlined: false,
-        grouped: true,
-        color: t.text,
-      ),
-      _ => null,
-    };
+    final extra = _GalleryLiveScope.of(context) != null
+        ? null
+        : switch (page) {
+            GalleryPage.home => _icon(
+              Icons.qr_code_scanner_rounded,
+              '扫码',
+              () => c.navigate(GalleryPage.qr),
+              outlined: false,
+              grouped: true,
+              color: t.text,
+            ),
+            GalleryPage.expert => _icon(
+              Icons.download_outlined,
+              '导出卡片记录',
+              () => c.export(),
+              outlined: false,
+              grouped: true,
+              color: t.text,
+            ),
+            _ => null,
+          };
     final extraAction = extra == null
         ? const SizedBox(key: ValueKey('no-header-extra'), height: 44)
         : Row(

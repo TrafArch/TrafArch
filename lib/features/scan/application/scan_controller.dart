@@ -465,8 +465,13 @@ class ScanController extends OwnedNotifier {
         await native.closeSession(id);
       } else if (_session == id) {
         await native.stopScan();
+      } else {
+        return;
       }
       recording?.closed();
+      if (!disposed && (_session == id || _closing == id)) {
+        releaseError = null;
+      }
     } catch (e) {
       recording?.closed(error: e);
       if (!disposed &&
@@ -479,7 +484,7 @@ class ScanController extends OwnedNotifier {
   }
 
   Future<void> stop() async {
-    final id = _session;
+    final id = _session ?? (releaseError == null ? null : _closing);
     if (id != null) {
       _recordings[id]?.cancelled = true;
       _recordings[id]?.sink?.event(
@@ -487,7 +492,7 @@ class ScanController extends OwnedNotifier {
         phase: DiagnosticPhase.closing,
       );
     }
-    _closing = id;
+    if (id != null) _closing = id;
     _session = null;
     phase = ScanPhase.cancelled;
     progress = null;
@@ -499,6 +504,7 @@ class ScanController extends OwnedNotifier {
       } else {
         try {
           await channel.stopScan();
+          if (!disposed && _closing == id) releaseError = null;
         } catch (e) {
           if (!disposed && _session == null && _closing == id) {
             releaseError = 'NFC 连接释放失败：$e';
@@ -508,6 +514,10 @@ class ScanController extends OwnedNotifier {
           }
         }
       }
+      if (!disposed && _closing == id && releaseError == null) {
+        _closing = null;
+      }
+      if (!disposed) notifyListeners();
     }
   }
 

@@ -54,7 +54,7 @@ class _SettingsPageState extends State<SettingsPage> {
       final confirmed = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
-        builder: (_) => const _BetaUiWarningDialog(),
+        builder: (_) => _BetaUiWarningDialog(live: beta.live),
       );
       if (confirmed == true && mounted) {
         BetaUiScope.maybeOf(context)?.onChanged(true);
@@ -213,9 +213,14 @@ class _SettingsPageState extends State<SettingsPage> {
                       child: SwitchListTile(
                         secondary: const Icon(Icons.new_releases_outlined),
                         title: const Text('启用新界面（beta）'),
-                        subtitle: const Text('预览全新界面与模拟数据，仅本次运行生效'),
+                        subtitle: Text(
+                          beta.switchError ??
+                              (beta.live
+                                  ? '体验真实 NFC 读取、行程和专家分析，仅本次运行生效'
+                                  : '预览全新界面与模拟数据，仅本次运行生效'),
+                        ),
                         value: beta.enabled,
-                        onChanged: _requestBetaUiChange,
+                        onChanged: beta.switching ? null : _requestBetaUiChange,
                       ),
                     ),
                   Card(
@@ -326,7 +331,8 @@ class _SettingsPageState extends State<SettingsPage> {
 }
 
 class _BetaUiWarningDialog extends StatefulWidget {
-  const _BetaUiWarningDialog();
+  const _BetaUiWarningDialog({required this.live});
+  final bool live;
 
   @override
   State<_BetaUiWarningDialog> createState() => _BetaUiWarningDialogState();
@@ -370,17 +376,27 @@ class _BetaUiWarningDialogState extends State<_BetaUiWarningDialog> {
       ),
       icon: const Icon(Icons.warning_amber_rounded),
       iconColor: foreground,
-      title: Text('新界面预览警告', style: TextStyle(color: foreground)),
+      title: Text(
+        widget.live ? '启用 2.x 实卡体验' : '新界面预览警告',
+        style: TextStyle(color: foreground),
+      ),
       content: Text.rich(
-        const TextSpan(
-          children: [
-            TextSpan(text: '新界面仅用于 '),
-            TextSpan(text: 'UI预览', style: emphasis),
-            TextSpan(text: '。页面操作仅作演示，卡片、余额和行程均为'),
-            TextSpan(text: '模拟数据', style: emphasis),
-            TextSpan(text: '。\n\n预览不会读取实体卡，也不会写入真实档案。'),
-          ],
-        ),
+        widget.live
+            ? const TextSpan(
+                text:
+                    '2.x 会读取实体卡，当前仅接入首页、行程和专家分析。'
+                    '不会保存档案或写卡；卡包、扫码及完整设置请使用现有界面。'
+                    '\n\n可随时在设置中切回，重启也会恢复现有界面。',
+              )
+            : const TextSpan(
+                children: [
+                  TextSpan(text: '新界面仅用于 '),
+                  TextSpan(text: 'UI预览', style: emphasis),
+                  TextSpan(text: '。页面操作仅作演示，卡片、余额和行程均为'),
+                  TextSpan(text: '模拟数据', style: emphasis),
+                  TextSpan(text: '。\n\n预览不会读取实体卡，也不会写入真实档案。'),
+                ],
+              ),
         style: TextStyle(color: foreground),
       ),
       actions: [

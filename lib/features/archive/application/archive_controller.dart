@@ -56,6 +56,7 @@ class ArchiveController extends OwnedNotifier {
     DateTime readAt,
     List<CapturedFrame> frames, {
     List<NfcMetadataIssue> metadataIssues = const [],
+    bool prepareSave = true,
   }) {
     if (disposed) return;
     final parsed = view.parsedCard;
@@ -77,7 +78,7 @@ class ArchiveController extends OwnedNotifier {
               metadataIssues,
             );
         if (item == null) return;
-        pending = item;
+        if (prepareSave) pending = item;
         fingerprint = item.fingerprint;
         identified = IdentifiedCard(
           fingerprint: item.fingerprint,
@@ -93,6 +94,12 @@ class ArchiveController extends OwnedNotifier {
       final identity = CardIdentificationService(view.knowledge)
           .identify(parsed, analysisIdentity: view.analysis?.identity);
       if (identity == null) return;
+      if (!prepareSave) {
+        identified = identity;
+        fingerprint = identity.fingerprint;
+        notifyListeners();
+        return;
+      }
       final balance = view.balanceInterpretation;
       final separateObservation =
           CardParserIds.isTUnionFamily(parsed.parserId) &&

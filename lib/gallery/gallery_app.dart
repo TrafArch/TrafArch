@@ -15,12 +15,22 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../app/app_info.dart';
+import '../app/app_dependencies.dart';
+import '../app/beta_ui_scope.dart';
+import '../features/expert/expert_page.dart';
+import '../features/home/presentation/result_labels.dart';
+import '../features/home/presentation/transit_summary_panel.dart';
+import '../features/scan/application/scan_controller.dart';
 import '../features/settings/presentation/firebase_analytics_tile.dart';
+import '../features/transit_analysis/balance_interpretation.dart';
 import '../features/trips/journey_transport_icon.dart';
 import '../features/trips/trip_filters.dart';
+import '../features/trips/trips_page.dart';
 import '../platform/browser/feedback_browser.dart';
 import '../platform/qr/qr_image_picker.dart';
 import '../platform/storage/archive_document_store.dart';
+import '../protocols/felica/models/felica_card_type.dart';
+import '../protocols/transit/card_parser.dart';
 import '../shared/app_support.dart';
 import 'gallery_controller.dart';
 import 'gallery_balance_presentation.dart';
@@ -49,18 +59,21 @@ part 'gallery_read_prompt.dart';
 part 'gallery_wallet_item.dart';
 part 'gallery_detail.dart';
 part 'gallery_face_crop.dart';
+part 'gallery_live_read.dart';
 
 class GalleryApp extends StatefulWidget {
   const GalleryApp({
     super.key,
     this.controller,
+    this.liveApp,
     this.onDisableBeta,
     this.openWebLink,
     this.openEmail,
     this.preferences,
     this.loadKnowledgeIndex = GalleryKnowledgeIndex.load,
-  });
+  }) : assert(liveApp == null || controller == null);
   final GalleryController? controller;
+  final AppDependencies? liveApp;
   final VoidCallback? onDisableBeta;
   final Future<void> Function(Uri)? openWebLink;
   final Future<bool> Function(String)? openEmail;
@@ -74,6 +87,7 @@ class GalleryApp extends StatefulWidget {
 class _GalleryAppState extends State<GalleryApp> {
   late final Future<GalleryController> _ready;
   GalleryController? _owned;
+  _GalleryLiveRead? _liveRead;
   late final GalleryPreferences _preferences;
   final _appearance = _GalleryAppearance();
   Future<GalleryKnowledgeIndex>? _knowledgeIndex;
@@ -91,6 +105,12 @@ class _GalleryAppState extends State<GalleryApp> {
   void initState() {
     super.initState();
     _preferences = widget.preferences ?? GalleryPreferences();
+    if (widget.liveApp case final app?) {
+      final controller = _owned = GalleryController(GalleryData.empty());
+      _liveRead = _GalleryLiveRead(app, controller);
+      _ready = Future.value(controller);
+      return;
+    }
     _ready = widget.controller != null
         ? Future.value(widget.controller!)
         : GalleryData.load().then((data) {
@@ -106,6 +126,7 @@ class _GalleryAppState extends State<GalleryApp> {
 
   @override
   void dispose() {
+    _liveRead?.dispose();
     _owned?.dispose();
     if (widget.preferences == null) _preferences.dispose();
     super.dispose();
@@ -121,7 +142,7 @@ class _GalleryAppState extends State<GalleryApp> {
           home: Scaffold(
             body: Center(
               child: snapshot.hasError
-                  ? const Text('样例数据加载失败，请重新打开应用')
+                  ? const Text('界面加载失败，请重新打开应用')
                   : const CircularProgressIndicator(),
             ),
           ),
@@ -132,7 +153,9 @@ class _GalleryAppState extends State<GalleryApp> {
         builder: (context, _) {
           // Monet follows the home card. Until a newly chosen photo has been
           // sampled, use the user's preset instead of flashing an old theme.
-          final monetSeed = c.monet && c.hasCardSeed ? c.themeSeed : null;
+          final monetSeed = _liveRead == null && c.monet && c.hasCardSeed
+              ? c.themeSeed
+              : null;
           return MaterialApp(
             title: 'TrafArch',
             debugShowCheckedModeBanner: false,
@@ -174,14 +197,17 @@ class _GalleryAppState extends State<GalleryApp> {
                 ),
               );
             },
-            home: _GalleryNavigator(
-              key: ValueKey(c.generation),
-              controller: c,
-              preferences: _preferences,
-              loadKnowledge: _loadKnowledge,
-              onDisableBeta: widget.onDisableBeta,
-              openWebLink: widget.openWebLink,
-              openEmail: widget.openEmail,
+            home: _GalleryLiveScope(
+              notifier: _liveRead,
+              child: _GalleryNavigator(
+                key: ValueKey(c.generation),
+                controller: c,
+                preferences: _preferences,
+                loadKnowledge: _loadKnowledge,
+                onDisableBeta: widget.onDisableBeta,
+                openWebLink: widget.openWebLink,
+                openEmail: widget.openEmail,
+              ),
             ),
           );
         },
@@ -639,28 +665,35 @@ class _GalleryViewState extends State<_GalleryView> {
     c.showOverlay(type, card: card, anchor: rect, anchorId: anchor);
   }
 
-  Widget _page(GalleryPage page) => switch (page) {
-    GalleryPage.home => _home(),
-    GalleryPage.trips => _trips(),
-    GalleryPage.expert => _expert(),
-    GalleryPage.cards => _cards(),
-    GalleryPage.footprints => _footprints(),
-    GalleryPage.detail => _detail(),
-    GalleryPage.settings => _settings(),
-    GalleryPage.knowledge => _knowledge(),
-    GalleryPage.knowledgeSearch => _GalleryKnowledgeSearch(
-      load: widget.loadKnowledge,
-      onBack: c.back,
-      onResult: c.openKnowledgeResult,
-    ),
-    GalleryPage.knowledgeCity ||
-    GalleryPage.knowledgeLine ||
-    GalleryPage.knowledgeStation => _knowledgeDetails(_entry.knowledgeResult!),
-    GalleryPage.qr => _qr(),
-    GalleryPage.feedback => _feedback(),
-    GalleryPage.acknowledgements => _acknowledgements(),
-    GalleryPage.licenses => _licensePage(),
-  };
+  Widget _page(GalleryPage page) {
+    if (_GalleryLiveScope.of(context) case final live?) {
+      return _livePage(page, live);
+    }
+    return switch (page) {
+      GalleryPage.home => _home(),
+      GalleryPage.trips => _trips(),
+      GalleryPage.expert => _expert(),
+      GalleryPage.cards => _cards(),
+      GalleryPage.footprints => _footprints(),
+      GalleryPage.detail => _detail(),
+      GalleryPage.settings => _settings(),
+      GalleryPage.knowledge => _knowledge(),
+      GalleryPage.knowledgeSearch => _GalleryKnowledgeSearch(
+        load: widget.loadKnowledge,
+        onBack: c.back,
+        onResult: c.openKnowledgeResult,
+      ),
+      GalleryPage.knowledgeCity ||
+      GalleryPage.knowledgeLine ||
+      GalleryPage.knowledgeStation => _knowledgeDetails(
+        _entry.knowledgeResult!,
+      ),
+      GalleryPage.qr => _qr(),
+      GalleryPage.feedback => _feedback(),
+      GalleryPage.acknowledgements => _acknowledgements(),
+      GalleryPage.licenses => _licensePage(),
+    };
+  }
 
   Widget _list(
     List<Widget> children, {
