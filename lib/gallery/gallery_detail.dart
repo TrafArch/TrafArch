@@ -253,7 +253,29 @@ extension _GalleryDetail on _GalleryViewState {
             _icon(
               Icons.download_outlined,
               '导出本卡记录',
-              () => c.export(),
+              () {
+                final live = _GalleryLiveScope.of(context);
+                if (live == null) {
+                  c.export();
+                  return;
+                }
+                final saved = live.savedCardFor(card.id);
+                if (saved != null) {
+                  unawaited(
+                    exportArchiveJson(
+                      context,
+                      live.app,
+                      card: saved,
+                      onNotice: (message, failed) => _toast(
+                        message,
+                        type: failed
+                            ? GalleryFeedbackType.error
+                            : GalleryFeedbackType.success,
+                      ),
+                    ),
+                  );
+                }
+              },
               outlined: false,
               grouped: true,
               color: t.text,
@@ -265,7 +287,8 @@ extension _GalleryDetail on _GalleryViewState {
   }
 
   List<Widget> _cardInformation(GalleryCard card) {
-    final raw = c.data.raw[card.id];
+    final live = _GalleryLiveScope.of(context);
+    final raw = live == null ? c.data.raw[card.id] : c.liveRaw[card.id];
     return [
       _panel(
         Column(
@@ -277,7 +300,7 @@ extension _GalleryDetail on _GalleryViewState {
               ('有效期', card.valid == '—' ? '未知' : '${card.valid}（未记录日）'),
               ('当前余额', card.balance(c.includeOverdraft)),
               ('最近读取', card.when),
-              ('协议', card.type == 'FeliCa' ? 'FeliCa' : 'ISO-DEP / 交通联合'),
+              ('协议', card.type),
             ])
               _kv(row.$1, row.$2),
           ],
@@ -294,10 +317,8 @@ extension _GalleryDetail on _GalleryViewState {
                 Icons.copy_outlined,
                 '复制原始数据',
                 () {
-                  Clipboard.setData(
-                    ClipboardData(text: '${raw['sfi18']}\n${raw['sfi1e']}'),
-                  );
-                  _toast('已复制模拟原始数据');
+                  Clipboard.setData(ClipboardData(text: _rawText(raw)));
+                  _toast(live == null ? '已复制模拟原始数据' : '已复制原始读取证据');
                 },
                 outlined: false,
                 grouped: true,
@@ -313,13 +334,34 @@ extension _GalleryDetail on _GalleryViewState {
           ],
         ),
       ),
-      _text('模拟样例', role: GalleryTypography.caption, color: t.muted),
+      _text(
+        live == null ? '模拟样例' : '捕获时的原始读取证据',
+        role: GalleryTypography.caption,
+        color: t.muted,
+      ),
       _gap(8),
       if (raw is Map)
-        _hexBox('SFI 0x18\n${raw['sfi18']}\n\nSFI 0x1E\n${raw['sfi1e']}')
+        _hexBox(
+          live == null
+              ? 'SFI 0x18\n${raw['sfi18']}\n\nSFI 0x1E\n${raw['sfi1e']}'
+              : _rawText(raw),
+        )
       else
-        _text('本样例未保留原始数据', role: GalleryTypography.caption, color: t.muted),
+        _text(
+          live == null ? '本样例未保留原始数据' : '本次批次未保留可展示的原始证据',
+          role: GalleryTypography.caption,
+          color: t.muted,
+        ),
     ];
+  }
+
+  String _rawText(Map raw) {
+    final text = raw['text'];
+    if (text is String) return text;
+    return [
+      if (raw['sfi18'] != null) 'SFI 0x18\n${raw['sfi18']}',
+      if (raw['sfi1e'] != null) 'SFI 0x1E\n${raw['sfi1e']}',
+    ].join('\n\n');
   }
 
   Future<void> _selectSpendingPeriod(
@@ -402,14 +444,23 @@ extension _GalleryDetail on _GalleryViewState {
     );
   }
 
-  List<Widget> _spendingChildren(GalleryCard card) => _spendingWidgets(
-    GallerySpendingSummary(
-      card.currency,
-      c.ledger(card),
-      selection: _spendingSelection,
-    ),
-    now: GalleryController.clock,
-  );
+  List<Widget> _spendingChildren(GalleryCard card) {
+    final live = _GalleryLiveScope.of(context);
+    final history = live?.historyFor(card.id);
+    return _spendingWidgets(
+      history == null
+          ? GallerySpendingSummary(
+              card.currency,
+              c.ledger(card),
+              selection: _spendingSelection,
+            )
+          : projectGalleryArchiveSpending(
+              history,
+              selection: _spendingSelection,
+            ),
+      now: live == null ? GalleryController.clock : DateTime.now(),
+    );
+  }
 
   List<Widget> _spendingWidgets(
     GallerySpendingSummary summary, {

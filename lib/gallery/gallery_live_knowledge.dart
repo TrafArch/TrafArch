@@ -11,86 +11,88 @@ extension _GalleryLiveKnowledge on _GalleryViewState {
     return FutureBuilder<GalleryKnowledgeIndex>(
       future: _liveKnowledgeBrowse ??= widget.loadKnowledge(),
       builder: (context, snapshot) {
-        final cities = snapshot.data?.cities
-            .where((city) => city.system == system)
-            .toList();
-        final coverage = active?.coverageDatasets.where(
-          (dataset) => dataset.system.toUpperCase() == system,
-        );
-        final headings = <Widget>[
-          _header('知识库', back: true),
-          _GalleryKnowledgeSearchBar(
-            onOpen: () => c.navigate(GalleryPage.knowledgeSearch),
-          ),
-          _gap(14),
-          _tabs(
-            const ['交通联合 TU', '城市一卡通 CU'],
-            system == 'TU' ? 0 : 1,
-            (index) =>
-                c.update(() => c.knowledgeTab = index == 0 ? 'tu' : 'cu'),
-            id: 'live-knowledge-system',
-          ),
-          _sectionTitle('数据概况'),
-          _panel(
-            Column(
-              children: [
-                _kv('$system 本地参考包', active?.packageVersions[system] ?? '不可用'),
-                if (coverage != null &&
-                    active!.packagePaths.containsKey(system)) ...[
-                  _kv('覆盖地区', '${coverage.length}'),
-                  _kv(
-                    '站点条目',
-                    '${coverage.fold(0, (total, item) => total + item.entryCountOverride)}',
-                  ),
-                ],
-              ],
-            ),
-          ),
-          _gap(),
-          if (snapshot.hasError)
+        if (snapshot.hasError) {
+          return _list([
+            _header('知识库', back: true),
             _empty(
-              '参考包暂不可用',
-              '无法建立本地浏览索引，不会使用模拟数据。',
+              '本地参考数据暂不可用',
+              '无法读取当前已校验的 TU／CU 发布包。',
+              icon: Icons.storage_outlined,
               action: _button(
                 '重试',
                 () => _updateDetail(() => _liveKnowledgeBrowse = null),
+                primary: true,
               ),
-            )
-          else if (cities == null)
-            const Center(child: CircularProgressIndicator())
-          else if (cities.isEmpty)
-            _empty('$system 暂无地区数据', '可切换到另一套参考包。')
-          else
-            _sectionTitle('覆盖地区'),
-        ];
-        final visibleCities =
-            snapshot.connectionState == ConnectionState.done &&
-                !snapshot.hasError
-            ? cities ?? const <GalleryKnowledgeCity>[]
-            : const <GalleryKnowledgeCity>[];
-        return ListView.builder(
-          key: PageStorageKey('live-knowledge-$system'),
-          padding: EdgeInsets.fromLTRB(
-            16,
-            6,
-            16,
-            30 + MediaQuery.paddingOf(context).bottom,
-          ),
-          itemCount: headings.length + visibleCities.length,
-          itemBuilder: (context, index) {
-            if (index < headings.length) return headings[index];
-            final city = visibleCities[index - headings.length];
-            final result = GalleryKnowledgeResult(
-              GalleryKnowledgeKind.city,
-              city,
-            );
-            return _GalleryKnowledgeResultTile(
-              result,
-              onTap: () => c.openKnowledgeResult(result),
-            );
-          },
+            ),
+          ]);
+        }
+        final index = snapshot.data;
+        if (index == null) {
+          return _list([
+            _header('知识库', back: true),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 48),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          ]);
+        }
+        return _knowledgePage(
+          _liveKnowledgeRecord(index, system, active),
+          live: true,
         );
       },
     );
+  }
+
+  GalleryRecord _liveKnowledgeRecord(
+    GalleryKnowledgeIndex index,
+    String system,
+    KnowledgeBase? active,
+  ) {
+    final cities = index.cities
+        .where((city) => city.system.toUpperCase() == system)
+        .toList(growable: false);
+    final regions = [
+      for (final city in cities)
+        {
+          'code': city.code,
+          'name': city.name,
+          'province': city.province,
+          'lineCount': city.lines.length,
+          'entries': city.codeCount,
+          'lines': [
+            for (final line in city.lines)
+              {
+                'name': line.name,
+                'stations': [for (final station in line.stations) station.name],
+              },
+          ],
+        },
+    ];
+    final coverage = active?.coverageDatasets.where(
+      (dataset) => dataset.system.toUpperCase() == system,
+    );
+    return {
+      'name': system == 'TU' ? '交通联合' : '城市一卡通',
+      'formatVersion': 1,
+      'version': active?.packageVersions[system] ?? '不可用',
+      'source': system == 'TU'
+          ? 'TrafArch_Database_TU.sqlite'
+          : 'TrafArch_Database_CU.sqlite',
+      'sha256': active?.packageHashes[system] ?? '未提供',
+      'regions': regions,
+      'entries':
+          coverage?.fold<int>(
+            0,
+            (total, item) => total + item.entryCountOverride,
+          ) ??
+          regions.fold<int>(
+            0,
+            (total, item) => total + (item['entries'] as int),
+          ),
+      'cities': active?.cities.length,
+      'cards': active?.cityUnionCards.entryCount,
+      'terminals': active?.cuTerminals.length,
+    };
   }
 }

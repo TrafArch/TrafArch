@@ -7,9 +7,7 @@ import 'package:transit_card_analyzer/app/app_dependencies.dart';
 import 'package:transit_card_analyzer/app/trafarch_app.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_name_extension.dart';
 import 'package:transit_card_analyzer/features/home/presentation/pending_save_presenter.dart';
-import 'package:transit_card_analyzer/features/expert/raw_data_panel.dart';
 import 'package:transit_card_analyzer/features/octopus/octopus_balance_controller.dart';
-import 'package:transit_card_analyzer/features/trips/trip_cards_view.dart';
 import 'package:transit_card_analyzer/gallery/gallery_app.dart';
 import 'package:transit_card_analyzer/platform/nfc/felica_channel.dart';
 import 'package:transit_card_analyzer/platform/nfc/nfc_models.dart';
@@ -18,7 +16,6 @@ import 'package:transit_card_analyzer/platform/nfc/octopus_channel.dart';
 import 'package:transit_card_analyzer/platform/storage/archive_document_store.dart';
 import 'package:transit_card_analyzer/platform/storage/app_logger.dart';
 import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
-import 'package:transit_card_analyzer/protocols/felica/models/jpy_amount_formatter.dart';
 import 'package:transit_card_analyzer/protocols/octopus/octopus_balance.dart';
 import 'package:transit_card_analyzer/shared/domain/archive_conflict_policy.dart';
 
@@ -34,16 +31,22 @@ void main() {
         final app = fixture.app;
         expect(fixture.native.discoveries, 0);
         expect(find.text('模拟数据'), findsNothing);
+        expect(find.text('读取自 NFC'), findsNothing);
         expect(find.byTooltip('扫码'), findsOneWidget);
 
         await _read(tester, '开始读取');
         expect(app.hasCompletedRead, isTrue, reason: '${app.error}');
-        final balance = switch (kind) {
+        final balanceNumber = switch (kind) {
+          _CardKind.tu || _CardKind.cu => '100.00',
+          _CardKind.suica => '1,000',
+          _CardKind.octopus => '50.00',
+        };
+        final balanceText = switch (kind) {
           _CardKind.tu || _CardKind.cu => '¥100.00',
-          _CardKind.suica => formatJpyAmount(1000),
+          _CardKind.suica => 'JP￥1,000',
           _CardKind.octopus => r'HK$50.00',
         };
-        expect(find.text(balance), findsWidgets);
+        expect(find.text(balanceNumber), findsWidgets);
         expect(app.pendingCardSave, isNull);
         final saved = (await tester.runAsync(app.cardRepository.getAllCards))!;
         expect(saved, hasLength(kind == _CardKind.octopus ? 0 : 1));
@@ -51,17 +54,24 @@ void main() {
         await tester.pumpAndSettle();
 
         await _navigate(tester, 'trips');
-        expect(find.text(balance), findsWidgets);
+        expect(find.text(balanceText), findsWidgets);
         if (kind == _CardKind.octopus) {
-          expect(find.text('暂无行程数据'), findsOneWidget);
+          expect(find.text('暂无行程记录'), findsOneWidget);
         } else {
           expect(
-            find.byWidgetPredicate((widget) => widget is TripCardsView),
-            findsOneWidget,
+            find
+                    .byKey(const ValueKey('trip-endpoints'))
+                    .evaluate()
+                    .isNotEmpty ||
+                find
+                    .byKey(const ValueKey('trip-one-way'))
+                    .evaluate()
+                    .isNotEmpty,
+            isTrue,
           );
         }
         if (kind == _CardKind.suica) {
-          expect(find.textContaining('不含进出站时刻'), findsOneWidget);
+          expect(find.textContaining('不会补造进出站时刻'), findsOneWidget);
         }
 
         await _navigate(tester, 'expert');
@@ -69,25 +79,81 @@ void main() {
         await tester.ensureVisible(raw);
         await tester.tap(raw);
         await tester.pumpAndSettle();
-        expect(find.byType(RawDataPanel), findsOneWidget);
-        expect(
-          tester.widget<RawDataPanel>(find.byType(RawDataPanel)).apduLog,
-          app.apduLog,
-        );
+        expect(find.textContaining('APDU 命令 / 响应'), findsOneWidget);
         expect(fixture.native.discoveries, 1);
         expect(find.byTooltip('导出卡片记录'), findsNothing);
 
         await _navigate(tester, 'cards');
         await _settleIo(tester);
-        expect(find.byTooltip('导入卡片 JSON'), findsOneWidget);
         expect(
-          find.text(saved.firstOrNull?.displayName ?? '暂无已保存卡片'),
+          find.text(saved.firstOrNull?.displayName ?? '还没有保存的卡片'),
           findsOneWidget,
         );
         await _unmount(tester);
       },
     );
   }
+
+  testWidgets('transit data parsing includes the 1.x expert fields', (
+    tester,
+  ) async {
+    await _showGallery(tester, _CardKind.tu);
+    await _read(tester, '开始读取');
+    await _navigate(tester, 'expert');
+    await tester.tap(find.text('交通数据解析'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('交通应用信息'), findsOneWidget);
+    expect(find.text('钱包与余额'), findsNothing);
+    expect(find.text('读取内容'), findsNothing);
+    expect(find.text('应用序列号'), findsNothing);
+    expect(find.text('余额'), findsOneWidget);
+    expect(find.text('币种'), findsOneWidget);
+    await tester.tap(find.text('交通应用信息'));
+    await tester.pumpAndSettle();
+    expect(find.text('应用类型标识'), findsOneWidget);
+    final applicationType = find.text('应用类型标识');
+    await tester.scrollUntilVisible(
+      applicationType,
+      260,
+      scrollable: galleryVerticalScroll(),
+    );
+    expect(find.text('应用类型标识'), findsOneWidget);
+    expect(find.text('应用版本'), findsOneWidget);
+    expect(find.text('生效日期'), findsOneWidget);
+    expect(find.text('失效日期'), findsOneWidget);
+    expect(find.text('发卡机构 FCI'), findsOneWidget);
+
+    final process = find.text('过程记录 · 0x1A / 0x1E');
+    await tester.scrollUntilVisible(
+      process,
+      260,
+      scrollable: galleryVerticalScroll(),
+    );
+    await tester.ensureVisible(process);
+    await tester.pumpAndSettle();
+    await tester.tap(process);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('未读取到过程记录'), findsOneWidget);
+
+    final transactions = find.text('交易明细');
+    await tester.scrollUntilVisible(
+      transactions,
+      260,
+      scrollable: galleryVerticalScroll(),
+    );
+    await tester.ensureVisible(transactions);
+    await tester.pumpAndSettle();
+    await tester.tap(transactions);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('交易 1 ·'), findsOneWidget);
+    expect(find.text('交易序号'), findsOneWidget);
+    expect(find.text('终端编号'), findsOneWidget);
+    expect(find.text('终端解码'), findsOneWidget);
+    expect(find.text('原始数据'), findsOneWidget);
+
+    await _unmount(tester);
+  });
 
   testWidgets(
     '2.x manually saves, shows frozen history, renames and confirms delete',
@@ -99,8 +165,8 @@ void main() {
       expect(await tester.runAsync(app.cardRepository.getAllCards), isEmpty);
       await tester.tap(find.text('保存卡片'));
       await _settleIo(tester);
-      expect(find.byType(SaveCardDialog), findsOneWidget);
-      await tester.tap(find.widgetWithText(FilledButton, '保存'));
+      expect(find.byType(TextField), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, '确认'));
       await _settleIo(tester);
       expect(app.pendingCardSave, isNull);
       final card = (await tester.runAsync(app.cardRepository.getAllCards))!
@@ -112,8 +178,9 @@ void main() {
       await _settleIo(tester);
       expect(find.text('最近交易'), findsOneWidget);
       expect(
-        find.byWidgetPredicate((widget) => widget is TripCardsView),
-        findsOneWidget,
+        find.byKey(const ValueKey('trip-endpoints')).evaluate().isNotEmpty ||
+            find.byKey(const ValueKey('trip-one-way')).evaluate().isNotEmpty,
+        isTrue,
       );
       await tester.tap(find.text('消费统计'));
       await tester.pumpAndSettle();
@@ -122,10 +189,12 @@ void main() {
 
       await tester.tap(find.text('卡片信息'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('自定义名称'));
+      await tester.tap(find.byTooltip('${card.displayName} 管理'));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextFormField), '阶段二档案');
-      await tester.tap(find.widgetWithText(FilledButton, '保存'));
+      await tester.tap(find.text('重命名'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), '阶段二档案');
+      await tester.tap(find.widgetWithText(FilledButton, '确认'));
       await _settleIo(tester);
       final renamed = (await tester.runAsync(app.cardRepository.getAllCards))!
           .single;
@@ -133,7 +202,13 @@ void main() {
       expect(renamed.sessionDataJson, card.sessionDataJson);
       expect(renamed.displayName, '阶段二档案');
 
-      await tester.tap(find.byTooltip('删除卡片'));
+      final cardMenu = find.byWidgetPredicate(
+        (widget) =>
+            widget is Tooltip && (widget.message?.endsWith(' 管理') ?? false),
+      );
+      await tester.tap(cardMenu);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('删除本卡'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(TextButton, '取消'));
       await tester.pumpAndSettle();
@@ -141,12 +216,16 @@ void main() {
         await tester.runAsync(app.cardRepository.getAllCards),
         hasLength(1),
       );
-      await tester.tap(find.byTooltip('删除卡片'));
+      await tester.tap(cardMenu);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('删除本卡'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, '删除'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(FilledButton, '删除'));
       await _settleIo(tester);
       expect(await tester.runAsync(app.cardRepository.getAllCards), isEmpty);
-      expect(find.text('暂无已保存卡片'), findsOneWidget);
+      expect(find.text('还没有保存的卡片'), findsOneWidget);
       await _unmount(tester);
     },
   );
@@ -158,8 +237,8 @@ void main() {
       await _read(tester, '开始读取');
       fixture.native.noTag = true;
       await _read(tester, '再次读取');
-      expect(find.textContaining('上次成功读取'), findsOneWidget);
-      expect(find.text(formatJpyAmount(1000)), findsOneWidget);
+      expect(find.text('读取失败，保留上次结果'), findsOneWidget);
+      expect(find.text('1,000'), findsOneWidget);
       expect(find.text('重新读取'), findsOneWidget);
       expect(fixture.app.pendingCardSave, isNull);
       await _navigate(tester, 'trips');
@@ -201,7 +280,13 @@ void main() {
           .single;
       await tester.tap(find.byTooltip('设置'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('已存在的记录'));
+      final conflictRow = find.text('已存在的记录');
+      await tester.scrollUntilVisible(
+        conflictRow,
+        200,
+        scrollable: galleryVerticalScroll(),
+      );
+      await tester.tap(conflictRow);
       await tester.pumpAndSettle();
       await tester.tap(find.text('每次询问'));
       await tester.pumpAndSettle();
@@ -210,19 +295,23 @@ void main() {
         await app.settings.store.read(SettingsKeys.archiveConflictPolicy),
         'ask',
       );
-      await tester.tap(find.byTooltip('返回'));
+      await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
 
       fixture.native.balanceFen = 8000;
       fixture.native.readAt = _readAt.add(const Duration(minutes: 1));
       await _read(tester, '再次读取');
       await _settleIo(tester);
+      await tester.tap(find.text('保存卡片'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, '确认'));
+      await tester.pumpAndSettle();
       expect(find.text('记录已存在'), findsOneWidget);
       expect(
         (await tester.runAsync(app.cardRepository.getAllCards))!.single,
         original,
       );
-      await tester.tap(find.widgetWithText(TextButton, '跳过'));
+      await tester.tap(find.text('跳过'));
       await tester.pumpAndSettle();
       expect(app.pendingCardSave, isNull);
 
@@ -253,14 +342,15 @@ void main() {
         .single;
     await tester.pump(const Duration(seconds: 4));
     await tester.pumpAndSettle();
-    await _navigate(tester, 'cards');
-    await _settleIo(tester);
-    await tester.tap(find.byTooltip('导入卡片 JSON'));
-    await _settleIo(tester);
-    expect(fixture.documents.opens, 1);
-    expect(find.byType(AlertDialog), findsNothing);
-
-    await tester.tap(find.byTooltip('导出卡片 JSON'));
+    await tester.tap(find.byTooltip('设置'));
+    await tester.pumpAndSettle();
+    final exportRow = find.text('导出卡片记录');
+    await tester.scrollUntilVisible(
+      exportRow,
+      220,
+      scrollable: galleryVerticalScroll(),
+    );
+    await tester.tap(exportRow);
     await tester.pumpAndSettle();
     await tester.tap(find.text('完整备份'));
     await tester.pumpAndSettle();
@@ -269,17 +359,22 @@ void main() {
     expect(fixture.documents.file!.content, contains('trafarch.archive'));
     await tester.runAsync(() => app.cardRepository.deleteCard(card.id));
     await _settleIo(tester);
-    expect(find.text('暂无已保存卡片'), findsOneWidget);
     await tester.pump(const Duration(seconds: 6));
     await tester.pumpAndSettle();
-
+    final importRow = find.text('导入卡片记录');
+    await tester.scrollUntilVisible(
+      importRow,
+      220,
+      scrollable: galleryVerticalScroll(),
+    );
     Future<void> preview() async {
-      await tester.tap(find.byTooltip('导入卡片 JSON'));
+      await tester.tap(importRow);
       await _settleIo(tester);
       expect(find.text('导入卡片 JSON'), findsOneWidget);
     }
 
     await preview();
+    expect(fixture.documents.opens, 1);
     await tester.tap(find.widgetWithText(TextButton, '取消'));
     await _settleIo(tester);
     expect(await tester.runAsync(app.cardRepository.getAllCards), isEmpty);
@@ -289,6 +384,10 @@ void main() {
     final restored = (await tester.runAsync(app.cardRepository.getAllCards))!
         .single;
     expect(restored.sessionDataJson, card.sessionDataJson);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    await _navigate(tester, 'cards');
+    await _settleIo(tester);
     expect(find.text(card.displayName), findsOneWidget);
     await _unmount(tester);
   });
@@ -301,13 +400,13 @@ void main() {
     await _read(tester, '开始读取');
     expect(fixture.app.nfcReleaseFailed, isTrue);
     expect(fixture.app.hasCompletedRead, isFalse);
-    expect(find.text('NFC 连接未确认关闭，请重试。'), findsOneWidget);
-    expect(find.text(r'HK$50.00'), findsNothing);
+    expect(find.text('未能读到卡片'), findsOneWidget);
+    expect(find.text('50.00'), findsNothing);
 
     fixture.octopusChannel.closeFails = false;
     await _read(tester, '重新读取');
     expect(fixture.app.hasCompletedRead, isTrue);
-    expect(find.text(r'HK$50.00'), findsWidgets);
+    expect(find.text('50.00'), findsWidgets);
     expect(fixture.native.discoveries, 2);
     expect(fixture.app.pendingCardSave, isNull);
     await _unmount(tester);
@@ -346,6 +445,36 @@ void main() {
       await _unmount(tester);
     },
   );
+
+  testWidgets('initial live UI opens 2.x without the legacy screen', (
+    tester,
+  ) async {
+    _size(tester);
+    final fixture = _Fixture(_CardKind.suica);
+    fixture.app.scan.autoScanConsumed = true;
+    var created = 0;
+    await tester.pumpWidget(
+      TransitCardAnalyzerApp(
+        enableUpdateChecks: false,
+        enableLiveBeta: true,
+        initialLiveUi: true,
+        createDependencies: () {
+          created++;
+          return fixture.app;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(GalleryApp), findsOneWidget);
+    expect(find.text('开始读取'), findsOneWidget);
+    expect(find.text('启用 2.x 实卡体验'), findsNothing);
+    expect(
+      tester.widget<GalleryApp>(find.byType(GalleryApp)).liveApp,
+      same(fixture.app),
+    );
+    expect(created, 1);
+    await _unmount(tester);
+  });
 
   testWidgets(
     'production toggle shares dependencies and waits for successful close',
@@ -392,7 +521,7 @@ void main() {
       await tester.pump();
       await tester.tap(find.byTooltip('设置'));
       await tester.pumpAndSettle();
-      final returnToOldUi = find.text('返回现有界面');
+      final returnToOldUi = find.widgetWithText(SwitchListTile, '启用新界面（beta）');
       await tester.scrollUntilVisible(
         returnToOldUi,
         250,
@@ -400,17 +529,17 @@ void main() {
       );
       await tester.ensureVisible(returnToOldUi);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('返回现有界面'));
+      await tester.tap(returnToOldUi);
       await tester.pumpAndSettle();
       expect(find.text('NFC 尚未关闭，无法切换。请重试。'), findsOneWidget);
       expect(find.byType(GalleryApp), findsOneWidget);
 
       fixture.native.closeFails = false;
       final close = fixture.native.close = Completer<void>();
-      await tester.ensureVisible(find.text('返回现有界面'));
+      await tester.ensureVisible(returnToOldUi);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('返回现有界面'));
-      await tester.pumpAndSettle();
+      await tester.tap(returnToOldUi);
+      await tester.pump();
       expect(find.text('正在关闭读卡连接…'), findsOneWidget);
       expect(find.byType(GalleryApp), findsOneWidget);
       close.complete();
@@ -433,10 +562,11 @@ Future<void> _unmount(WidgetTester tester) async {
 }
 
 Future<void> _read(WidgetTester tester, String label) async {
-  final button = tester.widget<TextButton>(
-    find.widgetWithText(TextButton, label),
+  await tester.tap(find.widgetWithText(TextButton, label));
+  await tester.pump();
+  await tester.runAsync(
+    () => Future<void>.delayed(const Duration(milliseconds: 40)),
   );
-  await tester.runAsync(button.onPressed! as Future<void> Function());
   await tester.pumpAndSettle();
 }
 

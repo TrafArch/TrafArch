@@ -482,15 +482,7 @@ class _GalleryPopupRoute extends PopupRoute<void> with _GalleryPredictiveRoute {
     GalleryOverlay.source,
     GalleryOverlay.mode,
   ].contains(configuration.entry.overlay);
-  bool get _sheet => [
-    GalleryOverlay.face,
-    GalleryOverlay.trip,
-    GalleryOverlay.export,
-    GalleryOverlay.importPreview,
-    GalleryOverlay.rawFeedback,
-    GalleryOverlay.contributors,
-    GalleryOverlay.licenseDetail,
-  ].contains(configuration.entry.overlay);
+  bool get _sheet => configuration.entry.overlay?.isBottomSheet ?? false;
   @override
   bool get barrierDismissible => true;
   @override

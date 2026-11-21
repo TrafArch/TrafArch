@@ -66,7 +66,7 @@ void main() {
     expect(app.qrAcquiring, isTrue);
     expect(
       tester
-          .widget<FilledButton>(find.widgetWithText(FilledButton, '扫描二维码'))
+          .widget<TextButton>(find.widgetWithText(TextButton, '扫描二维码'))
           .onPressed,
       isNull,
     );
@@ -139,6 +139,8 @@ void main() {
       await tester.tap(find.text('知识库'));
       await tester.pump();
       await _waitFor(tester, find.text('生效包测试市'));
+      await tester.tap(find.text('数据概况'));
+      await tester.pumpAndSettle();
       expect(find.text('active-test-v3'), findsOneWidget);
       expect(find.textContaining('数据快照'), findsNothing);
       final entry = find.byKey(const ValueKey('knowledge-search-entry'));
@@ -181,7 +183,7 @@ void main() {
       logger.startSession('local-test').end(DiagnosticOutcome.success);
       await tester.tap(find.byTooltip('设置'));
       await tester.pumpAndSettle();
-      final logs = find.text('导出诊断日志');
+      final logs = find.text('诊断日志');
       await tester.scrollUntilVisible(
         logs,
         200,

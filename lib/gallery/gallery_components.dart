@@ -1091,10 +1091,12 @@ extension _GalleryComponents on _GalleryViewState {
     String title,
     List<Widget> children, {
     bool initiallyOpen = false,
+    bool collapsible = true,
     bool surface = true,
     WidgetBuilder? bodyBuilder,
   }) {
     final open =
+        !collapsible ||
         c.expanded.contains(id) ||
         initiallyOpen && !c.expanded.contains('closed:$id');
     final body = Column(
@@ -1103,15 +1105,17 @@ extension _GalleryComponents on _GalleryViewState {
         Semantics(
           expanded: open,
           child: InkWell(
-            onTap: () => c.update(() {
-              if (open) {
-                c.expanded.remove(id);
-                c.expanded.add('closed:$id');
-              } else {
-                c.expanded.remove('closed:$id');
-                c.expanded.add(id);
-              }
-            }),
+            onTap: collapsible
+                ? () => c.update(() {
+                    if (open) {
+                      c.expanded.remove(id);
+                      c.expanded.add('closed:$id');
+                    } else {
+                      c.expanded.remove('closed:$id');
+                      c.expanded.add(id);
+                    }
+                  })
+                : null,
             borderRadius: BorderRadius.circular(18),
             child: Padding(
               padding: EdgeInsets.symmetric(
@@ -1127,7 +1131,7 @@ extension _GalleryComponents on _GalleryViewState {
                       weight: FontWeight.w600,
                     ),
                   ),
-                  _expandArrow(open),
+                  if (collapsible) _expandArrow(open),
                 ],
               ),
             ),
