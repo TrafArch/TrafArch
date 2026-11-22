@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-22 — 专家页读取芯片与 IC 卡提供机构
+
+- 新增 `assets/data/card_provider_registry.json`，由用户提供的 2023 年 IC 卡及芯片备案表转换为 149 条四字节 HEX 对照记录，分为芯片提供机构与 IC 卡提供机构，并保留源文件 SHA256 和重复备案号。
+- Android 在 ISO-DEP 连接前读取发现阶段缓存的 `historicalBytes` 与 `hiLayerResponse`，连接或后续 APDU 失败不再抹掉已获得的复位证据。原生通道契约、参数键和 sessionId 语义不变。
+- Dart 按已知 ATR／复位数据布局提取两个备案码并分别查表。1.x 专家「信息获取」和 2.x 实卡专家「机构信息」展示芯片提供机构、IC卡提供机构及原始备案码；2.x 复用现有专家展开卡样式。未知、未提供和重复码不擅自选定。
+- 未修改 TU/CU SQLite、用户档案数据库或参考数据 manifest，未编译 APK。
+- 回归：`flutter test` 3,259 项通过；`flutter analyze --no-fatal-infos` 无 error／warning（5 条既有 info）；`gradlew :app:compileDebugKotlin` 通过。
+
 ## 2026-11-22 — 岭南通与深圳通品牌标识
 
 - 新增用户提供的岭南通、深圳通透明 PNG 标识资源，保留现有交通联合、城市一卡通、Suica 与八达通资源。首页、更换卡面、卡片详情和卡包品牌区复用同一品牌映射。

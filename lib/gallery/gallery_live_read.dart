@@ -1305,6 +1305,15 @@ extension _GalleryLivePages on _GalleryViewState {
             ['读取时间', c.current.when],
           ],
         },
+        if (app.lastResult != null)
+          {
+            'title': '机构信息',
+            'open': true,
+            'rows': <List<String>>[
+              ['芯片提供机构', app.cardProviders?.chip.displayText ?? '未提供'],
+              ['IC卡提供机构', app.cardProviders?.icCard.displayText ?? '未提供'],
+            ],
+          },
         if (felica != null)
           {
             'title': 'FeliCa',

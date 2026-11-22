@@ -126,14 +126,20 @@ internal class TagMetadataReader {
             null
         }
         if (isoDep != null) {
+            // Activation data is cached by Android at discovery time. Read it
+            // before connect so a later I/O failure cannot erase the evidence.
+            try {
+                historicalBytes = isoDep.historicalBytes?.toHex()
+                hiLayerResponse = isoDep.hiLayerResponse?.toHex()
+            } catch (e: Exception) {
+                issue(issues, "ISO-DEP activation metadata", e)
+            }
             try {
                 access.own(isoDep)
                 isoDep.timeout = 5000
                 isoDep.connect()
                 connected = isoDep.isConnected
                 maxLen = isoDep.maxTransceiveLength
-                historicalBytes = isoDep.historicalBytes?.toHex()
-                hiLayerResponse = isoDep.hiLayerResponse?.toHex()
             } catch (e: Exception) {
                 issue(issues, "ISO-DEP", e)
             }
