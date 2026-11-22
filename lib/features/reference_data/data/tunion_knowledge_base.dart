@@ -9,8 +9,10 @@ import 'tu_station_repository.dart';
 import 'tu_region_live_source.dart';
 import 'tu_database.dart';
 import 'suica_station_repository.dart';
+import 'card_provider_registry_asset.dart';
 
 import '../domain/card_catalog.dart';
+import '../domain/card_provider_registry.dart';
 import '../domain/tu_lookup_service.dart';
 export '../domain/card_catalog.dart';
 
@@ -33,6 +35,7 @@ class KnowledgeBase {
   /// 卡号前缀库（卡号前 8 位 → 卡片名称 / 发卡地）与卡种类型取值对照。
   final CardPrefixTable cardPrefixes;
   final StationCodeTable stationCodes;
+  final CardProviderRegistry cardProviders;
 
   /// 城市一卡通（City Union / CJ/T 331-2016）卡片识别库：城市代码
   /// （邮编前四位 / CU 城市项目代码）→ 城市名 / 省份 / 本地卡名称参考。
@@ -75,6 +78,7 @@ class KnowledgeBase {
     required this.terminalRules,
     this.cardPrefixes = CardPrefixTable.empty,
     this.stationCodes = StationCodeTable.empty,
+    this.cardProviders = const CardProviderRegistry.empty(),
     this.cityUnionCards = CityUnionCardTable.empty,
     this.cuTerminals = CityUnionTerminalMatcher.empty,
     this.coverageDatasets = const [],
@@ -88,6 +92,7 @@ class KnowledgeBase {
     cities: CityTable.fromCardPrefixes(const {}),
     issuers: IssuerTable.fromJson(const {}),
     terminalRules: TerminalRuleSet.fromJson(const {}),
+    cardProviders: const CardProviderRegistry.empty(),
   );
 
   factory KnowledgeBase.fromJsonStrings({
@@ -107,6 +112,7 @@ class KnowledgeBase {
       cardPrefixes: CardPrefixTable.fromJson(prefixes),
       cityUnionCards: CityUnionCardTable.fromJson(decode(cityUnionCatalog)),
       stationCodes: stationCodes ?? StationCodeTable.empty,
+      cardProviders: const CardProviderRegistry.empty(),
     );
   }
 
@@ -120,9 +126,17 @@ class KnowledgeBase {
     TuDatabase? tu;
     CityUnionRegionDatabaseContent? cu;
     SuicaStationRepository? suica;
+    var cardProviders = const CardProviderRegistry.empty();
     final tuDocuments = <String, Object?>{};
     Object? cuCatalog;
     await Future.wait([
+      () async {
+        try {
+          cardProviders = await CardProviderRegistryAsset.load(bundle);
+        } catch (e) {
+          issues['CARD_PROVIDERS'] = '$e';
+        }
+      }(),
       () async {
         try {
           suica = await SuicaStationRepository.load(bundle);
@@ -192,6 +206,7 @@ class KnowledgeBase {
         stationCodes: (stationCodes ?? StationCodeTable.empty).withLiveSources([
           if (tu != null) TuRegionLiveSource(tu!.repository),
         ]),
+        cardProviders: cardProviders,
         coverageDatasets: [
           if (tu != null) ...TuRegionLiveSource(tu!.repository).lazyDatasets(),
           ...?cu?.live?.lazyDatasets(),

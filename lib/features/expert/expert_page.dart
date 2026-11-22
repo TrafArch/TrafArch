@@ -106,7 +106,7 @@ class ExpertReadSections {
 
   List<Widget> content(BuildContext context, ExpertReadTab section) =>
       switch (section) {
-        ExpertReadTab.information => _information(),
+        ExpertReadTab.information => _information(context),
         ExpertReadTab.transit => _transitPanels(context),
         ExpertReadTab.compliance => [
           CompliancePanel(
@@ -122,7 +122,7 @@ class ExpertReadSections {
         ],
       };
 
-  List<Widget> _information() {
+  List<Widget> _information(BuildContext context) {
     if (app.parsedCard == null &&
         app.felicaResult == null &&
         (app.parsing || app.lastResult == null)) {
@@ -139,6 +139,20 @@ class ExpertReadSections {
         MacauPassPanel(result: local)
       else
         IdentityPanel(app: app),
+      if (app.lastResult != null) ...[
+        const Divider(height: 32),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            '机构信息',
+            style: Theme.of(context).textTheme.titleSmall
+                ?.copyWith(color: Theme.of(context).colorScheme.primary),
+          ),
+        ),
+        const SizedBox(height: 4),
+        ExpertField('芯片提供机构', app.cardProviders?.chip.displayText ?? '未提供'),
+        ExpertField('IC卡提供机构', app.cardProviders?.icCard.displayText ?? '未提供'),
+      ],
       if (app.applications.isNotEmpty) ...[
         const Divider(height: 32),
         ApplicationEvidencePanel(applications: app.applications),

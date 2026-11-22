@@ -163,6 +163,29 @@ void main() {
     await _unmount(tester);
   });
 
+  testWidgets('2.x provider information uses the standard expert section', (
+    tester,
+  ) async {
+    final fixture = await _showGallery(tester, _CardKind.tu);
+    fixture.native.historicalBytes =
+        '3B 6D 00 00 00 81 54 31 00 86 60 11 08 16 00 00 00';
+    await _read(tester, '开始读取');
+    await _navigate(tester, 'expert');
+
+    expect(find.text('机构信息'), findsOneWidget);
+    expect(find.text('芯片提供机构'), findsOneWidget);
+    expect(find.text('IC卡提供机构'), findsOneWidget);
+
+    await tester.tap(find.text('机构信息'));
+    await tester.pumpAndSettle();
+    expect(find.text('芯片提供机构'), findsNothing);
+    await tester.tap(find.text('机构信息'));
+    await tester.pumpAndSettle();
+    expect(find.text('芯片提供机构'), findsOneWidget);
+
+    await _unmount(tester);
+  });
+
   testWidgets('expert read time uses the device-local instant', (tester) async {
     final fixture = await _showGallery(tester, _CardKind.tu);
     fixture.native.readAt = DateTime.utc(2026, 11, 21, 2, 42);
@@ -830,6 +853,7 @@ class _Reader implements NfcChannel, FelicaChannel {
   Completer<void>? closeReached;
   DateTime readAt = _readAt;
   int balanceFen = 10000;
+  String? historicalBytes;
 
   NfcScanResult get tag => NfcScanResult(
     uid: _idm,
@@ -841,6 +865,7 @@ class _Reader implements NfcChannel, FelicaChannel {
         : kind == _CardKind.suica
         ? '0003'
         : '8008',
+    historicalBytes: historicalBytes,
     timestamp: readAt,
   );
 
