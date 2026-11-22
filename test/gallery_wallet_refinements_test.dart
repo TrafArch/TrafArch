@@ -699,8 +699,8 @@ void main() {
           final title = tester.getRect(
             find.byKey(const ValueKey('face-title-shanghai')),
           );
-          final tail = tester.getRect(
-            find.byKey(const ValueKey('face-tail-shanghai')),
+          final number = tester.getRect(
+            find.byKey(const ValueKey('face-card-number-shanghai')),
           );
           final amount = tester.getRect(
             find.byKey(
@@ -709,7 +709,7 @@ void main() {
               ),
             ),
           );
-          for (final field in [title, tail, amount]) {
+          for (final field in [title, number, amount]) {
             expect(face.contains(field.topLeft), isTrue);
             expect(
               face.contains(field.bottomRight - const Offset(.01, .01)),
@@ -717,8 +717,9 @@ void main() {
             );
           }
           expect(amount.top, greaterThan(title.bottom));
-          expect(tail.top, greaterThan(title.bottom));
-          expect(amount.overlaps(tail), isFalse);
+          expect(number.top, greaterThan(title.bottom));
+          expect(number.top, greaterThan(amount.bottom));
+          expect(amount.overlaps(number), isFalse);
           expect(find.text('当前余额'), findsNothing);
           expect(find.textContaining('最近读取'), findsNothing);
           if (balance == '—') {
@@ -727,9 +728,8 @@ void main() {
               findsNothing,
             );
           } else {
-            expect(find.text('CNY ¥'), findsOneWidget);
+            expect(find.text('CN ¥'), findsOneWidget);
           }
-          if (scale >= 1.5) expect(tail.top, greaterThan(amount.bottom));
           expect(
             tester.takeException(),
             isNull,

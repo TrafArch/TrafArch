@@ -972,54 +972,73 @@ class _DetailCardLayout {
     BuildContext context,
     GalleryCard card,
     GalleryBalancePresentation balance,
-    this.width,
+    double width,
   ) {
-    scaler = MediaQuery.textScalerOf(context);
-    expandedTitleHeight = _measureDetailText(
+    final brands = _faceBrands(card);
+    final titleStyle = GalleryTypography.card.copyWith(
+      fontSize: 16,
+      height: 23 / 16,
+    );
+    final amountStyle = GalleryTypography.amount.copyWith(
+      fontSize: 23,
+      height: 28 / 23,
+    );
+    final unitStyle = GalleryTypography.caption.copyWith(
+      fontSize: 16,
+      height: 22 / 16,
+    );
+    final cardNumberStyle = GalleryTypography.field.copyWith(
+      fontFamily: 'monospace',
+      fontSize: 14,
+      height: 20 / 14,
+      fontWeight: FontWeight.w500,
+    );
+    final titleHeight = _measureDetailText(
       context,
       card.name,
-      GalleryTypography.card.copyWith(fontSize: 18, height: 24 / 18),
-      math.max(24, width - 40 - (_faceBrands(card).isEmpty ? 0 : 80)),
+      titleStyle,
+      math.max(1.0, width - 40),
     ).height;
-    tailWidth = _measureDetailText(
+    final brandWidth = brands.isEmpty ? 0.0 : (brands.length > 1 ? 64.0 : 68.0);
+    final logoHeight = brands.length > 1 ? 42.0 : 44.0;
+    final brandHeight = brands.isEmpty
+        ? 0.0
+        : brands.length * logoHeight + (brands.length - 1) * 2;
+    final lowerWidth = math.max(
+      1.0,
+      width - 40 - (brands.isEmpty ? 0 : brandWidth + 10),
+    );
+    lowerRightInset = 20 + (brands.isEmpty ? 0 : brandWidth + 10);
+    final amountHeight = _measureDetailText(
       context,
-      '**** ${card.tail}',
-      GalleryTypography.label.copyWith(
-        fontFamily: 'monospace',
-        letterSpacing: .6,
-      ),
-      double.infinity,
-    ).width;
-    final numberWidth = _measureDetailText(
+      balance.known ? balance.number : balance.displayText,
+      amountStyle,
+      lowerWidth,
+    ).height;
+    final currencyLabel = _faceCurrencyLabel(balance.currencyLabel);
+    final unitHeight = currencyLabel.isEmpty
+        ? 0.0
+        : _measureDetailText(
+            context,
+            currencyLabel,
+            unitStyle,
+            lowerWidth,
+          ).height;
+    final cardNumberHeight = _measureDetailText(
       context,
-      balance.number,
-      GalleryTypography.balance,
-      double.infinity,
-    ).width;
-    final unitWidth =
-        _measureDetailText(
-          context,
-          balance.currencyLabel,
-          GalleryTypography.caption,
-          double.infinity,
-        ).width +
-        8;
-    stacked =
-        numberWidth + unitWidth + tailWidth + 16 > width - 40 ||
-        scaler.scale(14) / 14 >= 1.5;
+      _formatFaceCardNumber(card.pan),
+      cardNumberStyle,
+      lowerWidth,
+    ).height;
+    final balanceHeight = math.max(amountHeight, unitHeight);
+    final lowerContentHeight = balanceHeight + 4 + cardNumberHeight;
     expandedHeight = math.max(
-      180.0 + math.max(0, scaler.scale(14) / 14 - 1) * 80,
-      40 +
-          expandedTitleHeight +
-          28 +
-          scaler.scale(38) +
-          (stacked ? scaler.scale(18) + 12 : 0),
+      204.0,
+      40 + titleHeight + 4 + math.max(lowerContentHeight, brandHeight),
     );
   }
-  final double width;
-  late final TextScaler scaler;
-  late final double expandedHeight, expandedTitleHeight, tailWidth;
-  late final bool stacked;
+  late final double expandedHeight;
+  late final double lowerRightInset;
 }
 
 /// The expanded identity card. On scroll the parent shrinks and fades this
@@ -1043,31 +1062,64 @@ class _GalleryDetailFace extends StatelessWidget {
     final foreground = card.image == null
         ? face.foreground
         : GalleryCardFace.imageForeground;
-    final secondary = card.image == null
-        ? face.secondaryForeground
-        : GalleryCardFace.imageSecondaryForeground;
     final nameStyle = GalleryTypography.card.copyWith(
-      fontSize: 18,
-      height: 24 / 18,
+      fontSize: 16,
+      height: 23 / 16,
       color: foreground,
     );
-    final numberStyle = GalleryTypography.balance.copyWith(
+    final amountStyle = GalleryTypography.amount.copyWith(
       color: foreground,
+      fontSize: 23,
+      height: 28 / 23,
       fontFeatures: const [FontFeature.tabularFigures()],
     );
-    final unitStyle = GalleryTypography.caption.copyWith(color: secondary);
-    final numberTop =
-        layout.expandedHeight -
-        20 -
-        layout.scaler.scale(38) -
-        (layout.stacked ? layout.scaler.scale(18) + 12 : 0);
-    final amountWidth = math.max(
-      1.0,
-      layout.width - 40 - (layout.stacked ? 0 : layout.tailWidth + 16),
+    final unitStyle = GalleryTypography.caption.copyWith(
+      color: foreground,
+      fontSize: 16,
+      height: 22 / 16,
     );
-    final nameWidth = math.max(
-      24.0,
-      layout.width - 40 - (_faceBrands(card).isEmpty ? 0 : 80),
+    final cardNumberStyle = GalleryTypography.field.copyWith(
+      fontFamily: 'monospace',
+      fontSize: 14,
+      height: 20 / 14,
+      fontWeight: FontWeight.w500,
+      color: foreground,
+    );
+    final currencyLabel = _faceCurrencyLabel(balance.currencyLabel);
+    final cardNumber = _formatFaceCardNumber(card.pan);
+    final amount = Semantics(
+      label: '余额，${balance.displayText}',
+      excludeSemantics: true,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: balance.known
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  if (currencyLabel.isNotEmpty) ...[
+                    Text(
+                      currencyLabel,
+                      key: ValueKey('face-currency-${card.id}'),
+                      style: unitStyle,
+                    ),
+                    const SizedBox(width: 3),
+                  ],
+                  Text(
+                    balance.number,
+                    key: ValueKey('face-number-${card.id}'),
+                    style: amountStyle,
+                  ),
+                ],
+              )
+            : Text(
+                balance.displayText,
+                key: ValueKey('face-unknown-${card.id}'),
+                style: amountStyle,
+              ),
+      ),
     );
     return SizedBox(
       key: ValueKey('card-face-${card.id}'),
@@ -1083,87 +1135,58 @@ class _GalleryDetailFace extends StatelessWidget {
               colors: [face.start, face.end],
             ),
             border: card.image == null
-                ? Border.all(color: tokens.line.withValues(alpha: .3))
+                ? Border.all(color: const Color(0x29ffffff))
                 : null,
           ),
           child: Stack(
+            fit: StackFit.passthrough,
             children: [
               if (card.image != null)
                 Positioned.fill(child: _FaceCropImage(card: card)),
               Positioned(
                 left: 20,
                 top: 20,
-                width: nameWidth,
+                right: 20,
                 child: Text(
                   card.name,
                   key: ValueKey('face-title-${card.id}'),
                   style: nameStyle,
                 ),
               ),
-              if (_faceBrands(card).isNotEmpty)
-                Positioned(
-                  top: 20,
-                  right: 20,
-                  child: _FaceBrandMark(card: card, id: 'detail-face'),
-                ),
               Positioned(
                 left: 20,
-                top: numberTop,
-                width: amountWidth,
-                child: Semantics(
-                  label: '余额，${balance.displayText}',
-                  excludeSemantics: true,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: balance.known
-                        ? Row(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.baseline,
-                            textBaseline: TextBaseline.alphabetic,
-                            children: [
-                              if (balance.currencyLabel.isNotEmpty) ...[
-                                Text(
-                                  balance.currencyLabel,
-                                  key: ValueKey('face-currency-${card.id}'),
-                                  style: unitStyle,
-                                ),
-                                const SizedBox(width: 8),
-                              ],
-                              Text(
-                                balance.number,
-                                key: ValueKey('face-number-${card.id}'),
-                                style: numberStyle,
-                              ),
-                            ],
-                          )
-                        : Text(
-                            balance.displayText,
-                            key: ValueKey('face-unknown-${card.id}'),
-                            style: unitStyle,
-                          ),
-                  ),
-                ),
-              ),
-              Positioned(
-                right: 20,
+                right: layout.lowerRightInset,
                 bottom: 20,
-                width: layout.tailWidth + 2,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    '**** ${card.tail}',
-                    key: ValueKey('face-tail-${card.id}'),
-                    maxLines: 1,
-                    softWrap: false,
-                    style: GalleryTypography.caption.copyWith(
-                      fontFamily: 'monospace',
-                      color: secondary,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    amount,
+                    const SizedBox(height: 4),
+                    Container(
+                      key: ValueKey('face-card-number-${card.id}'),
+                      decoration: card.image != null && !tokens.dark
+                          ? BoxDecoration(
+                              color: Colors.black.withValues(alpha: .35),
+                              borderRadius: BorderRadius.circular(6),
+                            )
+                          : null,
+                      child: Text(
+                        cardNumber,
+                        semanticsLabel: '卡号，$cardNumber',
+                        textAlign: TextAlign.left,
+                        style: cardNumberStyle,
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ),
+              if (_faceBrands(card).isNotEmpty)
+                Positioned(
+                  right: 20,
+                  bottom: 20,
+                  child: _FaceBrandMark(card: card, id: 'detail-face'),
+                ),
             ],
           ),
         ),

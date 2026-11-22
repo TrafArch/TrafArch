@@ -1,7 +1,49 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/gallery/gallery_balance_presentation.dart';
+import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
+import 'package:transit_card_analyzer/protocols/transit/local/local_card_models.dart';
+import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_models.dart';
 
 void main() {
+  test('a local wallet supplies the 2.x balance when TU balance is absent', () {
+    final localInfo = CardInfo()
+      ..isSZT = true
+      ..balance = 12345;
+    final card = ParsedCard(
+      parserId: CardParserIds.shenzhenTunion,
+      parserName: '深圳通（交通联合版）',
+      info: const TUnionCardInfo(),
+      transactions: const [],
+      localCard: ReadResult(
+        info: localInfo,
+        records: const [],
+        extras: CardExtras(),
+      ),
+    );
+
+    expect(GalleryBalancePresentation.observedCardBalanceMinor(card), 12345);
+  });
+
+  test('a standalone local card supplies its observed balance', () {
+    final localInfo = CardInfo()
+      ..isSZT = true
+      ..balance = 12345;
+    final card = ParsedCard(
+      parserId: CardParserIds.localCard,
+      parserName: '深圳通（PAY.SZT）',
+      info: const TUnionCardInfo(),
+      transactions: const [],
+      localCard: ReadResult(
+        info: localInfo,
+        records: const [],
+        extras: CardExtras(),
+      ),
+    );
+
+    expect(GalleryBalancePresentation.observedCardBalanceMinor(card), 12345);
+    expect(localInfo.currencyCode, isNull);
+  });
+
   test('explicit currencies use the requested code and symbol', () {
     for (final (code, amount, expected) in [
       ('CNY', '¥31.20', 'CNY ¥31.20'),

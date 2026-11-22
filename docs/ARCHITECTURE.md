@@ -2,7 +2,7 @@
 
 ## 2.x 界面与实卡接入
 
-`lib/main_gallery.dart` 协议确认后直接启动 2.x 实卡界面：`TransitCardAnalyzerApp` 以 `enableLiveBeta` 和 `initialLiveUi` 创建唯一的 `AppDependencies`，构建关闭自动更新检查。正式入口 `lib/main.dart` 仍默认现有界面，通过同一 Beta 开关切到 2.x；切换前等待 NFC 关闭。`InternalPreviewApp` 与样例 fixtures 仅保留给组件测试和设计回归，不再作为 `main_gallery.dart` 的宿主。
+正式入口 `lib/main.dart` 与实卡测试入口 `lib/main_gallery.dart` 均使用 2.x 协议确认页，再由 `TransitCardAnalyzerApp` 以 `enableLiveBeta` 和 `initialLiveUi` 进入 2.x 实卡界面。1.x 通过设置手动启用，在本次运行中作为备用。切换前等待 NFC 关闭，两套界面共用同一个 `AppDependencies`。实卡测试入口关闭自动更新检查。`InternalPreviewApp` 与样例 fixtures 用于组件测试和设计回归。
 
 2.x 的主题、四项导航和读取交互位于 `lib/gallery/`。实卡模式不加载 fixtures，而是通过 `_GalleryLiveRead` 适配真实 `AppDependencies`：订阅 `watchAllArchiveRows` 生成卡包和历史，把当前 `CardSessionSnapshot` 投影成原预览的首页、行程与专家记录，并把保存、改名、删除、冲突策略、导入导出、诊断和设置动作委托给既有业务层。专家的「交通数据解析」直接消费 1.x 同一套解析结果：余额、币种、卡种与机构字段并入固定展开的「交通应用信息」；0x1A 轨道／公交保留各自原有展开卡，全部 0x1E 记录合并到一张卡并按记录分组，交易明细也合并到一张卡并按交易分组，两类记录整体保持过程记录在前。CU 文件字段继续按 2.x 展开卡片展示。未知值不补猜。失败重读可在首页保留上次摘要，但本次行程和专家不展示旧证据；关闭失败、取消和迟到响应仍由现有会话屏障隔离。
 
@@ -336,7 +336,7 @@ CU 在 v3 快照扩展 `cuProjection` 中保存独立记录与捕获时的匹配
 
 ## CDN 更新契约
 
-`features/updates` 的 `UpdateService` 由 AppDependencies 装配，`UpdatePrompt` 在首帧后检查一次；`--dart-define=UPDATE_MANIFEST_URL=https://cdn.example.com/manifest.json` 未配置则完全不请求。当前 build 使用打包前从 pubspec 同步的 AppInfo，测试可注入 build 与获取函数。Debug / Profile / Release 打包成功后，pubspec 自动预留下一个构建号，AppInfo 保留产物实际使用的构建号；repairBuild 同样自增，普通测试、静态检查和 dry-run 不自增。整数 build 严格大于当前值才提示，version 仅展示；下载经 url_launcher 外部浏览器，不安装、不自动下载参考库。
+`features/updates` 的 `UpdateService` 由 `AppDependencies` 装配。正式入口的 `UpdatePrompt` 在首帧后检查一次，2.x 与 1.x 切换共用检查结果，启动提示在单次运行中最多显示一次。配置 `--dart-define=UPDATE_MANIFEST_URL=https://cdn.example.com/manifest.json` 时，两套界面的关于区域均可手动检查更新。当前 build 使用打包前从 pubspec 同步的 AppInfo，测试可注入 build 与获取函数。Debug / Profile / Release 打包成功后，pubspec 自动预留下一个构建号，AppInfo 保留产物实际使用的构建号；repairBuild 同样自增，普通测试、静态检查和 dry-run 不自增。整数 build 严格大于当前值才提示，version 仅展示；下载经 url_launcher 外部浏览器，不安装、不自动下载参考库。
 
 manifest v1 必须含 `format_version: 1` 和 `app: {build: 整数, version: 字符串, notes: 字符串, download_url: HTTPS}`。可选 `references` 对象以 `TU` / `CU` 为键，每项为 `{url: HTTPS, package: {...}}`；package 原样复制离线 CLI 发布的 reference_manifest.json 对应包条目（file、sha256、bytes、content_version、tables）。HTTPS 禁止凭据、片段和所有重定向；连接超时 10 秒，总下载超时 30 秒，manifest 上限 256 KiB，单库上限 128 MiB。只请求 CDN 公共内容，无用户数据上传；CDN 仍能看到通常的网络连接信息。SHA256 校验完整性，不替代 CDN 发布端的可信性管理。
 

@@ -57,6 +57,7 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp>
   bool _live = false;
   bool _switching = false;
   String? _switchError;
+  bool _startupUpdateShown = false;
 
   @override
   void initState() {
@@ -119,6 +120,12 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp>
     )..load();
   }
 
+  bool _claimStartupUpdatePrompt() {
+    if (_startupUpdateShown) return false;
+    _startupUpdateShown = true;
+    return true;
+  }
+
   Future<void> _switchLiveUi(bool enabled) async {
     if (_switching || enabled == _live || _app.qrAcquiring) return;
     setState(() {
@@ -155,6 +162,9 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp>
           ? GalleryApp(
               liveApp: _app,
               preferences: _livePreferences,
+              claimStartupUpdatePrompt: widget.enableUpdateChecks
+                  ? _claimStartupUpdatePrompt
+                  : null,
               onDisableBeta: () => _switchLiveUi(false),
               openWebLink: _app.openWebLink,
               openEmail: _app.openFeedbackEmail,
@@ -172,6 +182,7 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp>
           child: widget.enableUpdateChecks
               ? UpdatePrompt(
                   service: _app.updates,
+                  shouldShow: _claimStartupUpdatePrompt,
                   child: AppShell(app: _app, routeObserver: _routeObserver),
                 )
               : AppShell(app: _app, routeObserver: _routeObserver),

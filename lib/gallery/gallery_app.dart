@@ -51,6 +51,8 @@ import '../features/trips/local_card_trip_presenter.dart';
 import '../features/trips/trip_filters.dart';
 import '../features/trips/trip_entry_presenter.dart';
 import '../features/trips/trip_cards_view.dart';
+import '../features/updates/update_prompt.dart';
+import '../features/updates/update_service.dart';
 import '../platform/browser/feedback_browser.dart';
 import '../platform/qr/qr_image_picker.dart';
 import '../platform/storage/archive_document_store.dart';
@@ -98,6 +100,7 @@ class GalleryApp extends StatefulWidget {
     super.key,
     this.controller,
     this.liveApp,
+    this.claimStartupUpdatePrompt,
     this.onDisableBeta,
     this.openWebLink,
     this.openEmail,
@@ -106,6 +109,7 @@ class GalleryApp extends StatefulWidget {
   }) : assert(liveApp == null || controller == null);
   final GalleryController? controller;
   final AppDependencies? liveApp;
+  final bool Function()? claimStartupUpdatePrompt;
   final VoidCallback? onDisableBeta;
   final Future<void> Function(Uri)? openWebLink;
   final Future<bool> Function(String)? openEmail;
@@ -201,6 +205,20 @@ class _GalleryAppState extends State<GalleryApp> {
           final monetSeed = _liveRead == null && c.monet && c.hasCardSeed
               ? c.themeSeed
               : null;
+          final home = _GalleryLiveScope(
+            notifier: _liveRead,
+            child: _GalleryNavigator(
+              key: ValueKey(c.generation),
+              controller: c,
+              preferences: _preferences,
+              loadKnowledge: _loadKnowledge,
+              onDisableBeta: widget.onDisableBeta,
+              openWebLink: widget.openWebLink,
+              openEmail: widget.openEmail,
+            ),
+          );
+          final updates = widget.liveApp?.updates;
+          final claimStartupUpdate = widget.claimStartupUpdatePrompt;
           return MaterialApp(
             title: 'TrafArch',
             debugShowCheckedModeBanner: false,
@@ -242,18 +260,13 @@ class _GalleryAppState extends State<GalleryApp> {
                 ),
               );
             },
-            home: _GalleryLiveScope(
-              notifier: _liveRead,
-              child: _GalleryNavigator(
-                key: ValueKey(c.generation),
-                controller: c,
-                preferences: _preferences,
-                loadKnowledge: _loadKnowledge,
-                onDisableBeta: widget.onDisableBeta,
-                openWebLink: widget.openWebLink,
-                openEmail: widget.openEmail,
-              ),
-            ),
+            home: updates != null && claimStartupUpdate != null
+                ? UpdatePrompt(
+                    service: updates,
+                    shouldShow: claimStartupUpdate,
+                    child: home,
+                  )
+                : home,
           );
         },
       );

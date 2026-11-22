@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../../../shared/presentation/adaptive_layout.dart';
@@ -23,8 +21,6 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  bool _betaUiWarningOpen = false;
-
   @override
   void initState() {
     super.initState();
@@ -39,29 +35,6 @@ class _SettingsPageState extends State<SettingsPage> {
 
   void _onChanged() {
     if (mounted) setState(() {});
-  }
-
-  Future<void> _requestBetaUiChange(bool enabled) async {
-    final beta = BetaUiScope.maybeOf(context);
-    if (beta == null || beta.enabled == enabled || _betaUiWarningOpen) return;
-    if (!enabled) {
-      beta.onChanged(false);
-      return;
-    }
-
-    _betaUiWarningOpen = true;
-    try {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => _BetaUiWarningDialog(live: beta.live),
-      );
-      if (confirmed == true && mounted) {
-        BetaUiScope.maybeOf(context)?.onChanged(true);
-      }
-    } finally {
-      _betaUiWarningOpen = false;
-    }
   }
 
   Future<void> _pickArchiveConflictPolicy() async {
@@ -211,16 +184,18 @@ class _SettingsPageState extends State<SettingsPage> {
                   if (BetaUiScope.maybeOf(context) case final beta?)
                     Card(
                       child: SwitchListTile(
-                        secondary: const Icon(Icons.new_releases_outlined),
-                        title: const Text('启用新界面（beta）'),
+                        secondary: const Icon(Icons.dashboard_outlined),
+                        title: const Text('启用 2.x 主界面'),
                         subtitle: Text(
                           beta.switchError ??
-                              (beta.live
-                                  ? '体验真实 NFC 读取、行程、专家分析与卡包，仅本次运行生效'
-                                  : '预览全新界面与模拟数据，仅本次运行生效'),
+                              (beta.switching
+                                  ? '正在切换到 2.x 主界面…'
+                                  : beta.live
+                                  ? '当前使用 1.x 备用界面，重启后会恢复 2.x。'
+                                  : '打开 2.x 界面的内置样例。'),
                         ),
                         value: beta.enabled,
-                        onChanged: beta.switching ? null : _requestBetaUiChange,
+                        onChanged: beta.switching ? null : beta.onChanged,
                       ),
                     ),
                   Card(
@@ -326,99 +301,6 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _BetaUiWarningDialog extends StatefulWidget {
-  const _BetaUiWarningDialog({required this.live});
-  final bool live;
-
-  @override
-  State<_BetaUiWarningDialog> createState() => _BetaUiWarningDialogState();
-}
-
-class _BetaUiWarningDialogState extends State<_BetaUiWarningDialog> {
-  static const _waitSeconds = 10;
-  int _remainingSeconds = _waitSeconds;
-  late final Timer _countdown;
-
-  @override
-  void initState() {
-    super.initState();
-    _countdown = Timer.periodic(const Duration(seconds: 1), (timer) {
-      final remaining = _waitSeconds - timer.tick;
-      if (remaining <= 0) timer.cancel();
-      setState(() => _remainingSeconds = remaining > 0 ? remaining : 0);
-    });
-  }
-
-  @override
-  void dispose() {
-    _countdown.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final foreground = scheme.onErrorContainer;
-    final canConfirm = _remainingSeconds == 0;
-    const emphasis = TextStyle(fontWeight: FontWeight.bold);
-    return AlertDialog(
-      scrollable: true,
-      backgroundColor: scheme.errorContainer,
-      surfaceTintColor: Colors.transparent,
-      insetPadding: const EdgeInsets.all(24),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(28),
-        side: BorderSide(color: foreground.withValues(alpha: 0.2)),
-      ),
-      icon: const Icon(Icons.warning_amber_rounded),
-      iconColor: foreground,
-      title: Text(
-        widget.live ? '启用 2.x 实卡体验' : '新界面预览警告',
-        style: TextStyle(color: foreground),
-      ),
-      content: Text.rich(
-        widget.live
-            ? const TextSpan(
-                text:
-                    '2.x 会读取实体卡，并与现有界面共用真实卡包。'
-                    '保存及重复卡片处理沿用当前设置；不会写卡。扫码仅在主动打开相机或选择图片后开始。'
-                    '\n\n可随时在设置中切回，重启也会恢复现有界面。',
-              )
-            : const TextSpan(
-                children: [
-                  TextSpan(text: '新界面仅用于 '),
-                  TextSpan(text: 'UI预览', style: emphasis),
-                  TextSpan(text: '。页面操作仅作演示，卡片、余额和行程均为'),
-                  TextSpan(text: '模拟数据', style: emphasis),
-                  TextSpan(text: '。\n\n预览不会读取实体卡，也不会写入真实档案。'),
-                ],
-              ),
-        style: TextStyle(color: foreground),
-      ),
-      actions: [
-        TextButton(
-          style: TextButton.styleFrom(foregroundColor: foreground),
-          onPressed: () => Navigator.pop(context, false),
-          child: const Text('不开启'),
-        ),
-        FilledButton(
-          style: FilledButton.styleFrom(
-            backgroundColor: scheme.error,
-            foregroundColor: scheme.onError,
-            disabledBackgroundColor: foreground.withValues(alpha: 0.12),
-            disabledForegroundColor: foreground.withValues(alpha: 0.8),
-          ),
-          onPressed: canConfirm ? () => Navigator.pop(context, true) : null,
-          child: Text(
-            canConfirm ? '确认开启' : '确认开启（$_remainingSeconds 秒）',
-            textAlign: TextAlign.center,
-          ),
-        ),
-      ],
     );
   }
 }

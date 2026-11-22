@@ -610,24 +610,27 @@ class _LiveCardSummary {
       final local = parsed.localCard?.info;
       if (CardParserIds.isTUnionFamily(parserId) ||
           parserId == CardParserIds.cityUnion) {
+        final observedBalance =
+            GalleryBalancePresentation.observedCardBalanceMinor(parsed);
         final direct =
             parserId == CardParserIds.cityUnion ||
             BalanceInterpretation.fromParsedCard(parsed).semantics ==
                 BalanceSemantics.direct;
         balance = direct
             ? app.balanceDisplay.formatBalance(
-                    parsed.info.balanceFen,
+                    observedBalance,
                     symbol: app.cardCurrency.symbol,
                   ) ??
                   '余额未知'
             : '账户余额未知';
         currencyCode = direct ? app.cardCurrency.code : null;
-      } else if (local?.observedBalance != null &&
-          local?.currencyCode == app.cardCurrency.code) {
-        balance = local!.isMacauPass
-            ? 'MOP \$${local.balance}'
-            : '${app.cardCurrency.symbol}${(local.balance / 100).toStringAsFixed(2)}';
-        currencyCode = local.currencyCode ?? app.cardCurrency.code;
+      } else if (GalleryBalancePresentation.observedCardBalanceMinor(parsed)
+          case final observedBalance?) {
+        balance = local?.isMacauPass == true
+            ? 'MOP \$${local!.balance}'
+            : '${app.cardCurrency.symbol}'
+                  '${(observedBalance / 100).toStringAsFixed(2)}';
+        currencyCode = local?.currencyCode ?? app.cardCurrency.code;
       } else {
         balance = '余额未知';
         currencyCode = local?.currencyCode;
@@ -800,9 +803,10 @@ String _tail(String? number) {
 
 String _readTime(DateTime? date) {
   if (date == null) return '日期未记录';
+  final local = date.toLocal();
   String two(int value) => value.toString().padLeft(2, '0');
-  return '${date.year}-${two(date.month)}-${two(date.day)} '
-      '${two(date.hour)}:${two(date.minute)}';
+  return '${local.year}-${two(local.month)}-${two(local.day)} '
+      '${two(local.hour)}:${two(local.minute)}';
 }
 
 String _faceFor(String type, List<String> applications) {
@@ -1681,7 +1685,12 @@ extension _GalleryLivePages on _GalleryViewState {
         parsed.selectedAidHex.isEmpty ? '未提供 AID' : parsed.selectedAidHex,
       ),
       ('解析器', parsed.parserName),
-      ('余额读取', parsed.info.balanceFen == null ? '未读到余额' : '已读取'),
+      (
+        '余额读取',
+        GalleryBalancePresentation.observedCardBalanceMinor(parsed) == null
+            ? '未读到余额'
+            : '已读取',
+      ),
       ('交易文件', '${app.transactions.length} 条'),
       ('应用证据', '${app.applications.length} 项'),
       ('城市一卡通文件', '${app.cityUnionFiles.length} 个'),
