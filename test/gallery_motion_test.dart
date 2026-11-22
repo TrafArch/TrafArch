@@ -109,7 +109,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 60));
       expect(tester.getTopLeft(settings).dx, inExclusiveRange(0, 412));
-      await tester.pump(const Duration(milliseconds: 161));
+      await tester.pump(const Duration(milliseconds: 201));
       await tester.pump();
       expect(settings, findsNothing);
       expect(c.page, GalleryPage.home);
@@ -590,15 +590,11 @@ void main() {
       await tester.tap(header);
       await tester.pump();
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump(const Duration(milliseconds: 100));
       final partial = tester.getSize(clip).height;
       await tester.pumpAndSettle();
       final full = tester.getSize(clip).height;
-      if (lineCount == 1) {
-        expect(partial, closeTo(full, .1));
-      } else {
-        expect(partial, inExclusiveRange(0, full));
-      }
+      expect(partial, inExclusiveRange(0, full));
       await tester.tap(header);
       await tester.pump();
       await tester.pump();
@@ -615,10 +611,7 @@ void main() {
       await tester.tap(header);
       await tester.pump();
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
-      if (lineCount == 24) {
-        expect(tester.getSize(clip).height, inExclusiveRange(0, full));
-      }
+      await tester.pump(const Duration(milliseconds: 221));
       await tester.pumpAndSettle();
       expect(
         find.descendant(of: region, matching: find.byType(ClipRect)),

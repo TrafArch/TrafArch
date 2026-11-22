@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -10,6 +12,10 @@ import 'navigation/app_shell.dart';
 import '../features/updates/update_prompt.dart';
 import '../shared/presentation/adaptive_layout.dart';
 import 'navigation/recovery_route_observer.dart';
+import '../gallery/gallery_app.dart';
+import '../gallery/gallery_preferences.dart';
+import '../platform/storage/settings_store.dart';
+import 'beta_ui_scope.dart';
 
 export 'navigation/app_shell.dart' show AppShell;
 
@@ -18,11 +24,15 @@ class TransitCardAnalyzerApp extends StatefulWidget {
     super.key,
     this.createDependencies,
     this.enableUpdateChecks = true,
+    this.enableLiveBeta = false,
+    this.initialLiveUi = false,
   });
 
   /// The root widget owns the returned state's initialization and disposal.
   final AppDependencies Function()? createDependencies;
   final bool enableUpdateChecks;
+  final bool enableLiveBeta;
+  final bool initialLiveUi;
 
   @override
   State<TransitCardAnalyzerApp> createState() => _TransitCardAnalyzerAppState();
@@ -43,11 +53,18 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp>
   /// AppShell 需要感知”被其他页面或对话框覆盖后再回显”：扫码解析、设置等
   /// 页面以及保存卡片对话框 pop 回来时靠它恢复悬浮底栏的显隐动画。
   late final RouteObserver<ModalRoute<dynamic>> _routeObserver;
+  GalleryPreferences? _livePreferences;
+  bool _live = false;
+  bool _switching = false;
+  String? _switchError;
+  bool _startupUpdateShown = false;
 
   @override
   void initState() {
     super.initState();
     _app = widget.createDependencies?.call() ?? AppDependencies();
+    _live = widget.enableLiveBeta && widget.initialLiveUi;
+    if (_live) _ensureLivePreferences();
     _routeObserver = RecoveryRouteObserver(_app);
     WidgetsBinding.instance.addObserver(this);
     _monetEnabled.value = _app.monetEnabled;
@@ -60,6 +77,7 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _app.removeListener(_syncMonetFromDependencies);
+    _livePreferences?.dispose();
     _app.dispose();
     _monetEnabled.dispose();
     super.dispose();
@@ -67,6 +85,12 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_live &&
+        (state == AppLifecycleState.paused ||
+            state == AppLifecycleState.detached) &&
+        _app.scanning) {
+      unawaited(_app.stop());
+    }
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
@@ -85,8 +109,71 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp>
     }
   }
 
+  void _ensureLivePreferences() {
+    final store = _app.settings.store;
+    _livePreferences ??= GalleryPreferences(
+      readEnabled: () async =>
+          await store.read(SettingsKeys.galleryPredictiveBackEnabled) !=
+          'false',
+      writeEnabled: (value) =>
+          store.write(SettingsKeys.galleryPredictiveBackEnabled, '$value'),
+    )..load();
+  }
+
+  bool _claimStartupUpdatePrompt() {
+    if (_startupUpdateShown) return false;
+    _startupUpdateShown = true;
+    return true;
+  }
+
+  Future<void> _switchLiveUi(bool enabled) async {
+    if (_switching || enabled == _live || _app.qrAcquiring) return;
+    setState(() {
+      _switching = true;
+      _switchError = null;
+    });
+    await _app.stop();
+    if (!mounted) return;
+    if (_app.nfcReleaseFailed) {
+      setState(() {
+        _switching = false;
+        _switchError = 'NFC 尚未关闭，无法切换。请重试。';
+      });
+      return;
+    }
+    _app.scan.autoScanConsumed = true;
+    _ensureLivePreferences();
+    setState(() {
+      _switching = false;
+      _live = enabled;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (!widget.enableLiveBeta) return _legacyUi();
+    return BetaUiScope(
+      enabled: _live,
+      live: true,
+      switching: _switching,
+      switchError: _switchError,
+      onChanged: _switchLiveUi,
+      child: _live
+          ? GalleryApp(
+              liveApp: _app,
+              preferences: _livePreferences,
+              claimStartupUpdatePrompt: widget.enableUpdateChecks
+                  ? _claimStartupUpdatePrompt
+                  : null,
+              onDisableBeta: () => _switchLiveUi(false),
+              openWebLink: _app.openWebLink,
+              openEmail: _app.openFeedbackEmail,
+            )
+          : _legacyUi(),
+    );
+  }
+
+  Widget _legacyUi() {
     return DynamicColorBuilder(
       builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
         return ValueListenableBuilder<bool>(
@@ -95,6 +182,7 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp>
           child: widget.enableUpdateChecks
               ? UpdatePrompt(
                   service: _app.updates,
+                  shouldShow: _claimStartupUpdatePrompt,
                   child: AppShell(app: _app, routeObserver: _routeObserver),
                 )
               : AppShell(app: _app, routeObserver: _routeObserver),

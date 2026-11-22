@@ -104,7 +104,7 @@ void main() {
     },
   );
   testWidgets(
-    'navigation clicks retain horizontal motion and can reverse mid transition',
+    'navigation clicks crossfade in place and can reverse mid transition',
     (tester) async {
       await mount(tester);
       Finder surface(GalleryPage page) => find
@@ -120,16 +120,25 @@ void main() {
           .first;
       final home = surface(GalleryPage.home);
       final cards = surface(GalleryPage.cards);
+      double opacity(GalleryPage page) => tester
+          .widget<Opacity>(
+            find.byWidgetPredicate(
+              (widget) => widget is Opacity && widget.key == ValueKey(page),
+            ),
+          )
+          .opacity;
       await tester.tap(find.byKey(const ValueKey('nav-cards')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 60));
-      expect(tester.getTopLeft(home).dx, inExclusiveRange(-412, 0));
-      expect(tester.getTopLeft(cards).dx, inExclusiveRange(0, 412));
-      final beforeReverse = tester.getTopLeft(home).dx;
+      expect(tester.getTopLeft(home).dx, 0);
+      expect(tester.getTopLeft(cards).dx, 0);
+      final beforeReverse = opacity(GalleryPage.home);
+      expect(beforeReverse, inExclusiveRange(0, 1));
+      expect(opacity(GalleryPage.cards), inExclusiveRange(0, 1));
       await tester.tap(find.byKey(const ValueKey('nav-home')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 30));
-      expect(tester.getTopLeft(home).dx, greaterThan(beforeReverse));
+      expect(opacity(GalleryPage.home), greaterThan(beforeReverse));
       await tester.pumpAndSettle();
       expect(c.page, GalleryPage.home);
       expect(tester.getTopLeft(home).dx, 0);
@@ -370,7 +379,7 @@ void main() {
   );
 
   testWidgets(
-    'card face title, card number and balance remain separate at large sizes',
+    'home card places balance and number lower left with brand lower right',
     (tester) async {
       c.hasRead = true;
       c.current.saved = true;
@@ -380,35 +389,123 @@ void main() {
         addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
         c.update(() {});
         await tester.pumpAndSettle();
+        final face = tester.getRect(
+          find.byKey(const ValueKey('card-face-shanghai')),
+        );
         final title = tester.getRect(
           find.byKey(const ValueKey('face-title-shanghai')),
         );
-        final tail = tester.getRect(
-          find.byKey(const ValueKey('face-tail-shanghai')),
+        final number = tester.getRect(
+          find.byKey(const ValueKey('face-card-number-shanghai')),
         );
-        final label = tester.getRect(
+        expect(
           find.byKey(const ValueKey('face-balance-label-shanghai')),
+          findsNothing,
+        );
+        final currency = tester.getRect(
+          find.byKey(const ValueKey('face-currency-shanghai')),
         );
         final balance = tester.getRect(
           find.byKey(const ValueKey('face-number-shanghai')),
         );
-        expect(tail.top, greaterThan(title.bottom));
-        expect(label.top, greaterThan(title.bottom));
-        expect(balance.top, greaterThan(label.bottom));
-        expect(balance.overlaps(title), isFalse);
-        expect(balance.overlaps(tail), isFalse);
+        final brand = tester.getRect(
+          find.byKey(const ValueKey('face-brand-shanghai')),
+        );
+        expect(title.left, closeTo(face.left + 20, 1.5));
+        expect(title.top, closeTo(face.top + 20, 1.5));
+        expect(currency.left, closeTo(title.left, 1.5));
+        expect(balance.left, greaterThan(currency.right));
+        expect(number.left, closeTo(title.left, 1.5));
+        expect(number.bottom, closeTo(face.bottom - 20, 1.5));
+        expect(balance.bottom + 4, closeTo(number.top, 1.5));
+        expect(brand.left, greaterThan(number.right));
+        expect(brand.right, closeTo(face.right - 20, 1.5));
+        expect(brand.bottom, closeTo(number.bottom, 1.5));
+        expect(brand.size, const Size(64, 86));
+        final tunion = tester.getRect(
+          find.byKey(const ValueKey('face-tunion-shanghai')),
+        );
+        final cityUnion = tester.getRect(
+          find.byKey(const ValueKey('face-cu-shanghai')),
+        );
+        expect(tunion.size, const Size(64, 42));
+        expect(cityUnion.size, const Size(64, 42));
+        expect(tunion.left, closeTo(cityUnion.left, .5));
+        expect(tunion.right, closeTo(cityUnion.right, .5));
+        expect(cityUnion.top - tunion.bottom, closeTo(2, .5));
+        expect(
+          tester
+              .widget<Text>(find.byKey(const ValueKey('face-title-shanghai')))
+              .style!
+              .fontSize,
+          16,
+        );
+        expect(
+          tester
+              .widget<Text>(
+                find.byKey(const ValueKey('face-currency-shanghai')),
+              )
+              .style!
+              .fontSize,
+          16,
+        );
+        expect(
+          tester
+              .widget<Text>(find.byKey(const ValueKey('face-number-shanghai')))
+              .style!
+              .fontSize,
+          23,
+        );
+        expect(
+          tester
+              .widget<Text>(
+                find.descendant(
+                  of: find.byKey(const ValueKey('face-card-number-shanghai')),
+                  matching: find.byType(Text),
+                ),
+              )
+              .style!
+              .fontSize,
+          14,
+        );
         expect(tester.takeException(), isNull);
       }
     },
   );
+
+  testWidgets('single application marks keep the original logo size', (
+    tester,
+  ) async {
+    c.hasRead = true;
+    await mount(tester, width: 360);
+    final single = GalleryCard.fromJson({
+      ...c.data.cards.first,
+      'applications': const ['tu'],
+    });
+    c.update(() {
+      final index = c.cards.indexWhere((card) => card.id == single.id);
+      c.cards[index] = single;
+    });
+    await tester.pumpAndSettle();
+    expect(
+      tester.getSize(find.byKey(const ValueKey('face-brand-shanghai'))),
+      const Size(68, 44),
+    );
+    expect(
+      tester.getSize(find.byKey(const ValueKey('face-tunion-shanghai'))),
+      const Size(68, 44),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('home card seed drives independent light and dark schemes', (
     tester,
   ) async {
     c.themeMode = ThemeMode.light;
     await mount(tester);
     final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
-    expect(app.themeAnimationDuration, const Duration(milliseconds: 240));
-    expect(app.themeAnimationCurve, Curves.easeInOut);
+    expect(app.themeAnimationDuration, const Duration(milliseconds: 200));
+    expect(app.themeAnimationCurve, Curves.easeInOutCubic);
     GalleryTokens tokens() => Theme.of(
       tester.element(find.byKey(const ValueKey('gallery-brand-mark'))),
     ).extension<GalleryTokens>()!;

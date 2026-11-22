@@ -93,8 +93,12 @@ void main() {
         of: find.byKey(ValueKey('card-face-${card.id}')),
         matching: find.byType(Image),
       );
-      if (images.evaluate().isEmpty) return null;
-      return (tester.widget<Image>(images.first).image as MemoryImage).bytes;
+      return tester
+          .widgetList<Image>(images)
+          .map((image) => image.image)
+          .whereType<MemoryImage>()
+          .firstOrNull
+          ?.bytes;
     }
 
     // 选图后先完成裁切，再由更换卡面 sheet 的完成提交。
@@ -114,6 +118,13 @@ void main() {
         c.current.saved = true;
         await mountFace(tester);
         final card = c.current;
+        final cityUnion = tester.widget<Image>(
+          find.byKey(ValueKey('face-cu-${card.id}')),
+        );
+        expect(
+          cityUnion.image,
+          const AssetImage('assets/gallery/city-union-logo.png'),
+        );
         expect(card.image, isNull);
         expect(
           tester
@@ -540,8 +551,9 @@ void main() {
   );
 
   testWidgets(
-    'wallet uses themed panels, transparent brand logos and grouped actions',
+    'wallet uses themed panels, local brand logos and grouped actions',
     (tester) async {
+      c.current.saved = true;
       c.navigate(GalleryPage.cards);
       await mount(tester);
       final group = find.byKey(const ValueKey('main-action-group'));
@@ -577,23 +589,23 @@ void main() {
           findsNothing,
         );
         for (final application in card.applications) {
-          final brand = switch (application) {
-            'tu' => 'tunion',
-            'cu' => 'city-union',
-            _ => application,
-          };
-          final logo = tester.widget<SvgPicture>(
-            find.byKey(
-              ValueKey(
-                'wallet-${application == 'tu' ? 'tunion' : application}-${card.id}',
-              ),
-            ),
-          );
-          expect(
-            (logo.bytesLoader as SvgAssetLoader).assetName,
-            'assets/gallery/$brand-logo.svg',
-          );
-          expect(logo.colorFilter, isNull);
+          final brand = application == 'tu' ? 'tunion' : application;
+          final logo = find.byKey(ValueKey('wallet-$brand-${card.id}'));
+          if (brand == 'cu') {
+            final image = tester.widget<Image>(logo);
+            expect(
+              image.image,
+              const AssetImage('assets/gallery/city-union-logo.png'),
+            );
+            expect(image.color, isNull);
+          } else {
+            final svg = tester.widget<SvgPicture>(logo);
+            expect(
+              (svg.bytesLoader as SvgAssetLoader).assetName,
+              'assets/gallery/$brand-logo.svg',
+            );
+            expect(svg.colorFilter, isNull);
+          }
         }
         expect(find.byKey(ValueKey('wallet-drag-${card.id}')), findsOneWidget);
         expect(find.byTooltip('${card.name} 管理'), findsNothing);
@@ -654,6 +666,86 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+    'regional brand logos replace nothing and TU dual cards stack locally',
+    (tester) async {
+      final shenzhen = GalleryCard.live(
+        id: 'shenzhen-dual',
+        saved: true,
+        name: '深圳通（交通联合版）',
+        tail: '0000',
+        pan: '3104 8704 0000 0000',
+        rawBalance: '¥25.00',
+        city: '深圳',
+        type: '深圳通（交通联合版）',
+        valid: '2029-12',
+        when: '2026-11-22 11:00',
+        count: '1 条',
+        face: 'blue',
+        applications: const ['tu', 'shenzhen'],
+        currencyCode: 'CNY',
+      );
+      final lingnan = GalleryCard.live(
+        id: 'lingnan-single',
+        saved: true,
+        name: '岭南通',
+        tail: '0001',
+        pan: '3104 8700 0000 0001',
+        rawBalance: '¥18.00',
+        city: '广东',
+        type: '岭南通',
+        valid: '未知',
+        when: '2026-11-22 11:01',
+        count: '1 条',
+        face: 'graphite',
+        applications: const ['lingnan'],
+        currencyCode: 'CNY',
+      );
+      c.update(() {
+        c.cards.addAll([shenzhen, lingnan]);
+        c.currentCardId = shenzhen.id;
+        c.hasRead = true;
+      });
+      c.navigate(GalleryPage.home);
+      await mount(tester);
+
+      final tu = find.byKey(const ValueKey('face-tunion-shenzhen-dual'));
+      final shenzhenLogo = find.byKey(
+        const ValueKey('face-shenzhen-tong-shenzhen-dual'),
+      );
+      expect(tu, findsOneWidget);
+      expect(shenzhenLogo, findsOneWidget);
+      expect(
+        tester.getBottomLeft(tu).dy,
+        lessThan(tester.getTopLeft(shenzhenLogo).dy),
+      );
+      expect(
+        tester.widget<Image>(shenzhenLogo).image,
+        const AssetImage('assets/gallery/shenzhen-tong-logo.png'),
+      );
+      expect(
+        find.byKey(const ValueKey('face-lingnan-tong-shenzhen-dual')),
+        findsNothing,
+      );
+
+      c.navigate(GalleryPage.cards);
+      await tester.pumpAndSettle();
+      final lingnanLogo = find.byKey(
+        const ValueKey('wallet-lingnan-tong-lingnan-single'),
+      );
+      expect(lingnanLogo, findsOneWidget);
+      expect(
+        tester.widget<Image>(lingnanLogo).image,
+        const AssetImage('assets/gallery/lingnan-tong-logo.png'),
+      );
+      expect(
+        find.byKey(const ValueKey('wallet-tunion-lingnan-single')),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('card face keeps its fields separate for long and unknown money', (
     tester,
   ) async {
@@ -687,8 +779,8 @@ void main() {
           final title = tester.getRect(
             find.byKey(const ValueKey('face-title-shanghai')),
           );
-          final tail = tester.getRect(
-            find.byKey(const ValueKey('face-tail-shanghai')),
+          final number = tester.getRect(
+            find.byKey(const ValueKey('face-card-number-shanghai')),
           );
           final amount = tester.getRect(
             find.byKey(
@@ -697,7 +789,7 @@ void main() {
               ),
             ),
           );
-          for (final field in [title, tail, amount]) {
+          for (final field in [title, number, amount]) {
             expect(face.contains(field.topLeft), isTrue);
             expect(
               face.contains(field.bottomRight - const Offset(.01, .01)),
@@ -705,8 +797,9 @@ void main() {
             );
           }
           expect(amount.top, greaterThan(title.bottom));
-          expect(tail.top, greaterThan(title.bottom));
-          expect(amount.overlaps(tail), isFalse);
+          expect(number.top, greaterThan(title.bottom));
+          expect(number.top, greaterThan(amount.bottom));
+          expect(amount.overlaps(number), isFalse);
           expect(find.text('当前余额'), findsNothing);
           expect(find.textContaining('最近读取'), findsNothing);
           if (balance == '—') {
@@ -715,9 +808,8 @@ void main() {
               findsNothing,
             );
           } else {
-            expect(find.text('CNY ¥'), findsOneWidget);
+            expect(find.text('CN ¥'), findsOneWidget);
           }
-          if (scale >= 1.5) expect(tail.top, greaterThan(amount.bottom));
           expect(
             tester.takeException(),
             isNull,

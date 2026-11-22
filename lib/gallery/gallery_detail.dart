@@ -253,7 +253,29 @@ extension _GalleryDetail on _GalleryViewState {
             _icon(
               Icons.download_outlined,
               '导出本卡记录',
-              () => c.export(),
+              () {
+                final live = _GalleryLiveScope.of(context);
+                if (live == null) {
+                  c.export();
+                  return;
+                }
+                final saved = live.savedCardFor(card.id);
+                if (saved != null) {
+                  unawaited(
+                    exportArchiveJson(
+                      context,
+                      live.app,
+                      card: saved,
+                      onNotice: (message, failed) => _toast(
+                        message,
+                        type: failed
+                            ? GalleryFeedbackType.error
+                            : GalleryFeedbackType.success,
+                      ),
+                    ),
+                  );
+                }
+              },
               outlined: false,
               grouped: true,
               color: t.text,
@@ -265,7 +287,8 @@ extension _GalleryDetail on _GalleryViewState {
   }
 
   List<Widget> _cardInformation(GalleryCard card) {
-    final raw = c.data.raw[card.id];
+    final live = _GalleryLiveScope.of(context);
+    final raw = live == null ? c.data.raw[card.id] : c.liveRaw[card.id];
     return [
       _panel(
         Column(
@@ -277,7 +300,7 @@ extension _GalleryDetail on _GalleryViewState {
               ('有效期', card.valid == '—' ? '未知' : '${card.valid}（未记录日）'),
               ('当前余额', card.balance(c.includeOverdraft)),
               ('最近读取', card.when),
-              ('协议', card.type == 'FeliCa' ? 'FeliCa' : 'ISO-DEP / 交通联合'),
+              ('协议', card.type),
             ])
               _kv(row.$1, row.$2),
           ],
@@ -294,10 +317,8 @@ extension _GalleryDetail on _GalleryViewState {
                 Icons.copy_outlined,
                 '复制原始数据',
                 () {
-                  Clipboard.setData(
-                    ClipboardData(text: '${raw['sfi18']}\n${raw['sfi1e']}'),
-                  );
-                  _toast('已复制模拟原始数据');
+                  Clipboard.setData(ClipboardData(text: _rawText(raw)));
+                  _toast(live == null ? '已复制模拟原始数据' : '已复制原始读取证据');
                 },
                 outlined: false,
                 grouped: true,
@@ -313,34 +334,57 @@ extension _GalleryDetail on _GalleryViewState {
           ],
         ),
       ),
-      _text('模拟样例', role: GalleryTypography.caption, color: t.muted),
+      _text(
+        live == null ? '模拟样例' : '捕获时的原始读取证据',
+        role: GalleryTypography.caption,
+        color: t.muted,
+      ),
       _gap(8),
       if (raw is Map)
-        _hexBox('SFI 0x18\n${raw['sfi18']}\n\nSFI 0x1E\n${raw['sfi1e']}')
+        _hexBox(
+          live == null
+              ? 'SFI 0x18\n${raw['sfi18']}\n\nSFI 0x1E\n${raw['sfi1e']}'
+              : _rawText(raw),
+        )
       else
-        _text('本样例未保留原始数据', role: GalleryTypography.caption, color: t.muted),
+        _text(
+          live == null ? '本样例未保留原始数据' : '本次批次未保留可展示的原始证据',
+          role: GalleryTypography.caption,
+          color: t.muted,
+        ),
     ];
   }
 
-  Future<void> _selectSpendingPeriod(GallerySpendingPeriod period) async {
+  String _rawText(Map raw) {
+    final text = raw['text'];
+    if (text is String) return text;
+    return [
+      if (raw['sfi18'] != null) 'SFI 0x18\n${raw['sfi18']}',
+      if (raw['sfi1e'] != null) 'SFI 0x1E\n${raw['sfi1e']}',
+    ].join('\n\n');
+  }
+
+  Future<void> _selectSpendingPeriod(
+    GallerySpendingPeriod period,
+    DateTime now,
+  ) async {
     if (period != GallerySpendingPeriod.custom) {
       _updateDetail(
         () => _spendingSelection = GallerySpendingSelection.forPeriod(
           period,
-          GalleryController.clock,
+          now,
         ),
       );
       return;
     }
-    final first =
-        _spendingSelection.start ?? galleryCalendarDay(GalleryController.clock);
+    final first = _spendingSelection.start ?? galleryCalendarDay(now);
     final last = _spendingSelection.end ?? first;
     final selected = await showDialog<DateTimeRange>(
       context: context,
       builder: (_) => _GalleryRangePickerDialog(
         initialStart: first,
         initialEnd: last,
-        today: GalleryController.clock,
+        today: now,
       ),
     );
     if (!mounted || selected == null) return;
@@ -355,7 +399,11 @@ extension _GalleryDetail on _GalleryViewState {
   String _spendingDate(DateTime date) =>
       '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
-  Widget _spendingPeriodButton(GallerySpendingPeriod period, String label) {
+  Widget _spendingPeriodButton(
+    GallerySpendingPeriod period,
+    String label,
+    DateTime now,
+  ) {
     final selected = _spendingSelection.period == period;
     return Semantics(
       button: true,
@@ -371,7 +419,7 @@ extension _GalleryDetail on _GalleryViewState {
           type: MaterialType.transparency,
           child: InkWell(
             borderRadius: BorderRadius.circular(20),
-            onTap: () => _selectSpendingPeriod(period),
+            onTap: () => _selectSpendingPeriod(period, now),
             child: SizedBox(
               height: 40,
               child: Center(
@@ -397,11 +445,27 @@ extension _GalleryDetail on _GalleryViewState {
   }
 
   List<Widget> _spendingChildren(GalleryCard card) {
-    final summary = GallerySpendingSummary(
-      card.currency,
-      c.ledger(card),
-      selection: _spendingSelection,
+    final live = _GalleryLiveScope.of(context);
+    final history = live?.historyFor(card.id);
+    return _spendingWidgets(
+      history == null
+          ? GallerySpendingSummary(
+              card.currency,
+              c.ledger(card),
+              selection: _spendingSelection,
+            )
+          : projectGalleryArchiveSpending(
+              history,
+              selection: _spendingSelection,
+            ),
+      now: live == null ? GalleryController.clock : DateTime.now(),
     );
+  }
+
+  List<Widget> _spendingWidgets(
+    GallerySpendingSummary summary, {
+    required DateTime now,
+  }) {
     final range = _spendingSelection.start == null
         ? '全部已保留记录'
         : '${_spendingDate(_spendingSelection.start!)} ～ ${_spendingDate(_spendingSelection.end!)}';
@@ -417,7 +481,7 @@ extension _GalleryDetail on _GalleryViewState {
             (GallerySpendingPeriod.custom, '自定义'),
           ].indexed) ...[
             if (index > 0) const SizedBox(width: 8),
-            Expanded(child: _spendingPeriodButton(period, label)),
+            Expanded(child: _spendingPeriodButton(period, label, now)),
           ],
         ],
       ),
@@ -908,54 +972,73 @@ class _DetailCardLayout {
     BuildContext context,
     GalleryCard card,
     GalleryBalancePresentation balance,
-    this.width,
+    double width,
   ) {
-    scaler = MediaQuery.textScalerOf(context);
-    expandedTitleHeight = _measureDetailText(
+    final brands = _faceBrands(card);
+    final titleStyle = GalleryTypography.card.copyWith(
+      fontSize: 16,
+      height: 23 / 16,
+    );
+    final amountStyle = GalleryTypography.amount.copyWith(
+      fontSize: 23,
+      height: 28 / 23,
+    );
+    final unitStyle = GalleryTypography.caption.copyWith(
+      fontSize: 16,
+      height: 22 / 16,
+    );
+    final cardNumberStyle = GalleryTypography.field.copyWith(
+      fontFamily: 'monospace',
+      fontSize: 14,
+      height: 20 / 14,
+      fontWeight: FontWeight.w500,
+    );
+    final titleHeight = _measureDetailText(
       context,
       card.name,
-      GalleryTypography.card.copyWith(fontSize: 18, height: 24 / 18),
-      math.max(24, width - 40 - (_faceBrands(card).isEmpty ? 0 : 80)),
+      titleStyle,
+      math.max(1.0, width - 40),
     ).height;
-    tailWidth = _measureDetailText(
+    final brandWidth = brands.isEmpty ? 0.0 : (brands.length > 1 ? 64.0 : 68.0);
+    final logoHeight = brands.length > 1 ? 42.0 : 44.0;
+    final brandHeight = brands.isEmpty
+        ? 0.0
+        : brands.length * logoHeight + (brands.length - 1) * 2;
+    final lowerWidth = math.max(
+      1.0,
+      width - 40 - (brands.isEmpty ? 0 : brandWidth + 10),
+    );
+    lowerRightInset = 20 + (brands.isEmpty ? 0 : brandWidth + 10);
+    final amountHeight = _measureDetailText(
       context,
-      '**** ${card.tail}',
-      GalleryTypography.label.copyWith(
-        fontFamily: 'monospace',
-        letterSpacing: .6,
-      ),
-      double.infinity,
-    ).width;
-    final numberWidth = _measureDetailText(
+      balance.known ? balance.number : balance.displayText,
+      amountStyle,
+      lowerWidth,
+    ).height;
+    final currencyLabel = _faceCurrencyLabel(balance.currencyLabel);
+    final unitHeight = currencyLabel.isEmpty
+        ? 0.0
+        : _measureDetailText(
+            context,
+            currencyLabel,
+            unitStyle,
+            lowerWidth,
+          ).height;
+    final cardNumberHeight = _measureDetailText(
       context,
-      balance.number,
-      GalleryTypography.balance,
-      double.infinity,
-    ).width;
-    final unitWidth =
-        _measureDetailText(
-          context,
-          balance.currencyLabel,
-          GalleryTypography.caption,
-          double.infinity,
-        ).width +
-        8;
-    stacked =
-        numberWidth + unitWidth + tailWidth + 16 > width - 40 ||
-        scaler.scale(14) / 14 >= 1.5;
+      _formatFaceCardNumber(card.pan),
+      cardNumberStyle,
+      lowerWidth,
+    ).height;
+    final balanceHeight = math.max(amountHeight, unitHeight);
+    final lowerContentHeight = balanceHeight + 4 + cardNumberHeight;
     expandedHeight = math.max(
-      180.0 + math.max(0, scaler.scale(14) / 14 - 1) * 80,
-      40 +
-          expandedTitleHeight +
-          28 +
-          scaler.scale(38) +
-          (stacked ? scaler.scale(18) + 12 : 0),
+      204.0,
+      40 + titleHeight + 4 + math.max(lowerContentHeight, brandHeight),
     );
   }
-  final double width;
-  late final TextScaler scaler;
-  late final double expandedHeight, expandedTitleHeight, tailWidth;
-  late final bool stacked;
+  late final double expandedHeight;
+  late final double lowerRightInset;
 }
 
 /// The expanded identity card. On scroll the parent shrinks and fades this
@@ -979,31 +1062,64 @@ class _GalleryDetailFace extends StatelessWidget {
     final foreground = card.image == null
         ? face.foreground
         : GalleryCardFace.imageForeground;
-    final secondary = card.image == null
-        ? face.secondaryForeground
-        : GalleryCardFace.imageSecondaryForeground;
     final nameStyle = GalleryTypography.card.copyWith(
-      fontSize: 18,
-      height: 24 / 18,
+      fontSize: 16,
+      height: 23 / 16,
       color: foreground,
     );
-    final numberStyle = GalleryTypography.balance.copyWith(
+    final amountStyle = GalleryTypography.amount.copyWith(
       color: foreground,
+      fontSize: 23,
+      height: 28 / 23,
       fontFeatures: const [FontFeature.tabularFigures()],
     );
-    final unitStyle = GalleryTypography.caption.copyWith(color: secondary);
-    final numberTop =
-        layout.expandedHeight -
-        20 -
-        layout.scaler.scale(38) -
-        (layout.stacked ? layout.scaler.scale(18) + 12 : 0);
-    final amountWidth = math.max(
-      1.0,
-      layout.width - 40 - (layout.stacked ? 0 : layout.tailWidth + 16),
+    final unitStyle = GalleryTypography.caption.copyWith(
+      color: foreground,
+      fontSize: 16,
+      height: 22 / 16,
     );
-    final nameWidth = math.max(
-      24.0,
-      layout.width - 40 - (_faceBrands(card).isEmpty ? 0 : 80),
+    final cardNumberStyle = GalleryTypography.field.copyWith(
+      fontFamily: 'monospace',
+      fontSize: 14,
+      height: 20 / 14,
+      fontWeight: FontWeight.w500,
+      color: foreground,
+    );
+    final currencyLabel = _faceCurrencyLabel(balance.currencyLabel);
+    final cardNumber = _formatFaceCardNumber(card.pan);
+    final amount = Semantics(
+      label: '余额，${balance.displayText}',
+      excludeSemantics: true,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: balance.known
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  if (currencyLabel.isNotEmpty) ...[
+                    Text(
+                      currencyLabel,
+                      key: ValueKey('face-currency-${card.id}'),
+                      style: unitStyle,
+                    ),
+                    const SizedBox(width: 3),
+                  ],
+                  Text(
+                    balance.number,
+                    key: ValueKey('face-number-${card.id}'),
+                    style: amountStyle,
+                  ),
+                ],
+              )
+            : Text(
+                balance.displayText,
+                key: ValueKey('face-unknown-${card.id}'),
+                style: amountStyle,
+              ),
+      ),
     );
     return SizedBox(
       key: ValueKey('card-face-${card.id}'),
@@ -1019,87 +1135,58 @@ class _GalleryDetailFace extends StatelessWidget {
               colors: [face.start, face.end],
             ),
             border: card.image == null
-                ? Border.all(color: tokens.line.withValues(alpha: .3))
+                ? Border.all(color: const Color(0x29ffffff))
                 : null,
           ),
           child: Stack(
+            fit: StackFit.passthrough,
             children: [
               if (card.image != null)
                 Positioned.fill(child: _FaceCropImage(card: card)),
               Positioned(
                 left: 20,
                 top: 20,
-                width: nameWidth,
+                right: 20,
                 child: Text(
                   card.name,
                   key: ValueKey('face-title-${card.id}'),
                   style: nameStyle,
                 ),
               ),
-              if (_faceBrands(card).isNotEmpty)
-                Positioned(
-                  top: 20,
-                  right: 20,
-                  child: _FaceBrandMark(card: card, id: 'detail-face'),
-                ),
               Positioned(
                 left: 20,
-                top: numberTop,
-                width: amountWidth,
-                child: Semantics(
-                  label: '余额，${balance.displayText}',
-                  excludeSemantics: true,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: balance.known
-                        ? Row(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.baseline,
-                            textBaseline: TextBaseline.alphabetic,
-                            children: [
-                              if (balance.currencyLabel.isNotEmpty) ...[
-                                Text(
-                                  balance.currencyLabel,
-                                  key: ValueKey('face-currency-${card.id}'),
-                                  style: unitStyle,
-                                ),
-                                const SizedBox(width: 8),
-                              ],
-                              Text(
-                                balance.number,
-                                key: ValueKey('face-number-${card.id}'),
-                                style: numberStyle,
-                              ),
-                            ],
-                          )
-                        : Text(
-                            balance.displayText,
-                            key: ValueKey('face-unknown-${card.id}'),
-                            style: unitStyle,
-                          ),
-                  ),
-                ),
-              ),
-              Positioned(
-                right: 20,
+                right: layout.lowerRightInset,
                 bottom: 20,
-                width: layout.tailWidth + 2,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    '**** ${card.tail}',
-                    key: ValueKey('face-tail-${card.id}'),
-                    maxLines: 1,
-                    softWrap: false,
-                    style: GalleryTypography.caption.copyWith(
-                      fontFamily: 'monospace',
-                      color: secondary,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    amount,
+                    const SizedBox(height: 4),
+                    Container(
+                      key: ValueKey('face-card-number-${card.id}'),
+                      decoration: card.image != null && !tokens.dark
+                          ? BoxDecoration(
+                              color: Colors.black.withValues(alpha: .35),
+                              borderRadius: BorderRadius.circular(6),
+                            )
+                          : null,
+                      child: Text(
+                        cardNumber,
+                        semanticsLabel: '卡号，$cardNumber',
+                        textAlign: TextAlign.left,
+                        style: cardNumberStyle,
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ),
+              if (_faceBrands(card).isNotEmpty)
+                Positioned(
+                  right: 20,
+                  bottom: 20,
+                  child: _FaceBrandMark(card: card, id: 'detail-face'),
+                ),
             ],
           ),
         ),

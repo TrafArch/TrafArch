@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
 
 import 'gallery_color_engine.dart';
+import 'gallery_motion.dart';
 
 enum GalleryElevation { flat, card, floating, modal }
+
+abstract final class GalleryDialogMotion {
+  static const enter = GalleryMotion.menu;
+  static const exit = GalleryMotion.menuBack;
+  static const initialScale = GalleryMotion.menuScale;
+}
 
 abstract final class GalleryGeometry {
   static const buttonShape = RoundedRectangleBorder(

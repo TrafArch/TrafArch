@@ -1,10 +1,16 @@
 # TrafArch 架构与代码所有权
 
-## 2.x 内部界面预览
+## 2.x 界面与实卡接入
 
-`lib/main_gallery.dart` 启动 `InternalPreviewApp`，默认使用现有界面；内部宿主通过 `BetaUiScope` 向设置页提供“启用新界面（beta）”开关。开关仅保留在当前进程，重启恢复关闭。离开任一界面会释放该界面的状态；内部构建关闭自动更新检查，正式入口行为不变。
+正式入口 `lib/main.dart` 与实卡测试入口 `lib/main_gallery.dart` 均使用 2.x 协议确认页，再由 `TransitCardAnalyzerApp` 以 `enableLiveBeta` 和 `initialLiveUi` 进入 2.x 实卡界面。1.x 通过设置手动启用，在本次运行中作为备用。切换前等待 NFC 关闭，两套界面共用同一个 `AppDependencies`。实卡测试入口关闭自动更新检查。`InternalPreviewApp` 与样例 fixtures 用于组件测试和设计回归。
 
-新版前端从零构建于 `lib/gallery/`，不复用旧页面、旧主题或旧导航。`GalleryApp` → `GalleryController` / `GalleryQrController` → 合成 fixtures，页面消费展示状态与回调，不创建 `AppDependencies` 或访问真实档案、NFC、相机、相册与文件导出通道。现有界面继续使用原业务层，新版模拟数据不会写入或覆盖真实档案。
+2.x 的主题、四项导航和读取交互位于 `lib/gallery/`。实卡模式不加载 fixtures，而是通过 `_GalleryLiveRead` 适配真实 `AppDependencies`：订阅 `watchAllArchiveRows` 生成卡包和历史，把当前 `CardSessionSnapshot` 投影成原预览的首页、行程与专家记录，并把保存、改名、删除、冲突策略、导入导出、诊断和设置动作委托给既有业务层。专家的「交通数据解析」直接消费 1.x 同一套解析结果：余额、币种、卡种与机构字段并入固定展开的「交通应用信息」；0x1A 轨道／公交保留各自原有展开卡，全部 0x1E 记录合并到一张卡并按记录分组，交易明细也合并到一张卡并按交易分组，两类记录整体保持过程记录在前。CU 文件字段继续按 2.x 展开卡片展示。未知值不补猜。失败重读可在首页保留上次摘要，但本次行程和专家不展示旧证据；关闭失败、取消和迟到响应仍由现有会话屏障隔离。
+
+实卡卡包与详情沿用原预览的卡面、列表、统计和冻结交易组件，档案来源是 `SavedCard` 与 `ArchiveHistory` 投影。删除走现有确认流程，导出按当前卡或完整档案写入用户选择的 SAF 位置；消费统计按整数最小单位汇总明确的同币种扣款，CU 复用冻结金额与镜像过滤，不估算未知时间、币种或 Suica 余额差。业务设置同用 `SettingsController`，不写参考包或改档案 schema；卡面与排序持久化未接入。
+
+两套 UI 共用 `QrReadContent`、`QrAcquisition` 与 `QrController`。`AppDependencies.runQrAcquisition` 先等待普通及八达通 NFC 会话关闭，并独占相机／相册获取；离开路由或内存恢复使在途结果失效。2.x 知识库以当前 `KnowledgeBase.packagePaths` 启动后台只读索引；已校验包的实例变更后废弃旧索引，独立预览加载器不参与实卡路径。2.x 的主要页、档案详情、扫码和设置映射为现有恢复路由；恢复只展示冻结读卡证据，不重查参考库或自动归档。诊断由既有 `DiagnosticsController` 写本机文件，反馈只打开用户主动选择的外部链接。
+
+`InternalPreviewApp` 承载样例模式：`GalleryApp` → `GalleryController` / `GalleryQrController` → 合成 fixtures，不连接真实读卡或档案。以下样例、模拟场景和设计回归说明只适用于该宿主的测试路径，不适用于 `lib/main_gallery.dart` 的实卡构建。
 
 Gallery 的关于、问题反馈、致谢与开源许可为独立页面，仍使用 Gallery 主题和导航；许可按需读取 Flutter `LicenseRegistry`。公开联系地址集中在 `shared/app_support.dart`，现有设置页复用。`InternalPreviewApp` 仅注入用户点击时打开公开网页／邮件应用的回调：网页使用既有 `FeedbackBrowser`，邮箱使用 `url_launcher`。不自动访问外链，也不传递卡片、日志或档案数据。底栏共享一个 180ms 水平滑动胶囊，主页面按底栏顺序以 240ms 左右滑动，跨项直达目标。子页面、二维码获取视图与弹层由稳定标识的只读导航栈驱动真实 Navigator 路由，退出内容保留自身展示上下文并停止交互；专家页列表和横向页签使用稳定滚动标识。
 
@@ -279,7 +285,11 @@ flowchart TD
 
 目录层次不等同于强制编译模块；边界由源码依赖清单和静态检查约束。协议有意保留本地卡特例，没有用同一组默认值抹平不同卡族行为。
 
-反馈问卷和隐私政策经 `AppDependencies → SettingsController → FeedbackBrowser` 调用独立的 `transit_card_analyzer/browser` 通道。原生先通过 `CustomTabsClient.getPackageName(activity, null)` 检测已安装浏览器的 Custom Tabs 支持，不限制包名；有提供方则显式指定该包打开 Custom Tab，没有提供方或启动失败则用 `ACTION_VIEW` 交给默认浏览器直接打开原网址（未设置默认浏览器时由系统选择）。通道返回提供方包名或 `default_browser` 表示打开成功，仅两种方式均失败时返回 null，由 Dart 复制链接并提示。QQ 群入口经 `AppDependencies → SettingsController` 使用 `url_launcher` 的外部应用模式，优先以 `mqqapi://card/show_pslcard` 打开指定群资料页；启动失败时改用原 HTTPS 邀请页，两种方式均失败则提示用户复制群号搜索。
+主程序与预览入口均先挂载 `LegalConsentGate`。它只从本机 `SettingsStore` 检查 EULA 与隐私政策的共同同意记录，未确认时不挂载业务界面，也不启动更新检查、读卡或档案恢复。查看协议不写入同意记录；显式确认且持久化成功才放行。
+
+同意记录同时保存可选 Firebase 分析的选择（`v2:analytics-on` / `v2:analytics-off`）；旧的 `true` 不表示已授权分析。Android 清单将 `firebase_analytics_collection_enabled` 默认设为 `false`，宿主通过独立的 `transit_card_analyzer/analytics` 通道查询可用性并调用 `setAnalyticsCollectionEnabled`。运行时开关与是否打包 SDK 是两回事；未配置或离线构建不采集。两套设置页通过同一个宿主更新选择，不发送读卡或行程参数。
+
+反馈问卷、EULA 和隐私政策使用 `FeedbackBrowser` 的独立 `transit_card_analyzer/browser` 通道。主界面经 `AppDependencies → SettingsController` 调用，首次确认弹窗直接复用同一浏览器实现，无需启动业务依赖。原生先通过 `CustomTabsClient.getPackageName(activity, null)` 检测已安装浏览器的 Custom Tabs 支持，不限制包名；有提供方则显式指定该包打开 Custom Tab，没有提供方或启动失败则用 `ACTION_VIEW` 交给默认浏览器直接打开原网址（未设置默认浏览器时由系统选择）。通道返回提供方包名或 `default_browser` 表示打开成功，仅两种方式均失败时返回 null，由 Dart 复制链接并提示。QQ 群入口经 `AppDependencies → SettingsController` 使用 `url_launcher` 的外部应用模式，优先以 `mqqapi://card/show_pslcard` 打开指定群资料页；启动失败时改用原 HTTPS 邀请页，两种方式均失败则提示用户复制群号搜索。
 
 ## 采集和取消
 
@@ -326,7 +336,7 @@ CU 在 v3 快照扩展 `cuProjection` 中保存独立记录与捕获时的匹配
 
 ## CDN 更新契约
 
-`features/updates` 的 `UpdateService` 由 AppDependencies 装配，`UpdatePrompt` 在首帧后检查一次；`--dart-define=UPDATE_MANIFEST_URL=https://cdn.example.com/manifest.json` 未配置则完全不请求。当前 build 使用打包前从 pubspec 同步的 AppInfo，测试可注入 build 与获取函数。Debug / Profile / Release 打包成功后，pubspec 自动预留下一个构建号，AppInfo 保留产物实际使用的构建号；repairBuild 同样自增，普通测试、静态检查和 dry-run 不自增。整数 build 严格大于当前值才提示，version 仅展示；下载经 url_launcher 外部浏览器，不安装、不自动下载参考库。
+`features/updates` 的 `UpdateService` 由 `AppDependencies` 装配。正式入口的 `UpdatePrompt` 在首帧后检查一次，2.x 与 1.x 切换共用检查结果，启动提示在单次运行中最多显示一次。配置 `--dart-define=UPDATE_MANIFEST_URL=https://cdn.example.com/manifest.json` 时，两套界面的关于区域均可手动检查更新。当前 build 使用打包前从 pubspec 同步的 AppInfo，测试可注入 build 与获取函数。Debug / Profile / Release 打包成功后，pubspec 自动预留下一个构建号，AppInfo 保留产物实际使用的构建号；repairBuild 同样自增，普通测试、静态检查和 dry-run 不自增。整数 build 严格大于当前值才提示，version 仅展示；下载经 url_launcher 外部浏览器，不安装、不自动下载参考库。
 
 manifest v1 必须含 `format_version: 1` 和 `app: {build: 整数, version: 字符串, notes: 字符串, download_url: HTTPS}`。可选 `references` 对象以 `TU` / `CU` 为键，每项为 `{url: HTTPS, package: {...}}`；package 原样复制离线 CLI 发布的 reference_manifest.json 对应包条目（file、sha256、bytes、content_version、tables）。HTTPS 禁止凭据、片段和所有重定向；连接超时 10 秒，总下载超时 30 秒，manifest 上限 256 KiB，单库上限 128 MiB。只请求 CDN 公共内容，无用户数据上传；CDN 仍能看到通常的网络连接信息。SHA256 校验完整性，不替代 CDN 发布端的可信性管理。
 

@@ -39,6 +39,60 @@ class GalleryFaceCrop {
 /// A frozen design snapshot. This loader never opens production reference DBs.
 class GalleryData {
   GalleryData(this.json);
+  GalleryData.empty()
+    : json = const {'cards': [], 'trips': [], 'footprints': []};
+  GalleryData.live()
+    : json = {
+        'cards': [
+          {
+            'id': 'live-current',
+            'saved': false,
+            'name': '待读取',
+            'tail': '——',
+            'pan': '未提供',
+            'balance': '——',
+            'city': '未知',
+            'type': '交通卡',
+            'valid': '未知',
+            'when': '尚未读取',
+            'count': '0 条',
+            'face': 'blue',
+          },
+        ],
+        'trips': <GalleryRecord>[],
+        'ledgers': <String, dynamic>{},
+        'raw': <String, dynamic>{},
+        'rawFields': <dynamic>[],
+        'footprints': <GalleryRecord>[],
+        'palettes': <String, dynamic>{},
+        'sources': <String>['全部来源'],
+        'modes': <String>['全部方式'],
+        'expertTabs': <String>['信息获取', '交通数据解析', 'APDU / Raw Data'],
+        'knowledge': {
+          'captured': '',
+          'systems': {
+            for (final system in ['tu', 'cu'])
+              system: {
+                'name': system == 'tu' ? '交通联合' : '城市一卡通',
+                'formatVersion': 1,
+                'version': '不可用',
+                'source': '本地参考数据',
+                'sha256': '',
+                'regions': <GalleryRecord>[],
+                'entries': 0,
+              },
+          },
+        },
+        'qrValid': <String, dynamic>{},
+        'qrExpired': <String, dynamic>{},
+        'expert': {
+          'card': <GalleryRecord>[],
+          'bank': <GalleryRecord>[],
+          'felica': <GalleryRecord>[],
+          'transit': <GalleryRecord>[],
+        },
+        'scenes': <dynamic>[],
+      };
 
   final GalleryRecord json;
 
@@ -118,6 +172,8 @@ class GalleryCard {
       face = json['face'] as String,
       detailCrop = const GalleryFaceCrop(),
       listCrop = const GalleryFaceCrop(),
+      _currencyCode = null,
+      _live = false,
       // Explicit applications win over the frozen sample's known identity.
       // A user-editable name is never evidence of a card's brand or protocol.
       applications = List.unmodifiable(
@@ -134,6 +190,26 @@ class GalleryCard {
             },
       );
 
+  GalleryCard.live({
+    required this.id,
+    required this.saved,
+    required this.name,
+    required this.tail,
+    required this.pan,
+    required this.rawBalance,
+    required this.city,
+    required this.type,
+    required this.valid,
+    required this.when,
+    required this.count,
+    required this.face,
+    required this.applications,
+    required String? currencyCode,
+  }) : _currencyCode = currencyCode,
+       _live = true,
+       detailCrop = const GalleryFaceCrop(),
+       listCrop = const GalleryFaceCrop();
+
   final String id;
   bool saved;
   String name;
@@ -146,6 +222,8 @@ class GalleryCard {
   final String when;
   final String count;
   final List<String> applications;
+  final String? _currencyCode;
+  final bool _live;
   String face;
   Uint8List? image;
   Size? imageSize;
@@ -181,6 +259,8 @@ class GalleryCard {
        imageSize = imageSize ?? other.imageSize,
        detailCrop = detailCrop ?? other.detailCrop,
        listCrop = listCrop ?? other.listCrop,
+       _currencyCode = other._currencyCode,
+       _live = other._live,
        monetSeed = other.monetSeed;
 
   /// Display precision only; the original captured label remains unchanged.
@@ -197,16 +277,21 @@ class GalleryCard {
   }
 
   // These currencies belong to the frozen samples, not inferred real cards.
-  GalleryCurrency? get currency => switch (id) {
-    'shanghai' || 'shenzhen' => GalleryCurrency.cny,
-    'suica' => GalleryCurrency.jpy,
-    'octopus' => GalleryCurrency.hkd,
-    _ => null,
-  };
+  GalleryCurrency? get currency => _live
+      ? GalleryCurrency.fromCode(_currencyCode)
+      : switch (id) {
+          'shanghai' || 'shenzhen' => GalleryCurrency.cny,
+          'suica' => GalleryCurrency.jpy,
+          'octopus' => GalleryCurrency.hkd,
+          _ => null,
+        };
+
+  String? get currencyCode => _currencyCode;
 
   bool get unknownBalance => !RegExp(r'\d').hasMatch(rawBalance);
 
   String balance(bool includeOverdraft) {
+    if (_live) return rawBalance;
     if (unknownBalance) return '暂不可用';
     if (currency == GalleryCurrency.jpy) {
       return GalleryBalancePresentation.parse(
@@ -232,6 +317,12 @@ enum GalleryCurrency {
   hkd(100, '港元');
 
   const GalleryCurrency(this.scale, this.unit);
+  static GalleryCurrency? fromCode(String? code) => switch (code) {
+    'CNY' => cny,
+    'JPY' => jpy,
+    'HKD' => hkd,
+    _ => null,
+  };
   final int scale;
   final String unit;
 

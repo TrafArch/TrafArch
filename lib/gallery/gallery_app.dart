@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show File;
 import 'dart:math' as math;
-import 'dart:ui' show ImageFilter, ImageByteFormat, Size, instantiateImageCodec;
+import 'dart:ui'
+    show ImageFilter, ImageByteFormat, Size, instantiateImageCodec, lerpDouble;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -14,12 +15,55 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../app/app_info.dart';
+import '../app/app_dependencies.dart';
+import '../app/beta_ui_scope.dart';
+import '../features/archive/application/archive_history.dart';
+import '../features/archive/application/archive_record_count.dart';
+import '../features/archive/application/cu_archive_projection.dart';
+import '../features/archive/application/suica_archive_projection.dart';
+import '../features/archive/data/app_database.dart';
+import '../features/archive/data/card_repository.dart';
+import '../features/archive/domain/card_name_extension.dart';
+import '../features/archive/domain/card_session_snapshot.dart';
+import '../features/archive/domain/card_types.dart';
+import '../features/archive/presentation/archive_balance_display.dart';
+import '../features/archive/presentation/archive_trip_presenter.dart';
+import '../features/archive/presentation/shanghai_archive_mirrored_records.dart';
+import '../features/archive/presentation/archive_transfer_dialogs.dart';
+import '../features/cards/cards_page.dart';
+import '../features/expert/expert_page.dart';
+import '../features/expert/expert_formatters.dart';
+import '../features/home/presentation/result_labels.dart';
+import '../features/qr/presentation/jt_t1179_qr_display.dart';
+import '../features/qr/presentation/qr_acquire.dart';
+import '../features/recovery/recovery_state.dart';
+import '../features/reference_data/data/city_union_lookup_rules.dart';
+import '../features/reference_data/data/tunion_knowledge_base.dart';
+import '../features/scan/application/scan_controller.dart';
+import '../features/settings/presentation/diagnostic_export_dialog.dart';
+import '../features/settings/presentation/firebase_analytics_tile.dart';
+import '../features/transit_analysis/balance_interpretation.dart';
+import '../features/transit_analysis/tunion_analysis_models.dart';
 import '../features/trips/journey_transport_icon.dart';
+import '../features/trips/cu_trip_presenter.dart';
+import '../features/trips/journey_presentation.dart';
+import '../features/trips/local_card_trip_presenter.dart';
 import '../features/trips/trip_filters.dart';
+import '../features/trips/trip_entry_presenter.dart';
+import '../features/trips/trip_cards_view.dart';
+import '../features/updates/update_prompt.dart';
+import '../features/updates/update_service.dart';
 import '../platform/browser/feedback_browser.dart';
 import '../platform/qr/qr_image_picker.dart';
 import '../platform/storage/archive_document_store.dart';
+import '../protocols/felica/models/felica_card_type.dart';
+import '../protocols/felica/models/jpy_amount_formatter.dart';
+import '../protocols/transit/card_parser.dart';
+import '../protocols/transit/city_union/city_union_models.dart';
+import '../protocols/transit/multiapp/application_evidence.dart';
+import '../protocols/transit/tunion/tunion_models.dart';
 import '../shared/app_support.dart';
+import '../shared/domain/archive_conflict_policy.dart';
 import 'gallery_controller.dart';
 import 'gallery_balance_presentation.dart';
 import 'gallery_color_engine.dart';
@@ -31,11 +75,15 @@ import 'gallery_layout.dart';
 import 'gallery_monet.dart';
 import 'gallery_preferences.dart';
 import 'gallery_feedback.dart';
+import 'gallery_knowledge_index.dart';
+import 'gallery_motion.dart';
 import 'gallery_spending.dart';
+import 'gallery_archive_spending.dart';
 
 part 'gallery_components.dart';
 part 'gallery_pages.dart';
 part 'gallery_inspection.dart';
+part 'gallery_knowledge_search.dart';
 part 'gallery_overlays.dart';
 part 'gallery_information.dart';
 part 'gallery_navigation.dart';
@@ -44,21 +92,30 @@ part 'gallery_read_prompt.dart';
 part 'gallery_wallet_item.dart';
 part 'gallery_detail.dart';
 part 'gallery_face_crop.dart';
+part 'gallery_live_read.dart';
+part 'gallery_live_archive.dart';
+part 'gallery_live_knowledge.dart';
 
 class GalleryApp extends StatefulWidget {
   const GalleryApp({
     super.key,
     this.controller,
+    this.liveApp,
+    this.claimStartupUpdatePrompt,
     this.onDisableBeta,
     this.openWebLink,
     this.openEmail,
     this.preferences,
-  });
+    this.loadKnowledgeIndex = GalleryKnowledgeIndex.load,
+  }) : assert(liveApp == null || controller == null);
   final GalleryController? controller;
+  final AppDependencies? liveApp;
+  final bool Function()? claimStartupUpdatePrompt;
   final VoidCallback? onDisableBeta;
   final Future<void> Function(Uri)? openWebLink;
   final Future<bool> Function(String)? openEmail;
   final GalleryPreferences? preferences;
+  final Future<GalleryKnowledgeIndex> Function() loadKnowledgeIndex;
 
   @override
   State<GalleryApp> createState() => _GalleryAppState();
@@ -67,13 +124,43 @@ class GalleryApp extends StatefulWidget {
 class _GalleryAppState extends State<GalleryApp> {
   late final Future<GalleryController> _ready;
   GalleryController? _owned;
+  _GalleryLiveRead? _liveRead;
   late final GalleryPreferences _preferences;
   final _appearance = _GalleryAppearance();
+  Future<GalleryKnowledgeIndex>? _knowledgeIndex;
+  KnowledgeBase? _indexedKnowledge;
+
+  Future<GalleryKnowledgeIndex> _loadKnowledge() async {
+    Future<GalleryKnowledgeIndex> Function() load = widget.loadKnowledgeIndex;
+    if (widget.liveApp case final app?) {
+      await app.references.initialize();
+      final knowledge = app.knowledgeBase;
+      if (!identical(knowledge, _indexedKnowledge)) {
+        _indexedKnowledge = knowledge;
+        _knowledgeIndex = null;
+      }
+      load = () =>
+          GalleryKnowledgeIndex.loadPaths(knowledge?.packagePaths ?? const {});
+    }
+    final request = _knowledgeIndex ??= Future.sync(load);
+    try {
+      return await request;
+    } catch (_) {
+      if (identical(request, _knowledgeIndex)) _knowledgeIndex = null;
+      rethrow;
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     _preferences = widget.preferences ?? GalleryPreferences();
+    if (widget.liveApp case final app?) {
+      final controller = _owned = GalleryController(GalleryData.live());
+      _liveRead = _GalleryLiveRead(app, controller);
+      _ready = Future.value(controller);
+      return;
+    }
     _ready = widget.controller != null
         ? Future.value(widget.controller!)
         : GalleryData.load().then((data) {
@@ -89,6 +176,7 @@ class _GalleryAppState extends State<GalleryApp> {
 
   @override
   void dispose() {
+    _liveRead?.dispose();
     _owned?.dispose();
     if (widget.preferences == null) _preferences.dispose();
     super.dispose();
@@ -104,7 +192,7 @@ class _GalleryAppState extends State<GalleryApp> {
           home: Scaffold(
             body: Center(
               child: snapshot.hasError
-                  ? const Text('样例数据加载失败，请重新打开应用')
+                  ? const Text('界面加载失败，请重新打开应用')
                   : const CircularProgressIndicator(),
             ),
           ),
@@ -115,7 +203,23 @@ class _GalleryAppState extends State<GalleryApp> {
         builder: (context, _) {
           // Monet follows the home card. Until a newly chosen photo has been
           // sampled, use the user's preset instead of flashing an old theme.
-          final monetSeed = c.monet && c.hasCardSeed ? c.themeSeed : null;
+          final monetSeed = _liveRead == null && c.monet && c.hasCardSeed
+              ? c.themeSeed
+              : null;
+          final home = _GalleryLiveScope(
+            notifier: _liveRead,
+            child: _GalleryNavigator(
+              key: ValueKey(c.generation),
+              controller: c,
+              preferences: _preferences,
+              loadKnowledge: _loadKnowledge,
+              onDisableBeta: widget.onDisableBeta,
+              openWebLink: widget.openWebLink,
+              openEmail: widget.openEmail,
+            ),
+          );
+          final updates = widget.liveApp?.updates;
+          final claimStartupUpdate = widget.claimStartupUpdatePrompt;
           return MaterialApp(
             title: 'TrafArch',
             debugShowCheckedModeBanner: false,
@@ -123,8 +227,11 @@ class _GalleryAppState extends State<GalleryApp> {
             supportedLocales: const [Locale('zh', 'CN'), Locale('en')],
             localizationsDelegates: GlobalMaterialLocalizations.delegates,
             themeMode: c.themeMode,
-            themeAnimationDuration: const Duration(milliseconds: 240),
-            themeAnimationCurve: Curves.easeInOut,
+            themeAnimationDuration: GalleryMotion.duration(
+              context,
+              GalleryMotion.theme,
+            ),
+            themeAnimationCurve: GalleryMotion.standard,
             theme: _appearance.theme(c, false, monetSeed),
             darkTheme: _appearance.theme(c, true, monetSeed),
             builder: (context, child) {
@@ -154,14 +261,13 @@ class _GalleryAppState extends State<GalleryApp> {
                 ),
               );
             },
-            home: _GalleryNavigator(
-              key: ValueKey(c.generation),
-              controller: c,
-              preferences: _preferences,
-              onDisableBeta: widget.onDisableBeta,
-              openWebLink: widget.openWebLink,
-              openEmail: widget.openEmail,
-            ),
+            home: updates != null && claimStartupUpdate != null
+                ? UpdatePrompt(
+                    service: updates,
+                    shouldShow: claimStartupUpdate,
+                    child: home,
+                  )
+                : home,
           );
         },
       );
@@ -200,6 +306,7 @@ class _GalleryView extends StatefulWidget {
     required this.entry,
     required this.preferences,
     required this.anchors,
+    required this.loadKnowledge,
     this.visible = true,
     this.onDisableBeta,
     this.openWebLink,
@@ -209,6 +316,7 @@ class _GalleryView extends StatefulWidget {
   final GalleryRouteEntry entry;
   final GalleryPreferences preferences;
   final _GalleryAnchorRegistry anchors;
+  final Future<GalleryKnowledgeIndex> Function() loadKnowledge;
   final bool visible;
   final VoidCallback? onDisableBeta;
   final Future<void> Function(Uri)? openWebLink;
@@ -257,6 +365,8 @@ class _GalleryViewState extends State<_GalleryView> {
   final Set<String> _walletArrivals = {};
   GallerySpendingSelection _spendingSelection =
       const GallerySpendingSelection.all();
+  Future<GalleryKnowledgeIndex>? _liveKnowledgeBrowse;
+  KnowledgeBase? _browsedKnowledge;
   double _detailScrollDeficit = 0;
   double _detailMaxExtent = 0;
   double _detailShrinkDistance = 0;
@@ -453,22 +563,17 @@ class _GalleryViewState extends State<_GalleryView> {
     child: child,
   );
 
-  Widget _collapse(
-    bool open,
-    WidgetBuilder builder, {
-    bool adaptiveDuration = false,
-  }) => _GalleryCollapse(
+  Widget _collapse(bool open, WidgetBuilder builder) => _GalleryCollapse(
     open: open,
     builder: builder,
     reduceMotion: _reduceMotion,
-    adaptiveDuration: adaptiveDuration,
   );
 
   Widget _expandArrow(bool open, {double size = 18}) => AnimatedRotation(
-    turns: open ? .25 : 0,
-    duration: _reduceMotion ? Duration.zero : _GalleryMotion.expand,
-    curve: _GalleryMotion.curve,
-    child: Icon(Icons.chevron_right_rounded, size: size),
+    turns: open ? .5 : 0,
+    duration: GalleryMotion.duration(context, GalleryMotion.arrow),
+    curve: GalleryMotion.standard,
+    child: Icon(Icons.keyboard_arrow_down_rounded, size: size),
   );
 
   @override
@@ -484,16 +589,25 @@ class _GalleryViewState extends State<_GalleryView> {
     }
     widget.anchors.scheduleMeasure();
     if (_entry.overlay != null) {
-      return Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.viewInsetsOf(context).bottom,
-        ),
-        child: SafeArea(
-          bottom: false,
-          child: Stack(
-            key: _menuRoot,
-            fit: StackFit.expand,
-            children: _overlay(),
+      final sheet = _entry.overlay!.isBottomSheet;
+      return AnnotatedRegion<SystemUiOverlayStyle>(
+        value: (t.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
+            .copyWith(
+              statusBarColor: Colors.transparent,
+              systemNavigationBarColor: sheet ? t.raised : t.canvas,
+              systemNavigationBarDividerColor: Colors.transparent,
+            ),
+        child: Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewInsetsOf(context).bottom,
+          ),
+          child: SafeArea(
+            bottom: false,
+            child: Stack(
+              key: _menuRoot,
+              fit: StackFit.expand,
+              children: _overlay(),
+            ),
           ),
         ),
       );
@@ -621,20 +735,34 @@ class _GalleryViewState extends State<_GalleryView> {
     c.showOverlay(type, card: card, anchor: rect, anchorId: anchor);
   }
 
-  Widget _page(GalleryPage page) => switch (page) {
-    GalleryPage.home => _home(),
-    GalleryPage.trips => _trips(),
-    GalleryPage.expert => _expert(),
-    GalleryPage.cards => _cards(),
-    GalleryPage.footprints => _footprints(),
-    GalleryPage.detail => _detail(),
-    GalleryPage.settings => _settings(),
-    GalleryPage.knowledge => _knowledge(),
-    GalleryPage.qr => _qr(),
-    GalleryPage.feedback => _feedback(),
-    GalleryPage.acknowledgements => _acknowledgements(),
-    GalleryPage.licenses => _licensePage(),
-  };
+  Widget _page(GalleryPage page) {
+    final live = _GalleryLiveScope.of(context);
+    return switch (page) {
+      GalleryPage.home => _home(),
+      GalleryPage.trips => _trips(),
+      GalleryPage.expert => _expert(),
+      GalleryPage.cards => _cards(),
+      GalleryPage.footprints => _footprints(),
+      GalleryPage.detail => _detail(),
+      GalleryPage.settings => _settings(),
+      GalleryPage.knowledge => _knowledge(),
+      GalleryPage.knowledgeSearch => _GalleryKnowledgeSearch(
+        load: widget.loadKnowledge,
+        onBack: c.back,
+        onResult: c.openKnowledgeResult,
+        revision: live?.app.knowledgeBase,
+      ),
+      GalleryPage.knowledgeCity ||
+      GalleryPage.knowledgeLine ||
+      GalleryPage.knowledgeStation => _knowledgeDetails(
+        _entry.knowledgeResult!,
+      ),
+      GalleryPage.qr => _qr(),
+      GalleryPage.feedback => _feedback(),
+      GalleryPage.acknowledgements => _acknowledgements(),
+      GalleryPage.licenses => _licensePage(),
+    };
+  }
 
   Widget _list(
     List<Widget> children, {

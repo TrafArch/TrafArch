@@ -1,6 +1,7 @@
 package com.kajolno.TrafArch
 
 import android.content.Intent
+import com.kajolno.TrafArch.analytics.AnalyticsHandler
 import com.kajolno.TrafArch.browser.CustomTabsHandler
 import com.kajolno.TrafArch.nfc.NfcChannelHandler
 import com.kajolno.TrafArch.qr.QrImageHandler
@@ -15,6 +16,7 @@ class MainActivity : FlutterActivity() {
     private var qrImage: QrImageHandler? = null
     private var fileExport: FileExportHandler? = null
     private var browser: CustomTabsHandler? = null
+    private var analytics: AnalyticsHandler? = null
     private var archiveDocuments: ArchiveDocumentHandler? = null
     private var foreground = false
 
@@ -27,6 +29,7 @@ class MainActivity : FlutterActivity() {
         qrImage = QrImageHandler(this, messenger)
         fileExport = FileExportHandler(this, messenger)
         browser = CustomTabsHandler(this, messenger)
+        analytics = AnalyticsHandler(applicationContext, messenger)
         archiveDocuments = ArchiveDocumentHandler(this, messenger)
         if (foreground) nfc?.onResume()
     }
@@ -73,6 +76,8 @@ class MainActivity : FlutterActivity() {
         qrImage?.dispose()
         fileExport?.dispose()
         browser?.dispose()
+        analytics?.dispose()
+        analytics = null
         archiveDocuments?.dispose()
         nfc = null
         qrImage = null

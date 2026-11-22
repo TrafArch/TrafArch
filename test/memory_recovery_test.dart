@@ -21,6 +21,7 @@ import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
 import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_models.dart';
 import 'package:transit_card_analyzer/features/scan/domain/card_read_outcome.dart';
+import 'package:transit_card_analyzer/gallery/gallery_app.dart';
 
 import 'support/test_database.dart';
 
@@ -96,6 +97,42 @@ void main() {
     await reading;
     expect(app.lastResult, isNull);
   });
+
+  testWidgets(
+    '2.x restores frozen read on all three surfaces without NFC or auto-save',
+    (tester) async {
+      tester.view.physicalSize = const Size(412, 892);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final state = _state();
+      final memory = _Memory()..text = state.encode();
+      final nfc = _Nfc();
+      final app = appFor(
+        memory,
+        nfc: nfc,
+        settings: MemorySettingsStore({SettingsKeys.autoSaveEnabled: 'true'}),
+      );
+      await tester.runAsync(app.init);
+      await tester.pumpWidget(GalleryApp(liveApp: app));
+      await tester.pumpAndSettle();
+      expect(app.recoveryTab, 1);
+      expect(find.text('测试交通卡'), findsWidgets);
+      expect(find.text('保存卡片'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('nav-expert')));
+      await tester.pumpAndSettle();
+      expect(app.recoveryTab, 3);
+      expect(find.text('测试交通卡'), findsWidgets);
+      await tester.tap(find.byKey(const ValueKey('nav-home')));
+      await tester.pumpAndSettle();
+      expect(find.text('保存卡片'), findsOneWidget);
+      expect(app.recoveredCapture!.snapshotJson, state.capture!.snapshotJson);
+      expect(app.pendingCardSave, isNull);
+      expect(await tester.runAsync(app.cardRepository.getAllCards), isEmpty);
+      expect(nfc.scans, 0);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
+  );
 
   test('TRIM keeps current evidence and unsaved capture', () async {
     final memory = _Memory()..text = _state().encode();

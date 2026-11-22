@@ -1,76 +1,80 @@
 part of 'gallery_app.dart';
 
 extension _GalleryInspection on _GalleryViewState {
-  Widget _expert() => _list([
-    _tabs(
-      (c.data.json['expertTabs'] as List).cast<String>(),
-      c.expertTab,
-      (i) => c.update(() => c.expertTab = i),
-      scroll: true,
-      id: 'expert-tabs',
-    ),
-    _gap(16),
-    _fade(
-      'expert-${c.hasRead}-${c.expertTab}-${c.expertKind}',
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (!c.hasRead)
-            _empty(
-              '尚未读取卡片',
-              '请先在首页读取卡片，再查看技术字段与解析信息',
-              icon: Icons.science_outlined,
-              action: _button(
-                '前往首页',
-                () => c.navigate(GalleryPage.home),
-                primary: true,
-              ),
-            )
-          else
-            ...switch (c.expertTab) {
-              0 => [
-                ..._expertSections(c.expertKind),
-                _text(
-                  '以上为内置样例，未保留的字段显示未知。',
-                  role: GalleryTypography.caption,
-                  color: t.muted,
-                ),
-              ],
-              1 => [..._expertSections('transit')],
-              2 => [_compliance()],
-              _ => [
-                _text(
-                  '保留的示例帧按原顺序完整展示。SELECT、GET BALANCE 和 0x1A 原始响应未保留。',
-                  role: GalleryTypography.caption,
-                  color: t.muted,
-                ),
-                ...['sfi18', 'sfi1e'].indexed.expand(
-                  (item) => [
-                    _sectionTitle(
-                      '${item.$1 + 1} 读取${item.$1 == 0 ? '交易明细 SFI 0x18' : '过程循环 SFI 0x1E'}',
-                    ),
-                    _hexBox(
-                      'C-APDU  ${item.$1 == 0 ? '00 B2 01 C4 00' : '00 B2 01 F4 00'}\nR-APDU  ${_spacedHex('${(c.data.raw['shanghai'] as Map)[item.$2]}9000')}',
-                    ),
-                  ],
-                ),
-                _gap(14),
-                _expand('expert:raw-process', '过程记录原始数据 0x1A / 0x1E', [
-                  _kv('0x1A 城市轨道 / 公交', '未保留'),
-                  _kv('0x1E 循环记录 1', '42 字节'),
-                  _gap(10),
-                  _hexBox(
-                    _spacedHex(
-                      (c.data.raw['shanghai'] as Map)['sfi1e'] as String,
-                    ),
-                  ),
-                ], initiallyOpen: true),
-              ],
-            },
-        ],
+  Widget _expert() {
+    final live = _GalleryLiveScope.of(context);
+    if (live != null) return _liveExpert(live);
+    return _list([
+      _tabs(
+        (c.data.json['expertTabs'] as List).cast<String>(),
+        c.expertTab,
+        (i) => c.update(() => c.expertTab = i),
+        scroll: true,
+        id: 'expert-tabs',
       ),
-    ),
-  ], id: 'expert');
+      _gap(16),
+      _fade(
+        'expert-${c.hasRead}-${c.expertTab}-${c.expertKind}',
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (!c.hasRead)
+              _empty(
+                '尚未读取卡片',
+                '请先在首页读取卡片，再查看技术字段与解析信息',
+                icon: Icons.science_outlined,
+                action: _button(
+                  '前往首页',
+                  () => c.navigate(GalleryPage.home),
+                  primary: true,
+                ),
+              )
+            else
+              ...switch (c.expertTab) {
+                0 => [
+                  ..._expertSections(c.expertKind),
+                  _text(
+                    '以上为内置样例，未保留的字段显示未知。',
+                    role: GalleryTypography.caption,
+                    color: t.muted,
+                  ),
+                ],
+                1 => [..._expertSections('transit')],
+                2 => [_compliance()],
+                _ => [
+                  _text(
+                    '保留的示例帧按原顺序完整展示。SELECT、GET BALANCE 和 0x1A 原始响应未保留。',
+                    role: GalleryTypography.caption,
+                    color: t.muted,
+                  ),
+                  ...['sfi18', 'sfi1e'].indexed.expand(
+                    (item) => [
+                      _sectionTitle(
+                        '${item.$1 + 1} 读取${item.$1 == 0 ? '交易明细 SFI 0x18' : '过程循环 SFI 0x1E'}',
+                      ),
+                      _hexBox(
+                        'C-APDU  ${item.$1 == 0 ? '00 B2 01 C4 00' : '00 B2 01 F4 00'}\nR-APDU  ${_spacedHex('${(c.data.raw['shanghai'] as Map)[item.$2]}9000')}',
+                      ),
+                    ],
+                  ),
+                  _gap(14),
+                  _expand('expert:raw-process', '过程记录原始数据 0x1A / 0x1E', [
+                    _kv('0x1A 城市轨道 / 公交', '未保留'),
+                    _kv('0x1E 循环记录 1', '42 字节'),
+                    _gap(10),
+                    _hexBox(
+                      _spacedHex(
+                        (c.data.raw['shanghai'] as Map)['sfi1e'] as String,
+                      ),
+                    ),
+                  ], initiallyOpen: true),
+                ],
+              },
+          ],
+        ),
+      ),
+    ], id: 'expert');
+  }
 
   String _spacedHex(String value) =>
       RegExp(r'.{1,2}').allMatches(value).map((m) => m.group(0)).join(' ');
@@ -211,12 +215,22 @@ extension _GalleryInspection on _GalleryViewState {
   }
 
   Widget _knowledge() {
+    final live = _GalleryLiveScope.of(context);
+    if (live != null) return _liveKnowledge(live.app);
     final data =
         ((c.data.knowledge['systems'] as Map)[c.knowledgeTab] as GalleryRecord);
+    return _knowledgePage(data);
+  }
+
+  Widget _knowledgePage(GalleryRecord data, {bool live = false}) {
     final regions = (data['regions'] as List).cast<GalleryRecord>();
     return _list(
       [
         _header('知识库', back: true),
+        _GalleryKnowledgeSearchBar(
+          onOpen: () => c.navigate(GalleryPage.knowledgeSearch),
+        ),
+        _gap(12),
         _tabs(
           ['交通联合 TU', '城市一卡通 CU'],
           c.knowledgeTab == 'tu' ? 0 : 1,
@@ -285,7 +299,9 @@ extension _GalleryInspection on _GalleryViewState {
               ),
               _gap(14),
               _text(
-                '用于识别读卡结果中的城市、线路与站点。\n数据快照 ${c.data.knowledge['captured']}，两个体系独立统计。',
+                live
+                    ? '用于识别读卡结果中的城市、线路与站点。\n当前读取使用本机已校验的 TU／CU 发布包，两个体系独立统计。'
+                    : '用于识别读卡结果中的城市、线路与站点。\n数据快照 ${c.data.knowledge['captured']}，两个体系独立统计。',
                 role: GalleryTypography.caption,
                 color: t.muted,
               ),
@@ -326,38 +342,41 @@ extension _GalleryInspection on _GalleryViewState {
                 child: _panel(
                   Column(
                     children: [
-                      ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        title: _text(
-                          r['name'] as String,
-                          role: GalleryTypography.body,
-                          weight: FontWeight.w600,
-                        ),
-                        subtitle: _text(
-                          '${r['lineCount']} 条线路 · ${_groupNumber(r['entries'] as int)} 条编码\n${r['province'] ?? ''}',
-                          role: GalleryTypography.caption,
-                          color: t.muted,
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _text(
-                              r['code'] as String,
-                              role: GalleryTypography.caption,
-                              mono: true,
-                              color: t.muted,
-                            ),
-                            const SizedBox(width: 8),
-                            _expandArrow(open, size: 18),
-                          ],
-                        ),
-                        onTap: () => c.update(
-                          () => open
-                              ? c.knowledgeExpanded.remove(key)
-                              : c.knowledgeExpanded.add(key),
+                      Semantics(
+                        expanded: open,
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          title: _text(
+                            r['name'] as String,
+                            role: GalleryTypography.body,
+                            weight: FontWeight.w600,
+                          ),
+                          subtitle: _text(
+                            '${r['lineCount']} 条线路 · ${_groupNumber(r['entries'] as int)} 条编码\n${r['province'] ?? ''}',
+                            role: GalleryTypography.caption,
+                            color: t.muted,
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _text(
+                                r['code'] as String,
+                                role: GalleryTypography.caption,
+                                mono: true,
+                                color: t.muted,
+                              ),
+                              const SizedBox(width: 8),
+                              _expandArrow(open, size: 18),
+                            ],
+                          ),
+                          onTap: () => c.update(
+                            () => open
+                                ? c.knowledgeExpanded.remove(key)
+                                : c.knowledgeExpanded.add(key),
+                          ),
                         ),
                       ),
                       _collapse(
@@ -382,36 +401,44 @@ extension _GalleryInspection on _GalleryViewState {
                                     crossAxisAlignment:
                                         CrossAxisAlignment.stretch,
                                     children: [
-                                      InkWell(
-                                        onTap: () => c.update(
-                                          () => lineOpen
-                                              ? c.knowledgeExpanded.remove(
-                                                  lineKey,
-                                                )
-                                              : c.knowledgeExpanded.add(
-                                                  lineKey,
-                                                ),
-                                        ),
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            vertical: 14,
+                                      Semantics(
+                                        expanded: lineOpen,
+                                        child: InkWell(
+                                          onTap: () => c.update(
+                                            () => lineOpen
+                                                ? c.knowledgeExpanded.remove(
+                                                    lineKey,
+                                                  )
+                                                : c.knowledgeExpanded.add(
+                                                    lineKey,
+                                                  ),
                                           ),
-                                          child: Row(
-                                            children: [
-                                              Expanded(
-                                                child: _text(
-                                                  line['name'] as String,
-                                                  role: GalleryTypography.label,
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 14,
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                Expanded(
+                                                  child: _text(
+                                                    line['name'] as String,
+                                                    role:
+                                                        GalleryTypography.label,
+                                                  ),
                                                 ),
-                                              ),
-                                              _text(
-                                                '${stations.length} 站',
-                                                role: GalleryTypography.caption,
-                                                color: t.muted,
-                                              ),
-                                              const SizedBox(width: 8),
-                                              _expandArrow(lineOpen, size: 16),
-                                            ],
+                                                _text(
+                                                  '${stations.length} 站',
+                                                  role:
+                                                      GalleryTypography.caption,
+                                                  color: t.muted,
+                                                ),
+                                                const SizedBox(width: 8),
+                                                _expandArrow(
+                                                  lineOpen,
+                                                  size: 16,
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -445,7 +472,6 @@ extension _GalleryInspection on _GalleryViewState {
                                                 .toList(),
                                           ),
                                         ),
-                                        adaptiveDuration: true,
                                       ),
                                       const Divider(),
                                     ],
@@ -455,7 +481,6 @@ extension _GalleryInspection on _GalleryViewState {
                             ),
                           ],
                         ),
-                        adaptiveDuration: true,
                       ),
                     ],
                   ),
@@ -477,6 +502,8 @@ extension _GalleryInspection on _GalleryViewState {
   );
 
   Widget _qr() {
+    final live = _GalleryLiveScope.of(context);
+    if (live != null) return _liveQr(live.app);
     final q = c.qr;
     final view = _entry.qrView;
     final title = switch (view) {
@@ -726,6 +753,224 @@ extension _GalleryInspection on _GalleryViewState {
       ],
     ),
   );
+
+  Widget _liveQr(AppDependencies app) {
+    final qr = app.qrData;
+    final issuer = qr == null
+        ? '未知'
+        : app.cardPrefixByIssuerId(qr.issuerIdText)?.cardName ?? '未知';
+    final certificate = qr?.issuerCertificate;
+    return _list([
+      _header('乘车码解析', back: true),
+      _text(
+        '只读解析交通一卡通乘车码，查看账户、机构、时效和原始数据。',
+        role: GalleryTypography.label,
+        color: t.muted,
+      ),
+      _gap(18),
+      Row(
+        children: [
+          Expanded(
+            child: _button(
+              '扫描二维码',
+              app.qrAcquiring
+                  ? null
+                  : () => scanQrAndParse(
+                      context,
+                      app,
+                      onNotice: _archiveNotice,
+                      canPublish: () => c.page == GalleryPage.qr,
+                    ),
+              primary: true,
+              icon: Icons.qr_code_scanner_rounded,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _button(
+              '从相册导入',
+              app.qrAcquiring
+                  ? null
+                  : () => importQrFromGalleryAndParse(
+                      context,
+                      app,
+                      onNotice: _archiveNotice,
+                      canPublish: () => c.page == GalleryPage.qr,
+                    ),
+              icon: Icons.photo_library_outlined,
+            ),
+          ),
+        ],
+      ),
+      _gap(18),
+      if (app.qrAcquiring) _qrBusy(),
+      if (app.qrError != null) ...[
+        _panel(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _text(
+                app.qrError!.startsWith('图片') ? '图片未识别到二维码' : '解析失败',
+                role: GalleryTypography.lead,
+                weight: FontWeight.w600,
+                color: t.warn,
+              ),
+              _gap(8),
+              _text(
+                app.qrError!,
+                role: GalleryTypography.label,
+                color: t.muted,
+              ),
+            ],
+          ),
+        ),
+        _gap(14),
+      ],
+      if (qr != null) ...[
+        _panel(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.qr_code_2_rounded, size: 28, color: t.onTone),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _text(
+                          '乘车码解析成功',
+                          role: GalleryTypography.lead,
+                          weight: FontWeight.w600,
+                        ),
+                        _text(
+                          'JT/T 1179 · ${qr.raw.length} 字节',
+                          role: GalleryTypography.caption,
+                          color: t.muted,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              _gap(16),
+              _text(
+                qr.isQrExpired() ? '二维码已过期' : '获取时有效',
+                role: GalleryTypography.caption,
+                color: qr.isQrExpired() ? t.warn : t.ok,
+              ),
+            ],
+          ),
+        ),
+        _gap(14),
+        _expand(
+          'live-qr:info',
+          '乘车码信息',
+          [
+            _kv('版本', qr.versionHex),
+            _kv('声明长度', '${qr.declaredLength} 字节'),
+            _kv('数据总长', '${qr.raw.length} 字节'),
+            _kv('发卡机构名称', issuer),
+            _kv(
+              '发卡机构标识',
+              qr.issuerIdText ?? hexBytes(qr.issuerCertificate.issuerIdBytes),
+            ),
+            _kv('支付账户号', qr.paymentAccountDigits ?? qr.paymentAccountNumberHex),
+            _kv('用户账户号', qr.userAccountNumberText ?? qr.userAccountNumberHex),
+            _kv('发卡机构代码', qr.issuerCodeText ?? qr.issuerCodeHex),
+            _kv('发码平台代码', qr.platformCodeText ?? qr.platformCodeHex),
+            _kv(
+              '用户账户类型',
+              '0x${qr.userAccountType.toRadixString(16).padLeft(2, '0').toUpperCase()}',
+            ),
+            _kv(
+              '单次消费金额上限',
+              '${(qr.singleConsumptionLimitFen / 100).toStringAsFixed(2)} 元',
+            ),
+          ],
+          initiallyOpen: true,
+          surface: false,
+        ),
+        _expand(
+          'live-qr:time',
+          '时间信息',
+          [
+            _kv('授权过期时间', _qrClock(qr.authorizationExpiryUtc)),
+            _kv('二维码有效时间', '${qr.qrValiditySeconds} 秒'),
+            _kv('二维码生成时间', _qrClock(qr.generationTimeUtc)),
+            _kv('二维码状态', qr.isQrExpired() ? '已超出生效窗口' : '有效期内'),
+          ],
+          initiallyOpen: true,
+          surface: false,
+        ),
+        if (certificate != null)
+          _expand(
+            'live-qr:certificate',
+            '证书信息',
+            [
+              _kv(
+                '记录头',
+                '0x${certificate.recordHeader.toRadixString(16).padLeft(2, '0').toUpperCase()}',
+              ),
+              _kv('服务标识', certificate.serviceIdHex),
+              _kv('中心 CA 公钥索引', '${certificate.caPublicKeyIndex}'),
+              _kv(
+                '证书格式',
+                '0x${certificate.certificateFormat.toRadixString(16).padLeft(2, '0').toUpperCase()}',
+              ),
+              _kv(
+                '证书失效日期',
+                certificate.expiryDateUtc.toIso8601String().split('T').first,
+              ),
+              _kv('证书序列号', certificate.serialNumberHex),
+              _kv(
+                '公钥签名算法',
+                '0x${certificate.signatureAlgorithm.toRadixString(16).padLeft(2, '0').toUpperCase()}',
+              ),
+              _kv('公钥长度', '${certificate.publicKeyLength}'),
+              _gap(10),
+              _hexBox(certificate.issuerPublicKeyHex),
+            ],
+            initiallyOpen: false,
+            surface: false,
+          ),
+        _expand(
+          'live-qr:raw',
+          '原始数据（${qr.raw.length} 字节）',
+          [_hexBox(hexBytes(qr.raw))],
+          initiallyOpen: false,
+          surface: false,
+        ),
+        _gap(12),
+        _button(
+          '清除解析结果',
+          app.qrAcquiring ? null : app.clearQr,
+          icon: Icons.delete_outline_rounded,
+        ),
+      ] else if (app.qrRaw != null)
+        _expand(
+          'live-qr:failed-raw',
+          '原始数据（${app.qrRaw!.length} 字节）',
+          [_hexBox(hexBytes(app.qrRaw!))],
+          initiallyOpen: true,
+          surface: false,
+        )
+      else if (!app.qrAcquiring && app.qrError == null)
+        _empty(
+          '尚未获取二维码',
+          '扫描二维码或从相册导入，\n查看 JT/T 1179 乘车码读取信息。',
+          icon: Icons.qr_code_2_rounded,
+        ),
+    ], id: 'live-qr');
+  }
+
+  String _qrClock(DateTime value) {
+    final local = value.toLocal();
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${local.year}-${two(local.month)}-${two(local.day)} '
+        '${two(local.hour)}:${two(local.minute)}:${two(local.second)}';
+  }
 
   String _qrTime(int epoch) =>
       DateTime.fromMillisecondsSinceEpoch(epoch * 1000, isUtc: true)

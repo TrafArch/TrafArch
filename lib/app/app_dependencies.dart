@@ -124,6 +124,8 @@ class AppDependencies extends OwnedNotifier {
       octopus.clearResult();
       _discardRecoveryFile();
       _view = null;
+      _completedRead = false;
+      _galleryCaptureId = null;
       recoveredCapture = null;
       _completedCapture = null;
       recoveryNotice = null;
@@ -163,6 +165,11 @@ class AppDependencies extends OwnedNotifier {
   Future<void>? _initializing;
   int _scanRequest = 0;
   int? _unifiedScanRequest;
+  bool _completedRead = false;
+  bool _gallerySave = false;
+  bool _qrAcquiring = false;
+  int _qrAcquisitionRevision = 0;
+  String? _galleryCaptureId;
   ScanPresentation? _octopusView;
   OctopusBalanceResult? _octopusResult;
   bool _octopusAttempted = false;
@@ -177,6 +184,7 @@ class AppDependencies extends OwnedNotifier {
   int recoveryTab = 0;
   String? recoveryRoute;
   String? pendingRecoveryRoute;
+  bool pendingRecoveryNavigation = false;
   final Map<String, List<String>> recoveryFilters = {};
   bool savingRecoveredCapture = false;
 
@@ -188,6 +196,7 @@ class AppDependencies extends OwnedNotifier {
     final capture = recoveredCapture;
     if (savingRecoveredCapture ||
         capture?.canSave != true ||
+        capture?.interrupted == true ||
         capture?.pending == null ||
         _preparingRecovery) {
       return;
@@ -245,8 +254,11 @@ class AppDependencies extends OwnedNotifier {
       recoveryTab = state.tab;
       recoveryRoute = state.route;
       pendingRecoveryRoute = state.route;
+      pendingRecoveryNavigation = true;
       recoveryFilters.addAll(state.filters);
-      if (state.qrBytes != null) qr.parseQrBytes(state.qrBytes!);
+      if (state.qrBytes case final bytes?) {
+        qr.parseQrBytes(bytes, recordDiagnostics: false);
+      }
       scan.autoScanConsumed = true;
       recoveryNotice = state.capture?.interrupted == true
           ? '上次读取已中断，请重新贴卡读取。已获取的原始证据已保留。'
@@ -284,8 +296,10 @@ class AppDependencies extends OwnedNotifier {
     // Never overwrite an unconsumed recovery file during cold-start loading.
     if (!recoveryReady) return false;
     _preparingRecovery = true;
+    _qrAcquisitionRevision++;
     try {
-      final interrupted = scan.scanning;
+      final interrupted =
+          scan.scanning || (_gallerySave && !_completedRead && scanning);
       final capture =
           recoveredCapture ??
           (scan.tag != null || scan.outcome != null || interrupted
@@ -295,7 +309,9 @@ class AppDependencies extends OwnedNotifier {
                       scan.tag?.timestamp ??
                       DateTime.now(),
                   summary: {
-                    if (_view?.balanceInterpretation case final balance?)
+                    if (octopusBalanceText case final octopusBalance?)
+                      'balanceText': octopusBalance
+                    else if (_view?.balanceInterpretation case final balance?)
                       'balanceText': balance.accountBalanceText,
                     if (scan.outcome case final result?) ...{
                       ...captureCardInfo(result),
@@ -361,6 +377,7 @@ class AppDependencies extends OwnedNotifier {
       references.knowledge ?? KnowledgeBase.empty(),
     );
     _view = view;
+    if (_gallerySave) _galleryCaptureId = id;
     for (final trip in view.suicaTrips) {
       scan.addStructuredDiagnostic(id, 'parser_record', {
         'parserId': 'felica.suica',
@@ -374,6 +391,7 @@ class AppDependencies extends OwnedNotifier {
       readAt,
       scan.frames,
       metadataIssues: scan.tag?.metadataIssues ?? const [],
+      prepareSave: !_gallerySave,
     );
     _completedCapture = archive.pending;
     final capturedCard = view.parsedCard;
@@ -427,7 +445,7 @@ class AppDependencies extends OwnedNotifier {
       );
     }
     notifyListeners();
-    if (settings.autoSaveEnabled && isCurrent()) {
+    if (!_gallerySave && settings.autoSaveEnabled && isCurrent()) {
       await archive.autoSave(policy: settings.archiveConflictPolicy);
     }
   }
@@ -437,6 +455,9 @@ class AppDependencies extends OwnedNotifier {
   String? get lastCardFingerprint => archive.fingerprint;
   IdentifiedCard? get lastIdentified => archive.identified;
   NfcScanResult? get lastResult => scan.tag;
+  bool get hasCompletedRead => _completedRead;
+  bool get nfcReleaseFailed =>
+      scan.releaseError != null || octopus.releaseError != null;
   bool get scanning =>
       _unifiedScanRequest != null || scan.scanning || octopus.busy;
   bool get isOctopusCard =>
@@ -545,6 +566,26 @@ class AppDependencies extends OwnedNotifier {
   List<int>? get qrRaw => qr.qrRaw;
   String? get qrError => qr.qrError;
   bool get hasQrData => qr.hasQrData;
+  bool get qrAcquiring => _qrAcquiring;
+
+  Future<bool> runQrAcquisition(
+    Future<void> Function(bool Function()) acquire,
+  ) async {
+    if (disposed || _qrAcquiring || _preparingRecovery) return false;
+    _qrAcquiring = true;
+    final revision = ++_qrAcquisitionRevision;
+    bool isCurrent() => !disposed && revision == _qrAcquisitionRevision;
+    notifyListeners();
+    try {
+      await stop();
+      if (!isCurrent() || nfcReleaseFailed) return false;
+      await acquire(isCurrent);
+      return true;
+    } finally {
+      _qrAcquiring = false;
+      notifyListeners();
+    }
+  }
 
   String? cityNameOf(String? code) => references.cityNameOf(code);
   String? cuCityNameOf(String? code) => references.cuCityNameOf(code);
@@ -616,12 +657,17 @@ class AppDependencies extends OwnedNotifier {
       settings.openFeedbackEmail(address);
   Future<bool> openFeedbackQqGroup(String groupNumber, Uri joinUrl) =>
       settings.openFeedbackQqGroup(groupNumber, joinUrl);
-  Future<void> openPrivacyPolicy() => settings.openPrivacyPolicy();
+  Future<void> openWebLink(Uri url) => settings.openWebLink(url);
   Future<void> openFeedbackSurvey(Uri url) => settings.openFeedbackSurvey(url);
   Future<void> exportLog({Set<String>? sessionIds}) =>
       diagnostics.exportLog(sessionIds: sessionIds);
   Future<String> exportCards() => archive.exportCards();
-  Future<void> scanOnce() async {
+  Future<void> scanOnce() => _scanOnce();
+
+  Future<void> scanOnceForGallery() => _scanOnce(gallerySave: true);
+
+  Future<void> _scanOnce({bool gallerySave = false}) async {
+    if (_qrAcquiring) return;
     final request = ++_scanRequest;
     if (disposed || _preparingRecovery || savingRecoveredCapture) {
       return;
@@ -631,25 +677,35 @@ class AppDependencies extends OwnedNotifier {
     notifyListeners();
     try {
       if (octopus.busy || octopus.releaseError != null) await octopus.cancel();
-      if (supersedesRead) await _stopOrdinaryScan();
+      if (supersedesRead || scan.releaseError != null) {
+        await _stopOrdinaryScan();
+      }
       if (_ordinaryStop case final closing?) await closing;
-      if (disposed || request != _scanRequest || octopus.releaseError != null) {
+      if (disposed || request != _scanRequest || nfcReleaseFailed) {
         return;
       }
       // Keep the initialized ordinary reader's synchronous discovery start.
       if (!settings.initialized) await settings.initialize();
       if (disposed || request != _scanRequest) return;
+      _gallerySave = gallerySave;
       // scanOnce completes only after its physical NFC close barrier.
       await scan.scanOnce();
       if (disposed || request != _scanRequest || scan.releaseError != null) {
         return;
       }
       final view = _view;
-      if (view == null || !isOctopusCard) return;
-      if (disposed || request != _scanRequest || !identical(_view, view)) {
-        return;
+      if (view == null) return;
+      if (isOctopusCard) await _queryCurrentOctopus(request, view);
+      if (!disposed &&
+          request == _scanRequest &&
+          !nfcReleaseFailed &&
+          scan.phase == ScanPhase.complete &&
+          identical(_view, view)) {
+        _completedRead = true;
+        if (_galleryCaptureId case final id? when gallerySave) {
+          await _stageGalleryCapture(view, id, request);
+        }
       }
-      await _queryCurrentOctopus(request, view);
     } finally {
       if (_unifiedScanRequest == request) {
         _unifiedScanRequest = null;
@@ -658,8 +714,42 @@ class AppDependencies extends OwnedNotifier {
     }
   }
 
+  Future<void> _stageGalleryCapture(
+    ScanPresentation view,
+    String id,
+    int request,
+  ) async {
+    final readAt = scan.tag!.timestamp;
+    archive.stage(
+      view,
+      id,
+      readAt,
+      scan.frames,
+      metadataIssues: scan.tag!.metadataIssues,
+    );
+    _completedCapture = archive.pending;
+    final pending = archive.pending;
+    if (currentOctopusResult case final result? when pending != null) {
+      await archive.attachVerifiedAccountBalance(
+        fingerprint: pending.fingerprint,
+        readAt: readAt,
+        balanceMinor: result.balanceMinor,
+        evidenceSource:
+            'octopus.nfc-f:${result.idmHex}:${result.readAt.toUtc().toIso8601String()}',
+        persistSaved: false,
+      );
+      if (!disposed && id == _galleryCaptureId) {
+        _completedCapture = archive.pending;
+      }
+    }
+    if (!disposed && request == _scanRequest && settings.autoSaveEnabled) {
+      await archive.autoSave(policy: settings.archiveConflictPolicy);
+    }
+  }
+
   Future<void> readOctopus() async {
-    if (disposed ||
+    if (_qrAcquiring ||
+        disposed ||
         _preparingRecovery ||
         savingRecoveredCapture ||
         scanning ||
@@ -706,7 +796,7 @@ class AppDependencies extends OwnedNotifier {
     if (octopus.lastAttemptSucceeded) {
       final result = _octopusResult = octopus.result;
       final capture = _completedCapture;
-      if (result != null && capture != null) {
+      if (!_gallerySave && result != null && capture != null) {
         await archive.attachVerifiedAccountBalance(
           fingerprint: capture.fingerprint,
           readAt: capture.readAt ?? DateTime.now(),

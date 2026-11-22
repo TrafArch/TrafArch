@@ -72,6 +72,16 @@ class GalleryTokens extends ThemeExtension<GalleryTokens> {
   Color get disabledText =>
       dark ? const Color(0xff697582) : const Color(0xffa6afb8);
 
+  Color get inputContainer => surfaceContainer;
+  Color get inputForeground => text;
+  Color get inputHint => muted;
+  Color get inputIcon => muted;
+  Color get inputOutline => outlineSoft;
+  Color get inputFocusedOutline => action;
+  Color get inputDisabled =>
+      GalleryColorEngine.readable(disabledText, inputContainer, target: 3);
+  Color get inputCursor => action;
+
   /// Card-face semantic roles (spec 2.5 §3.2). Every list, detail and home
   /// card reads text through these instead of deciding by page.
   Color get cardSurface => surface;
@@ -140,6 +150,12 @@ class GalleryTokens extends ThemeExtension<GalleryTokens> {
     GalleryData data,
     bool dark,
     String palette, {
+    Color? monetSeed,
+  }) => forPalette(palette, dark: dark, monetSeed: monetSeed);
+
+  static GalleryTokens forPalette(
+    String palette, {
+    required bool dark,
     Color? monetSeed,
   }) {
     final preset = GalleryPalette.byId(palette);

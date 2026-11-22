@@ -69,7 +69,7 @@ void main() {
         expect(await service.checkOnce(), isNull);
         await tester.pumpWidget(
           MaterialApp(
-            home: AboutPage(updates: service, openPrivacyPolicy: () async {}),
+            home: AboutPage(updates: service, openWebLink: (_) async {}),
           ),
         );
         await tester.tap(find.text('检查更新'));
@@ -97,7 +97,7 @@ void main() {
     );
     await tester.pumpWidget(
       MaterialApp(
-        home: AboutPage(updates: service, openPrivacyPolicy: () async {}),
+        home: AboutPage(updates: service, openWebLink: (_) async {}),
       ),
     );
     await tester.pumpAndSettle();
@@ -134,7 +134,7 @@ void main() {
         MaterialApp(
           home: AboutPage(
             updates: service,
-            openPrivacyPolicy: () async {},
+            openWebLink: (_) async {},
             openUrl: (uri) async {
               opened = uri;
               return true;
@@ -176,7 +176,7 @@ void main() {
       );
       await tester.pumpWidget(
         MaterialApp(
-          home: AboutPage(updates: service, openPrivacyPolicy: () async {}),
+          home: AboutPage(updates: service, openWebLink: (_) async {}),
         ),
       );
       final button = find.byType(OutlinedButton);

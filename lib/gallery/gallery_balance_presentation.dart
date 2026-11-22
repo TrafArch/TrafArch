@@ -1,4 +1,5 @@
 import '../protocols/felica/models/jpy_amount_formatter.dart';
+import '../protocols/transit/card_parser.dart';
 
 /// The wallet's display form, independent of stored balances and ledger money.
 class GalleryBalancePresentation {
@@ -108,6 +109,11 @@ class GalleryBalancePresentation {
     'USD': r'$',
     'MOP': '¥',
   };
+
+  /// Prefer a successfully observed local wallet, matching archive capture.
+  /// This keeps Shenzhen Tong PAY.SZT available when its TU wallet is absent.
+  static int? observedCardBalanceMinor(ParsedCard? card) =>
+      card?.localCard?.info.observedBalance ?? card?.info.balanceFen;
 
   /// Whether [number] contains an observed amount, including zero or negatives.
   final bool known;

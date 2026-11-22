@@ -23,6 +23,7 @@ class KnowledgeBase {
   final Map<String, String> loadIssues;
   final Map<String, String> packageVersions;
   final Map<String, String> packageHashes;
+  final Map<String, String> packagePaths;
   final List<void Function()> closers;
   final CityUnionRegionKnowledgeDb? cuRepository;
   final SuicaStationRepository? suicaStations;
@@ -66,6 +67,7 @@ class KnowledgeBase {
     this.loadIssues = const {},
     this.packageVersions = const {},
     this.packageHashes = const {},
+    this.packagePaths = const {},
     this.closers = const [],
     this.cuRepository,
     this.suicaStations,
@@ -207,6 +209,10 @@ class KnowledgeBase {
           if (tu != null) 'TU': tu!.package.hash,
           if (cu?.live != null) 'CU': cu!.live!.package.hash,
         },
+        packagePaths: Map.unmodifiable({
+          if (tu != null) 'TU': tu!.package.path,
+          if (cu?.live != null) 'CU': cu!.live!.package.path,
+        }),
         loadIssues: Map.unmodifiable(issues),
         closers: [
           if (suica != null) suica!.close,

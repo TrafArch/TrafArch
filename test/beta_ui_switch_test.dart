@@ -23,35 +23,23 @@ AppDependencies createTestApp() => AppDependencies(
   channel: _NoopNfcChannel(),
 );
 
-void main() {
-  testWidgets(
-    'current settings exposes beta switch only inside internal host',
-    (tester) async {
-      final app = createTestApp();
-      addTearDown(app.dispose);
-      var enabled = false;
-      await tester.pumpWidget(
-        BetaUiScope(
-          enabled: false,
-          onChanged: (value) => enabled = value,
-          child: MaterialApp(home: SettingsPage(app: app)),
-        ),
-      );
-      final tile = find.widgetWithText(SwitchListTile, '启用新界面（beta）');
-      await tester.scrollUntilVisible(tile, 250);
-      expect(tester.widget<SwitchListTile>(tile).value, isFalse);
-      await tester.tap(tile);
-      await tester.pump();
-      expect(enabled, isTrue);
-      await tester.pumpWidget(MaterialApp(home: SettingsPage(app: app)));
-      await tester.pump();
-      expect(find.text('启用新界面（beta）'), findsNothing);
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump();
-    },
-  );
+final _enableMainUi = find.widgetWithText(SwitchListTile, '启用 2.x 主界面');
+final _useMainUi = find.widgetWithText(SwitchListTile, '使用 2.x 主界面');
 
-  testWidgets('internal host disposes inactive UI and returns to current app', (
+void main() {
+  testWidgets('legacy settings hides the switch outside a switching host', (
+    tester,
+  ) async {
+    final app = createTestApp();
+    addTearDown(app.dispose);
+    await tester.pumpWidget(MaterialApp(home: SettingsPage(app: app)));
+    await tester.scrollUntilVisible(find.text('莫奈取色'), 250);
+    expect(_enableMainUi, findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
+  testWidgets('preview switches between interfaces without a dialog', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(412, 892);
@@ -68,28 +56,49 @@ void main() {
         },
       ),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(find.byType(TransitCardAnalyzerApp), findsOneWidget);
     expect(find.byType(UpdatePrompt), findsNothing);
-    final scope = BetaUiScope.maybeOf(
-      tester.element(find.byType(TransitCardAnalyzerApp)),
-    )!;
-    scope.onChanged(true);
-    await tester.pump();
+
+    Future<void> openSwitch(Finder toggle) async {
+      await tester.tap(find.byTooltip('设置'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        toggle,
+        250,
+        scrollable: galleryVerticalScroll(),
+      );
+      await tester.ensureVisible(toggle);
+      await tester.pumpAndSettle();
+    }
+
+    await openSwitch(_enableMainUi);
+    expect(tester.widget<SwitchListTile>(_enableMainUi).value, isFalse);
+    await tester.tap(_enableMainUi);
     await tester.pumpAndSettle();
     expect(find.byType(GalleryApp), findsOneWidget);
     expect(find.byType(TransitCardAnalyzerApp), findsNothing);
+    expect(find.byType(AlertDialog), findsNothing);
     expect(created, 1);
-    BetaUiScope.maybeOf(tester.element(find.byType(GalleryApp)))!
-        .onChanged(false);
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 2));
+
+    await openSwitch(_useMainUi);
+    expect(tester.widget<SwitchListTile>(_useMainUi).value, isTrue);
+    await tester.tap(_useMainUi);
+    await tester.pumpAndSettle();
     expect(find.byType(TransitCardAnalyzerApp), findsOneWidget);
     expect(find.byType(GalleryApp), findsNothing);
+    expect(find.byType(AlertDialog), findsNothing);
     expect(created, 2);
+
+    await openSwitch(_enableMainUi);
+    await tester.tap(_enableMainUi);
+    await tester.pumpAndSettle();
+    expect(find.byType(GalleryApp), findsOneWidget);
+    expect(find.byType(AlertDialog), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
   });
+
   testWidgets(
     'preview return preference survives UI switching and host recreation',
     (tester) async {

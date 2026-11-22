@@ -8,6 +8,7 @@ import '../../../app/app_dependencies.dart';
 import '../../../app/beta_ui_scope.dart';
 import 'about_page.dart';
 import 'feedback_page.dart';
+import 'firebase_analytics_tile.dart';
 import 'diagnostic_export_dialog.dart';
 import '../../reference_data/presentation/knowledge_base_page.dart';
 
@@ -183,11 +184,18 @@ class _SettingsPageState extends State<SettingsPage> {
                   if (BetaUiScope.maybeOf(context) case final beta?)
                     Card(
                       child: SwitchListTile(
-                        secondary: const Icon(Icons.new_releases_outlined),
-                        title: const Text('启用新界面（beta）'),
-                        subtitle: const Text('预览全新界面与模拟数据，仅本次运行生效'),
+                        secondary: const Icon(Icons.dashboard_outlined),
+                        title: const Text('启用 2.x 主界面'),
+                        subtitle: Text(
+                          beta.switchError ??
+                              (beta.switching
+                                  ? '正在切换到 2.x 主界面…'
+                                  : beta.live
+                                  ? '当前使用 1.x 备用界面，重启后会恢复 2.x。'
+                                  : '打开 2.x 界面的内置样例。'),
+                        ),
                         value: beta.enabled,
-                        onChanged: beta.onChanged,
+                        onChanged: beta.switching ? null : beta.onChanged,
                       ),
                     ),
                   Card(
@@ -205,6 +213,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ),
                 ]),
+                section('隐私', [const Card(child: FirebaseAnalyticsTile())]),
                 section('日志', [
                   Card(
                     child: Column(
@@ -280,7 +289,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         MaterialPageRoute(
                           builder: (_) => AboutPage(
                             updates: app.updates,
-                            openPrivacyPolicy: app.openPrivacyPolicy,
+                            openWebLink: app.openWebLink,
                           ),
                         ),
                       ),
