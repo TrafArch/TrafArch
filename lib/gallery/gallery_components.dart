@@ -1299,7 +1299,14 @@ String _faceCurrencyLabel(String value) =>
     value.startsWith('CNY ') ? 'CN ${value.substring(4)}' : value;
 
 List<String> _faceBrands(GalleryCard card) => [
-  for (final application in ['tu', 'cu', 'suica', 'octopus'])
+  for (final application in [
+    'tu',
+    'cu',
+    'lingnan',
+    'shenzhen',
+    'suica',
+    'octopus',
+  ])
     if (card.applications.contains(application)) application,
 ];
 
@@ -1319,14 +1326,29 @@ Widget _brandLogo(
   required String id,
   required GalleryTokens t,
 }) {
-  final asset = brand == 'tu' ? 'tunion' : brand;
+  final asset = switch (brand) {
+    'tu' => 'tunion',
+    'lingnan' => 'lingnan-tong',
+    'shenzhen' => 'shenzhen-tong',
+    _ => brand,
+  };
   final key = ValueKey('$id-$asset-${card.id}');
-  if (brand == 'cu') {
+  final pngAsset = switch (brand) {
+    'cu' => 'city-union-logo',
+    'lingnan' => 'lingnan-tong-logo',
+    'shenzhen' => 'shenzhen-tong-logo',
+    _ => null,
+  };
+  if (pngAsset != null) {
     return Image.asset(
-      'assets/gallery/city-union-logo.png',
+      'assets/gallery/$pngAsset.png',
       key: key,
       fit: BoxFit.contain,
-      semanticLabel: '城市一卡通 CITY UNION',
+      semanticLabel: switch (brand) {
+        'cu' => '城市一卡通 CITY UNION',
+        'lingnan' => '岭南通 Lingnan Pass',
+        _ => '深圳通 Shenzhen Tong',
+      },
     );
   }
   return SvgPicture.asset(

@@ -202,6 +202,16 @@ void main() {
     expect(fixture.app.parsedCard?.localCard?.info.observedBalance, 12345);
     expect(find.text('余额未知'), findsNothing);
     expect(find.text('123.45'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Image &&
+            widget.image ==
+                const AssetImage('assets/gallery/shenzhen-tong-logo.png'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.bySemanticsLabel('交通联合 CHINA T-UNION'), findsOneWidget);
     await _unmount(tester);
   });
 
@@ -221,6 +231,16 @@ void main() {
     expect(fixture.app.parsedCard?.localCard?.info.observedBalance, 12345);
     expect(find.text('余额未知'), findsNothing);
     expect(find.text('123.45'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Image &&
+            widget.image ==
+                const AssetImage('assets/gallery/shenzhen-tong-logo.png'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.bySemanticsLabel('交通联合 CHINA T-UNION'), findsNothing);
     await _unmount(tester);
   });
 

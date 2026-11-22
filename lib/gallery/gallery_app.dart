@@ -60,6 +60,7 @@ import '../protocols/felica/models/felica_card_type.dart';
 import '../protocols/felica/models/jpy_amount_formatter.dart';
 import '../protocols/transit/card_parser.dart';
 import '../protocols/transit/city_union/city_union_models.dart';
+import '../protocols/transit/multiapp/application_evidence.dart';
 import '../protocols/transit/tunion/tunion_models.dart';
 import '../shared/app_support.dart';
 import '../shared/domain/archive_conflict_policy.dart';
