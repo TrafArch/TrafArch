@@ -17,7 +17,7 @@ void main() {
     );
   });
 
-  testWidgets('navigation, saving and the beta return control work by touch', (
+  testWidgets('navigation, saving and the fallback switch work by touch', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(412, 892);
@@ -60,7 +60,7 @@ void main() {
     c.navigate(GalleryPage.settings);
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
-      find.text('启用新界面（beta）'),
+      find.text('使用 2.x 主界面'),
       400,
       scrollable: find
           .byWidgetPredicate(
@@ -70,9 +70,9 @@ void main() {
           )
           .last,
     );
-    await tester.ensureVisible(find.text('启用新界面（beta）'));
+    await tester.ensureVisible(find.text('使用 2.x 主界面'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('启用新界面（beta）'));
+    await tester.tap(find.text('使用 2.x 主界面'));
     await tester.pump();
     expect(disabled, isTrue);
   });

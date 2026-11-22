@@ -265,7 +265,7 @@ extension _GalleryOverlays on _GalleryViewState {
         ),
         _gap(14),
         _hexBox(
-          'TrafArch 新界面 beta\n设计版本：2.4.0\n场景：${c.sceneId ?? c.page.name}\n数据：内置样例\n\n请描述看到的问题、操作步骤和期望结果。',
+          'TrafArch 2.x 界面\n设计版本：2.4.0\n场景：${c.sceneId ?? c.page.name}\n数据：内置样例\n\n请描述看到的问题、操作步骤和期望结果。',
         ),
         _gap(14),
         _button('关闭预览', c.back, primary: true),

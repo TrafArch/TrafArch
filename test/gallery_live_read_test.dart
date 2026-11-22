@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -8,7 +9,9 @@ import 'package:transit_card_analyzer/app/trafarch_app.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_name_extension.dart';
 import 'package:transit_card_analyzer/features/home/presentation/pending_save_presenter.dart';
 import 'package:transit_card_analyzer/features/octopus/octopus_balance_controller.dart';
+import 'package:transit_card_analyzer/features/updates/update_service.dart';
 import 'package:transit_card_analyzer/gallery/gallery_app.dart';
+import 'package:transit_card_analyzer/gallery/gallery_theme.dart';
 import 'package:transit_card_analyzer/platform/nfc/felica_channel.dart';
 import 'package:transit_card_analyzer/platform/nfc/nfc_models.dart';
 import 'package:transit_card_analyzer/platform/nfc/nfc_service.dart';
@@ -17,6 +20,7 @@ import 'package:transit_card_analyzer/platform/storage/archive_document_store.da
 import 'package:transit_card_analyzer/platform/storage/app_logger.dart';
 import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
 import 'package:transit_card_analyzer/protocols/octopus/octopus_balance.dart';
+import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
 import 'package:transit_card_analyzer/shared/domain/archive_conflict_policy.dart';
 
 import 'support/gallery_scroll.dart';
@@ -47,6 +51,10 @@ void main() {
           _CardKind.octopus => r'HK$50.00',
         };
         expect(find.text(balanceNumber), findsWidgets);
+        if (kind == _CardKind.tu) {
+          expect(find.text('3105 0600 1234 5678 900'), findsOneWidget);
+          expect(find.textContaining('最近读取'), findsNothing);
+        }
         expect(app.pendingCardSave, isNull);
         final saved = (await tester.runAsync(app.cardRepository.getAllCards))!;
         expect(saved, hasLength(kind == _CardKind.octopus ? 0 : 1));
@@ -152,6 +160,67 @@ void main() {
     expect(find.text('终端解码'), findsOneWidget);
     expect(find.text('原始数据'), findsOneWidget);
 
+    await _unmount(tester);
+  });
+
+  testWidgets('expert read time uses the device-local instant', (tester) async {
+    final fixture = await _showGallery(tester, _CardKind.tu);
+    fixture.native.readAt = DateTime.utc(2026, 11, 21, 2, 42);
+    await _read(tester, '开始读取');
+    await _navigate(tester, 'expert');
+
+    final local = fixture.native.readAt.toLocal();
+    String two(int value) => value.toString().padLeft(2, '0');
+    final expected =
+        '${local.year}-${two(local.month)}-${two(local.day)} '
+        '${two(local.hour)}:${two(local.minute)}';
+    await tester.scrollUntilVisible(
+      find.text('读取时间'),
+      260,
+      scrollable: galleryVerticalScroll(),
+    );
+    await tester.ensureVisible(find.text('读取时间'));
+    await tester.pumpAndSettle();
+    expect(find.text('读取时间'), findsOneWidget);
+    expect(find.text(expected), findsOneWidget);
+    await _unmount(tester);
+  });
+
+  testWidgets('2.x shows the Shenzhen local wallet when TU balance is absent', (
+    tester,
+  ) async {
+    final fixture = await _showGallery(
+      tester,
+      _CardKind.tu,
+      autoSave: false,
+      shenzhen: true,
+    );
+    await _read(tester, '开始读取');
+
+    expect(fixture.app.parsedCard?.parserId, CardParserIds.shenzhenTunion);
+    expect(fixture.app.parsedCard?.info.balanceFen, isNull);
+    expect(fixture.app.parsedCard?.localCard?.info.observedBalance, 12345);
+    expect(find.text('余额未知'), findsNothing);
+    expect(find.text('123.45'), findsOneWidget);
+    await _unmount(tester);
+  });
+
+  testWidgets('2.x shows a standalone Shenzhen local wallet balance', (
+    tester,
+  ) async {
+    final fixture = await _showGallery(
+      tester,
+      _CardKind.tu,
+      autoSave: false,
+      shenzhen: true,
+      tuWallet: false,
+    );
+    await _read(tester, '开始读取');
+
+    expect(fixture.app.parsedCard?.parserId, CardParserIds.localCard);
+    expect(fixture.app.parsedCard?.localCard?.info.observedBalance, 12345);
+    expect(find.text('余额未知'), findsNothing);
+    expect(find.text('123.45'), findsOneWidget);
     await _unmount(tester);
   });
 
@@ -451,7 +520,6 @@ void main() {
   ) async {
     _size(tester);
     final fixture = _Fixture(_CardKind.suica);
-    fixture.app.scan.autoScanConsumed = true;
     var created = 0;
     await tester.pumpWidget(
       TransitCardAnalyzerApp(
@@ -466,12 +534,14 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.byType(GalleryApp), findsOneWidget);
+    expect(find.byType(AppShell), findsNothing);
     expect(find.text('开始读取'), findsOneWidget);
-    expect(find.text('启用 2.x 实卡体验'), findsNothing);
+    expect(find.byType(AlertDialog), findsNothing);
     expect(
       tester.widget<GalleryApp>(find.byType(GalleryApp)).liveApp,
       same(fixture.app),
     );
+    expect(fixture.native.discoveries, 0);
     expect(created, 1);
     await _unmount(tester);
   });
@@ -482,32 +552,18 @@ void main() {
       _size(tester);
       final fixture = _Fixture(_CardKind.suica);
       final app = fixture.app;
-      app.scan.autoScanConsumed = true;
       var created = 0;
       await tester.pumpWidget(
         TransitCardAnalyzerApp(
           enableUpdateChecks: false,
           enableLiveBeta: true,
+          initialLiveUi: true,
           createDependencies: () {
             created++;
             return app;
           },
         ),
       );
-      await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('设置'));
-      await tester.pumpAndSettle();
-      final toggle = find.widgetWithText(SwitchListTile, '启用新界面（beta）');
-      await tester.scrollUntilVisible(
-        toggle,
-        250,
-        scrollable: galleryVerticalScroll(),
-      );
-      await tester.tap(toggle);
-      await tester.pump();
-      expect(find.text('启用 2.x 实卡体验'), findsOneWidget);
-      await tester.pump(const Duration(seconds: 10));
-      await tester.tap(find.text('确认开启'));
       await tester.pumpAndSettle();
       expect(
         tester.widget<GalleryApp>(find.byType(GalleryApp)).liveApp,
@@ -519,41 +575,122 @@ void main() {
       fixture.native.closeFails = true;
       await tester.tap(find.text('开始读取'));
       await tester.pump();
-      await tester.tap(find.byTooltip('设置'));
-      await tester.pumpAndSettle();
-      final returnToOldUi = find.widgetWithText(SwitchListTile, '启用新界面（beta）');
-      await tester.scrollUntilVisible(
-        returnToOldUi,
-        250,
-        scrollable: galleryVerticalScroll(),
-      );
-      await tester.ensureVisible(returnToOldUi);
-      await tester.pumpAndSettle();
-      await tester.tap(returnToOldUi);
+      final fallbackSwitch = find.widgetWithText(SwitchListTile, '使用 2.x 主界面');
+      await _openSettingsControl(tester, fallbackSwitch);
+      await tester.tap(fallbackSwitch);
       await tester.pumpAndSettle();
       expect(find.text('NFC 尚未关闭，无法切换。请重试。'), findsOneWidget);
       expect(find.byType(GalleryApp), findsOneWidget);
 
       fixture.native.closeFails = false;
       final close = fixture.native.close = Completer<void>();
-      await tester.ensureVisible(returnToOldUi);
+      await tester.ensureVisible(fallbackSwitch);
       await tester.pumpAndSettle();
-      await tester.tap(returnToOldUi);
+      await tester.tap(fallbackSwitch);
       await tester.pump();
-      expect(find.text('正在关闭读卡连接…'), findsOneWidget);
+      expect(find.text('正在切换到 1.x 备用界面…'), findsOneWidget);
+      expect(tester.widget<SwitchListTile>(fallbackSwitch).onChanged, isNull);
       expect(find.byType(GalleryApp), findsOneWidget);
       close.complete();
       response.complete(fixture.native.tag);
       await tester.pumpAndSettle();
       expect(find.byType(GalleryApp), findsNothing);
+      expect(tester.widget<AppShell>(find.byType(AppShell)).app, same(app));
       expect(app.disposed, isFalse);
       expect(app.hasCompletedRead, isFalse);
+
+      final mainUiSwitch = find.widgetWithText(SwitchListTile, '启用 2.x 主界面');
+      await _openSettingsControl(tester, mainUiSwitch);
+      await tester.tap(mainUiSwitch);
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.byType(AppShell), findsNothing);
+      expect(
+        tester.widget<GalleryApp>(find.byType(GalleryApp)).liveApp,
+        same(app),
+      );
       expect(fixture.native.discoveries, 1);
       expect(created, 1);
       await _unmount(tester);
       expect(app.disposed, isTrue);
     },
   );
+
+  testWidgets(
+    '2.x offers configured updates and only prompts once per launch',
+    (tester) async {
+      _size(tester);
+      var checks = 0;
+      final service = UpdateService(
+        currentBuild: 1,
+        manifestUrl: 'https://example.com/manifest.json',
+        fetch: (_, _) async => Uint8List.fromList(
+          utf8.encode(
+            jsonEncode({
+              'format_version': 1,
+              'app': {
+                'build': ++checks == 1 ? 2 : 1,
+                'version': '2.0.0',
+                'notes': '更新说明',
+                'download_url': 'https://example.com/app.apk',
+              },
+            }),
+          ),
+        ),
+      );
+      final fixture = _Fixture(_CardKind.suica, updateService: service);
+      await tester.pumpWidget(
+        TransitCardAnalyzerApp(
+          enableLiveBeta: true,
+          initialLiveUi: true,
+          createDependencies: () => fixture.app,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final updateDialog = find.byType(AlertDialog);
+      expect(find.text('发现新版本 2.0.0'), findsOneWidget);
+      expect(
+        Theme.of(tester.element(updateDialog)).extension<GalleryTokens>(),
+        isNotNull,
+      );
+      await tester.tap(find.text('暂不更新'));
+      await tester.pumpAndSettle();
+
+      final checkUpdates = find.text('检查更新');
+      await _openSettingsControl(tester, checkUpdates);
+      await tester.tap(checkUpdates);
+      await tester.pumpAndSettle();
+      expect(find.text('暂无更新'), findsOneWidget);
+      expect(checks, 2);
+
+      final fallbackSwitch = find.widgetWithText(SwitchListTile, '使用 2.x 主界面');
+      await tester.scrollUntilVisible(
+        fallbackSwitch,
+        250,
+        scrollable: galleryVerticalScroll(),
+      );
+      await tester.ensureVisible(fallbackSwitch);
+      await tester.pumpAndSettle();
+      await tester.tap(fallbackSwitch);
+      await tester.pumpAndSettle();
+      expect(find.byType(AppShell), findsOneWidget);
+      expect(updateDialog, findsNothing);
+      expect(checks, 2);
+      await _unmount(tester);
+    },
+  );
+}
+
+Future<void> _openSettingsControl(WidgetTester tester, Finder control) async {
+  await tester.tap(find.byTooltip('设置'));
+  await tester.pumpAndSettle();
+  await tester.scrollUntilVisible(
+    control,
+    250,
+    scrollable: galleryVerticalScroll(),
+  );
+  await tester.ensureVisible(control);
+  await tester.pumpAndSettle();
 }
 
 Future<void> _unmount(WidgetTester tester) async {
@@ -594,9 +731,16 @@ Future<_Fixture> _showGallery(
   WidgetTester tester,
   _CardKind kind, {
   bool autoSave = true,
+  bool shenzhen = false,
+  bool tuWallet = true,
 }) async {
   _size(tester);
-  final fixture = _Fixture(kind, autoSave: autoSave);
+  final fixture = _Fixture(
+    kind,
+    autoSave: autoSave,
+    shenzhen: shenzhen,
+    tuWallet: tuWallet,
+  );
   addTearDown(fixture.app.dispose);
   await tester.runAsync(fixture.app.init);
   expect(fixture.app.autoSaveEnabled, autoSave);
@@ -612,13 +756,20 @@ const _idmBytes = [1, 2, 3, 4, 5, 6, 7, 8];
 const _idm = '0102030405060708';
 
 class _Fixture {
-  _Fixture(_CardKind kind, {bool autoSave = true}) : native = _Reader(kind) {
+  _Fixture(
+    _CardKind kind, {
+    bool autoSave = true,
+    bool shenzhen = false,
+    bool tuWallet = true,
+    UpdateService? updateService,
+  }) : native = shenzhen ? _ShenzhenReader(withTu: tuWallet) : _Reader(kind) {
     app = AppDependencies(
       database: testDatabase(),
       bundle: MissingTestAssets(),
       channel: native,
       felicaChannel: native,
       logger: AppLogger(store: MemoryLogStore()),
+      updateService: updateService,
       archiveDocumentStore: documents,
       settingsStore: MemorySettingsStore({
         SettingsKeys.autoSaveEnabled: '$autoSave',
@@ -848,6 +999,93 @@ class _Reader implements NfcChannel, FelicaChannel {
     0x30,
     0,
   ];
+}
+
+class _ShenzhenReader extends _Reader {
+  _ShenzhenReader({required this.withTu}) : super(_CardKind.tu);
+
+  final bool withTu;
+  String? _application;
+
+  @override
+  bool get isIsoDep => true;
+
+  @override
+  List<int> _apdu(List<int> frame) {
+    const rejected = [0x6A, 0x82];
+    const missing = [0x6A, 0x83];
+    if (frame[1] == 0xA4) {
+      final aid = frame.skip(5).take(frame[4]).toList();
+      if (listEquals(aid, [0x3F, 0x00])) {
+        _application = null;
+        return _Reader._ok(const []);
+      }
+      if (listEquals(aid, [0xA0, 0, 0, 6, 0x32, 1, 1, 5])) {
+        if (!withTu) return rejected;
+        _application = 'TU';
+        return _Reader._ok(const []);
+      }
+      if (listEquals(aid, [0x50, 0x41, 0x59, 0x2E, 0x53, 0x5A, 0x54])) {
+        _application = 'SZT';
+        return _Reader._ok(const []);
+      }
+      return rejected;
+    }
+    if (_application == 'TU') {
+      if (frame[1] == 0x5C) return [0x69, 0x85];
+      if (frame[1] == 0xB0 && frame[2] == 0x95) {
+        const data =
+            '0221584012345678010103104870400000000001'
+            '2024010120291231AABB';
+        return _Reader._ok([
+          for (var index = 0; index < data.length; index += 2)
+            int.parse(data.substring(index, index + 2), radix: 16),
+        ]);
+      }
+    }
+    if (_application == 'SZT') {
+      if (frame[1] == 0x5C) return _Reader._ok(const [0, 0, 0x30, 0x39]);
+      if (frame[1] == 0xB0 && frame[2] == 0x95) {
+        final basic = List<int>.filled(32, 0)
+          ..setRange(16, 20, [0x67, 0x45, 0x23, 0xF1])
+          ..setRange(20, 24, [0x20, 0x24, 0x01, 0x02])
+          ..setRange(24, 28, [0x20, 0x30, 0x12, 0x31]);
+        return _Reader._ok(basic);
+      }
+      if (frame[1] == 0xB2 && frame[3] == 0xC4) {
+        if (frame[2] == 1 || frame[2] == 2) {
+          final kind = frame[2] == 1 ? 0x09 : 0x02;
+          return _Reader._ok([
+            0,
+            0x17,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0x01,
+            0x2C,
+            kind,
+            0,
+            0x12,
+            0x34,
+            0x56,
+            0x78,
+            0x90,
+            0x20,
+            0x26,
+            0x10,
+            0x31,
+            0x12,
+            0x34,
+            0x56,
+          ]);
+        }
+        return missing;
+      }
+    }
+    return rejected;
+  }
 }
 
 class _OctopusChannel implements OctopusNfcChannel {

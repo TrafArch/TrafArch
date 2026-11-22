@@ -88,6 +88,8 @@ class NfcScanResult {
   });
 
   factory NfcScanResult.fromMap(Map<dynamic, dynamic> map) {
+    final timestamp =
+        DateTime.tryParse('${map['timestamp']}') ?? DateTime.now();
     return NfcScanResult(
       sessionId: map['sessionId']?.toString(),
       metadataIssues: List.unmodifiable(
@@ -122,7 +124,9 @@ class NfcScanResult {
       tagDescription: map['tagDescription']?.toString(),
       isoDepConnected: map['isoDepConnected'] == true,
       felicaConnected: map['felicaConnected'] == true,
-      timestamp: DateTime.tryParse('${map['timestamp']}') ?? DateTime.now(),
+      // Android reports an ISO-8601 UTC instant. Normalize it at the platform
+      // boundary so device-local fields and capture offsets use the same zone.
+      timestamp: timestamp.toLocal(),
     );
   }
 }
