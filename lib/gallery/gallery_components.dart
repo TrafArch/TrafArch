@@ -745,18 +745,22 @@ extension _GalleryComponents on _GalleryViewState {
 
   Widget _face(GalleryCard card) {
     final foreground = _faceForeground(card);
-    final secondary = _faceForeground(card, secondary: true);
     final cardNumber = _formatFaceCardNumber(card.pan);
+    final balance = _balancePresentation(card);
+    final currencyLabel = _faceCurrencyLabel(balance.currencyLabel);
     final numberStyle = GalleryTypography.amount.copyWith(
       inherit: false,
       color: foreground,
+      fontSize: 23,
+      height: 28 / 23,
       fontFeatures: const [FontFeature.tabularFigures()],
     );
     final unitStyle = GalleryTypography.caption.copyWith(
       inherit: false,
-      color: secondary,
+      color: foreground,
+      fontSize: 16,
+      height: 22 / 16,
     );
-    final balance = _balancePresentation(card);
     final amount = Semantics(
       label: '余额，${balance.displayText}',
       excludeSemantics: true,
@@ -769,13 +773,13 @@ extension _GalleryComponents on _GalleryViewState {
                 crossAxisAlignment: CrossAxisAlignment.baseline,
                 textBaseline: TextBaseline.alphabetic,
                 children: [
-                  if (balance.currencyLabel.isNotEmpty) ...[
+                  if (currencyLabel.isNotEmpty) ...[
                     Text(
-                      balance.currencyLabel,
+                      currencyLabel,
                       key: ValueKey('face-currency-${card.id}'),
                       style: unitStyle,
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 3),
                   ],
                   Text(
                     balance.number,
@@ -787,7 +791,7 @@ extension _GalleryComponents on _GalleryViewState {
             : Text(
                 balance.displayText,
                 key: ValueKey('face-unknown-${card.id}'),
-                style: GalleryTypography.field.copyWith(color: secondary),
+                style: numberStyle,
               ),
       ),
     );
@@ -804,76 +808,65 @@ extension _GalleryComponents on _GalleryViewState {
             Positioned.fill(child: _FaceCropImage(card: card)),
           Padding(
             padding: const EdgeInsets.all(20),
-            // Equal space above and below keeps the card number centered
-            // while letting the card grow for wrapped lines or large text.
             child: IntrinsicHeight(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.topLeft,
-                      child: Text(
-                        card.name,
-                        key: ValueKey('face-title-${card.id}'),
-                        style: GalleryTypography.card.copyWith(
-                          color: foreground,
-                        ),
+                  Align(
+                    alignment: Alignment.topLeft,
+                    child: Text(
+                      card.name,
+                      key: ValueKey('face-title-${card.id}'),
+                      style: GalleryTypography.card.copyWith(
+                        color: foreground,
+                        fontSize: 16,
+                        height: 23 / 16,
                       ),
                     ),
                   ),
-                  _gap(12),
-                  Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      decoration: card.image != null && !t.dark
-                          ? BoxDecoration(
-                              color: Colors.black.withValues(alpha: .35),
-                              borderRadius: BorderRadius.circular(6),
-                            )
-                          : null,
-                      child: Text(
-                        cardNumber,
-                        key: ValueKey('face-card-number-${card.id}'),
-                        semanticsLabel: '卡号，$cardNumber',
-                        textAlign: TextAlign.center,
-                        style: GalleryTypography.field.copyWith(
-                          fontFamily: 'monospace',
-                          color: foreground,
-                        ),
-                      ),
-                    ),
-                  ),
-                  _gap(12),
+                  const SizedBox(height: 4),
                   Expanded(
-                    child: Align(
-                      alignment: Alignment.bottomLeft,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '当前余额',
-                                  key: ValueKey(
-                                    'face-balance-label-${card.id}',
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              amount,
+                              const SizedBox(height: 4),
+                              Container(
+                                key: ValueKey('face-card-number-${card.id}'),
+                                decoration: card.image != null && !t.dark
+                                    ? BoxDecoration(
+                                        color: Colors.black.withValues(
+                                          alpha: .35,
+                                        ),
+                                        borderRadius: BorderRadius.circular(6),
+                                      )
+                                    : null,
+                                child: Text(
+                                  cardNumber,
+                                  semanticsLabel: '卡号，$cardNumber',
+                                  textAlign: TextAlign.left,
+                                  style: GalleryTypography.field.copyWith(
+                                    fontFamily: 'monospace',
+                                    fontSize: 14,
+                                    height: 20 / 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: foreground,
                                   ),
-                                  style: unitStyle,
                                 ),
-                                _gap(4),
-                                amount,
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
-                          if (_faceBrands(card).isNotEmpty) ...[
-                            const SizedBox(width: 12),
-                            _FaceBrandMark(card: card, id: 'face'),
-                          ],
+                        ),
+                        if (_faceBrands(card).isNotEmpty) ...[
+                          const SizedBox(width: 10),
+                          _FaceBrandMark(card: card, id: 'face'),
                         ],
-                      ),
+                      ],
                     ),
                   ),
                 ],
@@ -1302,6 +1295,9 @@ String _formatFaceCardNumber(String value) {
       .join(' ');
 }
 
+String _faceCurrencyLabel(String value) =>
+    value.startsWith('CNY ') ? 'CN ${value.substring(4)}' : value;
+
 List<String> _faceBrands(GalleryCard card) => [
   for (final application in ['tu', 'cu', 'suica', 'octopus'])
     if (card.applications.contains(application)) application,
@@ -1358,15 +1354,22 @@ class _FaceBrandMark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).extension<GalleryTokens>()!;
+    final brands = _faceBrands(card);
+    final logoWidth = brands.length > 1 ? 64.0 : 68.0;
+    final logoHeight = brands.length > 1 ? 42.0 : 44.0;
+    const logoGap = 2.0;
     return SizedBox(
       key: ValueKey('$id-brand-${card.id}'),
-      width: 68,
-      height: 44,
+      width: logoWidth,
+      height: brands.length * logoHeight + (brands.length - 1) * logoGap,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          for (final (index, brand) in _faceBrands(card).indexed) ...[
-            if (index > 0) const SizedBox(height: 2),
-            Expanded(
+          for (final (index, brand) in brands.indexed) ...[
+            if (index > 0) const SizedBox(height: logoGap),
+            SizedBox(
+              width: logoWidth,
+              height: logoHeight,
               child: _brandLogo(card, brand, id: id, t: t),
             ),
           ],

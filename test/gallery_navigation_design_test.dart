@@ -379,7 +379,7 @@ void main() {
   );
 
   testWidgets(
-    'home card centers the full number and keeps the corner fields separate',
+    'home card places balance and number lower left with brand lower right',
     (tester) async {
       c.hasRead = true;
       c.current.saved = true;
@@ -398,8 +398,12 @@ void main() {
         final number = tester.getRect(
           find.byKey(const ValueKey('face-card-number-shanghai')),
         );
-        final label = tester.getRect(
+        expect(
           find.byKey(const ValueKey('face-balance-label-shanghai')),
+          findsNothing,
+        );
+        final currency = tester.getRect(
+          find.byKey(const ValueKey('face-currency-shanghai')),
         );
         final balance = tester.getRect(
           find.byKey(const ValueKey('face-number-shanghai')),
@@ -407,20 +411,93 @@ void main() {
         final brand = tester.getRect(
           find.byKey(const ValueKey('face-brand-shanghai')),
         );
-        expect(number.center.dx, closeTo(face.center.dx, .5));
-        expect(number.center.dy, closeTo(face.center.dy, .5));
-        expect(number.top, greaterThan(title.bottom));
-        expect(label.top, greaterThan(number.bottom));
-        expect(balance.top, greaterThan(label.bottom));
-        expect(label.left, closeTo(title.left, .5));
-        expect(brand.left, greaterThan(balance.right));
-        expect(brand.top, greaterThan(number.bottom));
-        expect(brand.right, closeTo(face.right - (title.left - face.left), .5));
-        expect(brand.bottom, closeTo(balance.bottom, .5));
+        expect(title.left, closeTo(face.left + 20, 1.5));
+        expect(title.top, closeTo(face.top + 20, 1.5));
+        expect(currency.left, closeTo(title.left, 1.5));
+        expect(balance.left, greaterThan(currency.right));
+        expect(number.left, closeTo(title.left, 1.5));
+        expect(number.bottom, closeTo(face.bottom - 20, 1.5));
+        expect(balance.bottom + 4, closeTo(number.top, 1.5));
+        expect(brand.left, greaterThan(number.right));
+        expect(brand.right, closeTo(face.right - 20, 1.5));
+        expect(brand.bottom, closeTo(number.bottom, 1.5));
+        expect(brand.size, const Size(64, 86));
+        final tunion = tester.getRect(
+          find.byKey(const ValueKey('face-tunion-shanghai')),
+        );
+        final cityUnion = tester.getRect(
+          find.byKey(const ValueKey('face-cu-shanghai')),
+        );
+        expect(tunion.size, const Size(64, 42));
+        expect(cityUnion.size, const Size(64, 42));
+        expect(tunion.left, closeTo(cityUnion.left, .5));
+        expect(tunion.right, closeTo(cityUnion.right, .5));
+        expect(cityUnion.top - tunion.bottom, closeTo(2, .5));
+        expect(
+          tester
+              .widget<Text>(find.byKey(const ValueKey('face-title-shanghai')))
+              .style!
+              .fontSize,
+          16,
+        );
+        expect(
+          tester
+              .widget<Text>(
+                find.byKey(const ValueKey('face-currency-shanghai')),
+              )
+              .style!
+              .fontSize,
+          16,
+        );
+        expect(
+          tester
+              .widget<Text>(find.byKey(const ValueKey('face-number-shanghai')))
+              .style!
+              .fontSize,
+          23,
+        );
+        expect(
+          tester
+              .widget<Text>(
+                find.descendant(
+                  of: find.byKey(const ValueKey('face-card-number-shanghai')),
+                  matching: find.byType(Text),
+                ),
+              )
+              .style!
+              .fontSize,
+          14,
+        );
         expect(tester.takeException(), isNull);
       }
     },
   );
+
+  testWidgets('single application marks keep the original logo size', (
+    tester,
+  ) async {
+    c.hasRead = true;
+    await mount(tester, width: 360);
+    final single = GalleryCard.fromJson({
+      ...c.data.cards.first,
+      'applications': const ['tu'],
+    });
+    c.update(() {
+      final index = c.cards.indexWhere((card) => card.id == single.id);
+      c.cards[index] = single;
+    });
+    await tester.pumpAndSettle();
+    expect(
+      tester.getSize(find.byKey(const ValueKey('face-brand-shanghai'))),
+      const Size(68, 44),
+    );
+    expect(
+      tester.getSize(find.byKey(const ValueKey('face-tunion-shanghai'))),
+      const Size(68, 44),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('home card seed drives independent light and dark schemes', (
     tester,
   ) async {

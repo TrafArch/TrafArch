@@ -67,7 +67,8 @@ void main() {
             find.byKey(const ValueKey('face-divider-shanghai')),
             findsNothing,
           );
-          expect(find.text('当前余额'), findsOneWidget);
+          expect(find.text('当前余额'), findsNothing);
+          expect(find.text('CN ¥'), findsOneWidget);
           expect(find.bySemanticsLabel('交通联合 CHINA T-UNION'), findsOneWidget);
           expect(find.text('3100 0000 0000 6821'), findsOneWidget);
           expect(find.text('**** 6821'), findsNothing);
@@ -98,7 +99,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1600));
     await tester.pumpAndSettle();
     expect(find.text('读取失败，保留上次结果'), findsOneWidget);
-    expect(find.text('当前余额'), findsOneWidget);
+    expect(find.text('当前余额'), findsNothing);
+    expect(find.text('CN ¥'), findsOneWidget);
     expect(find.text('3100 0000 0000 6821'), findsOneWidget);
     expect(find.bySemanticsLabel('交通联合 CHINA T-UNION'), findsOneWidget);
     expect(tester.takeException(), isNull);
