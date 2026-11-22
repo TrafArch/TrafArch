@@ -650,14 +650,24 @@ class _LiveCardSummary {
     final type = cardType == null
         ? transitTypeLabel(parsed?.parserId)
         : cardTypeLabel(cardType);
+    final confirmedApplications = {
+      for (final application in app.applications)
+        if (application.confirmed) application.appId,
+    };
     final applications = <String>[
       if (felica?.cardProductType == FelicaCardType.suica) 'suica',
       if (app.isOctopusCard && felica?.cardProductType != FelicaCardType.suica)
         'octopus',
-      if (parsed != null && CardParserIds.isTUnionFamily(parsed.parserId)) 'tu',
+      if ((parsed != null && CardParserIds.isTUnionFamily(parsed.parserId)) ||
+          confirmedApplications.contains('tu'))
+        'tu',
       if (parsed?.dualApplication == true ||
           parsed?.parserId == CardParserIds.cityUnion)
         'cu',
+      ..._regionalApplications(
+        parsed,
+        confirmedApplications: confirmedApplications,
+      ),
     ];
     return _LiveCardSummary(
       name: name,
@@ -723,6 +733,7 @@ class _LiveArchiveCard {
     final history = ArchiveHistory.project(row);
     final records = _galleryRecords(history, app.includeShanghaiOverdraft);
     final count = ArchiveRecordCount.fromHistory(history);
+    final confirmedApplications = _archivedConfirmedApplications(history);
     final card = _liveCard(
       id: saved.id,
       saved: true,
@@ -746,7 +757,15 @@ class _LiveArchiveCard {
           ? null
           : DateTime.fromMillisecondsSinceEpoch(saved.lastReadAt!),
       count: count.savedRecordCount ?? records.length,
-      applications: _applicationsForCardType(saved.cardType),
+      applications: {
+        ..._applicationsForCardType(
+          saved.cardType,
+          officialName: saved.officialName,
+        ),
+        if (confirmedApplications.contains('tu')) 'tu',
+        if (confirmedApplications.contains('lingnan')) 'lingnan',
+        if (confirmedApplications.contains('shenzhen')) 'shenzhen',
+      }.toList(),
     );
     return _LiveArchiveCard(
       saved: saved,
@@ -818,18 +837,56 @@ String _faceFor(String type, List<String> applications) {
   return 'blue';
 }
 
-List<String> _applicationsForCardType(String cardType) => switch (cardType) {
+List<String> _regionalApplications(
+  ParsedCard? parsed, {
+  Set<String> confirmedApplications = const {},
+}) {
+  final local = parsed?.localCard?.info;
+  return [
+    if (parsed?.parserId == CardParserIds.lingnanTong ||
+        parsed?.parserId == CardParserIds.lingnanTunion ||
+        local?.isLNT == true ||
+        confirmedApplications.contains('lingnan'))
+      'lingnan',
+    if (parsed?.parserId == CardParserIds.shenzhenTunion ||
+        local?.isSZT == true ||
+        confirmedApplications.contains('shenzhen'))
+      'shenzhen',
+  ];
+}
+
+Set<String> _archivedConfirmedApplications(ArchiveHistoryResult history) {
+  final raw =
+      history.latestCapture?.snapshot?.extensions['applicationEvidence'];
+  if (raw is! List) return const {};
+  return {
+    for (final item in raw)
+      if (ApplicationEvidence.tryParse(item) case final application?
+          when application.confirmed)
+        application.appId,
+  };
+}
+
+List<String> _applicationsForCardType(
+  String cardType, {
+  String? officialName,
+}) => switch (cardType) {
   CardTypes.suica => const ['suica'],
   CardTypes.octopusTunion => const ['octopus'],
   CardTypes.amusementIc => const [],
   CardTypes.cityUnion => const ['cu'],
   CardTypes.shanghaiTransitUnion ||
   CardTypes.harbinTransitUnion => const ['tu', 'cu'],
-  CardTypes.chinaTunion ||
-  CardTypes.lingnanTong ||
-  CardTypes.lingnanTunion ||
-  CardTypes.shenzhenTunion ||
-  CardTypes.beijingBmac ||
+  CardTypes.lingnanTong => const ['lingnan'],
+  CardTypes.lingnanTunion => const ['tu', 'lingnan'],
+  CardTypes.shenzhenTunion => const ['tu', 'shenzhen'],
+  CardTypes.chinaTunion || CardTypes.beijingBmac => const ['tu'],
+  CardTypes.localCard when officialName?.contains('深圳通') == true => const [
+    'shenzhen',
+  ],
+  CardTypes.localCard when officialName?.contains('岭南通') == true => const [
+    'lingnan',
+  ],
   CardTypes.localCard => const ['tu'],
   _ => const [],
 };
