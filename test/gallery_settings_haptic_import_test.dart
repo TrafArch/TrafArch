@@ -146,7 +146,7 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('导入弹窗展示两个来源，读卡识图只提示开发中且不导入', (tester) async {
+  testWidgets('导入弹窗展示两个来源，读卡识途只提示开发中且不导入', (tester) async {
     interceptHaptics(tester);
     var archiveCalls = 0;
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -166,7 +166,7 @@ void main() {
     await openImportSourceDialog(tester);
 
     expect(find.text('TrafArch 数据'), findsOneWidget);
-    expect(find.text('从读卡识图数据导入'), findsOneWidget);
+    expect(find.text('从读卡识途数据导入'), findsOneWidget);
     expect(find.text('正在开发中，敬请期待'), findsOneWidget);
     expect(find.text('取消'), findsOneWidget);
 
@@ -175,7 +175,7 @@ void main() {
 
     expect(find.text('选择导入来源'), findsNothing);
     expect(c.overlay, isNull);
-    expect(archiveCalls, 0, reason: '读卡识图选项不得触发任何真实导入');
+    expect(archiveCalls, 0, reason: '读卡识途选项不得触发任何真实导入');
     expect(find.text('正在开发中，敬请期待'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
@@ -284,7 +284,7 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  test('读卡识图导入占位实现明确返回开发中', () async {
+  test('读卡识途导入占位实现明确返回开发中', () async {
     const service = UnavailableTripReaderImportService();
     await expectLater(
       service.pickImport(),

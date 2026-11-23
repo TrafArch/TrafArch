@@ -10,7 +10,7 @@
 /// 不会调用这里的任何方法。
 library;
 
-/// 读卡识图数据尚未支持时抛出的异常。
+/// 读卡识途数据尚未支持时抛出的异常。
 class TripReaderImportUnavailable implements Exception {
   const TripReaderImportUnavailable();
 
@@ -18,10 +18,10 @@ class TripReaderImportUnavailable implements Exception {
   static const message = '正在开发中，敬请期待';
 
   @override
-  String toString() => '读卡识图数据导入$message（接口已预留，尚未实现）';
+  String toString() => '读卡识途数据导入$message（接口已预留，尚未实现）';
 }
 
-/// 读卡识图导入的预览结果。字段刻意保持最小，避免提前绑定外部数据格式。
+/// 读卡识途导入的预览结果。字段刻意保持最小，避免提前绑定外部数据格式。
 class TripReaderImportPreview {
   const TripReaderImportPreview({
     required this.name,
@@ -39,7 +39,7 @@ class TripReaderImportPreview {
   final int recordCount;
 }
 
-/// 读卡识图导入的结果。
+/// 读卡识途导入的结果。
 class TripReaderImportResult {
   const TripReaderImportResult({
     this.insertedCards = 0,

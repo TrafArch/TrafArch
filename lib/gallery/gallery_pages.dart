@@ -1496,7 +1496,7 @@ extension _GalleryPages on _GalleryViewState {
             ListTile(
               key: const ValueKey('import-source-trip-reader'),
               contentPadding: EdgeInsets.zero,
-              title: const Text('从读卡识图数据导入'),
+              title: const Text('从读卡识途数据导入'),
               subtitle: const Text('正在开发中，敬请期待'),
               onTap: () => Navigator.pop(context, _ImportSource.tripReader),
             ),
@@ -1781,5 +1781,5 @@ String _tripClock(String value) => value.replaceFirstMapped(
   (match) => match[1]!,
 );
 
-/// 「导入卡片记录」的来源选项。读卡识图来源目前只提示开发中，不触发导入。
+/// 「导入卡片记录」的来源选项。读卡识途来源目前只提示开发中，不触发导入。
 enum _ImportSource { archive, tripReader }

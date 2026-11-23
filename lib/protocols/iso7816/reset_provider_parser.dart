@@ -5,7 +5,12 @@ enum ResetProviderSource {
   nfcBProtocolInfo,
 }
 
-enum ResetProviderLayout { atr, providerBlock, providerBlockWithoutHighByte }
+enum ResetProviderLayout {
+  tUnionHistoricalBytes,
+  atr,
+  providerBlock,
+  providerBlockWithoutHighByte,
+}
 
 class ResetProviderCandidate {
   const ResetProviderCandidate({
@@ -16,6 +21,7 @@ class ResetProviderCandidate {
     required this.byteOffset,
   });
 
+  /// Only the observed low byte for [ResetProviderLayout.providerBlockWithoutHighByte].
   final String chipProviderCode;
   final String icCardProviderCode;
   final ResetProviderSource source;
@@ -23,9 +29,8 @@ class ResetProviderCandidate {
   final int byteOffset;
 }
 
-/// Extracts the two registered provider codes from reset information layouts
-/// used by Chinese contact and contactless IC cards. Registry membership is
-/// checked separately so unrelated 7-byte sequences are never displayed.
+/// Extracts provider codes at known positions in reset information.
+/// Registry lookup is independent of decoding.
 class ResetProviderParser {
   static Iterable<ResetProviderCandidate> parse(
     String? hex,
@@ -34,21 +39,67 @@ class ResetProviderParser {
     final bytes = _decodeHex(hex);
     if (bytes.length < 6) return;
 
-    for (var offset = 0; offset + 11 <= bytes.length; offset++) {
-      if (bytes[offset] != 0x3B ||
-          !const {0x6B, 0x6D, 0x8D}.contains(bytes[offset + 1])) {
-        continue;
+    // PC/SC readers can wrap the same ATS historical bytes in a synthetic ATR.
+    final pcscWrapped =
+        bytes[0] == 0x3B &&
+        (bytes[1] & 0xF0) == 0x80 &&
+        bytes[2] == 0x80 &&
+        bytes[3] == 0x01;
+    final historyOffset = pcscWrapped ? 4 : 0;
+    final historyLength = pcscWrapped ? bytes[1] & 0x0F : bytes.length;
+    final validPcscAtr = pcscWrapped && _hasValidPcscAtr(bytes, historyLength);
+    if (bytes[historyOffset] == 0x4D && bytes[historyOffset + 1] == 0x54) {
+      if (source != ResetProviderSource.historicalBytes ||
+          historyLength < 8 ||
+          (pcscWrapped && !validPcscAtr)) {
+        return;
       }
+      // The bundled chip registry uses the 00xx and FFxx ranges. Check the
+      // range so an unrelated MT-prefixed value such as MTCOS is rejected.
+      final chipHighByte = bytes[historyOffset + 2];
+      if (chipHighByte != 0x00 && chipHighByte != 0xFF) return;
       yield _candidate(
         bytes,
-        offset,
-        chipOffset: offset + 4,
-        cardOffset: offset + 9,
+        historyOffset,
+        chipOffset: historyOffset + 2,
+        cardOffset: historyOffset + 6,
         source: source,
-        layout: ResetProviderLayout.atr,
+        layout: ResetProviderLayout.tUnionHistoricalBytes,
       );
+      return;
     }
 
+    // Legacy 3B 8D inputs may omit the TCK but still carry all 13 bytes.
+    final legacyPcscAtr =
+        pcscWrapped &&
+        bytes[1] == 0x8D &&
+        (validPcscAtr || bytes.length == historyOffset + historyLength);
+    final legacyAtr =
+        legacyPcscAtr ||
+        (bytes[0] == 0x3B && (bytes[1] == 0x6B || bytes[1] == 0x6D));
+    final blockOffset = legacyAtr || validPcscAtr ? 4 : 0;
+    final blockLength = validPcscAtr
+        ? historyLength
+        : bytes.length - blockOffset;
+    if (blockLength >= 7) {
+      final hasLegacyMarker = _hasLegacyMarker(bytes, blockOffset + 2);
+      if (hasLegacyMarker || legacyAtr) {
+        yield _candidate(
+          bytes,
+          blockOffset,
+          chipOffset: blockOffset,
+          cardOffset: blockOffset + 5,
+          source: source,
+          layout: hasLegacyMarker
+              ? ResetProviderLayout.providerBlock
+              : ResetProviderLayout.atr,
+        );
+        return;
+      }
+    }
+
+    // A shifted legacy block only counts inside a 3B… reset frame close to its
+    // start; arbitrary payload bytes stay uninterpreted.
     for (var offset = 0; offset + 7 <= bytes.length; offset++) {
       if (!_plausibleBlockStart(bytes, offset)) continue;
       if (bytes[offset + 2] == 0x54 &&
@@ -62,6 +113,7 @@ class ResetProviderParser {
           source: source,
           layout: ResetProviderLayout.providerBlock,
         );
+        return;
       }
     }
 
@@ -86,20 +138,9 @@ class ResetProviderParser {
       );
     }
 
-    if (bytes.length >= 6 &&
-        bytes[1] == 0x54 &&
-        bytes[2] == 0x31 &&
-        bytes[3] == 0x00) {
-      final lowByte = _hexByte(bytes[0]);
+    if (_hasLegacyMarker(bytes, 1)) {
       yield ResetProviderCandidate(
-        chipProviderCode: '00$lowByte',
-        icCardProviderCode: _hexBytes(bytes.sublist(4, 6)),
-        source: source,
-        layout: ResetProviderLayout.providerBlockWithoutHighByte,
-        byteOffset: 0,
-      );
-      yield ResetProviderCandidate(
-        chipProviderCode: 'FF$lowByte',
+        chipProviderCode: _hexByte(bytes[0]),
         icCardProviderCode: _hexBytes(bytes.sublist(4, 6)),
         source: source,
         layout: ResetProviderLayout.providerBlockWithoutHighByte,
@@ -107,6 +148,16 @@ class ResetProviderParser {
       );
     }
   }
+
+  static bool _hasValidPcscAtr(List<int> bytes, int historyLength) =>
+      // TS, T0, TD1, TD2, historical bytes, and a TCK covering all but TS.
+      bytes.length == historyLength + 5 &&
+      bytes.skip(1).fold(0, (checksum, byte) => checksum ^ byte) == 0;
+
+  static bool _hasLegacyMarker(List<int> bytes, int offset) =>
+      bytes[offset] == 0x54 &&
+      bytes[offset + 1] == 0x31 &&
+      bytes[offset + 2] == 0x00;
 
   static ResetProviderCandidate _candidate(
     List<int> bytes,
@@ -134,27 +185,15 @@ class ResetProviderParser {
 
   static List<int> _decodeHex(String? value) {
     if (value == null) return const [];
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) return const [];
-    final tokens = trimmed.split(RegExp(r'\s+'));
-    if (tokens.length == 1) {
-      final compact = tokens.single;
-      if (compact.length.isOdd ||
-          !RegExp(r'^[0-9A-Fa-f]+$').hasMatch(compact)) {
-        return const [];
-      }
-      return [
-        for (var index = 0; index < compact.length; index += 2)
-          int.parse(compact.substring(index, index + 2), radix: 16),
-      ];
-    }
-    final bytes = <int>[];
-    for (final token in tokens) {
-      if (!RegExp(r'^[0-9A-Fa-f]{2}$').hasMatch(token)) return const [];
-      bytes.add(int.parse(token, radix: 16));
-    }
-    return bytes;
+    final compact = value.replaceAll(RegExp(r'\s+'), '');
+    if (compact.length.isOdd || !_hexPattern.hasMatch(compact)) return const [];
+    return [
+      for (var index = 0; index < compact.length; index += 2)
+        int.parse(compact.substring(index, index + 2), radix: 16),
+    ];
   }
+
+  static final _hexPattern = RegExp(r'^[0-9A-Fa-f]+$');
 
   static String _hexBytes(List<int> bytes) => bytes.map(_hexByte).join();
 

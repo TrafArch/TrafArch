@@ -51,40 +51,60 @@ class CardProviderResolver {
 
   CardProviderInfo resolve(NfcScanResult? tag) {
     if (tag == null) return const CardProviderInfo.unavailable();
+    final historicalBytes = tag.historicalBytes;
     final sources = <(ResetProviderSource, String?)>[
-      (ResetProviderSource.historicalBytes, tag.historicalBytes),
-      // A returned ATS repeats the historical bytes inside the full frame.
-      (ResetProviderSource.historicalBytes, tag.ats),
+      (
+        ResetProviderSource.historicalBytes,
+        historicalBytes == null || historicalBytes.trim().isEmpty
+            ? tag.ats
+            : historicalBytes,
+      ),
       (ResetProviderSource.higherLayerResponse, tag.hiLayerResponse),
       (ResetProviderSource.nfcBApplicationData, tag.nfcBApplicationData),
       (ResetProviderSource.nfcBProtocolInfo, tag.nfcBProtocolInfo),
     ];
+    CardProviderInfo? unregistered;
     for (final (source, value) in sources) {
       if (value == null || value.isEmpty) continue;
       for (final candidate in ResetProviderParser.parse(value, source)) {
-        final chip = _resolveField(
-          CardProviderKind.chip,
-          candidate.chipProviderCode,
-          source,
-        );
+        final chip =
+            candidate.layout == ResetProviderLayout.providerBlockWithoutHighByte
+            ? _resolveChipLowByte(candidate.chipProviderCode, source)
+            : _resolveField(
+                CardProviderKind.chip,
+                candidate.chipProviderCode,
+                source,
+              );
         final icCard = _resolveField(
           CardProviderKind.icCard,
           candidate.icCardProviderCode,
           source,
         );
-        // A dedicated provider block already proves the two positions, so its
-        // raw HEX codes stay visible even when the registry has no match. The
-        // generic ATR layout is looser and needs a registry hit to be shown.
-        final structural =
-            candidate.layout != ResetProviderLayout.atr ||
-            chip.state != CardProviderFieldState.unknown ||
-            icCard.state != CardProviderFieldState.unknown;
-        if (structural) {
-          return CardProviderInfo(chip: chip, icCard: icCard);
+        final info = CardProviderInfo(chip: chip, icCard: icCard);
+        if (candidate.layout == ResetProviderLayout.tUnionHistoricalBytes ||
+            chip.names.isNotEmpty ||
+            icCard.names.isNotEmpty) {
+          return info;
         }
+        // An ATR header alone is generic. Only a marked provider block
+        // can supply raw codes without any registry match.
+        if (candidate.layout != ResetProviderLayout.atr) unregistered ??= info;
       }
     }
-    return const CardProviderInfo.unavailable();
+    return unregistered ?? const CardProviderInfo.unavailable();
+  }
+
+  CardProviderField _resolveChipLowByte(
+    String lowByte,
+    ResetProviderSource source,
+  ) {
+    final matches = [
+      _resolveField(CardProviderKind.chip, '00$lowByte', source),
+      _resolveField(CardProviderKind.chip, 'FF$lowByte', source),
+    ].where((field) => field.names.isNotEmpty).toList();
+    return matches.length == 1
+        ? matches.single
+        : const CardProviderField.unavailable();
   }
 
   CardProviderField _resolveField(

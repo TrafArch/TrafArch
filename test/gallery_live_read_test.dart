@@ -185,14 +185,15 @@ void main() {
     tester,
   ) async {
     final fixture = await _showGallery(tester, _CardKind.tu);
-    fixture.native.historicalBytes =
-        '3B 6D 00 00 00 81 54 31 00 86 60 11 08 16 00 00 00';
+    fixture.native.historicalBytes = '4D 54 00 8C 00 30 86 65 12 34 56 78';
     await _read(tester, '开始读取');
     await _navigate(tester, 'expert');
 
     expect(find.text('机构信息'), findsOneWidget);
     expect(find.text('芯片提供机构'), findsOneWidget);
     expect(find.text('IC卡提供机构'), findsOneWidget);
+    expect(find.text('北京清华同方微电子（008C）'), findsOneWidget);
+    expect(find.text('金邦达（8665）'), findsOneWidget);
 
     await tester.tap(find.text('机构信息'));
     await tester.pumpAndSettle();
@@ -517,7 +518,7 @@ void main() {
     await tester.tap(find.widgetWithText(TextButton, '取消'));
     await _settleIo(tester);
     expect(await tester.runAsync(app.cardRepository.getAllCards), isEmpty);
-    // 读卡识图来源在 live 模式下只提示开发中，不得触发任何文件选择。
+    // 读卡识途来源在 live 模式下只提示开发中，不得触发任何文件选择。
     await openImportSource();
     final opensBeforeTripReader = fixture.documents.opens;
     await tester.tap(find.byKey(const ValueKey('import-source-trip-reader')));
@@ -527,7 +528,7 @@ void main() {
     expect(
       fixture.documents.opens,
       opensBeforeTripReader,
-      reason: '读卡识图来源不得调用 pickImport',
+      reason: '读卡识途来源不得调用 pickImport',
     );
     expect(await tester.runAsync(app.cardRepository.getAllCards), isEmpty);
     await preview();
