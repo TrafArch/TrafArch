@@ -2,10 +2,12 @@ import '../../transit_analysis/tunion_analysis_engine.dart';
 import '../../transit_analysis/cu_transaction_analysis.dart';
 import '../../transit_analysis/tunion_analysis_models.dart';
 import '../../transit_analysis/balance_interpretation.dart';
+import '../../../platform/nfc/nfc_models.dart';
 import '../../../protocols/transit/card_parser.dart';
 import '../../../protocols/transit/multiapp/application_evidence.dart';
 import '../../reference_data/data/tunion_knowledge_base.dart';
 import '../../reference_data/domain/city_union_knowledge_base.dart';
+import '../../reference_data/application/card_provider_resolver.dart';
 import '../../../protocols/felica/felica.dart';
 import '../../../protocols/transit/city_union/city_union_models.dart';
 import '../../../protocols/transit/local/local_card_models.dart';
@@ -19,9 +21,11 @@ import '../../trips/suica_trip_presenter.dart';
 /// Immutable display projection, rebuilt once when an attempt completes.
 /// Original protocol data remains available independently of derived trips.
 class ScanPresentation {
-  ScanPresentation(this.outcome, KnowledgeBase knowledge)
+  ScanPresentation(this.outcome, KnowledgeBase knowledge, {NfcScanResult? tag})
     : knowledge = knowledge,
-      parsedCard = outcome is TransitReadOutcome ? outcome.card : null {
+      parsedCard = outcome is TransitReadOutcome ? outcome.card : null,
+      cardProviders = CardProviderResolver(knowledge.cardProviders)
+          .resolve(tag) {
     final card = parsedCard;
     analysis = card != null && CardParserIds.isTUnionFamily(card.parserId)
         ? AnalysisEngine(knowledge).analyze(card)
@@ -44,6 +48,7 @@ class ScanPresentation {
   final CardReadOutcome outcome;
   final KnowledgeBase knowledge;
   final ParsedCard? parsedCard;
+  final CardProviderInfo cardProviders;
   late final CardAnalysisResult? analysis;
   late final List<CuTransactionView> cityUnionTransactions;
   late final TransitRecord? railTransitRecord;

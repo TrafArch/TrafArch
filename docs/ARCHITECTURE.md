@@ -8,6 +8,14 @@
 
 实卡卡包与详情沿用原预览的卡面、列表、统计和冻结交易组件，档案来源是 `SavedCard` 与 `ArchiveHistory` 投影。删除走现有确认流程，导出按当前卡或完整档案写入用户选择的 SAF 位置；消费统计按整数最小单位汇总明确的同币种扣款，CU 复用冻结金额与镜像过滤，不估算未知时间、币种或 Suica 余额差。业务设置同用 `SettingsController`，不写参考包或改档案 schema；卡面与排序持久化未接入。
 
+专家页的“芯片提供机构”和“IC卡提供机构”由 `assets/data/card_provider_registry.json`
+提供名称。该 JSON 保留源工作簿 SHA256、149 条来源行和重复备案码；运行时由
+`KnowledgeBase` 与参考数据同时加载，更新 TU/CU 的覆盖资源缺失时会回退内置 JSON。
+`ResetProviderParser` 只从已知 ATR／复位数据布局提取两个 4 位 HEX 备案码，
+`CardProviderResolver` 再分别按芯片与 IC 卡号段查表。未知、无备案码及重复码
+保持区分，不在原始字节中任意搜索号码，也不按 BCD 解释。1.x 专家“信息获取”
+以字段行展示；2.x 使用同一套专家展开卡、字段行、间距和主题颜色展示。
+
 两套 UI 共用 `QrReadContent`、`QrAcquisition` 与 `QrController`。`AppDependencies.runQrAcquisition` 先等待普通及八达通 NFC 会话关闭，并独占相机／相册获取；离开路由或内存恢复使在途结果失效。2.x 知识库以当前 `KnowledgeBase.packagePaths` 启动后台只读索引；已校验包的实例变更后废弃旧索引，独立预览加载器不参与实卡路径。2.x 的主要页、档案详情、扫码和设置映射为现有恢复路由；恢复只展示冻结读卡证据，不重查参考库或自动归档。诊断由既有 `DiagnosticsController` 写本机文件，反馈只打开用户主动选择的外部链接。
 
 `InternalPreviewApp` 承载样例模式：`GalleryApp` → `GalleryController` / `GalleryQrController` → 合成 fixtures，不连接真实读卡或档案。以下样例、模拟场景和设计回归说明只适用于该宿主的测试路径，不适用于 `lib/main_gallery.dart` 的实卡构建。

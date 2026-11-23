@@ -40,6 +40,7 @@ import '../features/scan/application/card_read_coordinator.dart';
 import '../features/scan/domain/card_read_outcome.dart';
 import '../features/scan/domain/scan_presentation.dart';
 import '../features/reference_data/application/reference_data_controller.dart';
+import '../features/reference_data/application/card_provider_resolver.dart';
 import '../features/settings/application/settings_controller.dart';
 import '../features/settings/application/diagnostics_controller.dart';
 import '../features/qr/application/qr_controller.dart';
@@ -375,6 +376,7 @@ class AppDependencies extends OwnedNotifier {
     final view = ScanPresentation(
       result,
       references.knowledge ?? KnowledgeBase.empty(),
+      tag: scan.tag,
     );
     _view = view;
     if (_gallerySave) _galleryCaptureId = id;
@@ -504,6 +506,7 @@ class AppDependencies extends OwnedNotifier {
   bool get autoScanConsumed => scan.autoScanConsumed;
   String? get error => scan.error ?? scan.releaseError;
   ParsedCard? get parsedCard => _view?.parsedCard;
+  CardProviderInfo? get cardProviders => _view?.cardProviders;
   List<ApplicationEvidence> get applications => _view?.applications ?? const [];
   ShanghaiTransitUnionResult? get shanghaiTransitUnion =>
       _view?.shanghaiTransitUnion;

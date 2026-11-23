@@ -1,0 +1,765 @@
+{
+  "format_version": 1,
+  "source": {
+    "file": "IC卡及芯片备案号2023.xlsx",
+    "sha256": "825e316e6cc3f14612a00aba15bd0d874f1616ad9f3bfc4838516e93d7237fd2",
+    "rows": 149,
+    "chip_provider_rows": [
+      2,
+      37
+    ],
+    "ic_card_provider_rows": [
+      38,
+      150
+    ]
+  },
+  "chip_providers": [
+    {
+      "code": "0002",
+      "name": "意法半导体",
+      "source_row": 2
+    },
+    {
+      "code": "0003",
+      "name": "日立",
+      "source_row": 3
+    },
+    {
+      "code": "0004",
+      "name": "恩智浦半导体（上海）",
+      "source_row": 4
+    },
+    {
+      "code": "0005",
+      "name": "英飞凌科技（中国）",
+      "source_row": 5
+    },
+    {
+      "code": "000E",
+      "name": "三星电子",
+      "source_row": 6
+    },
+    {
+      "code": "000F",
+      "name": "现代",
+      "source_row": 7
+    },
+    {
+      "code": "0014",
+      "name": "夏普",
+      "source_row": 8
+    },
+    {
+      "code": "0015",
+      "name": "爱特梅尔",
+      "source_row": 9
+    },
+    {
+      "code": "0016",
+      "name": "EM",
+      "source_row": 10
+    },
+    {
+      "code": "001C",
+      "name": "超捷半导体",
+      "source_row": 11
+    },
+    {
+      "code": "001D",
+      "name": "上海复旦微电子",
+      "source_row": 12
+    },
+    {
+      "code": "0020",
+      "name": "瑞萨科技",
+      "source_row": 13
+    },
+    {
+      "code": "005A",
+      "name": "聚辰半导体",
+      "source_row": 14
+    },
+    {
+      "code": "006B",
+      "name": "Thales DIS Design Services SAS",
+      "source_row": 15
+    },
+    {
+      "code": "0081",
+      "name": "北京中电华大电子设计",
+      "source_row": 16
+    },
+    {
+      "code": "0085",
+      "name": "上海华虹集成电路",
+      "source_row": 17
+    },
+    {
+      "code": "0087",
+      "name": "大唐微电子技术",
+      "source_row": 18
+    },
+    {
+      "code": "008C",
+      "name": "北京清华同方微电子",
+      "source_row": 19
+    },
+    {
+      "code": "008F",
+      "name": "聚辰半导体",
+      "source_row": 20
+    },
+    {
+      "code": "0090",
+      "name": "上海复旦微电子",
+      "source_row": 21
+    },
+    {
+      "code": "0096",
+      "name": "国民技术",
+      "source_row": 22
+    },
+    {
+      "code": "009A",
+      "name": "北京宏思电子技术",
+      "source_row": 23
+    },
+    {
+      "code": "009B",
+      "name": "中国电子科技集团公司第十五研究所",
+      "source_row": 24
+    },
+    {
+      "code": "009D",
+      "name": "山东华翼微电子技术",
+      "source_row": 25
+    },
+    {
+      "code": "00A1",
+      "name": "北京智芯微电子科技",
+      "source_row": 26
+    },
+    {
+      "code": "00AD",
+      "name": "新昇科技",
+      "source_row": 27
+    },
+    {
+      "code": "00BA",
+      "name": "广州万协通信息技术",
+      "source_row": 28
+    },
+    {
+      "code": "00BB",
+      "name": "加减信息科技（深圳）",
+      "source_row": 29
+    },
+    {
+      "code": "FF08",
+      "name": "北京智芯微电子科技",
+      "source_row": 30
+    },
+    {
+      "code": "FF09",
+      "name": "大唐微电子技术",
+      "source_row": 31
+    },
+    {
+      "code": "FF10",
+      "name": "芯昇科技",
+      "source_row": 32
+    },
+    {
+      "code": "FF0A",
+      "name": "广州万协通信息技术",
+      "source_row": 33
+    },
+    {
+      "code": "FF0B",
+      "name": "北京中电华大电子设计",
+      "source_row": 34
+    },
+    {
+      "code": "FF0C",
+      "name": "上海天臣射频技术",
+      "source_row": 35
+    },
+    {
+      "code": "FF0D",
+      "name": "中国电子科技集团公司第十五研究所",
+      "source_row": 36
+    },
+    {
+      "code": "FF0E",
+      "name": "上海华虹集成电路",
+      "source_row": 37
+    }
+  ],
+  "ic_card_providers": [
+    {
+      "code": "8631",
+      "name": "深圳市澄天伟业",
+      "source_row": 38
+    },
+    {
+      "code": "8631",
+      "name": "芯昇科技",
+      "source_row": 39
+    },
+    {
+      "code": "8632",
+      "name": "紫光同芯微电子",
+      "source_row": 40
+    },
+    {
+      "code": "8633",
+      "name": "广州广电运通金融电子",
+      "source_row": 41
+    },
+    {
+      "code": "8634",
+      "name": "珠海全球时代科技",
+      "source_row": 42
+    },
+    {
+      "code": "8635",
+      "name": "深圳市银通商智能卡",
+      "source_row": 43
+    },
+    {
+      "code": "8636",
+      "name": "恩智浦半导体（天津）",
+      "source_row": 44
+    },
+    {
+      "code": "8637",
+      "name": "上海仪电智能电子",
+      "source_row": 45
+    },
+    {
+      "code": "8638",
+      "name": "深圳明华澳汉智能卡科技",
+      "source_row": 46
+    },
+    {
+      "code": "8639",
+      "name": "天津环球磁卡-GMCC",
+      "source_row": 47
+    },
+    {
+      "code": "863D",
+      "name": "浙江精锐智能卡",
+      "source_row": 48
+    },
+    {
+      "code": "8640",
+      "name": "航天信息",
+      "source_row": 49
+    },
+    {
+      "code": "8642",
+      "name": "华旭金卡",
+      "source_row": 50
+    },
+    {
+      "code": "8643",
+      "name": "中电智能卡",
+      "source_row": 51
+    },
+    {
+      "code": "8645",
+      "name": "上海浦江智能卡系统-PDCC",
+      "source_row": 52
+    },
+    {
+      "code": "8648",
+      "name": "深圳航信德诚科技",
+      "source_row": 53
+    },
+    {
+      "code": "8649",
+      "name": "广东德生科技-DS",
+      "source_row": 54
+    },
+    {
+      "code": "8650",
+      "name": "捷德（中国）科技",
+      "source_row": 55
+    },
+    {
+      "code": "8651",
+      "name": "深圳毅能达金融信息",
+      "source_row": 56
+    },
+    {
+      "code": "8652",
+      "name": "精工伟达科技（深圳）-JKT",
+      "source_row": 57
+    },
+    {
+      "code": "8653",
+      "name": "江苏恒宝-HB/JSHB",
+      "source_row": 58
+    },
+    {
+      "code": "8657",
+      "name": "上海东方磁卡信息",
+      "source_row": 59
+    },
+    {
+      "code": "865A",
+      "name": "东莞卡的智能科技",
+      "source_row": 60
+    },
+    {
+      "code": "865D",
+      "name": "山东同创华虹科技",
+      "source_row": 61
+    },
+    {
+      "code": "865E",
+      "name": "深圳华正联实业",
+      "source_row": 62
+    },
+    {
+      "code": "865F",
+      "name": "福州兆科智能卡",
+      "source_row": 63
+    },
+    {
+      "code": "8660",
+      "name": "东信和平-EP",
+      "source_row": 64
+    },
+    {
+      "code": "8663",
+      "name": "北京金盾印刷厂",
+      "source_row": 65
+    },
+    {
+      "code": "8664",
+      "name": "上海泰雷兹智能卡技术",
+      "source_row": 66
+    },
+    {
+      "code": "8665",
+      "name": "金邦达",
+      "source_row": 67
+    },
+    {
+      "code": "866A",
+      "name": "杭州大成实业",
+      "source_row": 68
+    },
+    {
+      "code": "866B",
+      "name": "北京华大智宝电子系统",
+      "source_row": 69
+    },
+    {
+      "code": "866E",
+      "name": "东莞赛瑞智能科技",
+      "source_row": 70
+    },
+    {
+      "code": "8670",
+      "name": "山东华冠智能卡",
+      "source_row": 71
+    },
+    {
+      "code": "8672",
+      "name": "山东山铝电子技术",
+      "source_row": 72
+    },
+    {
+      "code": "8673",
+      "name": "北京中安特科技",
+      "source_row": 73
+    },
+    {
+      "code": "8675",
+      "name": "上海柯斯软件",
+      "source_row": 74
+    },
+    {
+      "code": "8678",
+      "name": "爱德觅尔（深圳）系统科技",
+      "source_row": 75
+    },
+    {
+      "code": "867A",
+      "name": "北京握奇智能科技",
+      "source_row": 76
+    },
+    {
+      "code": "867B",
+      "name": "中山达华智能科技",
+      "source_row": 77
+    },
+    {
+      "code": "867C",
+      "name": "飞天诚信科技",
+      "source_row": 78
+    },
+    {
+      "code": "867F",
+      "name": "山东凯胜电子",
+      "source_row": 79
+    },
+    {
+      "code": "8684",
+      "name": "广东楚天龙智能卡-CTD",
+      "source_row": 80
+    },
+    {
+      "code": "8685",
+      "name": "上海中卡智能卡",
+      "source_row": 81
+    },
+    {
+      "code": "8686",
+      "name": "捷德（江西）技术",
+      "source_row": 82
+    },
+    {
+      "code": "8688",
+      "name": "武汉天喻信息产业-WHTY",
+      "source_row": 83
+    },
+    {
+      "code": "8689",
+      "name": "迪隆（苏州工业园区）科技发展",
+      "source_row": 84
+    },
+    {
+      "code": "868B",
+      "name": "成都迈德物联网技术",
+      "source_row": 85
+    },
+    {
+      "code": "868C",
+      "name": "杭州艺高印刷",
+      "source_row": 86
+    },
+    {
+      "code": "868D",
+      "name": "青岛融佳安全印务",
+      "source_row": 87
+    },
+    {
+      "code": "868E",
+      "name": "深圳文鼎创数据科技",
+      "source_row": 88
+    },
+    {
+      "code": "868F",
+      "name": "盛华金卡智能科技（深圳）",
+      "source_row": 89
+    },
+    {
+      "code": "8691",
+      "name": "北京意诚信通智能卡",
+      "source_row": 90
+    },
+    {
+      "code": "8692",
+      "name": "北京万利时智能科技",
+      "source_row": 91
+    },
+    {
+      "code": "8693",
+      "name": "握奇数据系统",
+      "source_row": 92
+    },
+    {
+      "code": "8694",
+      "name": "北京骏毅能达智能科技",
+      "source_row": 93
+    },
+    {
+      "code": "8695",
+      "name": "大唐微电子技术",
+      "source_row": 94
+    },
+    {
+      "code": "8696",
+      "name": "亚洲信用卡厂（深圳）",
+      "source_row": 95
+    },
+    {
+      "code": "8697",
+      "name": "中钞信用卡厂-ZCCP/ZCC",
+      "source_row": 96
+    },
+    {
+      "code": "8698",
+      "name": "北京华弘集成电路设计",
+      "source_row": 97
+    },
+    {
+      "code": "869A",
+      "name": "中孚信息",
+      "source_row": 98
+    },
+    {
+      "code": "869B",
+      "name": "东港",
+      "source_row": 99
+    },
+    {
+      "code": "869D",
+      "name": "北京倍胜信息科技",
+      "source_row": 100
+    },
+    {
+      "code": "869F",
+      "name": "珠海保税区星汉智能卡",
+      "source_row": 101
+    },
+    {
+      "code": "86A2",
+      "name": "易联众信息技术",
+      "source_row": 102
+    },
+    {
+      "code": "86A4",
+      "name": "东莞西龙同辉智能卡",
+      "source_row": 103
+    },
+    {
+      "code": "86A5",
+      "name": "陕西煤航安全印务",
+      "source_row": 104
+    },
+    {
+      "code": "86A6",
+      "name": "鸿博",
+      "source_row": 105
+    },
+    {
+      "code": "86A7",
+      "name": "深圳新科行智能卡",
+      "source_row": 106
+    },
+    {
+      "code": "86A8",
+      "name": "长春光华科技发展",
+      "source_row": 107
+    },
+    {
+      "code": "86A9",
+      "name": "陕西峰火电子",
+      "source_row": 108
+    },
+    {
+      "code": "86AB",
+      "name": "诺得卡（上海）微电子",
+      "source_row": 109
+    },
+    {
+      "code": "86AD",
+      "name": "上海天臣防伪技术",
+      "source_row": 110
+    },
+    {
+      "code": "86AE",
+      "name": "北京融通高科科技发展",
+      "source_row": 111
+    },
+    {
+      "code": "86B1",
+      "name": "南京德朗克电子科技",
+      "source_row": 112
+    },
+    {
+      "code": "86B2",
+      "name": "北京大唐智能卡技术",
+      "source_row": 113
+    },
+    {
+      "code": "86B3",
+      "name": "烟台东方瑞创达电子科技",
+      "source_row": 114
+    },
+    {
+      "code": "86B4",
+      "name": "深圳正宏盛智能科技",
+      "source_row": 115
+    },
+    {
+      "code": "86B5",
+      "name": "深圳华创兆业科技",
+      "source_row": 116
+    },
+    {
+      "code": "86B6",
+      "name": "江苏远洋数据",
+      "source_row": 117
+    },
+    {
+      "code": "86B7",
+      "name": "深圳建和智能卡技术",
+      "source_row": 118
+    },
+    {
+      "code": "86B8",
+      "name": "北京雅光谷信息系统",
+      "source_row": 119
+    },
+    {
+      "code": "86BA",
+      "name": "四川精工伟达智能技术",
+      "source_row": 120
+    },
+    {
+      "code": "86BB",
+      "name": "深圳正东源科技",
+      "source_row": 121
+    },
+    {
+      "code": "86BC",
+      "name": "深圳西龙同辉技术",
+      "source_row": 122
+    },
+    {
+      "code": "86BD",
+      "name": "天地融科技股份",
+      "source_row": 123
+    },
+    {
+      "code": "86BE",
+      "name": "深圳赛思永盛科技",
+      "source_row": 124
+    },
+    {
+      "code": "86BF",
+      "name": "北京赛福特客信息技术",
+      "source_row": 125
+    },
+    {
+      "code": "86CA",
+      "name": "上海乾圆电子智能技术",
+      "source_row": 126
+    },
+    {
+      "code": "86CB",
+      "name": "苏州海博智能系统",
+      "source_row": 127
+    },
+    {
+      "code": "86CC",
+      "name": "上海博应信息技术",
+      "source_row": 128
+    },
+    {
+      "code": "86CD",
+      "name": "深圳量必达科技",
+      "source_row": 129
+    },
+    {
+      "code": "86CE",
+      "name": "中国安全防伪证件研制中心",
+      "source_row": 130
+    },
+    {
+      "code": "86CF",
+      "name": "上海诚天智能卡",
+      "source_row": 131
+    },
+    {
+      "code": "86DA",
+      "name": "北京银证信通智能卡",
+      "source_row": 132
+    },
+    {
+      "code": "86DB",
+      "name": "上海哲山科技",
+      "source_row": 133
+    },
+    {
+      "code": "86DC",
+      "name": "江西洲际智能科技",
+      "source_row": 134
+    },
+    {
+      "code": "86DE",
+      "name": "北京海泰瑞德科技发展",
+      "source_row": 135
+    },
+    {
+      "code": "86DF",
+      "name": "东莞金盛华智能科技",
+      "source_row": 136
+    },
+    {
+      "code": "86EA",
+      "name": "深圳新润晖智能卡",
+      "source_row": 137
+    },
+    {
+      "code": "86EB",
+      "name": "上海精麟电子科技",
+      "source_row": 138
+    },
+    {
+      "code": "86EC",
+      "name": "深圳德健智能科技",
+      "source_row": 139
+    },
+    {
+      "code": "86ED",
+      "name": "北京智芯微电子科技",
+      "source_row": 140
+    },
+    {
+      "code": "86EE",
+      "name": "上海安全印务",
+      "source_row": 141
+    },
+    {
+      "code": "86EF",
+      "name": "深圳融智兴科技",
+      "source_row": 142
+    },
+    {
+      "code": "86F1",
+      "name": "公安部第一研究所",
+      "source_row": 143
+    },
+    {
+      "code": "87F2",
+      "name": "北京金辰西维科安全印务",
+      "source_row": 144
+    },
+    {
+      "code": "87F7",
+      "name": "新恒汇电子",
+      "source_row": 145
+    },
+    {
+      "code": "87F8",
+      "name": "北京宏思电子技术",
+      "source_row": 146
+    },
+    {
+      "code": "86FA",
+      "name": "北京云海通商科技",
+      "source_row": 147
+    },
+    {
+      "code": "86FB",
+      "name": "拓汇斯科技（深圳）",
+      "source_row": 148
+    },
+    {
+      "code": "87FC",
+      "name": "澄天伟业（宁波）",
+      "source_row": 149
+    },
+    {
+      "code": "88FE",
+      "name": "南京宝华智能科技",
+      "source_row": 150
+    }
+  ]
+}

@@ -225,6 +225,12 @@ are retained. ISO-DEP remains preferred; NFC-F is connected only if ISO-DEP did 
 connect. Timeouts remain ISO-DEP 5000 ms and NFC-F 3000 ms. The existing best-effort
 MIFARE block-0 read is preserved; no authentication or new card capability is added.
 
+ISO-DEP historical bytes and the higher-layer response are captured from Android's
+discovery metadata before `connect()`. A later connection or APDU failure therefore
+does not erase the activation evidence already supplied with the successful scan.
+Provider-name lookup and reset-information decoding remain in Dart. The native
+transport does not consult the bundled provider registry or add a new MethodChannel.
+
 ## NFC errors
 
 | Code | Message / details | Meaning |
