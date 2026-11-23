@@ -167,14 +167,15 @@ void main() {
     tester,
   ) async {
     final fixture = await _showGallery(tester, _CardKind.tu);
-    fixture.native.historicalBytes =
-        '3B 6D 00 00 00 81 54 31 00 86 60 11 08 16 00 00 00';
+    fixture.native.historicalBytes = '4D 54 00 8C 00 30 86 65 12 34 56 78';
     await _read(tester, '开始读取');
     await _navigate(tester, 'expert');
 
     expect(find.text('机构信息'), findsOneWidget);
     expect(find.text('芯片提供机构'), findsOneWidget);
     expect(find.text('IC卡提供机构'), findsOneWidget);
+    expect(find.text('北京清华同方微电子（008C）'), findsOneWidget);
+    expect(find.text('金邦达（8665）'), findsOneWidget);
 
     await tester.tap(find.text('机构信息'));
     await tester.pumpAndSettle();
