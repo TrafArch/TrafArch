@@ -179,7 +179,7 @@ void main() {
     expect(find.textContaining('正在读取余额与行程'), findsOneWidget);
     expect(find.text('开始读取'), findsNothing);
     expect(find.text('正在读取…'), findsNothing);
-    expect(find.text('模拟数据'), findsOneWidget);
+    expect(find.text('模拟数据'), findsNothing);
     await tester.pump(const Duration(milliseconds: 1000));
     await tester.pumpAndSettle();
     expect(c.hasRead, isTrue);

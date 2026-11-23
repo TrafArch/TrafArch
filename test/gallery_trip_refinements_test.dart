@@ -36,7 +36,7 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('trip reference typography keeps arrival regular', (
+  testWidgets('trip reference typography bolds stations and trims the clock', (
     tester,
   ) async {
     await mount(tester);
@@ -57,14 +57,14 @@ void main() {
     );
     expect(
       tester.widget<Text>(find.text('徐家汇').first).style!.fontWeight,
-      FontWeight.w400,
+      FontWeight.w600,
     );
     for (final (value, size, lineHeight, weight) in [
       ('今天', 26.0, 32.0, FontWeight.w600),
-      ('08:07', 16.0, 22.0, FontWeight.w400),
-      ('08:42', 16.0, 22.0, FontWeight.w400),
-      ('未记录', 16.0, 22.0, FontWeight.w400),
-      ('徐家汇', 18.0, 26.0, FontWeight.w400),
+      ('08:07', 14.0, 20.0, FontWeight.w400),
+      ('08:42', 14.0, 20.0, FontWeight.w400),
+      ('未记录', 14.0, 20.0, FontWeight.w400),
+      ('徐家汇', 18.0, 26.0, FontWeight.w600),
       ('轨道交通', 16.0, 22.0, FontWeight.w400),
       ('上海', 14.0, 20.0, FontWeight.w400),
       ('−¥4.00', 18.0, 24.0, FontWeight.w400),
@@ -83,7 +83,7 @@ void main() {
     await tester.tap(find.text('陆家嘴'));
     await tester.pumpAndSettle();
     for (final text in tester.widgetList<Text>(find.text('08:42'))) {
-      expect(text.style!.fontSize, 16);
+      expect(text.style!.fontSize, 14);
       expect(text.style!.fontWeight, FontWeight.w400);
     }
     controller.back();
@@ -95,6 +95,24 @@ void main() {
       tester.widget<Text>(find.text('08:42')).style!.fontWeight,
       FontWeight.w400,
     );
+  });
+
+  testWidgets('trip rows drop seconds from recorded clock times', (
+    tester,
+  ) async {
+    final sample = {
+      ...controller.trips.first,
+      'entryTime': '08:07:45',
+      'time': '08:42:10',
+    };
+    controller.trips
+      ..clear()
+      ..add(sample);
+    await mount(tester);
+    expect(find.text('08:07'), findsWidgets);
+    expect(find.text('08:42'), findsWidgets);
+    expect(find.text('08:07:45'), findsNothing);
+    expect(find.text('08:42:10'), findsNothing);
   });
 
   testWidgets('logo follows spending city and preserves the existing badge', (
@@ -203,13 +221,16 @@ void main() {
       findsNothing,
     );
     for (final value in ['07:52', '49 路', '汉口路江西中路']) {
-      expect(find.descendant(of: row, matching: find.text(value)), findsOneWidget);
+      expect(
+        find.descendant(of: row, matching: find.text(value)),
+        findsOneWidget,
+      );
     }
     final time = tester.widget<Text>(
       find.descendant(of: row, matching: find.text('07:52')),
     );
-    // 单向公交仅记录上车，时间与常规时间同为 16dp 且不加粗。
-    expect(time.style!.fontSize, 16);
+    // 单向公交仅记录上车，时间与常规时间同为 14dp 且不加粗。
+    expect(time.style!.fontSize, 14);
     expect(time.style!.fontWeight, FontWeight.w400);
     expect(find.text('公交'), findsWidgets);
     expect(find.text('上海'), findsWidgets);

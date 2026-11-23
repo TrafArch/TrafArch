@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -12,6 +12,7 @@ import 'package:transit_card_analyzer/features/octopus/octopus_balance_controlle
 import 'package:transit_card_analyzer/features/updates/update_service.dart';
 import 'package:transit_card_analyzer/gallery/gallery_app.dart';
 import 'package:transit_card_analyzer/gallery/gallery_theme.dart';
+import 'package:transit_card_analyzer/gallery/gallery_preferences.dart';
 import 'package:transit_card_analyzer/platform/nfc/felica_channel.dart';
 import 'package:transit_card_analyzer/platform/nfc/nfc_models.dart';
 import 'package:transit_card_analyzer/platform/nfc/nfc_service.dart';
@@ -25,6 +26,21 @@ import 'package:transit_card_analyzer/shared/domain/archive_conflict_policy.dart
 
 import 'support/gallery_scroll.dart';
 import 'support/test_database.dart';
+
+class _MemoryFaceStore implements GalleryFaceStore {
+  final values = <String, GalleryFaceSnapshot>{};
+
+  @override
+  Future<GalleryFaceSnapshot?> read(String cardId) async => values[cardId];
+
+  @override
+  Future<void> write(String cardId, GalleryFaceSnapshot snapshot) async {
+    values[cardId] = snapshot;
+  }
+
+  @override
+  Future<void> delete(String cardId) async => values.remove(cardId);
+}
 
 void main() {
   for (final kind in _CardKind.values) {
@@ -618,7 +634,7 @@ void main() {
       fixture.native.closeFails = true;
       await tester.tap(find.text('开始读取'));
       await tester.pump();
-      final fallbackSwitch = find.widgetWithText(SwitchListTile, '使用 2.x 主界面');
+      final fallbackSwitch = find.widgetWithText(SwitchListTile, '使用 1.x 备用界面');
       await _openSettingsControl(tester, fallbackSwitch);
       await tester.tap(fallbackSwitch);
       await tester.pumpAndSettle();
@@ -642,7 +658,7 @@ void main() {
       expect(app.disposed, isFalse);
       expect(app.hasCompletedRead, isFalse);
 
-      final mainUiSwitch = find.widgetWithText(SwitchListTile, '启用 2.x 主界面');
+      final mainUiSwitch = find.widgetWithText(SwitchListTile, '返回 2.x 主界面');
       await _openSettingsControl(tester, mainUiSwitch);
       await tester.tap(mainUiSwitch);
       await tester.pumpAndSettle();
@@ -706,7 +722,7 @@ void main() {
       expect(find.text('暂无更新'), findsOneWidget);
       expect(checks, 2);
 
-      final fallbackSwitch = find.widgetWithText(SwitchListTile, '使用 2.x 主界面');
+      final fallbackSwitch = find.widgetWithText(SwitchListTile, '使用 1.x 备用界面');
       await tester.scrollUntilVisible(
         fallbackSwitch,
         250,
@@ -787,7 +803,11 @@ Future<_Fixture> _showGallery(
   addTearDown(fixture.app.dispose);
   await tester.runAsync(fixture.app.init);
   expect(fixture.app.autoSaveEnabled, autoSave);
-  await tester.pumpWidget(GalleryApp(liveApp: fixture.app));
+  final preferences = GalleryPreferences(faceStore: _MemoryFaceStore());
+  addTearDown(preferences.dispose);
+  await tester.pumpWidget(
+    GalleryApp(liveApp: fixture.app, preferences: preferences),
+  );
   await tester.pumpAndSettle();
   return fixture;
 }

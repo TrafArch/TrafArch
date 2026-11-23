@@ -637,10 +637,19 @@ class _GalleryMainTransition extends StatefulWidget {
 }
 
 class _GalleryMainSlot {
-  _GalleryMainSlot(this.child, this.begin, this.end);
+  _GalleryMainSlot(
+    this.child,
+    this.begin,
+    this.end,
+    this.offsetBegin,
+    this.offsetEnd,
+  );
   Widget child;
   double begin, end;
+  double offsetBegin, offsetEnd;
   double position(double progress) => begin + (end - begin) * progress;
+  double offset(double progress) =>
+      offsetBegin + (offsetEnd - offsetBegin) * progress;
 }
 
 class _GalleryMainTransitionState extends State<_GalleryMainTransition>
@@ -661,7 +670,13 @@ class _GalleryMainTransitionState extends State<_GalleryMainTransition>
   @override
   void initState() {
     super.initState();
-    _slots[widget.page] = _GalleryMainSlot(widget.builder(widget.page), 1, 1);
+    _slots[widget.page] = _GalleryMainSlot(
+      widget.builder(widget.page),
+      1,
+      1,
+      0,
+      0,
+    );
   }
 
   @override
@@ -670,21 +685,54 @@ class _GalleryMainTransitionState extends State<_GalleryMainTransition>
     if (widget.reduceMotion) {
       _animation.stop();
       _slots.clear();
-      _slots[widget.page] = _GalleryMainSlot(widget.builder(widget.page), 1, 1);
+      _slots[widget.page] = _GalleryMainSlot(
+        widget.builder(widget.page),
+        1,
+        1,
+        0,
+        0,
+      );
       _animation.value = 1;
     } else if (widget.page != oldWidget.page) {
       final progress = _value;
+      final pages = GalleryController.visibleMainPages;
+      final targetIndex = pages.indexOf(widget.page);
+      final direction = targetIndex > pages.indexOf(oldWidget.page)
+          ? 1.0
+          : -1.0;
+      final activeOffset = _slots[oldWidget.page]?.offset(progress) ?? 0;
+      // Join the new page to the currently visible edge. If this tap reverses
+      // an in-flight transition, the selected page may already be partly off
+      // canvas, so a hard-coded ±1 start would expose a background stripe.
+      final incomingOffset = activeOffset + direction;
       _animation.stop();
       for (final item in _slots.entries) {
         item.value.begin = item.value.position(progress);
-        item.value.end = 0;
+        item.value.offsetBegin = item.key == widget.page
+            ? incomingOffset
+            : item.value.offset(progress);
+        item.value.end = item.key == widget.page ? 1 : 0;
+        item.value.offsetEnd = item.key == widget.page
+            ? 0
+            : item.key == oldWidget.page
+            ? -direction
+            : (pages.indexOf(item.key) < targetIndex ? -1 : 1);
       }
       final incoming = _slots.putIfAbsent(
         widget.page,
-        () => _GalleryMainSlot(widget.builder(widget.page), 0, 1),
+        () => _GalleryMainSlot(
+          widget.builder(widget.page),
+          0,
+          1,
+          incomingOffset,
+          0,
+        ),
       );
       incoming.child = widget.builder(widget.page);
+      incoming.begin = 0;
       incoming.end = 1;
+      incoming.offsetBegin = incomingOffset;
+      incoming.offsetEnd = 0;
       _animation.forward(from: 0);
     } else {
       for (final item in _slots.entries) {
@@ -710,18 +758,21 @@ class _GalleryMainTransitionState extends State<_GalleryMainTransition>
             Opacity(
               key: ValueKey(item.key),
               opacity: item.value.position(_value),
-              child: IgnorePointer(
-                ignoring: item.key != widget.page,
-                child: ExcludeFocus(
-                  excluding: item.key != widget.page,
-                  child: ExcludeSemantics(
+              child: FractionalTranslation(
+                translation: Offset(item.value.offset(_value), 0),
+                child: IgnorePointer(
+                  ignoring: item.key != widget.page,
+                  child: ExcludeFocus(
                     excluding: item.key != widget.page,
-                    child: TickerMode(
-                      enabled: item.key == widget.page,
-                      child: RepaintBoundary(
-                        child: ColoredBox(
-                          color: Theme.of(context).scaffoldBackgroundColor,
-                          child: item.value.child,
+                    child: ExcludeSemantics(
+                      excluding: item.key != widget.page,
+                      child: TickerMode(
+                        enabled: item.key == widget.page,
+                        child: RepaintBoundary(
+                          child: ColoredBox(
+                            color: Theme.of(context).scaffoldBackgroundColor,
+                            child: item.value.child,
+                          ),
                         ),
                       ),
                     ),

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/app/app_dependencies.dart';
 import 'package:transit_card_analyzer/app/beta_ui_scope.dart';
@@ -23,8 +23,8 @@ AppDependencies createTestApp() => AppDependencies(
   channel: _NoopNfcChannel(),
 );
 
-final _enableMainUi = find.widgetWithText(SwitchListTile, '启用 2.x 主界面');
-final _useMainUi = find.widgetWithText(SwitchListTile, '使用 2.x 主界面');
+final _enableMainUi = find.widgetWithText(SwitchListTile, '返回 2.x 主界面');
+final _useMainUi = find.widgetWithText(SwitchListTile, '使用 1.x 备用界面');
 
 void main() {
   testWidgets('legacy settings hides the switch outside a switching host', (
@@ -82,7 +82,7 @@ void main() {
     expect(created, 1);
 
     await openSwitch(_useMainUi);
-    expect(tester.widget<SwitchListTile>(_useMainUi).value, isTrue);
+    expect(tester.widget<SwitchListTile>(_useMainUi).value, isFalse);
     await tester.tap(_useMainUi);
     await tester.pumpAndSettle();
     expect(find.byType(TransitCardAnalyzerApp), findsOneWidget);

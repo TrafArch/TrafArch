@@ -1035,7 +1035,7 @@ extension _GalleryInspection on _GalleryViewState {
                         weight: FontWeight.w600,
                       ),
                       _text(
-                        'JT/T 1179 · ${c.qr.origin == 'gallery' ? '相册导入' : '扫描二维码'} · 模拟数据',
+                        'JT/T 1179 · ${c.qr.origin == 'gallery' ? '相册导入' : '扫描二维码'}',
                         role: GalleryTypography.caption,
                         color: t.muted,
                       ),

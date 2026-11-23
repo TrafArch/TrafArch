@@ -129,7 +129,16 @@ class TransitSummaryPanel extends StatelessWidget {
       else if (result?.cardType != null)
         summaryField(context, '卡型', result!.cardType!),
       if (cityName != null && cityName.isNotEmpty)
-        summaryField(context, '发卡地', cityName),
+        summaryField(
+          context,
+          '发卡地',
+          cityName,
+          valueStyle: Theme.of(context).textTheme.bodyLarge?.copyWith(
+            fontSize: 16,
+            height: 24 / 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       if (cityName == null && isLingnan) summaryField(context, '发卡地', '未识别'),
       if (isDualCity)
         summaryField(

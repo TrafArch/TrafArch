@@ -67,6 +67,23 @@ class _SummaryApp extends AppDependencies {
 }
 
 void main() {
+  testWidgets('首页卡片名称和发卡地突出，余额字号较小', (tester) async {
+    final app = _SummaryApp(_card(10000, cuBalance: 8100));
+    addTearDown(app.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: TransitSummaryPanel(app: app)),
+      ),
+    );
+
+    final name = find.byWidgetPredicate(
+      (widget) => widget is Text && widget.style?.fontSize == 20,
+    );
+    expect(name, findsOneWidget);
+    final balance = tester.widget<Text>(find.text('¥92.00'));
+    expect(balance.style!.fontSize, lessThan(14));
+  });
+
   testWidgets('上海TU含额度89元和CU实余额81元，关闭显示81/81且CU切换不变', (tester) async {
     final app = _SummaryApp(_card(8900, cuBalance: 8100));
     addTearDown(app.dispose);

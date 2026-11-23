@@ -53,6 +53,8 @@ class CardProviderResolver {
     if (tag == null) return const CardProviderInfo.unavailable();
     final sources = <(ResetProviderSource, String?)>[
       (ResetProviderSource.historicalBytes, tag.historicalBytes),
+      // A returned ATS repeats the historical bytes inside the full frame.
+      (ResetProviderSource.historicalBytes, tag.ats),
       (ResetProviderSource.higherLayerResponse, tag.hiLayerResponse),
       (ResetProviderSource.nfcBApplicationData, tag.nfcBApplicationData),
       (ResetProviderSource.nfcBProtocolInfo, tag.nfcBProtocolInfo),
@@ -70,8 +72,14 @@ class CardProviderResolver {
           candidate.icCardProviderCode,
           source,
         );
-        if (chip.state != CardProviderFieldState.unknown ||
-            icCard.state != CardProviderFieldState.unknown) {
+        // A dedicated provider block already proves the two positions, so its
+        // raw HEX codes stay visible even when the registry has no match. The
+        // generic ATR layout is looser and needs a registry hit to be shown.
+        final structural =
+            candidate.layout != ResetProviderLayout.atr ||
+            chip.state != CardProviderFieldState.unknown ||
+            icCard.state != CardProviderFieldState.unknown;
+        if (structural) {
           return CardProviderInfo(chip: chip, icCard: icCard);
         }
       }

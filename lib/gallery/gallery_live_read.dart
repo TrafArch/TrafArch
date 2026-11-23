@@ -8,7 +8,7 @@ class _GalleryLiveScope extends InheritedNotifier<_GalleryLiveRead> {
 }
 
 class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
-  _GalleryLiveRead(this.app, this.navigation) {
+  _GalleryLiveRead(this.app, this.navigation, this.restoreFaceImages) {
     final result = app.lastResult;
     if (app.hasCompletedRead && result != null) {
       lastCard = _LiveCardSummary.fromRead(app, readAt: result.timestamp);
@@ -30,6 +30,7 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
 
   final AppDependencies app;
   final GalleryController navigation;
+  final Future<void> Function(Iterable<GalleryCard>) restoreFaceImages;
   StreamSubscription<List<ArchiveRows>>? _archiveSubscription;
   List<_LiveArchiveCard> _archive = const [];
   Map<String, _LiveArchiveCard> _archiveById = const {};
@@ -148,6 +149,7 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
         if (card.id != currentCard.id) card,
     ];
     navigation.cards = cards;
+    unawaited(restoreFaceImages(cards));
     navigation.currentCardId = currentCard.id;
     if (!cards.any((card) => card.id == navigation.selectedCardId)) {
       navigation.selectedCardId = currentCard.id;
@@ -447,26 +449,31 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
 
   @override
   Future<void> setAutoSave(bool value) async {
-    await app.setAutoSaveEnabled(value);
+    // SettingsController publishes optimistically before awaiting storage; sync
+    // the Gallery toggle in the same turn so its thumb never waits on disk I/O.
+    final write = app.setAutoSaveEnabled(value);
     navigation.autoSave = value;
     _syncController();
     notifyListeners();
+    await write;
   }
 
   @override
   Future<void> setIncludeOverdraft(bool value) async {
-    await app.setIncludeShanghaiOverdraft(value);
+    final write = app.setIncludeShanghaiOverdraft(value);
     navigation.includeOverdraft = value;
     _syncController();
     notifyListeners();
+    await write;
   }
 
   @override
   Future<void> setLogs(bool value) async {
-    await app.setLoggingEnabled(value);
+    final write = app.setLoggingEnabled(value);
     navigation.logsEnabled = value;
     _syncController();
     notifyListeners();
+    await write;
   }
 
   Future<bool> openQr() async {

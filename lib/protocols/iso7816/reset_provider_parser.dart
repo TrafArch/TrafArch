@@ -50,6 +50,7 @@ class ResetProviderParser {
     }
 
     for (var offset = 0; offset + 7 <= bytes.length; offset++) {
+      if (!_plausibleBlockStart(bytes, offset)) continue;
       if (bytes[offset + 2] == 0x54 &&
           bytes[offset + 3] == 0x31 &&
           bytes[offset + 4] == 0x00) {
@@ -62,6 +63,27 @@ class ResetProviderParser {
           layout: ResetProviderLayout.providerBlock,
         );
       }
+    }
+
+    // "MT" provider block: M T chip(2) 00 kind icCard(2). The trailing codes
+    // are only read from a complete block anchored at the start of the reset
+    // information (or inside a 3B ATR envelope); partial or shifted matches
+    // must never surface as provider codes.
+    for (var offset = 0; offset + 8 <= bytes.length; offset++) {
+      if (bytes[offset] != 0x4D ||
+          bytes[offset + 1] != 0x54 ||
+          bytes[offset + 4] != 0x00) {
+        continue;
+      }
+      if (!_plausibleBlockStart(bytes, offset)) continue;
+      yield _candidate(
+        bytes,
+        offset,
+        chipOffset: offset + 2,
+        cardOffset: offset + 6,
+        source: source,
+        layout: ResetProviderLayout.providerBlock,
+      );
     }
 
     if (bytes.length >= 6 &&
@@ -101,14 +123,37 @@ class ResetProviderParser {
     byteOffset: offset,
   );
 
+  /// A provider block is trusted at the start of the reset information or
+  /// inside a contactless 3B… ATR envelope; anything shifted into arbitrary
+  /// payload bytes stays uninterpreted.
+  static bool _plausibleBlockStart(List<int> bytes, int offset) {
+    if (offset == 0) return true;
+    if (bytes.isEmpty || bytes[0] != 0x3B) return false;
+    return offset <= 8;
+  }
+
   static List<int> _decodeHex(String? value) {
     if (value == null) return const [];
-    final compact = value.replaceAll(RegExp(r'[^0-9A-Fa-f]'), '');
-    if (compact.isEmpty || compact.length.isOdd) return const [];
-    return [
-      for (var index = 0; index < compact.length; index += 2)
-        int.parse(compact.substring(index, index + 2), radix: 16),
-    ];
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return const [];
+    final tokens = trimmed.split(RegExp(r'\s+'));
+    if (tokens.length == 1) {
+      final compact = tokens.single;
+      if (compact.length.isOdd ||
+          !RegExp(r'^[0-9A-Fa-f]+$').hasMatch(compact)) {
+        return const [];
+      }
+      return [
+        for (var index = 0; index < compact.length; index += 2)
+          int.parse(compact.substring(index, index + 2), radix: 16),
+      ];
+    }
+    final bytes = <int>[];
+    for (final token in tokens) {
+      if (!RegExp(r'^[0-9A-Fa-f]{2}$').hasMatch(token)) return const [];
+      bytes.add(int.parse(token, radix: 16));
+    }
+    return bytes;
   }
 
   static String _hexBytes(List<int> bytes) => bytes.map(_hexByte).join();

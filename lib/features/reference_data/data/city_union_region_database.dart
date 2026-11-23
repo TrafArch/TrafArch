@@ -462,6 +462,29 @@ class CityUnionRegionKnowledgeDb implements LiveRegionLines {
   ];
 
   @override
+  Future<List<StationCodeEntry>> searchEntries(
+    String cityKey,
+    String system,
+    String query,
+  ) async {
+    if (system != 'cu') return const [];
+    final needle = query.trim().toLowerCase();
+    if (needle.isEmpty) return const [];
+    final rows = db.select(
+      'SELECT DISTINCT * FROM station_lookup WHERE region_code=? AND '
+      '(lower(COALESCE(line_name, \'\')) LIKE ? OR '
+      'lower(COALESCE(station_name, \'\')) LIKE ? OR '
+      'lower(COALESCE(source_key, \'\')) LIKE ? OR '
+      'lower(COALESCE(line_code, \'\')) LIKE ? OR '
+      'lower(COALESCE(station_code, \'\')) LIKE ?) LIMIT 100',
+      [cityKey, '%$needle%', '%$needle%', '$needle%', '$needle%', '$needle%'],
+    );
+    return [
+      for (final row in rows) _entry(row, CuLookupContext(regionCode: cityKey)),
+    ];
+  }
+
+  @override
   Future<List<RegionLineCoverage>> linesForRegion(
     String cityKey,
     String system,

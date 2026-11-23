@@ -536,6 +536,13 @@ extension _GalleryFaceCropper on _GalleryViewState {
         if (session.seed != null) card.monetSeed = session.seed;
         c.faceCrop = null;
       }, '保存卡面图片');
+      unawaited(
+        _preferences.saveFaceImage(card).then((saved) {
+          if (!saved && mounted) {
+            _toast(_preferences.faceError ?? '卡面图片未能保存到本机');
+          }
+        }),
+      );
     }
     c.back();
   }

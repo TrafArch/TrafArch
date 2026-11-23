@@ -86,6 +86,25 @@ class TuRegionLiveSource implements LiveStationSource, LiveRegionLines {
   List<RegionOverview> queryOverviews() => repository.queryOverviews();
 
   @override
+  Future<List<StationCodeEntry>> searchEntries(
+    String cityKey,
+    String system,
+    String query,
+  ) async {
+    if (system != 'tu') return const [];
+    final needle = query.trim().toLowerCase();
+    if (needle.isEmpty) return const [];
+    return [
+      for (final record in repository.entriesOfRegion(cityKey))
+        if ([record.lineName, record.stationName].whereType<String>().any(
+              (v) => v.toLowerCase().contains(needle),
+            ) ||
+            record.sourceKey.toLowerCase().startsWith(needle))
+          repository.entryForRecord(record),
+    ];
+  }
+
+  @override
   Future<List<RegionLineCoverage>> linesForRegion(
     String cityKey,
     String system,

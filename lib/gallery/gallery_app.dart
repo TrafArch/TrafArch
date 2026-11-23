@@ -157,8 +157,15 @@ class _GalleryAppState extends State<GalleryApp> {
     _preferences = widget.preferences ?? GalleryPreferences();
     if (widget.liveApp case final app?) {
       final controller = _owned = GalleryController(GalleryData.live());
-      _liveRead = _GalleryLiveRead(app, controller);
+      _liveRead = _GalleryLiveRead(
+        app,
+        controller,
+        _preferences.restoreFaceImages,
+      );
+      // Keep the live shell available while app-private image storage resolves.
+      // A slow or temporarily unavailable filesystem must not block tab startup.
       _ready = Future.value(controller);
+      unawaited(_restoreFaceImages(controller));
       return;
     }
     _ready = widget.controller != null
@@ -169,9 +176,21 @@ class _GalleryAppState extends State<GalleryApp> {
               controller.dispose();
             } else {
               _owned = controller;
+              unawaited(_restoreFaceImages(controller));
             }
             return controller;
           });
+    if (widget.controller != null && widget.preferences != null) {
+      unawaited(_restoreFaceImages(widget.controller!));
+    }
+  }
+
+  Future<GalleryController> _restoreFaceImages(
+    GalleryController controller,
+  ) async {
+    await _preferences.restoreFaceImages(controller.cards);
+    if (mounted) controller.notifyListeners();
+    return controller;
   }
 
   @override
@@ -227,10 +246,13 @@ class _GalleryAppState extends State<GalleryApp> {
             supportedLocales: const [Locale('zh', 'CN'), Locale('en')],
             localizationsDelegates: GlobalMaterialLocalizations.delegates,
             themeMode: c.themeMode,
-            themeAnimationDuration: GalleryMotion.duration(
-              context,
-              GalleryMotion.theme,
-            ),
+            // Switching brightness repaints the whole 2.x tree. Material's
+            // animated theme cross-fade rebuilds every themed widget on each
+            // frame, which is what dropped frames in settings; apply the new
+            // semantic colours in one frame instead. Layout, state, scroll
+            // offsets and inputs are untouched, and reduce-motion users see
+            // the same instant result.
+            themeAnimationDuration: Duration.zero,
             themeAnimationCurve: GalleryMotion.standard,
             theme: _appearance.theme(c, false, monetSeed),
             darkTheme: _appearance.theme(c, true, monetSeed),

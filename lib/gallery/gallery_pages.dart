@@ -186,21 +186,6 @@ extension _GalleryPages on _GalleryViewState {
             ),
           ),
         ],
-        if (live == null) ...[
-          _gap(
-            showResult
-                ? 8
-                : _compactHeight
-                ? 12
-                : 32,
-          ),
-          _text(
-            '模拟数据',
-            role: GalleryTypography.caption,
-            color: t.muted,
-            align: showResult ? TextAlign.left : TextAlign.center,
-          ),
-        ],
       ],
     );
   }
@@ -499,7 +484,11 @@ extension _GalleryPages on _GalleryViewState {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _text(time, role: GalleryJourneyTypography.time, lines: 1),
+                    _text(
+                      _tripClock(time),
+                      role: GalleryJourneyTypography.time,
+                      lines: 1,
+                    ),
                     if (line.isNotEmpty) ...[
                       const SizedBox(width: 8),
                       lineBadge(line),
@@ -593,12 +582,10 @@ extension _GalleryPages on _GalleryViewState {
                             color: t.muted,
                           ),
                         ],
+                        if (trip['foreign'] == true)
+                          _chip('异地用卡', weight: FontWeight.w400),
                       ],
                     ),
-                    if (trip['foreign'] == true) ...[
-                      _chip('异地用卡', weight: FontWeight.w400),
-                      const SizedBox(width: 6),
-                    ],
                     _text(
                       galleryDisplayAmount(trip['amount'] as String),
                       role: GalleryJourneyTypography.amount,
@@ -616,7 +603,7 @@ extension _GalleryPages on _GalleryViewState {
                           FittedBox(
                             fit: BoxFit.scaleDown,
                             child: _text(
-                              boarding,
+                              _tripClock(boarding),
                               role: GalleryJourneyTypography.oneWayTime,
                               lines: 1,
                             ),
@@ -1470,16 +1457,14 @@ extension _GalleryPages on _GalleryViewState {
         _sectionTitle('备用界面'),
         _panel(
           _switch(
-            '使用 2.x 主界面',
-            true,
+            '使用 1.x 备用界面',
+            false,
             beta?.switching == true ? null : (_) => widget.onDisableBeta!(),
             subtitle:
                 beta?.switchError ??
                 (beta?.switching == true
                     ? '正在切换到 1.x 备用界面…'
-                    : live == null
-                    ? '关闭后进入 1.x 备用界面。'
-                    : '关闭后切换到 1.x 备用界面，重启后会恢复 2.x。'),
+                    : '默认使用 2.x 主界面；开启后仅在本次运行切换到 1.x，重启自动恢复 2.x。'),
           ),
           padding: EdgeInsets.zero,
         ),
@@ -1732,3 +1717,9 @@ class _TripsSummaryDelegate extends SliverPersistentHeaderDelegate {
   @override
   bool shouldRebuild(_TripsSummaryDelegate oldDelegate) => true;
 }
+
+/// Journey rows read as clock times; seconds only widen the row and add noise.
+String _tripClock(String value) => value.replaceFirstMapped(
+  RegExp(r'(\d{1,2}:\d{2}):\d{2}(?:\.\d+)?'),
+  (match) => match[1]!,
+);

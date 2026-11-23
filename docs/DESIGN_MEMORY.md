@@ -1,5 +1,9 @@
 # TrafArch 设计偏好与长期记忆
 
+2026-11-23：2.0.0-beta1 行程卡片与首页卡片字重调整（站名加粗、时间去秒并缩小两号、公交隐藏日期与记录余额、扣费首行靠右、异地徽标紧贴乘车地）；2.x 同级页切换增加左右滑动（200ms，仅点击触发）；自定义卡面图片与裁切参数按卡片持久化到应用私有目录，重启恢复；2.x 主题切换改为一次性应用语义色以避免整树逐帧交叉淡化导致的掉帧；知识库按 2.6 规范重写并加入常驻全局搜索；2.x 界面不再出现「模拟数据」「测试信息」。
+
+2026-11-23 教训：2.x 不是 1.x 换皮，`lib/features/` 与 `lib/gallery/` 各有一份实现。首页卡面在 `gallery_components.dart`（`_face`/`_cardMetadata`，卡名 20sp、城市·卡型 16sp 加粗、余额 20sp／币种 14sp），行程行在 `gallery_pages.dart` 的 `_trip` 与 `GalleryJourneyTypography`（站名 w600、时间 14sp 且去秒），知识库在 `gallery_inspection.dart` 的 `_knowledgePage` + `gallery_knowledge_search.dart`。改「2.x 界面」必须落在 `lib/gallery/`；只改 `features/` 里的 `TransitSummaryPanel`、`TripEntryCard`、`KnowledgeBasePage` 不会出现在正式版。`gallery_app.dart` 对 `trip_cards_view.dart` 的 import 是未使用的，别据此判断共用。
+
 2026-11-19：2.6 知识库新增只读 TU／CU 全局搜索，保留预览地区层级，独立结果页展示原始匹配编码。配色和动效现行规则分别见 [Monet Adoptive System](../docx/TrafArch_monet_design.md) 与 [TrafArch Motion 1.0](../docx/TrafArch_motion_system.md)；两份文档已从 redesign 迁入项目。下列历史记录中的旧时序和旧取色来源不覆盖现行规范。
 
 来源：用户于 2026-11-03 确认的 2.x 优化方案与补充。完整、可执行规范见 [design.md](../design.md)，此处保留后续调整必须遵循的意图。

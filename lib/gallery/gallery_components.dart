@@ -725,7 +725,10 @@ extension _GalleryComponents on _GalleryViewState {
                 children: [
                   _text(
                     '${card.city} · ${card.type}',
-                    role: GalleryTypography.caption,
+                    role: GalleryTypography.body,
+                    size: 16,
+                    height: 24 / 16,
+                    weight: FontWeight.w600,
                     color: color,
                   ),
                   const SizedBox(width: 12),
@@ -751,15 +754,15 @@ extension _GalleryComponents on _GalleryViewState {
     final numberStyle = GalleryTypography.amount.copyWith(
       inherit: false,
       color: foreground,
-      fontSize: 23,
-      height: 28 / 23,
+      fontSize: 20,
+      height: 26 / 20,
       fontFeatures: const [FontFeature.tabularFigures()],
     );
     final unitStyle = GalleryTypography.caption.copyWith(
       inherit: false,
       color: foreground,
-      fontSize: 16,
-      height: 22 / 16,
+      fontSize: 14,
+      height: 20 / 14,
     );
     final amount = Semantics(
       label: '余额，${balance.displayText}',
@@ -819,8 +822,8 @@ extension _GalleryComponents on _GalleryViewState {
                       key: ValueKey('face-title-${card.id}'),
                       style: GalleryTypography.card.copyWith(
                         color: foreground,
-                        fontSize: 16,
-                        height: 23 / 16,
+                        fontSize: 20,
+                        height: 26 / 20,
                       ),
                     ),
                   ),

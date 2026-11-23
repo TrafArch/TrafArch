@@ -23,12 +23,13 @@ JourneyPresentation<TripEntryInfo> _journey({
   String? startStation = '草桥',
   String? seatLabel,
   bool fareAdjustment = false,
+  String startTimeText = '23:55',
 }) {
   final start = JourneyEndpoint(
     line: line,
     station: startStation,
     time: DateTime(2026, 10, 26, 23, 55),
-    timeText: '23:55',
+    timeText: startTimeText,
   );
   final end = JourneyEndpoint(
     line: '昌平线',
@@ -185,7 +186,15 @@ void main() {
     expect(find.text('草桥'), findsOneWidget);
     expect(find.text('昌平线'), findsOneWidget);
     expect(find.text('沙河'), findsOneWidget);
-    expect(find.textContaining('23:55'), findsOneWidget);
+    expect(
+      find.textContaining('23:55'),
+      findsOneWidget,
+      reason: tester
+          .widgetList<Text>(find.byType(Text))
+          .map((text) => text.data)
+          .toList()
+          .toString(),
+    );
     expect(find.textContaining('00:25'), findsOneWidget);
     expect(find.text('30分钟'), findsOneWidget);
     expect(find.text('2026年10月26日'), findsOneWidget);
@@ -278,6 +287,34 @@ void main() {
     expect(find.byKey(const ValueKey('journey-arrow')), findsNothing);
     expect(find.text('-¥7.00'), findsOneWidget);
   });
+  testWidgets('公交票据隐藏日期与余额，金额在首行右侧且异地标贴紧乘车地', (tester) async {
+    await _show(
+      tester,
+      _journey(mode: TripModeFilter.bus, startTimeText: '23:55:42'),
+      remote: true,
+    );
+    expect(find.text('2026年10月26日'), findsNothing);
+    expect(find.textContaining('行程后余额'), findsNothing);
+    expect(find.text('-¥7.00'), findsOneWidget);
+    expect(
+      find.textContaining('23:55'),
+      findsOneWidget,
+      reason: tester
+          .widgetList<Text>(find.byType(Text))
+          .map((text) => text.data)
+          .toList()
+          .toString(),
+    );
+    expect(find.textContaining('23:55:42'), findsNothing);
+    final amount = tester.getRect(find.text('-¥7.00'));
+    final header = tester.getRect(find.text('北京公共汽电车'));
+    final badge = tester.getRect(find.text('异地用卡'));
+    expect(amount.top, closeTo(header.top, 1));
+    expect(amount.right, greaterThan(badge.right));
+    expect(badge.left - header.right, lessThanOrEqualTo(10));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('只有明确提供的席别才显示', (tester) async {
     await _show(tester, _journey(seatLabel: '商务座'));
     expect(find.text('商务座'), findsOneWidget);

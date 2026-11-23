@@ -15,6 +15,17 @@ import 'package:transit_card_analyzer/gallery/gallery_theme.dart';
 
 import 'support/gallery_scroll.dart';
 
+class _EmptyGalleryFaceStore implements GalleryFaceStore {
+  @override
+  Future<GalleryFaceSnapshot?> read(String cardId) async => null;
+
+  @override
+  Future<void> write(String cardId, GalleryFaceSnapshot snapshot) async {}
+
+  @override
+  Future<void> delete(String cardId) async {}
+}
+
 Future<void> gestureEvent(
   WidgetTester tester,
   String method, [
@@ -49,7 +60,7 @@ void main() {
             as GalleryRecord,
       ),
     );
-    preferences = GalleryPreferences();
+    preferences = GalleryPreferences(faceStore: _EmptyGalleryFaceStore());
   });
   tearDown(() {
     c.dispose();
@@ -426,6 +437,55 @@ void main() {
     expect(c.page, GalleryPage.cards);
     expect(c.navigationStack, hasLength(1));
   });
+
+  testWidgets(
+    'main tabs slide horizontally and reverse from their current positions',
+    (tester) async {
+      await mount(tester);
+      final cards = find.byKey(PageStorageKey('gallery-${c.generation}-cards'));
+      await tester.tap(find.byKey(const ValueKey('nav-cards')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 60));
+      final cardsPartial = tester.getTopLeft(cards).dx;
+      expect(cardsPartial, greaterThan(0));
+      expect(c.page, GalleryPage.cards);
+      expect(c.navigationStack, hasLength(1));
+
+      await tester.tap(find.byKey(const ValueKey('nav-home')));
+      await tester.pump();
+      expect(tester.getTopLeft(cards).dx, closeTo(cardsPartial, .1));
+      await tester.pump(const Duration(milliseconds: 40));
+      expect(tester.getTopLeft(cards).dx, greaterThan(cardsPartial));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(PageStorageKey('gallery-${c.generation}-cards')),
+        findsNothing,
+      );
+      expect(c.page, GalleryPage.home);
+      expect(c.navigationStack, hasLength(1));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'main tabs switch without translation when reduced motion is enabled',
+    (tester) async {
+      await mount(tester);
+      tester.platformDispatcher.accessibilityFeaturesTestValue =
+          const FakeAccessibilityFeatures(disableAnimations: true);
+      addTearDown(
+        tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('nav-cards')));
+      await tester.pump();
+      final cards = find.byKey(PageStorageKey('gallery-${c.generation}-cards'));
+      expect(tester.getTopLeft(cards).dx, closeTo(0, .1));
+      expect(c.page, GalleryPage.cards);
+      expect(c.navigationStack, hasLength(1));
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'rapid nonadjacent reversals keep the viewport covered and settle on the last tab',
