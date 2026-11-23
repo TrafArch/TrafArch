@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -9,9 +9,12 @@ import 'package:transit_card_analyzer/app/trafarch_app.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_name_extension.dart';
 import 'package:transit_card_analyzer/features/home/presentation/pending_save_presenter.dart';
 import 'package:transit_card_analyzer/features/octopus/octopus_balance_controller.dart';
+import 'package:transit_card_analyzer/features/recovery/recovery_state.dart';
 import 'package:transit_card_analyzer/features/updates/update_service.dart';
 import 'package:transit_card_analyzer/gallery/gallery_app.dart';
+import 'package:transit_card_analyzer/gallery/gallery_controller.dart';
 import 'package:transit_card_analyzer/gallery/gallery_theme.dart';
+import 'package:transit_card_analyzer/gallery/gallery_preferences.dart';
 import 'package:transit_card_analyzer/platform/nfc/felica_channel.dart';
 import 'package:transit_card_analyzer/platform/nfc/nfc_models.dart';
 import 'package:transit_card_analyzer/platform/nfc/nfc_service.dart';
@@ -25,6 +28,21 @@ import 'package:transit_card_analyzer/shared/domain/archive_conflict_policy.dart
 
 import 'support/gallery_scroll.dart';
 import 'support/test_database.dart';
+
+class _MemoryFaceStore implements GalleryFaceStore {
+  final values = <String, GalleryFaceSnapshot>{};
+
+  @override
+  Future<GalleryFaceSnapshot?> read(String cardId) async => values[cardId];
+
+  @override
+  Future<void> write(String cardId, GalleryFaceSnapshot snapshot) async {
+    values[cardId] = snapshot;
+  }
+
+  @override
+  Future<void> delete(String cardId) async => values.remove(cardId);
+}
 
 void main() {
   for (final kind in _CardKind.values) {
@@ -480,8 +498,17 @@ void main() {
       220,
       scrollable: galleryVerticalScroll(),
     );
-    Future<void> preview() async {
+
+    /// 「导入卡片记录」先弹来源选择：选 TrafArch 数据才进入文件预览。
+    Future<void> openImportSource() async {
       await tester.tap(importRow);
+      await _settleIo(tester);
+      expect(find.text('选择导入来源'), findsOneWidget);
+    }
+
+    Future<void> preview() async {
+      await openImportSource();
+      await tester.tap(find.byKey(const ValueKey('import-source-archive')));
       await _settleIo(tester);
       expect(find.text('导入卡片 JSON'), findsOneWidget);
     }
@@ -490,6 +517,19 @@ void main() {
     expect(fixture.documents.opens, 1);
     await tester.tap(find.widgetWithText(TextButton, '取消'));
     await _settleIo(tester);
+    expect(await tester.runAsync(app.cardRepository.getAllCards), isEmpty);
+    // 读卡识途来源在 live 模式下只提示开发中，不得触发任何文件选择。
+    await openImportSource();
+    final opensBeforeTripReader = fixture.documents.opens;
+    await tester.tap(find.byKey(const ValueKey('import-source-trip-reader')));
+    await _settleIo(tester);
+    expect(find.text('选择导入来源'), findsNothing);
+    expect(find.text('正在开发中，敬请期待'), findsOneWidget);
+    expect(
+      fixture.documents.opens,
+      opensBeforeTripReader,
+      reason: '读卡识途来源不得调用 pickImport',
+    );
     expect(await tester.runAsync(app.cardRepository.getAllCards), isEmpty);
     await preview();
     await tester.tap(find.widgetWithText(FilledButton, '导入'));
@@ -619,7 +659,7 @@ void main() {
       fixture.native.closeFails = true;
       await tester.tap(find.text('开始读取'));
       await tester.pump();
-      final fallbackSwitch = find.widgetWithText(SwitchListTile, '使用 2.x 主界面');
+      final fallbackSwitch = find.widgetWithText(SwitchListTile, '使用 1.x 备用界面');
       await _openSettingsControl(tester, fallbackSwitch);
       await tester.tap(fallbackSwitch);
       await tester.pumpAndSettle();
@@ -643,7 +683,7 @@ void main() {
       expect(app.disposed, isFalse);
       expect(app.hasCompletedRead, isFalse);
 
-      final mainUiSwitch = find.widgetWithText(SwitchListTile, '启用 2.x 主界面');
+      final mainUiSwitch = find.widgetWithText(SwitchListTile, '返回 2.x 主界面');
       await _openSettingsControl(tester, mainUiSwitch);
       await tester.tap(mainUiSwitch);
       await tester.pumpAndSettle();
@@ -707,7 +747,7 @@ void main() {
       expect(find.text('暂无更新'), findsOneWidget);
       expect(checks, 2);
 
-      final fallbackSwitch = find.widgetWithText(SwitchListTile, '使用 2.x 主界面');
+      final fallbackSwitch = find.widgetWithText(SwitchListTile, '使用 1.x 备用界面');
       await tester.scrollUntilVisible(
         fallbackSwitch,
         250,
@@ -723,6 +763,258 @@ void main() {
       await _unmount(tester);
     },
   );
+
+  group('settings toggles after a completed read', () {
+    testWidgets('keep the read projection and publish once per tap', (
+      tester,
+    ) async {
+      final fixture = await _showGallery(tester, _CardKind.tu, autoSave: false);
+      await _read(tester, '开始读取');
+      await _settleIo(tester);
+      await tester.tap(find.byTooltip('设置'));
+      await tester.pumpAndSettle();
+
+      final autoSave = find.widgetWithText(SwitchListTile, '读取后自动保存');
+      await tester.scrollUntilVisible(
+        autoSave,
+        200,
+        scrollable: galleryVerticalScroll(),
+      );
+      await tester.ensureVisible(autoSave);
+      await tester.pumpAndSettle();
+      final overdraft = find.widgetWithText(SwitchListTile, '上海交通卡可透支余额');
+      final logs = find.widgetWithText(SwitchListTile, '记录运行日志');
+
+      final live = _liveAdapter(tester);
+      final controller = live.controller;
+      var liveNotifies = 0;
+      live.notifier.addListener(() => liveNotifies++);
+      var prefsNotifies = 0;
+      fixture.preferences.addListener(() => prefsNotifies++);
+
+      final trips = controller.trips;
+      final cards = controller.cards;
+      final ledgers = controller.liveLedgers;
+      expect(trips, isNotEmpty);
+      expect(prefsNotifies, 0);
+
+      // Toggling a setting must publish the switch in the same frame while the
+      // read projection stays untouched: trips, cards and ledgers are the
+      // expensive objects that used to be rebuilt on every notification.
+      await tester.tap(autoSave);
+      await tester.pump();
+      expect(controller.autoSave, isTrue);
+      expect(tester.widget<SwitchListTile>(autoSave).value, isTrue);
+      expect(identical(controller.trips, trips), isTrue);
+      expect(identical(controller.cards, cards), isTrue);
+      expect(identical(controller.liveLedgers, ledgers), isTrue);
+      expect(prefsNotifies, 0, reason: 'card faces must not be restored again');
+      expect(
+        liveNotifies,
+        1,
+        reason: 'one publish per tap, not one per listener',
+      );
+
+      await tester.tap(autoSave);
+      await tester.pump();
+      expect(controller.autoSave, isFalse);
+      expect(liveNotifies, 2);
+      expect(prefsNotifies, 0);
+      expect(identical(controller.trips, trips), isTrue);
+      await tester.pumpAndSettle();
+
+      // Rapid reversals stay one publish per intent.
+      for (final expected in [true, false, true, false]) {
+        await tester.tap(autoSave);
+        await tester.pump();
+        expect(tester.widget<SwitchListTile>(autoSave).value, expected);
+        expect(controller.autoSave, expected);
+      }
+      expect(liveNotifies, 6);
+      expect(prefsNotifies, 0);
+      expect(identical(controller.trips, trips), isTrue);
+      await tester.pumpAndSettle();
+
+      // The overdraft interpretation genuinely reprojects the records, but only
+      // once per change and still without duplicate publishes.
+      final beforeOverdraft = liveNotifies;
+      final projected = controller.trips;
+      await tester.tap(overdraft);
+      await tester.pump();
+      expect(controller.includeOverdraft, isTrue);
+      expect(find.textContaining('总余额包含固定 8 元额度'), findsOneWidget);
+      expect(identical(controller.trips, projected), isFalse);
+      expect(liveNotifies, beforeOverdraft + 1);
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(
+        logs,
+        200,
+        scrollable: galleryVerticalScroll(),
+      );
+      await tester.ensureVisible(logs);
+      await tester.pumpAndSettle();
+      final loggedTrips = controller.trips;
+      final beforeLogs = liveNotifies;
+      final beforeLogsPrefs = prefsNotifies;
+      await tester.tap(logs);
+      await tester.pump();
+      expect(controller.logsEnabled, isTrue);
+      expect(tester.widget<SwitchListTile>(logs).value, isTrue);
+      expect(identical(controller.trips, loggedTrips), isTrue);
+      expect(prefsNotifies, beforeLogsPrefs);
+      expect(liveNotifies, beforeLogs + 1);
+      await tester.pumpAndSettle();
+      await _unmount(tester);
+    });
+
+    testWidgets('publish the new value before the write completes', (
+      tester,
+    ) async {
+      final store = _PendingSettingsStore({
+        SettingsKeys.autoSaveEnabled: 'true',
+      });
+      final fixture = await _showGallery(
+        tester,
+        _CardKind.tu,
+        settingsStore: store,
+      );
+      await _read(tester, '开始读取');
+      await _settleIo(tester);
+      await tester.tap(find.byTooltip('设置'));
+      await tester.pumpAndSettle();
+
+      final autoSave = find.widgetWithText(SwitchListTile, '读取后自动保存');
+      await tester.scrollUntilVisible(
+        autoSave,
+        200,
+        scrollable: galleryVerticalScroll(),
+      );
+      await tester.ensureVisible(autoSave);
+      await tester.pumpAndSettle();
+
+      await tester.tap(autoSave);
+      await tester.pump();
+      expect(tester.widget<SwitchListTile>(autoSave).value, isFalse);
+      expect(fixture.app.autoSaveEnabled, isFalse);
+      expect(store.pendingWrites, 1);
+      expect(
+        store.values[SettingsKeys.autoSaveEnabled],
+        'true',
+        reason: 'the UI must not wait for the queued disk write',
+      );
+      store.releaseAll();
+      await tester.pumpAndSettle();
+      expect(store.values[SettingsKeys.autoSaveEnabled], 'false');
+
+      final logs = find.widgetWithText(SwitchListTile, '记录运行日志');
+      await tester.scrollUntilVisible(
+        logs,
+        200,
+        scrollable: galleryVerticalScroll(),
+      );
+      await tester.ensureVisible(logs);
+      await tester.pumpAndSettle();
+      await tester.tap(logs);
+      await tester.pump();
+      expect(tester.widget<SwitchListTile>(logs).value, isTrue);
+      expect(fixture.app.loggingEnabled, isTrue);
+      expect(store.values.containsKey(SettingsKeys.loggingEnabled), isFalse);
+      store.releaseAll();
+      await tester.pumpAndSettle();
+      expect(store.values[SettingsKeys.loggingEnabled], 'true');
+      await _unmount(tester);
+    });
+
+    testWidgets('recovery capture reprojects when the overdraft flag changes', (
+      tester,
+    ) async {
+      final fixture = await _showGallery(tester, _CardKind.tu, autoSave: false);
+      await _read(tester, '开始读取');
+      await _settleIo(tester);
+      final pending = fixture.app.pendingCardSave;
+      expect(pending?.sessionDataJson, isNotNull);
+      // A recovered capture replays the same snapshot after a restart: the
+      // projection is memoized while nothing changes, but the overdraft flag
+      // still decides how the records are read.
+      fixture.app.recoveredCapture = RecoveryCapture(
+        readAt: _readAt,
+        summary: {'cardName': pending!.displayName, 'balanceText': '余额未知'},
+        frames: const [],
+        pending: pending,
+        snapshotJson: pending.sessionDataJson,
+        canSave: true,
+      );
+      final live = _liveAdapter(tester);
+      final controller = live.controller;
+      final autoSave = find.widgetWithText(SwitchListTile, '读取后自动保存');
+      await _openSettingsControl(tester, autoSave);
+      // The first tap after the capture is installed publishes the recovery
+      // projection; the next one must still reproject because the overdraft
+      // flag decides how those records are read.
+      await tester.tap(autoSave);
+      await tester.pump();
+      final projected = controller.trips;
+      expect(projected, isNotEmpty);
+      final overdraft = find.widgetWithText(SwitchListTile, '上海交通卡可透支余额');
+      expect(overdraft, findsOneWidget);
+      await tester.tap(overdraft);
+      await tester.pump();
+      expect(controller.includeOverdraft, isTrue);
+      expect(
+        identical(controller.trips, projected),
+        isFalse,
+        reason: 'the overdraft flag is part of the projection signature',
+      );
+      await tester.pumpAndSettle();
+      await _unmount(tester);
+    });
+  });
+}
+
+/// The live shell is created inside [GalleryApp]; its adapter exposes the
+/// controller and the notifier the settings page listens to.
+({Listenable notifier, GalleryController controller}) _liveAdapter(
+  WidgetTester tester,
+) {
+  final notifier = tester
+      .widgetList<InheritedNotifier>(
+        find.byWidgetPredicate((widget) => widget is InheritedNotifier),
+      )
+      .map((widget) => widget.notifier)
+      .firstWhere((candidate) => '$candidate'.contains('GalleryLiveRead'))!;
+  return (
+    notifier: notifier,
+    controller: (notifier as dynamic).navigation as GalleryController,
+  );
+}
+
+class _PendingSettingsStore implements SettingsStore {
+  _PendingSettingsStore(this.values);
+
+  final Map<String, String> values;
+  final List<(String, String, Completer<void>)> _pending = [];
+
+  int get pendingWrites => _pending.length;
+
+  @override
+  Future<String?> read(String key) async => values[key];
+
+  @override
+  Future<void> write(String key, String value) {
+    final completer = Completer<void>();
+    _pending.add((key, value, completer));
+    return completer.future;
+  }
+
+  void releaseAll() {
+    final writes = List.of(_pending);
+    _pending.clear();
+    for (final (key, value, completer) in writes) {
+      values[key] = value;
+      completer.complete();
+    }
+  }
 }
 
 Future<void> _openSettingsControl(WidgetTester tester, Finder control) async {
@@ -777,6 +1069,7 @@ Future<_Fixture> _showGallery(
   bool autoSave = true,
   bool shenzhen = false,
   bool tuWallet = true,
+  SettingsStore? settingsStore,
 }) async {
   _size(tester);
   final fixture = _Fixture(
@@ -784,11 +1077,17 @@ Future<_Fixture> _showGallery(
     autoSave: autoSave,
     shenzhen: shenzhen,
     tuWallet: tuWallet,
+    settingsStore: settingsStore,
   );
   addTearDown(fixture.app.dispose);
   await tester.runAsync(fixture.app.init);
   expect(fixture.app.autoSaveEnabled, autoSave);
-  await tester.pumpWidget(GalleryApp(liveApp: fixture.app));
+  final preferences = GalleryPreferences(faceStore: _MemoryFaceStore());
+  addTearDown(preferences.dispose);
+  fixture.preferences = preferences;
+  await tester.pumpWidget(
+    GalleryApp(liveApp: fixture.app, preferences: preferences),
+  );
   await tester.pumpAndSettle();
   return fixture;
 }
@@ -806,6 +1105,7 @@ class _Fixture {
     bool shenzhen = false,
     bool tuWallet = true,
     UpdateService? updateService,
+    SettingsStore? settingsStore,
   }) : native = shenzhen ? _ShenzhenReader(withTu: tuWallet) : _Reader(kind) {
     app = AppDependencies(
       database: testDatabase(),
@@ -815,9 +1115,9 @@ class _Fixture {
       logger: AppLogger(store: MemoryLogStore()),
       updateService: updateService,
       archiveDocumentStore: documents,
-      settingsStore: MemorySettingsStore({
-        SettingsKeys.autoSaveEnabled: '$autoSave',
-      }),
+      settingsStore:
+          settingsStore ??
+          MemorySettingsStore({SettingsKeys.autoSaveEnabled: '$autoSave'}),
       octopusController: OctopusBalanceController(
         channel: octopusChannel,
         execute:
@@ -838,6 +1138,7 @@ class _Fixture {
   final documents = _ArchiveFiles();
   final octopusChannel = _OctopusChannel();
   late final AppDependencies app;
+  late GalleryPreferences preferences;
 }
 
 class _Reader implements NfcChannel, FelicaChannel {

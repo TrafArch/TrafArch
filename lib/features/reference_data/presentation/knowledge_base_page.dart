@@ -3,17 +3,74 @@ import 'package:flutter/material.dart';
 import '../../../shared/presentation/adaptive_layout.dart';
 
 import '../domain/station_codes.dart';
+import '../domain/region_db_store.dart';
 import '../data/tunion_knowledge_base.dart';
 import '../../../app/app_dependencies.dart';
 
 /// 知识库子页面：展示已安装的本地参考数据包（交通联合 TU / 城市一卡通 CU）
 /// 支持的地区，以及每个地区收录的线路与站点。
-class KnowledgeBasePage extends StatelessWidget {
+class KnowledgeBasePage extends StatefulWidget {
   final AppDependencies app;
   const KnowledgeBasePage({super.key, required this.app});
 
   @override
+  State<KnowledgeBasePage> createState() => _KnowledgeBasePageState();
+}
+
+class _KnowledgeBasePageState extends State<KnowledgeBasePage> {
+  final _searchController = TextEditingController();
+  String _query = '';
+  List<_KnowledgeSearchHit> _hits = const [];
+  bool _searching = false;
+  int _searchGeneration = 0;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _search(KnowledgeBase kb, String raw) async {
+    final query = raw.trim();
+    final generation = ++_searchGeneration;
+    setState(() {
+      _query = query;
+      _hits = const [];
+      _searching = query.isNotEmpty;
+    });
+    if (query.isEmpty) return;
+    final hits = <_KnowledgeSearchHit>[];
+    for (final dataset in kb.coverageDatasets) {
+      if ([dataset.cityName, dataset.cityCode, dataset.province]
+          .whereType<String>()
+          .any((s) => s.toLowerCase().contains(query.toLowerCase()))) {
+        hits.add(_KnowledgeSearchHit.city(dataset));
+      }
+      final entries = dataset.isLazy
+          ? await (dataset as LiveRegionDataset).searchEntries(query)
+          : dataset.codes.values
+                .where(
+                  (e) =>
+                      [e.line, e.station].whereType<String>().any(
+                        (s) => s.toLowerCase().contains(query.toLowerCase()),
+                      ) ||
+                      e.code.toLowerCase().startsWith(query.toLowerCase()),
+                )
+                .toList();
+      hits.addAll(
+        entries.map((entry) => _KnowledgeSearchHit.entry(dataset, entry)),
+      );
+    }
+    if (!mounted || generation != _searchGeneration) return;
+    setState(() {
+      _hits = hits.take(100).toList();
+      _searching = false;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final app = widget.app;
     return FoldSafePage(
       child: Scaffold(
         appBar: AppBar(title: const Text('知识库')),
@@ -55,11 +112,43 @@ class KnowledgeBasePage extends StatelessWidget {
                   ..sort(_byCityCode);
                 final cu = coverage.where((d) => d.system == 'cu').toList()
                   ..sort(_byCityCode);
-                final summary = _SummaryCard(kb: kb, tu: tu, cu: cu);
                 return DefaultTabController(
                   length: 2,
                   child: Column(
                     children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+                        child: TextField(
+                          controller: _searchController,
+                          onChanged: (value) => _search(kb, value),
+                          textInputAction: TextInputAction.search,
+                          decoration: InputDecoration(
+                            hintText: '搜索城市、线路、站点或编码',
+                            prefixIcon: const Icon(Icons.search, size: 20),
+                            suffixIcon: _searchController.text.isEmpty
+                                ? null
+                                : IconButton(
+                                    tooltip: '清空搜索',
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      _search(kb, '');
+                                    },
+                                    icon: const Icon(Icons.clear),
+                                  ),
+                            filled: true,
+                            fillColor: Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerHighest,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(26),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 12,
+                            ),
+                          ),
+                        ),
+                      ),
                       const TabBar(
                         tabs: [
                           Tab(text: '交通联合 TU'),
@@ -67,20 +156,36 @@ class KnowledgeBasePage extends StatelessWidget {
                         ],
                       ),
                       Expanded(
-                        child: TabBarView(
-                          children: [
-                            _CoverageList(
-                              header: summary,
-                              datasets: tu,
-                              emptyText: '交通联合暂无站点覆盖数据',
-                            ),
-                            _CoverageList(
-                              header: summary,
-                              datasets: cu,
-                              emptyText: '城市一卡通暂无站点覆盖数据',
-                            ),
-                          ],
-                        ),
+                        child: _query.isNotEmpty
+                            ? _SearchResults(
+                                query: _query,
+                                hits: _hits,
+                                loading: _searching,
+                              )
+                            : TabBarView(
+                                children: [
+                                  _CoverageList(
+                                    header: _SummaryCard(
+                                      kb: kb,
+                                      tu: tu,
+                                      cu: cu,
+                                      isTu: true,
+                                    ),
+                                    datasets: tu,
+                                    emptyText: '交通联合暂无站点覆盖数据',
+                                  ),
+                                  _CoverageList(
+                                    header: _SummaryCard(
+                                      kb: kb,
+                                      tu: tu,
+                                      cu: cu,
+                                      isTu: false,
+                                    ),
+                                    datasets: cu,
+                                    emptyText: '城市一卡通暂无站点覆盖数据',
+                                  ),
+                                ],
+                              ),
                       ),
                     ],
                   ),
@@ -102,124 +207,287 @@ class KnowledgeBasePage extends StatelessWidget {
   }
 }
 
-/// 顶部数据概况卡片：覆盖地区 / 站点条目数与其他知识库规模。
+class _KnowledgeSearchHit {
+  final StationDataset dataset;
+  final StationCodeEntry? entry;
+  const _KnowledgeSearchHit.city(this.dataset) : entry = null;
+  const _KnowledgeSearchHit.entry(this.dataset, this.entry);
+}
+
+class _SearchResults extends StatelessWidget {
+  final String query;
+  final List<_KnowledgeSearchHit> hits;
+  final bool loading;
+  const _SearchResults({
+    required this.query,
+    required this.hits,
+    required this.loading,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+    }
+    if (hits.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.search_off, size: 36),
+              SizedBox(height: 10),
+              Text('没有找到相关内容'),
+              SizedBox(height: 4),
+              Text('请尝试其他城市、线路、站点名称或编码。', textAlign: TextAlign.center),
+            ],
+          ),
+        ),
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      itemCount: hits.length,
+      itemBuilder: (context, index) {
+        final hit = hits[index];
+        final entry = hit.entry;
+        final isCity = entry == null;
+        final title = isCity
+            ? (hit.dataset.cityName ?? hit.dataset.cityCode ?? '未知地区')
+            : (entry.station?.isNotEmpty == true
+                  ? entry.station!
+                  : entry.line ?? entry.code);
+        final subtitle = isCity
+            ? '${hit.dataset.system.toUpperCase()} · ${hit.dataset.province ?? '地区'} · ${hit.dataset.lineCountOverride} 条线路 · ${hit.dataset.entryCountOverride} 条编码'
+            : [
+                hit.dataset.cityName ?? hit.dataset.cityCode ?? '未知地区',
+                if (entry.line?.isNotEmpty == true) entry.line!,
+                if (entry.code.isNotEmpty) '编码 ${entry.code}',
+                hit.dataset.system.toUpperCase(),
+              ].join(' · ');
+        return Card(
+          margin: const EdgeInsets.only(bottom: 6),
+          child: ListTile(
+            dense: true,
+            leading: Chip(
+              label: Text(
+                isCity
+                    ? '城市'
+                    : entry.line?.contains(query) == true
+                    ? '线路'
+                    : entry.code.toLowerCase().contains(query.toLowerCase())
+                    ? '编码'
+                    : '站点',
+              ),
+            ),
+            title: Text(title),
+            subtitle: Text(subtitle),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// 知识库概览：先突出当前体系覆盖规模，详细元数据按需展开。
 class _SummaryCard extends StatelessWidget {
   final KnowledgeBase kb;
   final List<StationDataset> tu;
   final List<StationDataset> cu;
-  const _SummaryCard({required this.kb, required this.tu, required this.cu});
+  final bool isTu;
+  const _SummaryCard({
+    required this.kb,
+    required this.tu,
+    required this.cu,
+    required this.isTu,
+  });
+
+  int _entryCount(List<StationDataset> datasets) =>
+      datasets.fold(0, (total, dataset) => total + dataset.entryCountOverride);
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    int entryCount(List<StationDataset> d) =>
-        d.fold(0, (a, x) => a + x.entryCountOverride);
-    return Card(
-      margin: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('数据概况', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 8),
-            _row(
-              context,
-              'TU 数据库版本',
-              kb.tuDatabaseVersion == null
-                  ? '未加载 / 未设置'
-                  : 'v${kb.tuDatabaseVersion}',
-            ),
-            _row(
-              context,
-              'CU 数据库版本',
-              kb.cuDatabaseVersion == null
-                  ? '未加载 / 未设置'
-                  : 'v${kb.cuDatabaseVersion}',
-            ),
-            _row(
-              context,
-              '交通联合覆盖',
-              '${tu.length} 个地区 · ${entryCount(tu)} 条站点编码',
-            ),
-            _row(
-              context,
-              '城市一卡通覆盖',
-              '${cu.length} 个地区 · ${entryCount(cu)} 条站点编码',
-            ),
-            _row(context, 'TU 数据包版本', kb.packageVersions['TU'] ?? '未加载'),
-            _row(context, 'CU 数据包版本', kb.packageVersions['CU'] ?? '未加载'),
-            _row(context, 'TU 城市码表', '${kb.cities.length} 城市'),
-            _row(
-              context,
-              'CU 城市码表',
-              kb.cuCities == null ? '未加载' : '${kb.cuCities!.length} 城市',
-            ),
-            _row(context, '发卡机构指纹', '${kb.issuers.length} 条'),
-            _row(context, '终端解码规则', '${kb.terminalRules.length} 条'),
-            _row(context, '城市一卡通识别卡', '${kb.cityUnionCards.entryCount} 种'),
-            _row(context, 'CU 终端索引', '${kb.cuTerminals.length} 条'),
-            _row(
-              context,
-              'CU 线路记录',
-              kb.cuRepository == null
-                  ? '未加载'
-                  : '${kb.cuRepository!.routeCount} 条',
-            ),
-            _row(
-              context,
-              'CU 公交映射',
-              kb.cuRepository == null
-                  ? '未加载'
-                  : '${kb.cuRepository!.busRouteCount} 条',
-            ),
-            _row(
-              context,
-              'CU 前缀字典',
-              kb.cuRepository == null
-                  ? '未加载'
-                  : '${kb.cuRepository!.prefixCount} 条',
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '来源：随应用安装的本地 TU / CU 参考数据包；两个体系独立加载。',
-              style: theme.textTheme.bodySmall,
-            ),
-            if (kb.loadIssues.isNotEmpty) ...[
-              const Divider(height: 24),
-              Text(
-                '数据加载 / 迁移问题',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  color: theme.colorScheme.error,
-                ),
+    final datasets = isTu ? tu : cu;
+    final systemName = isTu ? '交通联合参考数据' : '城市一卡通参考数据';
+    final version = kb.packageVersions[isTu ? 'TU' : 'CU'] ?? '本地数据';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Card(
+            color: theme.colorScheme.primaryContainer,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          systemName,
+                          style: theme.textTheme.titleMedium,
+                        ),
+                      ),
+                      Text(version, style: theme.textTheme.labelSmall),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _metric(context, '${datasets.length}', '覆盖地区'),
+                      ),
+                      Expanded(
+                        child: _metric(
+                          context,
+                          '${_entryCount(datasets)}',
+                          '站点编码条目',
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '用于识别读卡结果中的城市、线路与站点。数据随应用保存在本地。',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
               ),
-              for (final issue in kb.loadIssues.entries)
-                _row(context, issue.key, issue.value),
-              const Text('部分参考数据不可用，原始读卡结果仍保留。'),
-            ],
-          ],
-        ),
+            ),
+          ),
+          Card(
+            clipBehavior: Clip.antiAlias,
+            child: ExpansionTile(
+              title: const Text('数据概况'),
+              childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              children: [
+                _row(
+                  context,
+                  'TU 数据库版本',
+                  kb.tuDatabaseVersion == null
+                      ? '未加载 / 未设置'
+                      : 'v${kb.tuDatabaseVersion}',
+                ),
+                _row(
+                  context,
+                  'CU 数据库版本',
+                  kb.cuDatabaseVersion == null
+                      ? '未加载 / 未设置'
+                      : 'v${kb.cuDatabaseVersion}',
+                ),
+                _row(
+                  context,
+                  '交通联合覆盖',
+                  '${tu.length} 个地区 · ${_entryCount(tu)} 条站点编码',
+                ),
+                _row(
+                  context,
+                  '城市一卡通覆盖',
+                  '${cu.length} 个地区 · ${_entryCount(cu)} 条站点编码',
+                ),
+                _row(context, 'TU 数据包版本', kb.packageVersions['TU'] ?? '未加载'),
+                _row(context, 'CU 数据包版本', kb.packageVersions['CU'] ?? '未加载'),
+                _row(context, 'TU 城市码表', '${kb.cities.length} 城市'),
+                _row(
+                  context,
+                  'CU 城市码表',
+                  kb.cuCities == null ? '未加载' : '${kb.cuCities!.length} 城市',
+                ),
+                _row(context, '发卡机构指纹', '${kb.issuers.length} 条'),
+                _row(context, '终端解码规则', '${kb.terminalRules.length} 条'),
+                _row(context, '城市一卡通识别卡', '${kb.cityUnionCards.entryCount} 种'),
+                _row(context, 'CU 终端索引', '${kb.cuTerminals.length} 条'),
+                _row(
+                  context,
+                  'CU 线路记录',
+                  kb.cuRepository == null
+                      ? '未加载'
+                      : '${kb.cuRepository!.routeCount} 条',
+                ),
+                _row(
+                  context,
+                  'CU 公交映射',
+                  kb.cuRepository == null
+                      ? '未加载'
+                      : '${kb.cuRepository!.busRouteCount} 条',
+                ),
+                _row(
+                  context,
+                  'CU 前缀字典',
+                  kb.cuRepository == null
+                      ? '未加载'
+                      : '${kb.cuRepository!.prefixCount} 条',
+                ),
+                if (kb.loadIssues.isNotEmpty) ...[
+                  const Divider(height: 24),
+                  Text(
+                    '数据加载 / 迁移问题',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: theme.colorScheme.error,
+                    ),
+                  ),
+                  for (final issue in kb.loadIssues.entries)
+                    _row(context, issue.key, issue.value),
+                  const Text('部分参考数据不可用，原始读卡结果仍保留。'),
+                ],
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(2, 12, 2, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text('覆盖地区', style: theme.textTheme.titleSmall),
+                ),
+                Text(
+                  '按城市编码排序',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _row(BuildContext context, String k, String v) {
+  Widget _metric(BuildContext context, String value, String label) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        value,
+        style: Theme.of(context).textTheme.headlineSmall
+            ?.copyWith(fontWeight: FontWeight.w700),
+      ),
+      const SizedBox(height: 2),
+      Text(label, style: Theme.of(context).textTheme.bodySmall),
+    ],
+  );
+
+  Widget _row(BuildContext context, String key, String value) {
     final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
             width: 128,
             child: Text(
-              k,
+              key,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.outline,
               ),
             ),
           ),
-          Expanded(child: Text(v, style: theme.textTheme.bodyMedium)),
+          Expanded(child: Text(value, style: theme.textTheme.bodyMedium)),
         ],
       ),
     );

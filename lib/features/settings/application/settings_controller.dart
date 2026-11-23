@@ -38,6 +38,7 @@ class SettingsController extends OwnedNotifier {
   bool get includeShanghaiOverdraft =>
       _values[SettingsKeys.includeShanghaiOverdraft] ?? false;
   bool get monetEnabled => _values[SettingsKeys.monetEnabled] ?? true;
+  bool get hapticEnabled => _values[SettingsKeys.hapticEnabled] ?? true;
 
   Future<bool> openFeedbackEmail(String address) async {
     try {
@@ -111,6 +112,7 @@ class SettingsController extends OwnedNotifier {
       SettingsKeys.autoSaveEnabled,
       SettingsKeys.includeShanghaiOverdraft,
       SettingsKeys.monetEnabled,
+      SettingsKeys.hapticEnabled,
     ]) {
       final revision = _revisions[key] ?? 0;
       try {
@@ -161,25 +163,41 @@ class SettingsController extends OwnedNotifier {
       notifyListeners();
     });
   }
+
   Future<void> setIncludeShanghaiOverdraft(bool value) =>
       _set(SettingsKeys.includeShanghaiOverdraft, value);
   Future<void> setMonetEnabled(bool value) =>
       _set(SettingsKeys.monetEnabled, value);
+  Future<void> setHapticEnabled(bool value) =>
+      _set(SettingsKeys.hapticEnabled, value);
 
   Future<void> _set(String key, bool value) {
     if (disposed) return Future.value();
-    _revisions[key] = (_revisions[key] ?? 0) + 1;
+    final revision = _revisions[key] = (_revisions[key] ?? 0) + 1;
     _values[key] = value;
     logger.enabled = loggingEnabled;
+    // Publish the selected value before persistence: widget interaction never
+    // waits for queued disk writes, including rapid reversals.
     notifyListeners();
     return _writes = _writes.then((_) async {
+      // Coalesce stale pending values for this key; the latest intent wins.
+      if (disposed || _revisions[key] != revision) return;
+      var errorChanged = false;
       try {
         await store.write(key, '$value');
-        if (!disposed) persistenceError = null;
+        if (!disposed && persistenceError != null) {
+          persistenceError = null;
+          errorChanged = true;
+        }
       } catch (e) {
-        if (!disposed) persistenceError = '$e';
+        if (!disposed && persistenceError != '$e') {
+          persistenceError = '$e';
+          errorChanged = true;
+        }
       }
-      notifyListeners();
+      // Avoid rebuilding the whole SettingsPage a second time when the
+      // optimistic value was already rendered; notify only for an error change.
+      if (!disposed && errorChanged) notifyListeners();
     });
   }
 }

@@ -58,8 +58,8 @@ class _GalleryReadFlowState extends State<_GalleryReadFlow>
     } else {
       _visibility.animateBack(
         0,
-        duration: const Duration(milliseconds: 160),
-        curve: Curves.easeInCubic,
+        duration: _GalleryMotion.content,
+        curve: _GalleryMotion.accelerate,
       );
     }
   }
@@ -77,8 +77,8 @@ class _GalleryReadFlowState extends State<_GalleryReadFlow>
     });
     _visibility.animateTo(
       1,
-      duration: const Duration(milliseconds: 400),
-      curve: Curves.easeOutCubic,
+      duration: _GalleryMotion.slow,
+      curve: _GalleryMotion.decelerate,
     );
   }
 
@@ -113,7 +113,7 @@ class _GalleryReadFlowState extends State<_GalleryReadFlow>
         : AnimatedSize(
             key: const ValueKey('home-read-layout'),
             duration: _GalleryMotion.readResult,
-            curve: Curves.easeInOutCubicEmphasized,
+            curve: _GalleryMotion.readCurve,
             alignment: Alignment.topCenter,
             child: content,
           );
@@ -138,16 +138,16 @@ class _GalleryReadPromptState extends State<_GalleryReadPrompt>
     with TickerProviderStateMixin {
   late final _morph = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 560),
+    duration: _GalleryMotion.readMorph,
     value: widget.reading ? 1 : 0,
   );
   late final _loop = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 2800),
+    duration: _GalleryMotion.readLoop,
   );
   late final _failure = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 520),
+    duration: _GalleryMotion.readFailure,
     value: widget.failed ? 1 : 0,
   );
   bool _reduceMotion = false;
@@ -174,7 +174,7 @@ class _GalleryReadPromptState extends State<_GalleryReadPrompt>
     if (_reduceMotion) {
       _morph.value = target;
     } else if (_morph.value != target) {
-      _morph.animateTo(target, curve: Curves.easeInOutCubicEmphasized);
+      _morph.animateTo(target, curve: _GalleryMotion.readCurve);
     }
     if (widget.reading && !_reduceMotion) {
       if (!_loop.isAnimating) _loop.repeat();
@@ -225,10 +225,13 @@ class _GalleryReadPromptState extends State<_GalleryReadPrompt>
                 final approach = _reduceMotion
                     ? 1.0
                     : phase < .4
-                    ? Curves.easeInOutCubicEmphasized.transform(phase / .4)
+                    ? _GalleryMotion.readCurve.transform(phase / .4)
                     : phase < .78
                     ? 1.0
-                    : 1 - Curves.easeInOutCubic.transform((phase - .78) / .22);
+                    : 1 -
+                          _GalleryMotion.standard.transform(
+                            (phase - .78) / .22,
+                          );
                 return SizedBox(
                   key: const ValueKey('home-read-illustration'),
                   width: 240,
@@ -344,7 +347,7 @@ class _GalleryReadPromptState extends State<_GalleryReadPrompt>
                               right: 48,
                               bottom: 12,
                               child: Transform.scale(
-                                scale: Curves.easeOutCubic.transform(
+                                scale: _GalleryMotion.decelerate.transform(
                                   _failure.value,
                                 ),
                                 child: Container(

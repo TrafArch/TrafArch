@@ -4,13 +4,18 @@ List<Widget> summaryNameLine(BuildContext context, String name) => [
   Text(
     name,
     style: Theme.of(context).textTheme.titleMedium
-        ?.copyWith(fontWeight: FontWeight.w600),
+        ?.copyWith(fontSize: 20, height: 26 / 20, fontWeight: FontWeight.w600),
   ),
   const SizedBox(height: 4),
   const Divider(height: 20),
 ];
 
-Widget summaryField(BuildContext context, String label, String value) {
+Widget summaryField(
+  BuildContext context,
+  String label,
+  String value, {
+  TextStyle? valueStyle,
+}) {
   final theme = Theme.of(context);
   return Padding(
     padding: const EdgeInsets.only(bottom: 6),
@@ -29,7 +34,13 @@ Widget summaryField(BuildContext context, String label, String value) {
         Expanded(
           child: Text(
             value,
-            style: const TextStyle(fontWeight: FontWeight.w600),
+            style:
+                valueStyle ??
+                (label.contains('余额')
+                    ? theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      )
+                    : const TextStyle(fontWeight: FontWeight.w600)),
           ),
         ),
       ],

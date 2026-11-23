@@ -112,9 +112,10 @@ void main() {
       '数据与备份',
       '导出卡片记录',
       '导入卡片记录',
-      '外观',
+      '界面与外观',
       '外观主题',
       '莫奈取色',
+      '震动',
       '预测性返回手势',
       '底栏样式',
       '日志',
@@ -167,6 +168,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(c.overlay, isNull);
     await openSettingsRow(tester, '导入卡片记录');
+    expect(find.text('选择导入来源'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('import-source-archive')));
+    await tester.pumpAndSettle();
     expect(c.overlay, GalleryOverlay.importPreview);
     expect(find.text('文件内容预览 · 不会修改当前样例'), findsOneWidget);
     expect(find.textContaining('识别到 1 张卡片记录'), findsOneWidget);

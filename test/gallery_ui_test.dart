@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -60,7 +60,7 @@ void main() {
     c.navigate(GalleryPage.settings);
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
-      find.text('使用 2.x 主界面'),
+      find.text('使用 1.x 备用界面'),
       400,
       scrollable: find
           .byWidgetPredicate(
@@ -70,9 +70,9 @@ void main() {
           )
           .last,
     );
-    await tester.ensureVisible(find.text('使用 2.x 主界面'));
+    await tester.ensureVisible(find.text('使用 1.x 备用界面'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('使用 2.x 主界面'));
+    await tester.tap(find.text('使用 1.x 备用界面'));
     await tester.pump();
     expect(disabled, isTrue);
   });
@@ -129,7 +129,7 @@ void main() {
   });
 
   testWidgets(
-    'capsule moves while pages crossfade directly to the selected destination',
+    'capsule moves while selected pages slide directly to the destination',
     (tester) async {
       tester.view.physicalSize = const Size(360, 892);
       tester.view.devicePixelRatio = 1;
@@ -172,7 +172,7 @@ void main() {
         of: find.byKey(const ValueKey(GalleryPage.cards)),
         matching: find.byType(CustomScrollView),
       );
-      expect(tester.getTopLeft(incoming).dx, 0);
+      expect(tester.getTopLeft(incoming).dx, greaterThan(0));
       final fade = find.ancestor(
         of: incoming,
         matching: find.byWidgetPredicate(
@@ -192,7 +192,7 @@ void main() {
       expect(midway.center.dx, lessThan(target));
       expect(tester.element(capsule), same(originalElement));
       expect(tester.getTopLeft(find.text('卡包').first).dy, headerY);
-      expect(tester.getTopLeft(incoming).dx, 0);
+      expect(tester.getTopLeft(incoming).dx, greaterThan(0));
       expect(tester.widget<Opacity>(fade).opacity, inExclusiveRange(0, 1));
 
       // A new tap redirects the existing moving capsule without replacing it.

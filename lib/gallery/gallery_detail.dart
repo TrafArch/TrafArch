@@ -787,10 +787,8 @@ extension _GalleryDetail on _GalleryViewState {
                                             ),
                                             duration: _reduceMotion
                                                 ? Duration.zero
-                                                : const Duration(
-                                                    milliseconds: 260,
-                                                  ),
-                                            curve: Curves.easeInOutCubic,
+                                                : _GalleryMotion.expand,
+                                            curve: _GalleryMotion.standard,
                                             builder: (_, value, _) => Container(
                                               height: math.max(
                                                 2,
@@ -847,10 +845,8 @@ extension _GalleryDetail on _GalleryViewState {
           begin: List.filled(3, 0),
           end: fractions,
         ),
-        duration: _reduceMotion
-            ? Duration.zero
-            : const Duration(milliseconds: 260),
-        curve: Curves.easeInOutCubic,
+        duration: _reduceMotion ? Duration.zero : _GalleryMotion.expand,
+        curve: _GalleryMotion.standard,
         builder: (_, values, child) => CustomPaint(
           painter: _SpendingRingPainter(values, colors, t.chartTrack),
           child: child,

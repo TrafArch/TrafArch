@@ -40,15 +40,13 @@ class _GallerySwipeRevealState extends State<_GallerySwipeReveal>
     with SingleTickerProviderStateMixin {
   late final _reveal = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 200),
+    duration: _GalleryMotion.swipe,
   );
 
   void _settle(bool open) => _reveal.animateTo(
     open ? 1 : 0,
-    duration: widget.reduceMotion
-        ? Duration.zero
-        : const Duration(milliseconds: 200),
-    curve: Curves.easeOutCubic,
+    duration: widget.reduceMotion ? Duration.zero : _GalleryMotion.swipe,
+    curve: _GalleryMotion.decelerate,
   );
 
   void _act(_GallerySwipeAction action) {
@@ -244,13 +242,13 @@ class _GalleryWalletItemState extends State<_GalleryWalletItem>
   late final _size = AnimationController(
     vsync: this,
     value: widget.inserted && !widget.reduceMotion ? 0 : 1,
-    duration: const Duration(milliseconds: 260),
-    reverseDuration: const Duration(milliseconds: 220),
+    duration: _GalleryMotion.insert,
+    reverseDuration: _GalleryMotion.remove,
   );
   late final _sizeCurve = CurvedAnimation(
     parent: _size,
-    curve: Curves.easeOutCubic,
-    reverseCurve: Curves.easeInOutCubic,
+    curve: _GalleryMotion.decelerate,
+    reverseCurve: _GalleryMotion.standard,
   );
   bool _deleting = false;
 
@@ -274,7 +272,7 @@ class _GalleryWalletItemState extends State<_GalleryWalletItem>
     final commit = widget.onDelete;
     _size.reverseDuration = widget.reduceMotion
         ? Duration.zero
-        : const Duration(milliseconds: 220);
+        : _GalleryMotion.remove;
     _size.reverse().whenCompleteOrCancel(commit);
   }
 

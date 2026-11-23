@@ -26,6 +26,11 @@ abstract final class SettingsKeys {
   /// 开启后主题色跟随系统壁纸取色（Android 12+ Dynamic Color）；
   /// 关闭时使用应用内置固定主题色。
   static const monetEnabled = 'monet_enabled';
+
+  /// 「震动（触感反馈）」开关（'true' / 'false'；缺省视为开启）。
+  /// 关闭后设置开关、底栏切换等交互不再触发系统触感反馈；
+  /// 缺省为开启，因此未保存过该键时不能把它读成 false。
+  static const hapticEnabled = 'haptic_enabled';
 }
 
 /// 应用设置持久化抽象：文本键值对（每行 key=value），不使用 JSON。

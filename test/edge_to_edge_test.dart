@@ -35,6 +35,7 @@ void main() {
   testWidgets('系统栏图标跟随明暗主题，进入设置及返回后仍保持可读', (tester) async {
     addTearDown(tester.view.reset);
     addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
     _window(
       tester,
       const Size(390, 844),
@@ -61,6 +62,23 @@ void main() {
       TransitCardAnalyzerApp(createDependencies: () => app),
     );
     await tester.pumpAndSettle();
+    MaterialApp appWidget() => tester.widget(find.byType(MaterialApp));
+    expect(
+      appWidget().themeAnimationDuration,
+      const Duration(milliseconds: 200),
+    );
+    expect(appWidget().themeAnimationCurve, Curves.easeInOutCubic);
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(disableAnimations: true);
+    await tester.pump();
+    expect(appWidget().themeAnimationDuration, Duration.zero);
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(disableAnimations: false);
+    await tester.pump();
+    expect(
+      appWidget().themeAnimationDuration,
+      const Duration(milliseconds: 200),
+    );
 
     Map<dynamic, dynamic> style() =>
         calls

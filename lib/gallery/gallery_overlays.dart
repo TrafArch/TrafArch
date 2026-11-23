@@ -556,15 +556,24 @@ extension _GalleryOverlays on _GalleryViewState {
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 3),
                         child: TextButton(
-                          onPressed: () => c.update(() {
-                            _selectedCard.face = pair.$1;
-                            _selectedCard.image = null;
-                            _selectedCard.imageSize = null;
-                            _selectedCard.detailCrop = const GalleryFaceCrop();
-                            _selectedCard.listCrop = const GalleryFaceCrop();
-                            _selectedCard.monetSeed = null;
-                            c.faceCrop = null;
-                          }),
+                          onPressed: () {
+                            final card = _selectedCard;
+                            c.update(() {
+                              card.face = pair.$1;
+                              card.image = null;
+                              card.imageSize = null;
+                              card.detailCrop = const GalleryFaceCrop();
+                              card.listCrop = const GalleryFaceCrop();
+                              card.monetSeed = null;
+                              c.faceCrop = null;
+                            });
+                            unawaited(
+                              _preferences.clearFaceImage(card.id).then((_) {
+                                final error = _preferences.faceError;
+                                if (error != null && mounted) _toast(error);
+                              }),
+                            );
+                          },
                           style: TextButton.styleFrom(
                             padding: const EdgeInsets.all(4),
                             shape: RoundedRectangleBorder(
@@ -617,7 +626,7 @@ extension _GalleryOverlays on _GalleryViewState {
         ],
         _gap(8),
         _text(
-          '仅在本次界面会话中使用，不上传图片',
+          '卡面图片及裁切设置保存在本机，不会上传',
           role: GalleryTypography.caption,
           color: t.muted,
         ),

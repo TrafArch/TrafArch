@@ -125,30 +125,31 @@ abstract final class GalleryTypography {
 
 /// Journey tickets follow the user's reference rather than the general type scale.
 abstract final class GalleryJourneyTypography {
+  // 日期分组标题与设置页区块标题同字号同字重（GalleryTypography.section）。
   static const date = TextStyle(
     fontFamily: 'sans-serif',
-    fontSize: 26,
-    height: 32 / 26,
+    fontSize: 18,
+    height: 26 / 18,
     fontWeight: FontWeight.w600,
   );
   static const time = TextStyle(
     fontFamily: 'sans-serif',
-    fontSize: 16,
-    height: 22 / 16,
+    fontSize: 14,
+    height: 20 / 14,
     fontWeight: FontWeight.w400,
   );
-  // 单向公交仅记录上车，时间与常规时间同为三号 16dp 且不加粗。
+  // 单向公交仅记录上车，时间与常规时间同为三号 14dp 且不加粗。
   static const oneWayTime = TextStyle(
     fontFamily: 'sans-serif',
-    fontSize: 16,
-    height: 22 / 16,
+    fontSize: 14,
+    height: 20 / 14,
     fontWeight: FontWeight.w400,
   );
   static const station = TextStyle(
     fontFamily: 'sans-serif',
     fontSize: 18,
     height: 26 / 18,
-    fontWeight: FontWeight.w400,
+    fontWeight: FontWeight.w600,
   );
   static const mode = TextStyle(
     fontFamily: 'sans-serif',

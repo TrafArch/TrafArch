@@ -15,6 +15,11 @@ class GalleryKnowledgeCity {
   final _aliases = <String>{};
   int _codeCount = 0;
 
+  /// 设计快照（样例 fixtures）声明的线路数。发布包索引本身没有该字段，
+  /// 样例模式由 [GalleryKnowledgeIndex.applyDeclaredLineCounts] 补齐；
+  /// 缺失时为 null，线路数退回浏览列表长度。
+  int? declaredLineCount;
+
   Iterable<GalleryKnowledgeLine> get lines => _lines.values;
   int get codeCount => _codeCount;
 }
@@ -37,6 +42,176 @@ class GalleryKnowledgeStation {
   final _codes = <(String, String)>{};
 
   Set<(String, String)> get codes => UnmodifiableSetView(_codes);
+}
+
+/// 城市详情页的数据视图。样例（fixtures）与 live（已校验发布包）两条路径
+/// 都先转换成这个结构再导航，详情页因此不依赖具体数据源。
+class GalleryKnowledgeCityView {
+  const GalleryKnowledgeCityView({
+    required this.system,
+    required this.name,
+    required this.code,
+    required this.province,
+    required this.lineCount,
+    required this.codeCount,
+    required this.lines,
+    required this.hasStationData,
+  });
+
+  final String system, name, code, province;
+
+  /// 发布包声明的线路数；结构缺失时为 null（界面显示未知）。
+  final int? lineCount;
+
+  /// 城市编码条目数；结构缺失时为 null（界面显示未知）。
+  final int? codeCount;
+
+  final List<GalleryKnowledgeLineView> lines;
+
+  /// 数据源是否提供了线路内站点列表；没有则为 null 而不是 0。
+  final bool hasStationData;
+
+  /// 同城同名站点只计一次。
+  int? get stationCount {
+    if (!hasStationData) return null;
+    final names = <String>{};
+    for (final line in lines) {
+      for (final station in line.stations) {
+        names.add(station.name);
+      }
+    }
+    return names.length;
+  }
+
+  factory GalleryKnowledgeCityView.fromCity(GalleryKnowledgeCity city) {
+    final lines = [
+      for (final line in city.lines)
+        GalleryKnowledgeLineView(
+          name: line.name,
+          stations: List.unmodifiable([
+            for (final station in line.stations)
+              GalleryKnowledgeStationView(
+                name: station.name,
+                codes: List.unmodifiable({
+                  for (final (code, _) in station.codes) code,
+                }),
+              ),
+          ]),
+          codes: List.unmodifiable(line.codes),
+        ),
+    ];
+    return GalleryKnowledgeCityView(
+      system: city.system.toUpperCase(),
+      name: city.name,
+      code: city.code,
+      province: city.province,
+      lineCount: resolveKnowledgeLineCount(
+        declared: city.declaredLineCount,
+        listed: city.lines.length,
+      ),
+      codeCount: city.codeCount,
+      lines: List.unmodifiable(lines),
+      // 发布包可能只有线路行（如 CU 的 routes 表）而没有站点行；此时站点数
+      // 不可得，不能当成 0。
+      hasStationData: lines.any((line) => line.stations.isNotEmpty),
+    );
+  }
+
+  /// 从知识库记录（fixtures 或 live 的同构 regions 项）构造。
+  factory GalleryKnowledgeCityView.fromRegion(
+    String system,
+    Map<String, dynamic> region,
+  ) {
+    final rawLines = region['lines'];
+    final built = <GalleryKnowledgeLineView>[];
+    // 线路存在但缺 stations 字段时，站点数不可得，不能当成 0。
+    var hasStationData = rawLines is List;
+    if (rawLines is List) {
+      for (final raw in rawLines) {
+        if (raw is! Map) {
+          hasStationData = false;
+          continue;
+        }
+        final name = '${raw['name'] ?? ''}'.trim();
+        final rawStations = raw['stations'];
+        if (rawStations is! List) hasStationData = false;
+        built.add(
+          GalleryKnowledgeLineView(
+            name: name.isEmpty ? '未标注线路' : name,
+            stations: List.unmodifiable([
+              if (rawStations is List)
+                for (final station in rawStations)
+                  GalleryKnowledgeStationView(name: '$station'),
+            ]),
+            codes: const [],
+          ),
+        );
+      }
+    }
+    return GalleryKnowledgeCityView(
+      system: system.toUpperCase(),
+      name: '${region['name'] ?? '未知城市'}',
+      code: '${region['code'] ?? '未知'}',
+      province: '${region['province'] ?? ''}',
+      lineCount: knowledgeLineCountOfRegion(region),
+      codeCount: region['entries'] as int?,
+      lines: List.unmodifiable(built),
+      hasStationData: hasStationData,
+    );
+  }
+}
+
+/// 线路数的唯一口径：发布包／设计快照声明的值优先，只有缺失时才退回当前
+/// 可浏览的线路列表长度。首页城市卡、数据概况、城市页 KV 与线路区标题、
+/// 以及 [GalleryKnowledgeCityView.fromCity]／[GalleryKnowledgeCityView.fromRegion]
+/// 两条进入路径都走这里，避免同一城市在不同位置出现两个数字。
+///
+/// 样例的 `lines` 只是浏览子集，`lineCount` 才是设计快照统计；因此区标题
+/// 写「收录 N 条线路」时 N 也用这里的值，列表条数较少不算矛盾。
+int? resolveKnowledgeLineCount({int? declared, int? listed}) =>
+    declared ?? listed;
+
+/// 从 region 记录解析线路数（声明值优先，缺失才用 lines 列表长度）。
+/// 非 Map 的线路项不计入列表长度。
+int? knowledgeLineCountOfRegion(Map<String, dynamic> region) {
+  final declared = region['lineCount'];
+  final rawLines = region['lines'];
+  return resolveKnowledgeLineCount(
+    declared: declared is int ? declared : null,
+    listed: rawLines is List ? rawLines.whereType<Map>().length : null,
+  );
+}
+
+class GalleryKnowledgeLineView {
+  const GalleryKnowledgeLineView({
+    required this.name,
+    required this.stations,
+    this.codes = const <String>[],
+  });
+
+  final String name;
+  final List<GalleryKnowledgeStationView> stations;
+
+  /// 线路编号（原始值，按数据源顺序）。样例快照不含线路编号，保持空列表，
+  /// 界面显示「线路编号未知」而不猜测。
+  final List<String> codes;
+
+  /// 线路卡片展开状态的唯一标识：体系 + 城市编码 + 线路名。用线路名而不是
+  /// 列表索引，线路顺序变化不会串状态（spec §9.4）。
+  static String idFor(String system, String cityCode, String lineName) =>
+      'knowledge-line:${system.toUpperCase()}:$cityCode:$lineName';
+}
+
+/// 城市页线路卡内的站点视图。样例快照只提供站点名，[codes] 为空表示数据源
+/// 没有编码字段；有值时按原始字符串展示，不做格式猜测。
+class GalleryKnowledgeStationView {
+  const GalleryKnowledgeStationView({
+    required this.name,
+    this.codes = const <String>[],
+  });
+
+  final String name;
+  final List<String> codes;
 }
 
 class GalleryKnowledgeResult {
@@ -98,6 +273,16 @@ class GalleryKnowledgeIndex {
 
   final _postings = <int, List<_SearchTerm>>{};
   final List<GalleryKnowledgeCity> cities;
+
+  /// 补齐设计快照声明的线路数（`{system: {code: lineCount}}`，system 小写）。
+  /// 发布包索引本身没有这个字段，样例模式由界面层从 fixtures 传入；重复调用
+  /// 结果一致，缺失的城市保持 null（线路数退回浏览列表长度）。
+  void applyDeclaredLineCounts(Map<String, Map<String, int>> bySystem) {
+    for (final city in cities) {
+      final declared = bySystem[city.system.toLowerCase()]?[city.code];
+      if (declared != null) city.declaredLineCount = declared;
+    }
+  }
 
   static Future<GalleryKnowledgeIndex> loadPaths(Map<String, String> paths) {
     if (paths.isEmpty) throw StateError('本地参考数据包不可用');

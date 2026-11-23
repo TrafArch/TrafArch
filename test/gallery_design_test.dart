@@ -37,6 +37,19 @@ void main() {
       });
     }
   }
+  test('journey date group headings match the section role', () {
+    expect(
+      GalleryJourneyTypography.date.fontSize,
+      GalleryTypography.section.fontSize,
+    );
+    expect(GalleryJourneyTypography.date.fontSize, 18);
+    expect(GalleryJourneyTypography.date.height, 26 / 18);
+    expect(GalleryJourneyTypography.date.fontWeight, FontWeight.w600);
+    // 只调整日期标题，其他票据字号保持原样。
+    expect(GalleryJourneyTypography.time.fontSize, 14);
+    expect(GalleryJourneyTypography.station.fontSize, 18);
+    expect(GalleryJourneyTypography.amount.fontSize, 18);
+  });
   test('theme colors interpolate instead of switching at the middle', () {
     final a = GalleryTokens(scheme: GalleryPalette.values.first.scheme(false));
     final b = GalleryTokens(scheme: GalleryPalette.values.last.scheme(true));

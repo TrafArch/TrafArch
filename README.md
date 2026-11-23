@@ -1,4 +1,4 @@
-![TrafArch —— 读懂交通卡，留住每次出行](.github/assets/banner.svg)
+﻿![TrafArch —— 读懂交通卡，留住每次出行](.github/assets/banner.svg)
 
 # TrafArch
 
@@ -161,7 +161,7 @@ TrafArch 是一款 Android 交通卡读取工具。将卡片贴近手机，即�
 
 ## 2.x 主界面与 1.x 备用界面
 
-正式入口 `lib/main.dart` 从首次协议确认到首页、行程、专家、卡包和设置均使用 2.x 界面。需要兼容备用时，在「设置 → 备用界面」关闭「使用 2.x 主界面」。进入 1.x 后，可在「设置 → 外观」点按「启用 2.x 主界面」，重启应用也会恢复 2.x。两套界面共用 NFC、行程解析、本机档案、设置和已校验参考数据。
+正式入口 `lib/main.dart` 从首次协议确认到首页、行程、专家、卡包和设置均使用 2.x 界面。需要兼容备用时，在「设置 → 备用界面」开启「使用 1.x 备用界面」。进入 1.x 后，可在「设置 → 外观」开启「返回 2.x 主界面」，重启应用也会恢复 2.x。两套界面共用 NFC、行程解析、本机档案、设置和已校验参考数据。
 
 `flutter run -t lib/main_gallery.dart` 可启动同一套 2.x 实卡界面进行测试。`lib/app/internal_preview_app.dart` 与内置场景用于组件测试和设计回归。详细运行、数据来源与构建说明见 [界面 Gallery](docs/GALLERY.md)。
 

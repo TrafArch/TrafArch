@@ -98,6 +98,46 @@ class ResetProviderParser {
       }
     }
 
+    // A shifted legacy block only counts inside a 3B… reset frame close to its
+    // start; arbitrary payload bytes stay uninterpreted.
+    for (var offset = 0; offset + 7 <= bytes.length; offset++) {
+      if (!_plausibleBlockStart(bytes, offset)) continue;
+      if (bytes[offset + 2] == 0x54 &&
+          bytes[offset + 3] == 0x31 &&
+          bytes[offset + 4] == 0x00) {
+        yield _candidate(
+          bytes,
+          offset,
+          chipOffset: offset,
+          cardOffset: offset + 5,
+          source: source,
+          layout: ResetProviderLayout.providerBlock,
+        );
+        return;
+      }
+    }
+
+    // "MT" provider block: M T chip(2) 00 kind icCard(2). The trailing codes
+    // are only read from a complete block anchored at the start of the reset
+    // information (or inside a 3B ATR envelope); partial or shifted matches
+    // must never surface as provider codes.
+    for (var offset = 0; offset + 8 <= bytes.length; offset++) {
+      if (bytes[offset] != 0x4D ||
+          bytes[offset + 1] != 0x54 ||
+          bytes[offset + 4] != 0x00) {
+        continue;
+      }
+      if (!_plausibleBlockStart(bytes, offset)) continue;
+      yield _candidate(
+        bytes,
+        offset,
+        chipOffset: offset + 2,
+        cardOffset: offset + 6,
+        source: source,
+        layout: ResetProviderLayout.providerBlock,
+      );
+    }
+
     if (_hasLegacyMarker(bytes, 1)) {
       yield ResetProviderCandidate(
         chipProviderCode: _hexByte(bytes[0]),
@@ -133,6 +173,15 @@ class ResetProviderParser {
     layout: layout,
     byteOffset: offset,
   );
+
+  /// A provider block is trusted at the start of the reset information or
+  /// inside a contactless 3B… ATR envelope; anything shifted into arbitrary
+  /// payload bytes stays uninterpreted.
+  static bool _plausibleBlockStart(List<int> bytes, int offset) {
+    if (offset == 0) return true;
+    if (bytes.isEmpty || bytes[0] != 0x3B) return false;
+    return offset <= 8;
+  }
 
   static List<int> _decodeHex(String? value) {
     if (value == null) return const [];
