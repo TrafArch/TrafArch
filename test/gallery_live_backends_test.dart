@@ -139,7 +139,28 @@ void main() {
       await tester.tap(find.text('知识库'));
       await tester.pump();
       await _waitFor(tester, find.text('生效包测试市'));
-      await tester.tap(find.text('数据概况'));
+      // 概况三指标来自已校验发布包里的真实结构：1 城市 / 1 线路 / 1 站点。
+      for (final (id, value) in [
+        ('cities', '1'),
+        ('lines', '1'),
+        ('stations', '1'),
+      ]) {
+        expect(
+          find.descendant(
+            of: find.byKey(ValueKey('knowledge-metric-$id')),
+            matching: find.text(value),
+          ),
+          findsOneWidget,
+        );
+      }
+      final city = find.byKey(const ValueKey('knowledge-city-tu:0'));
+      await tester.tap(city);
+      await tester.pumpAndSettle();
+      expect(find.text('城市编码'), findsOneWidget);
+      expect(find.text('测试线路'), findsOneWidget);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('数据来源与版本'));
       await tester.pumpAndSettle();
       expect(find.text('active-test-v3'), findsOneWidget);
       expect(find.textContaining('数据快照'), findsNothing);
@@ -155,8 +176,10 @@ void main() {
       await _waitFor(tester, result);
       await tester.tap(result);
       await tester.pumpAndSettle();
+      // US-008：编码结果定位到二级城市页，原始匹配值在线路卡／站点行可见，
+      // 不再进入站点详情页（spec §2.1/§12）。
       expect(find.text('离线试验站'), findsOneWidget);
-      expect(find.text('original-field'), findsWidgets);
+      expect(find.text('匹配编码 090000001234'), findsOneWidget);
       expect(previewCalls, 0);
       await _unmount(tester);
     },

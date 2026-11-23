@@ -125,10 +125,11 @@ abstract final class GalleryTypography {
 
 /// Journey tickets follow the user's reference rather than the general type scale.
 abstract final class GalleryJourneyTypography {
+  // 日期分组标题与设置页区块标题同字号同字重（GalleryTypography.section）。
   static const date = TextStyle(
     fontFamily: 'sans-serif',
-    fontSize: 26,
-    height: 32 / 26,
+    fontSize: 18,
+    height: 26 / 18,
     fontWeight: FontWeight.w600,
   );
   static const time = TextStyle(

@@ -294,7 +294,9 @@ extension _GalleryPages on _GalleryViewState {
                     ...grouped.entries.expand(
                       (entry) => [
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(2, 22, 2, 12),
+                          // 18sp 分组标题比 26sp 需要更收紧的上下留白。
+                          key: ValueKey('trip-date-${entry.key}'),
+                          padding: const EdgeInsets.fromLTRB(2, 18, 2, 10),
                           child: Semantics(
                             header: true,
                             child: _text(
@@ -838,7 +840,7 @@ extension _GalleryPages on _GalleryViewState {
                                   ? 1
                                   : 1 +
                                         .02 *
-                                            Curves.easeOutCubic.transform(
+                                            _GalleryMotion.decelerate.transform(
                                               animation.value,
                                             ),
                               child: DecoratedBox(
@@ -1191,13 +1193,7 @@ extension _GalleryPages on _GalleryViewState {
             const Divider(),
             _settingRow(
               '导入卡片记录',
-              () {
-                if (live == null) {
-                  _importCardRecords();
-                } else {
-                  unawaited(_importLiveArchive(live));
-                }
-              },
+              () => unawaited(_selectImportSource(live)),
               subtitle: live == null
                   ? '选择备份文件预览内容，不修改当前样例'
                   : '先预览字段或备份，确认后写入本机档案',
@@ -1207,7 +1203,7 @@ extension _GalleryPages on _GalleryViewState {
         ),
         padding: EdgeInsets.zero,
       ),
-      _sectionTitle('外观'),
+      _sectionTitle('界面与外观'),
       _panel(
         Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1306,6 +1302,13 @@ extension _GalleryPages on _GalleryViewState {
                   }).toList(),
                 ),
               ),
+            ),
+            const Divider(),
+            _switch(
+              '震动',
+              c.hapticEnabled,
+              c.setHaptic,
+              subtitle: '控制开关点击与底栏切换的系统触感反馈',
             ),
             const Divider(),
             _switch(
@@ -1472,6 +1475,53 @@ extension _GalleryPages on _GalleryViewState {
     ]);
   }
 
+  /// 先选择导入来源，再走各来源自己的流程；取消或遮罩关闭不产生任何副作用。
+  Future<void> _selectImportSource(_GalleryLiveRead? live) async {
+    final source = await showDialog<_ImportSource>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('选择导入来源'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              key: const ValueKey('import-source-archive'),
+              contentPadding: EdgeInsets.zero,
+              title: const Text('TrafArch 数据'),
+              subtitle: Text(
+                live == null ? '选择备份文件预览内容，不修改当前样例' : '先预览字段或备份，确认后写入本机档案',
+              ),
+              onTap: () => Navigator.pop(context, _ImportSource.archive),
+            ),
+            ListTile(
+              key: const ValueKey('import-source-trip-reader'),
+              contentPadding: EdgeInsets.zero,
+              title: const Text('从读卡识图数据导入'),
+              subtitle: const Text('正在开发中，敬请期待'),
+              onTap: () => Navigator.pop(context, _ImportSource.tripReader),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || source == null) return;
+    if (source == _ImportSource.tripReader) {
+      _toast('正在开发中，敬请期待', type: GalleryFeedbackType.info);
+      return;
+    }
+    if (live == null) {
+      await _importCardRecords();
+    } else {
+      await _importLiveArchive(live);
+    }
+  }
+
   Future<void> _importLiveArchive(_GalleryLiveRead live) async {
     try {
       final preview = await live.app.archiveTransfer.pickImport();
@@ -1532,7 +1582,14 @@ extension _GalleryPages on _GalleryViewState {
         ? null
         : _text(subtitle, role: GalleryTypography.caption, color: t.muted),
     value: value,
-    onChanged: onChanged,
+    onChanged: onChanged == null
+        ? null
+        : (next) {
+            // 在点击时读取当前偏好：关闭震动的那一次点击仍然会振动，
+            // 重新开启的那一次不会，所有开关共用同一规则。
+            if (c.hapticEnabled) HapticFeedback.selectionClick();
+            onChanged(next);
+          },
   );
   Widget _settingRow(
     String label,
@@ -1723,3 +1780,6 @@ String _tripClock(String value) => value.replaceFirstMapped(
   RegExp(r'(\d{1,2}:\d{2}):\d{2}(?:\.\d+)?'),
   (match) => match[1]!,
 );
+
+/// 「导入卡片记录」的来源选项。读卡识图来源目前只提示开发中，不触发导入。
+enum _ImportSource { archive, tripReader }

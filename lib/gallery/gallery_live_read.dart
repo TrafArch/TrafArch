@@ -12,6 +12,7 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
     final result = app.lastResult;
     if (app.hasCompletedRead && result != null) {
       lastCard = _LiveCardSummary.fromRead(app, readAt: result.timestamp);
+      _lastCardStamp = _readStamp(app);
     }
     navigation.attachLive(this);
     app.addListener(_appChanged);
@@ -35,6 +36,15 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
   List<_LiveArchiveCard> _archive = const [];
   Map<String, _LiveArchiveCard> _archiveById = const {};
   _LiveReadCard? _current;
+
+  /// Signature of the inputs that produced [_current]. A settings notification
+  /// (auto-save, overdraft, logs) leaves all of them untouched, so the live
+  /// projection is reused instead of being rebuilt from the snapshot.
+  String? _currentKey;
+  List<_LiveArchiveCard>? _syncedArchive;
+  List<GalleryCard>? _syncedCards;
+  bool _syncedFresh = false;
+  String? _lastCardStamp;
   bool _freshCurrent = false;
   String? _archiveIssue;
   GalleryCard? _placeholder;
@@ -111,7 +121,11 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
     _restoreRoutes();
     final result = app.lastResult;
     if (app.hasCompletedRead && result != null) {
-      lastCard = _LiveCardSummary.fromRead(app, readAt: result.timestamp);
+      final stamp = _readStamp(app);
+      if (stamp != _lastCardStamp) {
+        lastCard = _LiveCardSummary.fromRead(app, readAt: result.timestamp);
+        _lastCardStamp = stamp;
+      }
     }
     _syncController();
     notifyListeners();
@@ -133,56 +147,91 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
       for (final item in archive) item.card.id: item,
     });
     _archiveIssue = null;
+    // A different archive can change which saved row matches the current read.
+    _currentKey = null;
     _syncController();
     notifyListeners();
   }
 
-  void _syncController() {
+  /// [publish] forces a controller notification for callers that mutated the
+  /// controller directly (dismissing an overlay) without changing live data.
+  void _syncController({bool publish = false}) {
     if (_disposed) return;
     final live = _buildCurrent();
+    // The data projection (cards, trips, ledgers, raw evidence and face
+    // restore) is expensive and only changes with the read, the archive or the
+    // overdraft interpretation. Toggling auto-save/logs leaves all of them
+    // untouched, so publish just the light scalar flags in that case.
+    final dataChanged =
+        !identical(live, _current) ||
+        !identical(_archive, _syncedArchive) ||
+        !identical(navigation.cards, _syncedCards) ||
+        _freshCurrent != _syncedFresh;
     _current = live;
-    final saved = savedCards;
-    final currentCard = live?.card ?? _placeholderCard;
-    final cards = <GalleryCard>[
-      currentCard,
-      for (final card in saved)
-        if (card.id != currentCard.id) card,
-    ];
-    navigation.cards = cards;
-    unawaited(restoreFaceImages(cards));
-    navigation.currentCardId = currentCard.id;
-    if (!cards.any((card) => card.id == navigation.selectedCardId)) {
-      navigation.selectedCardId = currentCard.id;
+    var changed = dataChanged;
+    if (dataChanged) {
+      final saved = savedCards;
+      final currentCard = live?.card ?? _placeholderCard;
+      final cards = <GalleryCard>[
+        currentCard,
+        for (final card in saved)
+          if (card.id != currentCard.id) card,
+      ];
+      navigation.cards = cards;
+      unawaited(restoreFaceImages(cards));
+      navigation.currentCardId = currentCard.id;
+      if (!cards.any((card) => card.id == navigation.selectedCardId)) {
+        navigation.selectedCardId = currentCard.id;
+      }
+      final fresh = _freshCurrent && live != null;
+      navigation.trips = fresh ? live.records : const [];
+      navigation.hasRead = live != null;
+      navigation.liveLedgers = {
+        for (final item in _archive) item.card.id: item.records,
+        if (live != null) live.card.id: live.records,
+      };
+      navigation.liveRaw = {
+        for (final item in _archive) item.card.id: item.raw,
+        if (live != null) live.card.id: live.raw,
+      };
+      _syncedArchive = _archive;
+      _syncedCards = cards;
+      _syncedFresh = _freshCurrent;
+      if (!sources.contains(navigation.source)) {
+        navigation.source = '全部来源';
+      }
+      if (!modes.contains(navigation.mode)) {
+        navigation.mode = '全部方式';
+      }
     }
-    final fresh = _freshCurrent && live != null;
-    navigation.trips = fresh ? live.records : const [];
-    navigation.hasRead = live != null;
-    navigation.liveLedgers = {
-      for (final item in _archive) item.card.id: item.records,
-      if (live != null) live.card.id: live.records,
-    };
-    navigation.liveRaw = {
-      for (final item in _archive) item.card.id: item.raw,
-      if (live != null) live.card.id: live.raw,
-    };
-    navigation.autoSave = app.autoSaveEnabled;
-    navigation.includeOverdraft = app.includeShanghaiOverdraft;
-    navigation.logsEnabled = app.loggingEnabled;
-    if (!sources.contains(navigation.source)) {
-      navigation.source = '全部来源';
+    if (navigation.autoSave != app.autoSaveEnabled) {
+      navigation.autoSave = app.autoSaveEnabled;
+      changed = true;
     }
-    if (!modes.contains(navigation.mode)) {
-      navigation.mode = '全部方式';
+    if (navigation.includeOverdraft != app.includeShanghaiOverdraft) {
+      navigation.includeOverdraft = app.includeShanghaiOverdraft;
+      changed = true;
     }
-    if (_error != null || app.nfcReleaseFailed) {
-      navigation.readState = GalleryReadState.failed;
-    } else if (busy) {
-      navigation.readState = GalleryReadState.reading;
-    } else if (live != null) {
-      navigation.readState = GalleryReadState.success;
-    } else {
-      navigation.readState = GalleryReadState.unread;
+    if (navigation.logsEnabled != app.loggingEnabled) {
+      navigation.logsEnabled = app.loggingEnabled;
+      changed = true;
     }
+    if (navigation.hapticEnabled != app.hapticEnabled) {
+      navigation.hapticEnabled = app.hapticEnabled;
+      changed = true;
+    }
+    final readState = _error != null || app.nfcReleaseFailed
+        ? GalleryReadState.failed
+        : busy
+        ? GalleryReadState.reading
+        : live != null
+        ? GalleryReadState.success
+        : GalleryReadState.unread;
+    if (navigation.readState != readState) {
+      navigation.readState = readState;
+      changed = true;
+    }
+    if (!changed && !publish) return;
     navigation.notifyListeners();
   }
 
@@ -246,16 +295,47 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
     final recovery = app.recoveredCapture;
     if (recovery != null) {
       _freshCurrent = true;
-      return _fromRecovery(recovery);
+      // The overdraft flag changes how the captured records are projected, so
+      // it is part of the signature. Archive changes reset [_currentKey].
+      return _memoized(
+        'recovery:${identityHashCode(recovery)}'
+        '|overdraft:${app.includeShanghaiOverdraft}',
+        () => _fromRecovery(recovery),
+      );
     }
     if (app.hasCompletedRead &&
         app.lastResult != null &&
         (_attempt == null || _readStamp(app) != _attemptStartedWith)) {
       _freshCurrent = true;
-      return _fromCompletedRead();
+      final pending = app.pendingCardSave;
+      // A pending save can be replaced in place under the same id (verified
+      // Octopus evidence rewrites the snapshot), so hash the instance too.
+      final pendingKey = pending == null
+          ? '-'
+          : '${pending.pendingSaveId}@${identityHashCode(pending)}';
+      return _memoized(
+        'read:${_readStamp(app)}'
+        '|overdraft:${app.includeShanghaiOverdraft}'
+        '|pending:$pendingKey'
+        '|fingerprint:${app.lastCardFingerprint ?? '-'}',
+        _fromCompletedRead,
+      );
     }
     if (busy || app.nfcReleaseFailed || _error != null) return _current;
     return null;
+  }
+
+  /// Projecting the current read decodes the captured snapshot and runs the
+  /// trip presenters over every record. The signature in [_buildCurrent] covers
+  /// every input that changes the result (read stamp, overdraft interpretation,
+  /// pending save, fingerprint) and an archive change resets [_currentKey];
+  /// settings toggles reuse [_current] instead of rebuilding it per
+  /// notification.
+  _LiveReadCard? _memoized(String key, _LiveReadCard? Function() build) {
+    if (key == _currentKey && _current != null) return _current;
+    final built = build();
+    _currentKey = key;
+    return built;
   }
 
   _LiveReadCard? _fromCompletedRead() {
@@ -265,6 +345,7 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
       app,
       readAt: result.timestamp,
     );
+    _lastCardStamp = _readStamp(app);
     final fingerprint =
         app.lastCardFingerprint ?? app.pendingCardSave?.fingerprint;
     final saved = _archive
@@ -410,7 +491,7 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
         lastSaveSucceeded = true;
         lastSaveMessage = '已跳过已存在的记录';
         navigation.overlay = null;
-        _syncController();
+        _syncController(publish: true);
         notifyListeners();
         return;
       }
@@ -432,7 +513,7 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
     if (_disposed) return;
     navigation.overlay = null;
     lastSaveSucceeded = ok;
-    _syncController();
+    _syncController(publish: true);
     notifyListeners();
   }
 
@@ -443,18 +524,18 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
     if (trimmed.isEmpty || !card.saved) return;
     await app.cardRepository.renameCard(card.id, trimmed);
     navigation.overlay = null;
-    _syncController();
+    _syncController(publish: true);
     notifyListeners();
   }
 
   @override
   Future<void> setAutoSave(bool value) async {
-    // SettingsController publishes optimistically before awaiting storage; sync
-    // the Gallery toggle in the same turn so its thumb never waits on disk I/O.
+    // SettingsController publishes optimistically before awaiting storage, so
+    // its notification already syncs the Gallery toggle in this turn;
+    // _syncController publishes the flag only when it actually changed.
     final write = app.setAutoSaveEnabled(value);
     navigation.autoSave = value;
     _syncController();
-    notifyListeners();
     await write;
   }
 
@@ -463,7 +544,6 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
     final write = app.setIncludeShanghaiOverdraft(value);
     navigation.includeOverdraft = value;
     _syncController();
-    notifyListeners();
     await write;
   }
 
@@ -472,7 +552,17 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
     final write = app.setLoggingEnabled(value);
     navigation.logsEnabled = value;
     _syncController();
-    notifyListeners();
+    await write;
+  }
+
+  @override
+  Future<void> setHaptic(bool value) async {
+    // Same optimistic scalar pattern as setAutoSave: the settings controller
+    // publishes before awaiting storage, so this notification already syncs
+    // the Gallery flag; _syncController publishes only when it changed.
+    final write = app.setHapticEnabled(value);
+    navigation.hapticEnabled = value;
+    _syncController();
     await write;
   }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_floating_bottom_bar/flutter_floating_bottom_bar.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/app/app_dependencies.dart';
@@ -80,6 +81,67 @@ void main() {
       app.dispose();
     });
   }
+
+  testWidgets('1.x 底栏切换震动受已持久化的震动偏好控制', (tester) async {
+    final haptics = <Object?>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'HapticFeedback.vibrate') {
+          haptics.add(call.arguments);
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+
+    await tester.binding.setSurfaceSize(const Size(390, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final store = MemorySettingsStore({SettingsKeys.hapticEnabled: 'false'});
+    final app = AppDependencies(
+      database: testDatabase(),
+      settingsStore: store,
+      bundle: MissingTestAssets(),
+      channel: _NoopNfcChannel(),
+    );
+    await tester.runAsync(app.init);
+    final bar = BottomBarController();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppShell(app: app, bottomBarController: bar),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(app.hapticEnabled, isFalse, reason: '启动时应读到已保存的关闭状态');
+
+    Finder navIcon(IconData icon) => find.descendant(
+      of: find.byType(FloatingNavBar),
+      matching: find.byIcon(icon),
+    );
+
+    await tester.tap(navIcon(Icons.directions_transit_outlined));
+    await tester.pumpAndSettle();
+    expect(tester.widget<FloatingNavBar>(find.byType(FloatingNavBar)).index, 1);
+    expect(haptics, isEmpty, reason: '关闭震动后 1.x 底栏切换不得振动');
+
+    // 设置页改写偏好后壳页不会重建：点击时仍须读到新值。
+    await app.setHapticEnabled(true);
+    await tester.pumpAndSettle();
+    await tester.tap(navIcon(Icons.credit_card_outlined));
+    await tester.pumpAndSettle();
+    expect(tester.widget<FloatingNavBar>(find.byType(FloatingNavBar)).index, 2);
+    expect(haptics, ['HapticFeedbackType.selectionClick']);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    bar.dispose();
+    app.dispose();
+  });
 }
 
 class _NoopNfcChannel implements NfcChannel {

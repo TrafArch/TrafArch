@@ -8,6 +8,7 @@ import 'package:transit_card_analyzer/features/trips/journey_transport_icon.dart
 import 'package:transit_card_analyzer/gallery/gallery_app.dart';
 import 'package:transit_card_analyzer/gallery/gallery_controller.dart';
 import 'package:transit_card_analyzer/gallery/gallery_data.dart';
+import 'package:transit_card_analyzer/gallery/gallery_design.dart';
 import 'package:transit_card_analyzer/gallery/gallery_theme.dart';
 
 import 'support/gallery_scroll.dart';
@@ -60,7 +61,7 @@ void main() {
       FontWeight.w600,
     );
     for (final (value, size, lineHeight, weight) in [
-      ('今天', 26.0, 32.0, FontWeight.w600),
+      ('今天', 18.0, 26.0, FontWeight.w600),
       ('08:07', 14.0, 20.0, FontWeight.w400),
       ('08:42', 14.0, 20.0, FontWeight.w400),
       ('未记录', 14.0, 20.0, FontWeight.w400),
@@ -90,11 +91,46 @@ void main() {
     await tester.pumpAndSettle();
     controller.openCard(controller.current);
     await tester.pumpAndSettle();
-    expect(tester.widget<Text>(find.text('今天')).style!.fontSize, 26);
+    expect(tester.widget<Text>(find.text('今天')).style!.fontSize, 18);
     expect(
       tester.widget<Text>(find.text('08:42')).style!.fontWeight,
       FontWeight.w400,
     );
+  });
+
+  testWidgets('date group headings track the section role and large fonts', (
+    tester,
+  ) async {
+    await mount(tester);
+    final heading = find.byKey(const ValueKey('trip-date-今天'));
+    expect(heading, findsOneWidget);
+    final label = find.descendant(of: heading, matching: find.text('今天'));
+    final style = tester.widget<Text>(label).style!;
+    expect(style.fontSize, GalleryTypography.section.fontSize);
+    expect(style.height, 26 / 18);
+    expect(style.fontWeight, FontWeight.w600);
+    for (final scale in [1.5, 2.0]) {
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: '$scale');
+      final box = tester.getRect(heading);
+      final text = tester.getRect(label);
+      // 标题在自身留白内完整绘制，未被裁切。
+      expect(box.contains(text.topLeft), isTrue, reason: '$scale');
+      expect(
+        box.contains(text.bottomRight - const Offset(.1, .1)),
+        isTrue,
+        reason: '$scale',
+      );
+      expect(text.height, greaterThanOrEqualTo(18 * scale));
+    }
+    tester.platformDispatcher.clearTextScaleFactorTestValue();
+    controller.openCard(controller.current);
+    await tester.pumpAndSettle();
+    for (final text in tester.widgetList<Text>(find.text('今天'))) {
+      expect(text.style!.fontSize, GalleryJourneyTypography.date.fontSize);
+    }
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('trip rows drop seconds from recorded clock times', (

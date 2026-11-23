@@ -863,7 +863,7 @@ final tokens = Theme.of(context)
 
 避免每个 Widget 自己执行独立的颜色动画。
 
-知识库搜索的输入控制器、焦点和结果列表独立于主题。主题变化只更新角色色值，不重新索引、检索或重置滚动位置。时长规范见 [TrafArch Motion 1.0](TrafArch_motion_system.md)。
+知识库搜索的输入控制器、焦点和结果列表独立于主题。主题变化只更新角色色值，不重新索引、检索或重置滚动位置。时长规范见 [TrafArch Motion 1.0.1](TrafArch_motion_system.md)。
 
 ## 9.3 图片更新时的动画处理
 

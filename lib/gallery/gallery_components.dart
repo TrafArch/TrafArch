@@ -210,8 +210,8 @@ extension _GalleryComponents on _GalleryViewState {
                           reverseDuration: _reduceMotion
                               ? Duration.zero
                               : _GalleryMotion.content,
-                          switchInCurve: Curves.easeOutCubic,
-                          switchOutCurve: Curves.easeInCubic,
+                          switchInCurve: _GalleryMotion.decelerate,
+                          switchOutCurve: _GalleryMotion.accelerate,
                           transitionBuilder: (child, animation) =>
                               FadeTransition(
                                 opacity: animation,
@@ -969,8 +969,9 @@ extension _GalleryComponents on _GalleryViewState {
                         showLabel: showLabels,
                         onTap: () {
                           // Page switches acknowledge through the system
-                          // haptic API; re-tapping the current page is inert.
-                          if (pages[i] != c.mainPage) {
+                          // haptic API; re-tapping the current page is inert
+                          // and the user preference can mute it entirely.
+                          if (pages[i] != c.mainPage && c.hapticEnabled) {
                             HapticFeedback.selectionClick();
                           }
                           c.navigate(pages[i]);

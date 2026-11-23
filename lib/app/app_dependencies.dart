@@ -559,6 +559,7 @@ class AppDependencies extends OwnedNotifier {
   ArchiveConflictPolicy get archiveConflictPolicy =>
       settings.archiveConflictPolicy;
   bool get monetEnabled => settings.monetEnabled;
+  bool get hapticEnabled => settings.hapticEnabled;
   bool get openingFeedbackSurvey => settings.openingFeedbackSurvey;
   String? get feedbackBrowserError => settings.feedbackBrowserError;
   String? get feedbackBrowserNotice => settings.feedbackBrowserNotice;
@@ -654,6 +655,8 @@ class AppDependencies extends OwnedNotifier {
       settings.setArchiveConflictPolicy(policy);
   Future<void> setMonetEnabled(bool enabled) =>
       settings.setMonetEnabled(enabled);
+  Future<void> setHapticEnabled(bool enabled) =>
+      settings.setHapticEnabled(enabled);
   Future<void> setIncludeShanghaiOverdraft(bool enabled) =>
       settings.setIncludeShanghaiOverdraft(enabled);
   Future<bool> openFeedbackEmail(String address) =>

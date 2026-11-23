@@ -38,6 +38,7 @@ class SettingsController extends OwnedNotifier {
   bool get includeShanghaiOverdraft =>
       _values[SettingsKeys.includeShanghaiOverdraft] ?? false;
   bool get monetEnabled => _values[SettingsKeys.monetEnabled] ?? true;
+  bool get hapticEnabled => _values[SettingsKeys.hapticEnabled] ?? true;
 
   Future<bool> openFeedbackEmail(String address) async {
     try {
@@ -111,6 +112,7 @@ class SettingsController extends OwnedNotifier {
       SettingsKeys.autoSaveEnabled,
       SettingsKeys.includeShanghaiOverdraft,
       SettingsKeys.monetEnabled,
+      SettingsKeys.hapticEnabled,
     ]) {
       final revision = _revisions[key] ?? 0;
       try {
@@ -166,6 +168,8 @@ class SettingsController extends OwnedNotifier {
       _set(SettingsKeys.includeShanghaiOverdraft, value);
   Future<void> setMonetEnabled(bool value) =>
       _set(SettingsKeys.monetEnabled, value);
+  Future<void> setHapticEnabled(bool value) =>
+      _set(SettingsKeys.hapticEnabled, value);
 
   Future<void> _set(String key, bool value) {
     if (disposed) return Future.value();

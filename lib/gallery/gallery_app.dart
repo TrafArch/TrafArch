@@ -144,11 +144,35 @@ class _GalleryAppState extends State<GalleryApp> {
     }
     final request = _knowledgeIndex ??= Future.sync(load);
     try {
-      return await request;
+      final index = await request;
+      await _applySnapshotLineCounts(index);
+      return index;
     } catch (_) {
       if (identical(request, _knowledgeIndex)) _knowledgeIndex = null;
       rethrow;
     }
+  }
+
+  /// 发布包索引本身不含「设计快照」的声明线路数。样例 fixtures 的 regions
+  /// 提供了该值，载入后按体系 + 城市编码补进索引，搜索路径（城市页、
+  /// 搜索结果摘要）因此与首页城市卡共用同一口径；live 的 regions 为空，
+  /// 等价于不补。
+  Future<void> _applySnapshotLineCounts(GalleryKnowledgeIndex index) async {
+    final controller = await _ready;
+    final systems = controller.data.knowledge['systems'];
+    if (systems is! Map) return;
+    index.applyDeclaredLineCounts({
+      for (final entry in systems.entries)
+        if (entry.value case final Map system)
+          '${entry.key}': {
+            if (system['regions'] case final List regions)
+              for (final region in regions)
+                if (region is Map &&
+                    region['lineCount'] is int &&
+                    region['code'] != null)
+                  '${region['code']}': region['lineCount'] as int,
+          },
+    });
   }
 
   @override
@@ -392,6 +416,19 @@ class _GalleryViewState extends State<_GalleryView> {
   double _detailScrollDeficit = 0;
   double _detailMaxExtent = 0;
   double _detailShrinkDistance = 0;
+
+  /// 城市详情页滚动：线路卡按需构建，从搜索定位到指定线路时靠它逐屏
+  /// 滚动到目标卡片（滚动位置仍由 PageStorageKey 保存恢复）。
+  final ScrollController _knowledgeScroll = ScrollController();
+  int _knowledgeRevealToken = -1;
+  GlobalKey? _knowledgeRevealKey;
+
+  @override
+  void dispose() {
+    _knowledgeScroll.dispose();
+    super.dispose();
+  }
+
   void _updateDetail(VoidCallback update) => setState(update);
 
   Future<void> _pickFaceImage() async {
@@ -774,11 +811,7 @@ class _GalleryViewState extends State<_GalleryView> {
         onResult: c.openKnowledgeResult,
         revision: live?.app.knowledgeBase,
       ),
-      GalleryPage.knowledgeCity ||
-      GalleryPage.knowledgeLine ||
-      GalleryPage.knowledgeStation => _knowledgeDetails(
-        _entry.knowledgeResult!,
-      ),
+      GalleryPage.knowledgeCity => _knowledgeCityPage(),
       GalleryPage.qr => _qr(),
       GalleryPage.feedback => _feedback(),
       GalleryPage.acknowledgements => _acknowledgements(),

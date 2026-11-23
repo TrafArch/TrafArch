@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/gallery/gallery_app.dart';
 import 'package:transit_card_analyzer/gallery/gallery_controller.dart';
 import 'package:transit_card_analyzer/gallery/gallery_data.dart';
+import 'package:transit_card_analyzer/gallery/gallery_motion.dart';
 import 'package:transit_card_analyzer/gallery/gallery_preferences.dart';
 import 'package:transit_card_analyzer/gallery/gallery_theme.dart';
 
@@ -359,7 +360,7 @@ void main() {
       c.navigate(GalleryPage.knowledge);
       await mount(tester);
       expect(find.text('源文件'), findsNothing);
-      await tester.tap(find.text('数据概况'));
+      await tester.tap(find.text('数据来源与版本'));
       await tester.pump();
       final clipped = find
           .ancestor(of: find.text('源文件'), matching: find.byType(ClipRect))
@@ -369,7 +370,7 @@ void main() {
       await tester.pumpAndSettle();
       final full = tester.getSize(clipped).height;
       expect(growing, inExclusiveRange(0, full));
-      await tester.tap(find.text('数据概况'));
+      await tester.tap(find.text('数据来源与版本'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 45));
       expect(tester.getSize(clipped).height, inExclusiveRange(0, full));
@@ -627,68 +628,45 @@ void main() {
     },
   );
 
-  for (final lineCount in [1, 24]) {
-    testWidgets('coverage motion scales to $lineCount lines and can reverse', (
-      tester,
-    ) async {
-      final system =
-          (c.data.knowledge['systems'] as Map)['tu'] as GalleryRecord;
-      final regionData = (system['regions'] as List).first as GalleryRecord;
-      regionData['lines'] = (regionData['lines'] as List)
-          .take(lineCount)
-          .toList();
+  testWidgets(
+    'knowledge city cards open the city page and popping restores the list',
+    (tester) async {
+      c.navigate(GalleryPage.settings);
       c.navigate(GalleryPage.knowledge);
       await mount(tester);
-      final region = find.byKey(const ValueKey('knowledge-region-tu:0'));
-      final header = find.descendant(
-        of: region,
-        matching: find.byType(ListTile),
+      final list = find.byKey(
+        PageStorageKey('gallery-${c.generation}-knowledge'),
       );
-      final clip = find
-          .descendant(of: region, matching: find.byType(ClipRect))
-          .first;
-      await tester.tap(header);
-      await tester.pump();
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-      final partial = tester.getSize(clip).height;
+      final card = find.byKey(const ValueKey('knowledge-city-tu:12'));
+      await tester.scrollUntilVisible(
+        card,
+        220,
+        scrollable: galleryVerticalScroll(within: list),
+      );
       await tester.pumpAndSettle();
-      final full = tester.getSize(clip).height;
-      expect(partial, inExclusiveRange(0, full));
-      await tester.tap(header);
-      await tester.pump();
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-      final shrinking = tester.getSize(clip).height;
-      expect(shrinking, inExclusiveRange(0, full));
-      await tester.tap(header);
-      await tester.pump();
-      await tester.pump();
-      expect(tester.getSize(clip).height, closeTo(shrinking, .1));
-      await tester.pump(const Duration(milliseconds: 50));
-      expect(tester.getSize(clip).height, greaterThan(shrinking));
+      final offset = tester
+          .state<ScrollableState>(galleryVerticalScroll(within: list))
+          .position
+          .pixels;
+      expect(offset, greaterThan(0));
+      await tester.tap(card);
       await tester.pumpAndSettle();
-      await tester.tap(header);
-      await tester.pump();
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 221));
+      expect(c.page, GalleryPage.knowledgeCity);
+      expect(find.text('城市编码'), findsOneWidget);
+      expect(c.selectedKnowledgeCity?.name, isNotEmpty);
+      await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
+      expect(c.page, GalleryPage.knowledge);
       expect(
-        find.descendant(of: region, matching: find.byType(ClipRect)),
-        findsNothing,
+        tester
+            .state<ScrollableState>(galleryVerticalScroll(within: list))
+            .position
+            .pixels,
+        closeTo(offset, .1),
       );
-      tester.platformDispatcher.accessibilityFeaturesTestValue =
-          const FakeAccessibilityFeatures(disableAnimations: true);
-      addTearDown(
-        tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(header);
-      await tester.pumpAndSettle();
-      expect(tester.getSize(clip).height, closeTo(full, .1));
       expect(tester.takeException(), isNull);
-    });
-  }
+    },
+  );
 
   testWidgets(
     'theme segment slides continuously and reverses from its current position',
@@ -1014,4 +992,52 @@ void main() {
       }
     },
   );
+
+  test('scene tokens cover swipe, insert, remove and the read curve', () {
+    expect(GalleryMotion.swipe, const Duration(milliseconds: 200));
+    expect(GalleryMotion.mainTab, GalleryMotion.swipe);
+    expect(GalleryMotion.insert, GalleryMotion.expand);
+    expect(GalleryMotion.insert, const Duration(milliseconds: 260));
+    expect(GalleryMotion.remove, GalleryMotion.collapse);
+    expect(GalleryMotion.remove, const Duration(milliseconds: 220));
+    expect(GalleryMotion.highlight, const Duration(milliseconds: 180));
+    expect(GalleryMotion.readMorph, GalleryMotion.readResult);
+    expect(GalleryMotion.readCurve, Curves.easeInOutCubicEmphasized);
+  });
+
+  test('gallery widgets take durations and curves from GalleryMotion', () {
+    const timers = {
+      'gallery_controller.dart': {1600, 700},
+      'gallery_knowledge_search.dart': {280},
+    };
+    final rawCurves = <String>[];
+    final rawDurations = <String>[];
+    for (final entity in Directory('lib/gallery').listSync()) {
+      if (entity is! File || !entity.path.endsWith('.dart')) continue;
+      final name = entity.uri.pathSegments.last;
+      if (name == 'gallery_motion.dart') continue;
+      final lines = entity.readAsLinesSync();
+      for (var i = 0; i < lines.length; i++) {
+        final line = lines[i];
+        if (line.trimLeft().startsWith('//')) continue;
+        final where = '$name:${i + 1}';
+        if (line.contains('Curves.')) rawCurves.add(where);
+        final match = RegExp(r'Duration\(milliseconds: ([^)]+)\)')
+            .firstMatch(line);
+        if (match == null) continue;
+        final value = match.group(1)!.trim();
+        final numeric = int.tryParse(value);
+        if (numeric == null) {
+          // 由文案长度算出的展示时长（gallery_feedback）属消息调度。
+          if (name == 'gallery_feedback.dart') continue;
+          rawDurations.add('$where ($value)');
+          continue;
+        }
+        if (timers[name]?.contains(numeric) ?? false) continue;
+        rawDurations.add('$where ($value)');
+      }
+    }
+    expect(rawCurves, isEmpty);
+    expect(rawDurations, isEmpty);
+  });
 }
