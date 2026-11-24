@@ -157,19 +157,19 @@ String? archiveJourneyOperationKey(
 
 Map<String, dynamic> _identityContext(ArchiveHistoryRecord record) {
   final context = record.context;
-  final shanghaiRecharge = record.isShanghaiWalletRecharge;
   final system = archiveJourneySystemId(
     context,
-    shanghaiRecharge: shanghaiRecharge,
+    shanghaiRecharge: record.isShanghaiWalletRecharge,
   );
   final identity = {
     for (final field in context.toJson().entries)
       if (!const {
-            'referencePackages',
-            'observedFields',
-            'captureDeviceOffsetMinutes',
-          }.contains(field.key) &&
-          !(shanghaiRecharge && field.key == 'displayCardType'))
+        'referencePackages',
+        'observedFields',
+        'captureDeviceOffsetMinutes',
+        // Older captures of the same wallet lack this presentation hint.
+        'displayCardType',
+      }.contains(field.key))
         field.key: field.key == 'systemId' ? system : field.value,
   };
   final observation = identity['balanceInterpretation'];

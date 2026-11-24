@@ -23,20 +23,18 @@ extension _GalleryDetail on _GalleryViewState {
       2 => [_cardInformation(card)],
       _ => <Widget>[
         if (ledger.isEmpty) _empty('暂无交易记录', '卡内记录可能不完整'),
-        for (final record in ledger)
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _sectionTitle(
-                record['date'] as String? ?? '日期未记录',
-                role: GalleryJourneyTypography.date,
-              ),
-              _panel(
-                _trip(record),
+        for (final group in _tripsByDate(ledger).entries) ...[
+          _tripDateHeading(group.key),
+          for (final (index, trip) in group.value.indexed) ...[
+            if (index > 0) _gap(8),
+            Builder(
+              builder: (_) => _panel(
+                _trip(trip),
                 padding: const EdgeInsets.symmetric(horizontal: 14),
               ),
-            ],
-          ),
+            ),
+          ],
+        ],
         _gap(16),
         _text(
           '仅展示样例中保留的记录，可能不代表完整历史。',

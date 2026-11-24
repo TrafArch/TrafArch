@@ -215,10 +215,6 @@ extension _GalleryPages on _GalleryViewState {
   Widget _trips() {
     final live = _GalleryLiveScope.of(context);
     final trips = c.filteredTrips;
-    final grouped = <String, List<GalleryRecord>>{};
-    for (final trip in trips) {
-      grouped.putIfAbsent(trip['date'] as String, () => []).add(trip);
-    }
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth - 32;
@@ -313,34 +309,22 @@ extension _GalleryPages on _GalleryViewState {
                       icon: Icons.route_outlined,
                     )
                   else
-                    ...grouped.entries.expand(
-                      (entry) => [
-                        Padding(
-                          // 18sp 分组标题比 26sp 需要更收紧的上下留白。
-                          key: ValueKey('trip-date-${entry.key}'),
-                          padding: const EdgeInsets.fromLTRB(2, 18, 2, 10),
-                          child: Semantics(
-                            header: true,
-                            child: _text(
-                              entry.key,
-                              role: GalleryJourneyTypography.date,
-                            ),
-                          ),
-                        ),
-                        _panel(
-                          Column(
-                            children: [
-                              for (int i = 0; i < entry.value.length; i++) ...[
-                                if (i > 0) Divider(height: 1, color: t.line),
-                                _trip(entry.value[i]),
-                              ],
+                    for (final group in _tripsByDate(trips).entries) ...[
+                      _tripDateHeading(group.key),
+                      _panel(
+                        Column(
+                          children: [
+                            for (final (index, trip)
+                                in group.value.indexed) ...[
+                              if (index > 0) Divider(height: 1, color: t.line),
+                              _trip(trip),
                             ],
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
-                          radius: 24,
+                          ],
                         ),
-                      ],
-                    ),
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        radius: 24,
+                      ),
+                    ],
                 ],
               ),
             ),
@@ -349,6 +333,40 @@ extension _GalleryPages on _GalleryViewState {
       },
     );
   }
+
+  Map<String, List<GalleryRecord>> _tripsByDate(Iterable<GalleryRecord> trips) {
+    final labelsByDay = <DateTime, String>{};
+    final daysByLabel = <String, Set<DateTime>>{};
+    for (final trip in trips) {
+      final day = galleryRecordedDate(trip);
+      if (day == null) continue;
+      final label = labelsByDay.putIfAbsent(
+        day,
+        () => trip['date'] as String? ?? _dateLabel(day),
+      );
+      daysByLabel.putIfAbsent(label, () => {}).add(day);
+    }
+    final grouped = <String, List<GalleryRecord>>{};
+    for (final trip in trips) {
+      final day = galleryRecordedDate(trip);
+      final label = labelsByDay[day] ?? trip['date'] as String? ?? '日期未记录';
+      // Keep undated legacy rows under their recorded label if the year is ambiguous.
+      final title = day != null && daysByLabel[label]!.length > 1
+          ? '${day.year}年${day.month}月${day.day}日'
+          : label;
+      grouped.putIfAbsent(title, () => []).add(trip);
+    }
+    return grouped;
+  }
+
+  Widget _tripDateHeading(String label) => Padding(
+    key: ValueKey('trip-date-$label'),
+    padding: const EdgeInsets.fromLTRB(2, 18, 2, 10),
+    child: Semantics(
+      header: true,
+      child: _text(label, role: GalleryJourneyTypography.date),
+    ),
+  );
 
   /// One pinned surface contracts with scrolling, without overlapping copies.
   Widget _tripsSummary(double progress) => Container(
