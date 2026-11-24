@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/app/app_dependencies.dart';
 import 'package:transit_card_analyzer/app/trafarch_app.dart';
+import 'package:transit_card_analyzer/features/archive/domain/card_archive_identity.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_name_extension.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_session_snapshot.dart';
 import 'package:transit_card_analyzer/features/home/presentation/pending_save_presenter.dart';
@@ -29,6 +30,9 @@ import 'package:transit_card_analyzer/protocols/octopus/octopus_balance.dart';
 import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
 import 'package:transit_card_analyzer/shared/domain/archive_conflict_policy.dart';
 
+import 'qingdao_cu_wallet_regression_test.dart' show qingdaoMetroReplay;
+import 'shanghai_local_terminal_regression_test.dart'
+    show scanHarbinMirrorLedger;
 import 'support/gallery_scroll.dart';
 import 'support/test_database.dart';
 
@@ -129,6 +133,139 @@ void main() {
       },
     );
   }
+
+  testWidgets(
+    'home marks a partial Suzhou wallet and clears its warning for the next card',
+    (tester) async {
+      final reader = _SuzhouHomeReader();
+      final fixture = await _showGallery(tester, _CardKind.tu, reader: reader);
+      await _read(tester, '开始读取');
+      final wallet = fixture.app.applications.singleWhere(
+        (a) => a.appId == 'suzhou_suxin',
+      );
+      expect(wallet.confirmed, isTrue);
+      expect(wallet.balanceFen, isNull);
+      expect(find.textContaining('部分读取'), findsOneWidget);
+      expect(find.textContaining('读取完成'), findsNothing);
+      expect(find.text('本次未读到交易记录'), findsOneWidget);
+      expect(find.text('暂无行程记录'), findsNothing);
+
+      reader.suzhou = false;
+      reader.readAt = _readAt.add(const Duration(minutes: 1));
+      await _read(tester, '再次读取');
+      expect(find.textContaining('部分读取'), findsNothing);
+      expect(find.textContaining('读取完成'), findsOneWidget);
+      expect(find.text('本次未读到交易记录'), findsNothing);
+      expect(find.text('100.00'), findsWidgets);
+      await _unmount(tester);
+    },
+  );
+
+  testWidgets(
+    '2.x shows the current Suzhou card name on recovery and in the wallet',
+    (tester) async {
+      final fixture = await _showGallery(tester, _CardKind.tu);
+      final app = fixture.app;
+      await tester.runAsync(
+        () => app.cardRepository.saveIdentity(
+          fingerprint: 'local_card::12345',
+          identity: const CardArchiveIdentity(
+            cardType: 'local_card',
+            officialName: '苏州·苏薪卡',
+          ),
+          readAt: _readAt,
+        ),
+      );
+      app.recoveredCapture = RecoveryCapture(
+        readAt: _readAt,
+        summary: const {'cardType': 'local_card', 'cardName': '地方交通卡 · 苏州·苏薪卡'},
+        frames: const [],
+      );
+      await app.setAutoSaveEnabled(false);
+      await _settleIo(tester);
+      expect(_liveAdapter(tester).controller.current.name, '苏州市民卡');
+      expect(app.recoveredCapture!.summary['cardName'], '地方交通卡 · 苏州·苏薪卡');
+      await _navigate(tester, 'cards');
+      await _settleIo(tester);
+      expect(find.text('苏州市民卡'), findsOneWidget);
+      final saved = (await tester.runAsync(app.cardRepository.getAllCards))!
+          .single;
+      expect(saved.officialName, '苏州·苏薪卡');
+      await _unmount(tester);
+    },
+  );
+
+  for (final withExitClock in [true, false]) {
+    testWidgets('青岛双应用卡片详情按 CU 进出站时刻配对：出站时刻 $withExitClock', (tester) async {
+      final fixture = await _showGallery(
+        tester,
+        _CardKind.tu,
+        reader: _Reader(
+          _CardKind.tu,
+          replayApdu: qingdaoMetroReplay(withExitClock: withExitClock),
+        ),
+      );
+      await _read(tester, '开始读取');
+      expect(
+        fixture.app.applications
+            .where((app) => app.confirmed)
+            .map((app) => app.appId),
+        containsAll(['tu', 'cu']),
+      );
+      final controller = _liveAdapter(tester).controller;
+      final records = controller.ledger(controller.current);
+      final metro = records.where((row) => row['kind'] == 'rail');
+      expect(metro, hasLength(withExitClock ? 1 : 0));
+      if (withExitClock) {
+        final ride = metro.single;
+        expect(ride['oneWay'], isFalse);
+        expect(ride['entryTime'], contains('16:47:13'));
+        expect(ride['exitTime'], contains('16:52:40'));
+        expect(ride['amount'], '-¥1.80');
+        expect(ride['events'], hasLength(2));
+        await _navigate(tester, 'trips');
+        final endpoints = find.byKey(const ValueKey('trip-endpoints'));
+        expect(
+          find.descendant(of: endpoints, matching: find.text('站点未记录')),
+          findsNWidgets(2),
+        );
+      } else {
+        expect(records.where((row) => row['amount'] == '-¥1.80'), hasLength(1));
+        expect(records.where((row) => row['amount'] == '-¥0.00'), hasLength(1));
+      }
+      await _unmount(tester);
+    });
+  }
+
+  testWidgets('哈尔滨卡卡片详情显示 CU 镜像核实的站点，保留未知方向', (tester) async {
+    final fixture = await _showGallery(tester, _CardKind.tu);
+    final view = await scanHarbinMirrorLedger();
+    final trip = view.analysis!.trips.first;
+    expect(trip.rideStatusName, isNull);
+    expect(trip.stationLabel, '上海火车站');
+    fixture.app.archive.stage(view, 'harbin-mirror', _readAt, const []);
+    await tester.runAsync(fixture.app.archive.autoSave);
+    await _navigate(tester, 'cards');
+    await _settleIo(tester);
+    final saved = (await tester.runAsync(
+      fixture.app.cardRepository.getAllCards,
+    ))!.single;
+    await tester.tap(find.text(saved.displayName));
+    await _settleIo(tester);
+    final controller = _liveAdapter(tester).controller;
+    final row = controller.ledger(controller.selectedCard).first;
+    expect(row['kind'], 'rail');
+    expect(row['oneWay'], isTrue);
+    expect(row['exitTime'], isNull);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('trip-one-way')).first,
+        matching: find.text('上海火车站'),
+      ),
+      findsOneWidget,
+    );
+    await _unmount(tester);
+  });
 
   testWidgets(
     'Shanghai TU/CU mirrors and CU-only older recharges appear once',
@@ -375,36 +512,37 @@ void main() {
     await _unmount(tester);
   });
 
-  testWidgets('saved card information omits captured frame JSON and raw actions', (
-    tester,
-  ) async {
-    final fixture = await _showGallery(tester, _CardKind.tu);
-    await _read(tester, '开始读取');
-    await _navigate(tester, 'cards');
-    await _settleIo(tester);
-    final saved = (await tester.runAsync(
-      fixture.app.cardRepository.getAllCards,
-    ))!.single;
-    final snapshot = CardSessionSnapshot.decode(saved.sessionDataJson!)!;
-    expect(
-      snapshot.rawEvidence.any((row) => row['kind'] == 'physical_frame'),
-      isTrue,
-    );
+  testWidgets(
+    'saved card information omits captured frame JSON and raw actions',
+    (tester) async {
+      final fixture = await _showGallery(tester, _CardKind.tu);
+      await _read(tester, '开始读取');
+      await _navigate(tester, 'cards');
+      await _settleIo(tester);
+      final saved = (await tester.runAsync(
+        fixture.app.cardRepository.getAllCards,
+      ))!.single;
+      final snapshot = CardSessionSnapshot.decode(saved.sessionDataJson!)!;
+      expect(
+        snapshot.rawEvidence.any((row) => row['kind'] == 'physical_frame'),
+        isTrue,
+      );
 
-    await tester.tap(find.text(saved.displayName));
-    await _settleIo(tester);
-    await tester.tap(find.text('卡片信息'));
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('协议'));
-    await tester.pumpAndSettle();
-    expect(find.text('完整卡号'), findsOneWidget);
-    expect(find.text('原始数据'), findsNothing);
-    expect(find.text('捕获时的原始读取证据'), findsNothing);
-    expect(find.textContaining('physical_frame'), findsNothing);
-    expect(find.byTooltip('复制原始数据'), findsNothing);
-    expect(find.byTooltip('原始数据反馈预览'), findsNothing);
-    await _unmount(tester);
-  });
+      await tester.tap(find.text(saved.displayName));
+      await _settleIo(tester);
+      await tester.tap(find.text('卡片信息'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('协议'));
+      await tester.pumpAndSettle();
+      expect(find.text('完整卡号'), findsOneWidget);
+      expect(find.text('原始数据'), findsNothing);
+      expect(find.text('捕获时的原始读取证据'), findsNothing);
+      expect(find.textContaining('physical_frame'), findsNothing);
+      expect(find.byTooltip('复制原始数据'), findsNothing);
+      expect(find.byTooltip('原始数据反馈预览'), findsNothing);
+      await _unmount(tester);
+    },
+  );
 
   testWidgets('transit data parsing includes the 1.x expert fields', (
     tester,
@@ -1554,8 +1692,9 @@ class _Fixture {
 }
 
 class _Reader implements NfcChannel, FelicaChannel {
-  _Reader(this.kind);
+  _Reader(this.kind, {this.replayApdu});
   final _CardKind kind;
+  final Future<List<int>> Function(List<int>)? replayApdu;
   bool get isIsoDep => kind == _CardKind.tu || kind == _CardKind.cu;
   bool noTag = false;
   bool closeFails = false;
@@ -1603,8 +1742,11 @@ class _Reader implements NfcChannel, FelicaChannel {
   }
 
   @override
-  Future<List<int>> transceive(List<int> frame) async =>
-      isIsoDep ? _apdu(frame) : _felica(frame);
+  Future<List<int>> transceive(List<int> frame) async {
+    final replay = replayApdu;
+    if (isIsoDep && replay != null) return replay(frame);
+    return isIsoDep ? _apdu(frame) : _felica(frame);
+  }
 
   List<int> _apdu(List<int> frame) {
     final cu = kind == _CardKind.cu;
@@ -1791,6 +1933,31 @@ class _Reader implements NfcChannel, FelicaChannel {
     0x30,
     0,
   ];
+}
+
+class _SuzhouHomeReader extends _Reader {
+  _SuzhouHomeReader() : super(_CardKind.tu);
+
+  bool suzhou = true;
+  bool _suxinSelected = false;
+
+  @override
+  List<int> _apdu(List<int> frame) {
+    if (!suzhou) return super._apdu(frame);
+    if (frame[1] == 0xA4) {
+      _suxinSelected = listEquals(
+        frame.skip(5).toList(),
+        'SUXIN.DDF01'.codeUnits,
+      );
+      return _suxinSelected ? _Reader._ok([]) : [0x6A, 0x82];
+    }
+    if (!_suxinSelected) return [0x6A, 0x82];
+    return switch (frame) {
+      [0, 0xB0, 0x95, 0, 0x1E] => _Reader._ok(_Reader._cuPublic),
+      [0x80, 0x5C, 0, 1, 4] || [0, 0xB2, 1, 0xC4, 0x17] => [0x69, 0x82],
+      _ => [0x6A, 0x83],
+    };
+  }
 }
 
 // Synthetic responses reproduce the Shanghai capture's overlapping file

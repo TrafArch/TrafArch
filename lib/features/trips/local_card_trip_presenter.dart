@@ -32,7 +32,7 @@ const localTripSourceLabels = <LocalTripSourceFilter, String>{
   LocalTripSourceFilter.suxinTx: '通行流水',
   LocalTripSourceFilter.lingnan: '岭南通流水',
   LocalTripSourceFilter.shenzhen: '深圳通流水',
-  LocalTripSourceFilter.suxin: '苏薪卡流水',
+  LocalTripSourceFilter.suxin: '$suzhouCitizenCardName流水',
   LocalTripSourceFilter.cika: '苏州计次卡流水',
   LocalTripSourceFilter.tft: '天府通流水',
   LocalTripSourceFilter.other: '其他文件',

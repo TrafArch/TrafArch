@@ -57,7 +57,7 @@ const _walletNames = {
   'wuhan': '武汉通（AP1.WHCTC）',
   BeijingDf1001Scan.id: BeijingDf1001Scan.directoryName,
   MotBmacScan.id: MotBmacScan.name,
-  'suzhou_suxin': '苏州通（SUXIN）',
+  'suzhou_suxin': suzhouCitizenCardName,
   'suzhou_cika': '苏州计次',
   'tft': '天府通',
 };
@@ -425,7 +425,9 @@ class LocalCardReader {
             : info.isLNT
             ? CardParserIds.lingnanTong
             : CardParserIds.localCard,
-        parserName: '地方交通卡 · ${info.cardKindLabel}',
+        parserName: info.isSuxin
+            ? suzhouCitizenCardName
+            : '地方交通卡 · ${info.cardKindLabel}',
         info: TUnionCardInfo(
           applicationSerial: info.cardNumber.isEmpty ? null : info.cardNumber,
           issuerId: info.issuerCode.isEmpty ? null : info.issuerCode,

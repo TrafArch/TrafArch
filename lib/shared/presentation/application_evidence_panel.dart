@@ -15,6 +15,13 @@ List<String> applicationObservationText(ApplicationEvidence application) {
     _ => true,
   };
   final slots = local?.extras.slots;
+  // Parsing an explicit offset yields UTC. The counter belongs to the
+  // calendar month on the Suzhou card, including at midnight on the first.
+  final suzhouTime = switch (slots?['suxin.discountTime']) {
+    final String iso when iso.endsWith('+08:00') =>
+      DateTime.tryParse(iso)?.add(const Duration(hours: 8)),
+    _ => null,
+  };
   return [
     if (number != null) '卡号 $number',
     if (info?.isSuxin == true && info!.cardNumber.isNotEmpty)
@@ -29,9 +36,13 @@ List<String> applicationObservationText(ApplicationEvidence application) {
       '余额未知',
     if (info?.expiryDate case final date?)
       '有效期至 ${date.toIso8601String().split('T').first}',
-    if (slots?['suxin.statsDate'] case final String date)
+    if (suzhouTime != null) ...[
+      if (slots?['suxin.statsCount'] case final int count)
+        '${suzhouTime.year}年${suzhouTime.month.toString().padLeft(2, '0')}月地铁优惠累计 $count 次',
+    ] else if (slots?['suxin.statsDate'] case final String date) ...[
       '统计日期 ${date.split('T').first}',
-    if (slots?['suxin.statsCount'] case final int count) '统计次数 $count 次',
+      if (slots?['suxin.statsCount'] case final int count) '统计次数 $count 次',
+    ],
     if (slots?['tft.statsMonth'] case final int month) '统计月份 $month',
     if (slots?['tft.statsCount'] case final int count) '统计次数 $count 次',
     if (slots?['tft.statsAmountFen'] case final int amount) '统计金额 $amount 分',
