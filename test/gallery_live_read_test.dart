@@ -1953,6 +1953,7 @@ class _SuzhouHomeReader extends _Reader {
     }
     if (!_suxinSelected) return [0x6A, 0x82];
     return switch (frame) {
+      [0, 0x20, 0, 0, 3, 0x12, 0x34, 0x56] => _Reader._ok([]),
       [0, 0xB0, 0x95, 0, 0x1E] => _Reader._ok(_Reader._cuPublic),
       [0x80, 0x5C, 0, 1, 4] || [0, 0xB2, 1, 0xC4, 0x17] => [0x69, 0x82],
       _ => [0x6A, 0x83],

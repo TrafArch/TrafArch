@@ -6,7 +6,7 @@ import '../local_card_models.dart';
 import '../../tunion/tunion_codec.dart';
 import 'local_wallet_session.dart';
 
-/// 只读选择 SUXIN.DDF01；保护文件的状态字由读取层记录。
+/// 只读选择 SUXIN.DDF01，并用默认 PIN 123456 解锁保护文件。
 class SuzhouCard implements LocalWalletReader {
   SuzhouCard(this._apdu);
   final ApduExchange _apdu;
@@ -15,6 +15,12 @@ class SuzhouCard implements LocalWalletReader {
   Future<bool> select(CardInfo info, List<ApduRecord> records) async {
     final a = await _apdu(CardAid.suxin, 'SELECT SUXIN', records: records);
     if (a == null) return false;
+    final verified = await _apdu(
+      CardAid.suzhouPinVerify,
+      'SUZHOU PIN VERIFY',
+      records: records,
+    );
+    if (verified == null) return false;
     info.isSuzhou = true;
     info.isSuxin = true;
     return true;
