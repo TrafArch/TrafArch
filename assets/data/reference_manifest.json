@@ -81621,15 +81621,15 @@
       }
     },
     "TU": {
-      "bytes": 6295552,
-      "content_version": "838947772b3821697a37fd46728504b35f960d2ff5cf3c1d3d1d4c4fb820c41f",
+      "bytes": 6332416,
+      "content_version": "63563c8cef418a9894ded4f28249fc43c0e649cb567278a825c2eaf4fd8c851e",
       "file": "TrafArch_Database_TU.sqlite",
-      "sha256": "517c59f3596c06a6ccff40752e7cf39db1bc2b2a76bd74d13d2381ab7ada6c53",
+      "sha256": "c5fabb5524e8d64aa815b24e0868d4de1fbe54c488a778915d06616d3829b151",
       "tables": {
         "card_prefixes": 429,
         "issuer_city_codes": 347,
         "protocol_region_codes": 3224,
-        "record_provenance": 8069,
+        "record_provenance": 8119,
         "reference_documents": 6,
         "reference_package": 4,
         "region_10_transport_summary": 4,
@@ -81681,7 +81681,7 @@
         "region_乌鲁木齐_8810": 21,
         "region_佛山_5880": 70,
         "region_兰州_兰州新区_8210": 22,
-        "region_北京_1000": 649,
+        "region_北京_1000": 650,
         "region_南京_3010": 273,
         "region_南昌_4210": 57,
         "region_南通_3060": 45,
@@ -81697,7 +81697,7 @@
         "region_常州_3040": 44,
         "region_广州_5810": 484,
         "region_徐州_3030": 55,
-        "region_成都_6510": 722,
+        "region_成都_6510": 771,
         "region_无锡_3020": 98,
         "region_昆明_7310": 114,
         "region_杭州_3310": 311,
@@ -81874,12 +81874,12 @@
   "tool_sha256": "5cbe962a2227602fbc3b668c885f4bb00edb9219dcc5358c637a14c22dcd0302",
   "tool_version": "1.0.0",
   "tu_manifest_sync": {
-    "city_records": 8069,
+    "city_records": 8119,
     "database_bytes_preserved": true,
     "origin": "User-updated TU asset; existing provenance retained; no physical-card verification",
-    "package_sha256": "517c59f3596c06a6ccff40752e7cf39db1bc2b2a76bd74d13d2381ab7ada6c53",
-    "previous_manifest_sha256": "840b42efe03f55494959468be360aeaa60dca7822ee0129f6f22b09fb532a0ea",
-    "previous_package_sha256": "0d8cbdf9153e138cbabec341e494225a735b2cdaab37ecc312b8f7f776f11403",
+    "package_sha256": "c5fabb5524e8d64aa815b24e0868d4de1fbe54c488a778915d06616d3829b151",
+    "previous_manifest_sha256": "4f5f0c7bab2a6acf4d8c66ab2e0bd80b622ca4f5bc665a00160dd873f391f919",
+    "previous_package_sha256": "e60819fec5767604b766bba71bab8e96dd41da56009f3eea0dfe9300c419f871",
     "publisher_sha256": "56a76d0e50a13535064f804544df73d89edd663bac418517ffccfe642d70f384"
   }
 }
