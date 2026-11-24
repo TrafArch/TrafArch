@@ -117,7 +117,7 @@ void main() {
     () {
       expect(
         tu.select('SELECT COUNT(*) AS c FROM all_records').single['c'],
-        8069,
+        8119,
       );
       final xiamen = repository.findStations(
         regionCode: '3930',
@@ -145,6 +145,72 @@ void main() {
       );
     },
   );
+
+  test('Beijing suburban railway resolves the Tielu station code', () {
+    final match = TuLookupService(repository).resolveCycle(
+      city: '1000',
+      field: '55001600000000',
+      appType: 0x0E,
+    );
+    expect(match.confidence, StationMatchConfidence.exact);
+    expect(match.lineName, '城市副中心线');
+    expect(match.stationName, '铁路');
+    expect(match.entry?.sourceKey, '1000550016');
+    expect(match.entry?.sourceField, 'M0.i0.a');
+    expect(match.entry?.rawValueJson, '["","城市副中心线","铁路"]');
+  });
+
+  test('Chengdu additions resolve each supplied code in station order', () {
+    const sections = [
+      ('02', 53, '龙泉驿火车站 大面铺 连山坡 界牌 书房 龙平路 龙泉驿'),
+      ('10', 18, '武侯祠 高升桥 红牌楼'),
+      (
+        '13',
+        21,
+        '龙安 龙华寺 三圣花乡 幸福梅林 娇子立交 四川师大 净居寺 三官堂 九眼桥 新南门 华西坝 '
+            '文翁石室 小南街 青羊宫 杜甫草堂 光华村 东坡路 万寿桥 培风 万家湾 瓦窑滩',
+      ),
+      (
+        '17',
+        30,
+        '阳公桥 龙爪堰 清水河大桥 浣花里 省骨科医院 小南街 人民公园 西大街 城隍庙 红星桥 '
+            '建设北路 踏水桥 二仙桥 机车厂 人民塘 航天路 威灵 高洪',
+      ),
+    ];
+    final lookup = TuLookupService(repository);
+    for (final (line, first, stations) in sections) {
+      final lineName = '${int.parse(line)}号线';
+      final names = stations.split(' ');
+      for (var index = 0; index < names.length; index++) {
+        final localCode = '$line${first + index}';
+        final key = '6510$localCode';
+        final match = lookup.resolveCycle(
+          city: '6510',
+          field: '0000${localCode}000000',
+          appType: 1,
+        );
+        expect(match.confidence, StationMatchConfidence.exact, reason: key);
+        expect(match.lineName, lineName, reason: key);
+        expect(match.stationName, names[index], reason: key);
+        expect(match.entry?.sourceKey, key);
+        expect(match.entry?.sourceField, 'M0.e0.a');
+      }
+    }
+
+    final longquanyi = tu.select(
+      'SELECT station_id,source_key FROM "region_成都_6510" '
+      'WHERE line_name=? AND station_name=? ORDER BY source_key',
+      ['2号线', '龙泉驿'],
+    );
+    expect(longquanyi.map((row) => row['source_key']), ['65100252', '65100259']);
+    expect(longquanyi.map((row) => row['station_id']).toSet(), hasLength(2));
+
+    expect(
+      lookup.resolveRailKey(city: '6510', key: '6510131321').stationName,
+      '龙安',
+    );
+    expect(repository.queryIssue, isNull);
+  });
 
   test('Nantong line two codes resolve through the cycle lookup', () {
     const names = [
