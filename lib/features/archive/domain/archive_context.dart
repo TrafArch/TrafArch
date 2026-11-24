@@ -13,6 +13,11 @@ class ArchiveContext {
   final Map<String, bool> observedFields;
   final Map<String, dynamic> extensions;
 
+  String? get displayCardType => switch (extensions['displayCardType']) {
+    String value => value,
+    _ => null,
+  };
+
   const ArchiveContext({
     this.systemId,
     this.applicationId,

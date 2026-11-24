@@ -270,9 +270,9 @@ List<Map<String, dynamic>> projectArchiveRecords(
             ? '年份推断，秒未知'
             : '卡内时间，时区未核实',
         'amount': presentation.info.amountText,
-        'amount_raw': trip.balanceDelta.toString(),
-        'amount_unit': '分',
-        'currency': 'CNY',
+        'amount_raw': (trip.tripDelta ?? trip.balanceDelta).toString(),
+        'amount_unit': trip.tripDelta == null ? '分' : '次',
+        'currency': trip.tripDelta == null ? 'CNY' : null,
         'terminal': trip.terminalHex,
       });
     }

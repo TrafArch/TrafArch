@@ -5,11 +5,12 @@ import 'city_union_models.dart';
 /// The latest metro clocks from QinDaoTong's CU 0x19 statistics file.
 /// A clock can corroborate a wallet record and cannot create a transaction.
 class QingdaoMetroTap extends CityUnionRawFileView {
-  QingdaoMetroTap(this.recordNumber, List<int> data)
+  QingdaoMetroTap(int recordNumber, List<int> data)
     : clock = _readClock(recordNumber, data),
-      super(sfi: 0x19, raw: data);
+      super(sfi: 0x19, recordNumber: recordNumber, raw: data);
 
-  final int recordNumber;
+  @override
+  int get recordNumber => super.recordNumber!;
   final String? clock;
   bool get isEntry => recordNumber == 3;
 

@@ -15,18 +15,19 @@ class CardReadCoordinator {
     required void Function(int) onProgress,
   }) async {
     if (tag.isoDepConnected) {
-      final result = await LocalCardParser(
+      final scan = await LocalCardParser(
         apdu,
         onStage: onStage,
         onProgress: onProgress,
-      ).read();
+      ).scan();
+      final result = scan.result;
       if (result != null) {
         return TransitReadOutcome(
           result.parsedCard,
-          shanghai: result.shanghai,
           applications: result.applications,
         );
       }
+      return UnsupportedReadOutcome(applications: scan.applications);
     } else if (tag.felicaConnected) {
       final word = tag.nfcFSystemCode?.replaceAll(' ', '');
       return FelicaReadOutcome(

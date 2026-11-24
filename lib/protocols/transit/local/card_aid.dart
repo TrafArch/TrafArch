@@ -45,16 +45,6 @@ class CardAid {
     0x10,
     0x02,
   ];
-  static final List<int> suzhouPinVerify = const [
-    0x00,
-    0x20,
-    0x00,
-    0x00,
-    0x03,
-    0x12,
-    0x34,
-    0x56,
-  ];
 
   static final Uint8List selectCU = _select('A00000000386980701');
   static final Uint8List selectTU = _select('A000000632010105');

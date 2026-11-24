@@ -104,8 +104,7 @@ class ArchiveController extends OwnedNotifier {
       final separateObservation =
           CardParserIds.isTUnionFamily(parsed.parserId) &&
           balance?.semantics != BalanceSemantics.direct;
-      final observedBalanceFen =
-          parsed.localCard?.info.observedBalance ?? parsed.info.balanceFen;
+      final observedBalanceFen = parsed.primaryBalanceFen;
       // Ordinary cards retain their established currency policy. Unknown TU
       // identities keep the integer but cannot acquire a currency from metadata.
       final currency = separateObservation
@@ -176,6 +175,7 @@ class ArchiveController extends OwnedNotifier {
         timeZoneOffsetMinutes: null,
         extensions: {
           'captureDeviceOffsetMinutes': readAt.timeZoneOffset.inMinutes,
+          'displayCardType': identity.identity.cardType,
           if (separateObservation) 'balanceInterpretation': balance!.toJson(),
         },
         clockBasis: 'device-local-card-time-unverified',

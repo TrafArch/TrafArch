@@ -13,8 +13,8 @@ import 'cj_t331_wallet_recharge_parser.dart';
 class CityUnionFileParser {
   CityUnionFileParser._();
 
-  /// TripReader CU application channels use explicit roles: 0x18 consumption,
-  /// 0x10 recharge, 0x06 (Shanghai/Kunshan) or 0x1A foreign consumption.
+  /// The reader identifies a wallet role from SFI, length and transaction type.
+  /// For example, 0x1A can contain recharge or foreign consumption records.
   /// Keep [parse] available for the standalone CJ/T standard table layouts.
   static CityUnionWalletTransaction parseWalletRecord(
     int sfi,

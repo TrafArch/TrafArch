@@ -185,6 +185,11 @@ until this sweep finishes**, and background cleanup never disables successor rea
 mode or reads successor handles. No tag `connect`, `transceive`, `readBlock` or
 `close` runs on the main looper.
 
+The ordinary Dart scan waits for the captured session's close reply after acquisition
+and before reference-data processing, completion callbacks and archive writes. A
+physical release error remains visible alongside any usable observations. Each
+published FeliCa system uses the IDm returned by polling that system.
+
 Repeated close of a known retired ID joins the same retirement or returns its
 recorded outcome. It never performs another close or touches the current session.
 Unknown/stale IDs return `STALE_SESSION` without disabling reader mode. Retired IDs

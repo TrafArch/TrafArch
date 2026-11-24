@@ -21,7 +21,7 @@ ShanghaiBalanceDisplay archiveCardBalanceDisplay(
     includeShanghaiOverdraft: includeShanghaiOverdraft,
     parserId: context?.systemId,
     applicationId: context?.applicationId,
-    cardType: card.cardType,
+    cardType: context?.displayCardType ?? card.cardType,
     currencyCode: source?.context.currencyCode ?? card.currencyCode,
   );
 }

@@ -35,7 +35,7 @@ class OctopusBalanceReader {
     String? expectedCardIdm,
   }) async {
     final expectedIdm = expectedCardIdm?.trim().toUpperCase();
-    if (expectedIdm != null && !_validIdm(expectedIdm)) {
+    if (expectedIdm != null && !isValidIdm(expectedIdm)) {
       throw const OctopusBalanceException('本次卡片标识无效，请重新读卡。', code: 'identity');
     }
 
@@ -55,7 +55,7 @@ class OctopusBalanceReader {
       );
     }
     final idm = polling.idmHex;
-    if (!_validIdm(idm)) {
+    if (!isValidIdm(idm)) {
       throw const OctopusBalanceException('八达通返回的卡片标识无效。', code: 'identity');
     }
     if (expectedIdm != null && idm != expectedIdm) {
@@ -104,13 +104,25 @@ class OctopusBalanceReader {
       );
     }
 
-    final block = data.sublist(3);
-    final raw = (block[balanceOffset] << 8) | block[balanceOffset + 1];
     return OctopusBalanceResult(
-      balanceMinor: (raw - balanceAdjustment) * balanceExponent,
+      balanceMinor: decodeBalanceBlock(data.sublist(3)),
       idmHex: idm,
       readAt: DateTime.now(),
     );
+  }
+
+  static bool isValidIdm(String idm) =>
+      RegExp(r'^[0-9A-F]{16}$').hasMatch(idm) && idm != '0000000000000000';
+
+  static int decodeBalanceBlock(List<int> block) {
+    if (block.length != blockSize) {
+      throw const OctopusBalanceException(
+        '八达通余额块长度无效。',
+        code: 'invalid_response',
+      );
+    }
+    final raw = (block[balanceOffset] << 8) | block[balanceOffset + 1];
+    return (raw - balanceAdjustment) * balanceExponent;
   }
 
   Future<List<int>> _exchange(
@@ -139,8 +151,5 @@ extension on FelicaResponse {
       .join()
       .toUpperCase();
 }
-
-bool _validIdm(String idm) =>
-    RegExp(r'^[0-9A-F]{16}$').hasMatch(idm) && idm != '0000000000000000';
 
 const _cancelled = OctopusBalanceException('本次操作已取消。', code: 'cancelled');

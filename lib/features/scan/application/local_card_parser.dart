@@ -25,13 +25,15 @@ class LocalCardParser implements CardParser {
   String get parserName => '卡片统一识读';
 
   /// 统一识读入口：返回交通卡识读的完整产物。
-  Future<LocalReadOutcome?> read() => LocalCardReader(
+  Future<IsoDepScan> scan() => LocalCardReader(
     _transceive,
     onStage: onStage,
     callback: onProgress == null
         ? const NoopLocalCardReaderCallback()
         : _ProgressCallback(onProgress!),
-  ).read();
+  ).scan();
+
+  Future<LocalReadOutcome?> read() async => (await scan()).result;
 
   @override
   Future<ParsedCard?> parse() async => (await read())?.parsedCard;

@@ -98,7 +98,7 @@ class CardIdentificationService {
               officialName: local.info.cardKindLabel,
               source: CardIdentificationSources.parserOnly,
             ),
-            cardNumber: local.info.cardNumber,
+            cardNumber: local.info.displayCardNumber ?? local.info.cardNumber,
           );
         }
         final fingerprint = CardFingerprint.build(
@@ -179,7 +179,10 @@ class CardIdentificationService {
         ? null
         : rawConfidence;
     final identity = resolve(
-      cardType: cardType ?? _refineTUnionType(officialName),
+      cardType:
+          cardType ??
+          CardTypes.regionalTunionType(info.applicationSerial) ??
+          _refineTUnionType(officialName),
       officialName: officialName,
       issuerName: issuerName,
       cityName: cityName,

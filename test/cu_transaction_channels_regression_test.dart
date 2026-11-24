@@ -23,9 +23,11 @@ void main() {
     (0x20, 0x00, 0x06),
     (0x21, 0x53, 0x06),
     (0x31, 0x00, 0x1A),
+    (0x31, 0x00, 0x06),
+    (0x20, 0x00, 0x19),
   ]) {
     test(
-      'CU ${sample.$1.toRadixString(16)}${sample.$2.toRadixString(16)} reads recharge and foreign channels by profile',
+      'CU ${sample.$1.toRadixString(16)}${sample.$2.toRadixString(16)} accepts observed foreign file ${sample.$3} alongside recharge',
       () async {
         final commands = <String>[];
         final info = CardInfo();
@@ -62,11 +64,14 @@ void main() {
         );
         expect(await cu.select(info, records), isTrue);
         final card = (await cu.read(info, records))!;
-        expect(commands, contains('00B2018417'));
+        expect(
+          commands,
+          containsAll(['00B2018417', '00B201D417', '00B2013417', '00B201CC00']),
+        );
         expect(
           commands,
           contains(
-            '00B201${((sample.$3 << 3) | 4).toRadixString(16).toUpperCase().padLeft(2, '0')}17',
+            '00B201${((sample.$3 << 3) | 4).toRadixString(16).toUpperCase().padLeft(2, '0')}${sample.$3 == 0x19 ? '00' : '17'}',
           ),
         );
         expect(
@@ -89,6 +94,43 @@ void main() {
     );
   }
 
+  test(
+    'standard 1A recharge and 19 statistics never become foreign debits',
+    () async {
+      final unit = CommonUnitCu(
+        ApduExchange(
+          transceive: (cmd) async {
+            if (cmd[1] == 0xA4) return [0x90, 0];
+            if (_hex(cmd) == '00B201D417') {
+              return [..._record('200011023400', type: 2), 0x90, 0];
+            }
+            if (_hex(cmd) == '00B201CC00') {
+              return [
+                ..._record('200011023400'),
+                ...List.filled(9, 0),
+                0x90,
+                0,
+              ];
+            }
+            return [0x6A, 0x83];
+          },
+        ),
+      );
+      final info = CardInfo();
+      final records = <ApduRecord>[];
+      expect(await unit.select(info, records), isTrue);
+      final card = (await unit.read(info, records))!;
+      expect(
+        card.cityUnionFiles.whereType<CjT331WalletRecharge>().single.sfi,
+        0x1A,
+      );
+      expect(
+        card.cityUnionFiles.whereType<CityUnionRawFileView>().single.sfi,
+        0x19,
+      );
+      expect(records.map((row) => row.fileSelector), [0x1A]);
+    },
+  );
   testWidgets(
     'CU terminal lookup preserves raw HEX even when standard BCD field is invalid',
     (tester) async {

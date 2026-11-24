@@ -1,4 +1,7 @@
 import '../local/local_card_models.dart';
+import '../local/local_hex.dart';
+import '../city_union/city_union_models.dart';
+import 'local_application_capture.dart';
 import '../tunion/tunion_cash_log.dart';
 import '../card_parser.dart';
 import '../../transport/transport_failure.dart';
@@ -29,6 +32,7 @@ class ApplicationEvidence {
     this.balanceFen,
     this.recordCount = 0,
     this.records = const [],
+    this.observations = const {},
     this.readError,
     this.transportFailure,
     this.payload,
@@ -55,6 +59,9 @@ class ApplicationEvidence {
 
   /// 该应用自身的原始流水（不含其他应用）。
   final List<ApduRecord> records;
+
+  /// Original file/selector observations scoped to this selected application.
+  final Map<String, String> observations;
 
   final Object? readError;
   final TransportFailure? transportFailure;
@@ -97,6 +104,7 @@ class ApplicationEvidence {
     int? balanceFen,
     int recordCount = 0,
     List<ApduRecord> records = const [],
+    Map<String, String> observations = const {},
     Object? readError,
     TransportFailure? transportFailure,
     Object? payload,
@@ -114,6 +122,7 @@ class ApplicationEvidence {
     balanceFen: balanceFen,
     recordCount: recordCount,
     records: records,
+    observations: observations,
     readError: readError,
     transportFailure: transportFailure,
     payload: payload,
@@ -147,6 +156,9 @@ class ApplicationEvidence {
       if (cardNumber != null) 'cardNumber': cardNumber,
       if (balanceFen != null) 'balanceFen': balanceFen,
       if (recordCount != 0) 'recordCount': recordCount,
+      if (summary == null && records.isNotEmpty)
+        'records': [for (final record in records) captureLocalRecord(record)],
+      if (observations.isNotEmpty) 'observations': observations,
       if (notes.isNotEmpty) 'notes': notes,
       if (readError != null) 'readError': '$readError',
       'transportFailure': ?_failureJson(transportFailure),
@@ -166,31 +178,94 @@ class ApplicationEvidence {
   /// 类型化产物的轻量摘要；未知或不可序列化类型保留 null。
   Map<String, dynamic>? payloadSummary() => switch (payload) {
     TUnionCashLog log => log.toJson(),
-    ParsedCard(
-      :final parserId,
-      :final parserName,
-      :final selectedAidHex,
-      :final info,
-    ) =>
-      {
-        'kind': 'parsed_card',
-        'parserId': parserId,
-        'parserName': parserName,
-        'selectedAid': selectedAidHex,
-        if (info.balanceFen != null) 'balanceFen': info.balanceFen,
-      },
-    ReadResult(:final info) => {
-      'kind': 'read_result',
-      'isLocalCard': info.isLocalCard,
-      if (info.cardNumber.isNotEmpty) 'cardNumber': info.cardNumber,
-      if (info.observedBalance != null) 'balanceFen': info.observedBalance,
+    ParsedCard card => {
+      'kind': 'parsed_card',
+      'parserId': card.parserId,
+      'parserName': card.parserName,
+      'selectedAid': card.selectedAidHex,
+      'balanceFen': ?card.info.balanceFen,
+      'records': [
+        if (appId == 'tu') ...[
+          for (final tx in card.transactions)
+            if (tx.rawHex case final raw?)
+              {'sfi': 0x18, 'recordNumber': ?tx.recordNumber, 'rawHex': raw},
+          for (final record in card.transitProcessRecords)
+            {
+              'sfi': record.sfi,
+              'recordNumber': record.recordNumber,
+              'rawHex': record.rawHex,
+            },
+        ],
+        if (appId == 'cu')
+          for (final file in card.cityUnionFiles)
+            {
+              'sfi': file.sfi,
+              if (file is CityUnionWalletTransaction)
+                'recordNumber': ?file.recordNumber,
+              if (file is CityUnionRawFileView)
+                'recordNumber': ?file.recordNumber,
+              'rawHex': file.rawHex,
+              if (file.errors.isNotEmpty) 'errors': file.errors,
+            },
+      ],
     },
+    ReadResult wallet => captureLocalApplication(wallet),
+    Map<String, dynamic> frozen when frozen['kind'] == 'parsed_card' => frozen,
     _ => null,
   };
 
   /// 旧快照中的银行卡条目保留原文，跳过展示投影。
   static bool isRetiredBankEntry(Object? raw) =>
       raw is Map && raw['appId'] == 'bank';
+
+  static List<ApplicationEvidence> parseList(Object? raw) => [
+    if (raw is List)
+      for (final item in raw) ?tryParse(item),
+  ];
+
+  /// Original records grouped by this application, including their physical
+  /// file/directory when captured. Never project another wallet's ledger here.
+  Iterable<({String source, String rawHex})> get rawRecords sync* {
+    for (final entry in observations.entries) {
+      yield (source: entry.key, rawHex: entry.value);
+    }
+    final wallet = payload;
+    if (wallet is ReadResult || wallet == null) {
+      for (final record in wallet is ReadResult ? wallet.records : records) {
+        final bytes = record.rawBody ?? record.response;
+        if (bytes == null || bytes.isEmpty) continue;
+        yield (
+          source: [
+            ?record.directory,
+            if (record.fileSelector > 0)
+              'SFI ${_file(record.fileSelector >> 3)}',
+            if (record.recordNumber > 0) '#${record.recordNumber}',
+            if (record.label?.isNotEmpty == true) record.label!,
+          ].join(' · '),
+          rawHex: LocalHex.bytesToHex(bytes),
+        );
+      }
+      return;
+    }
+    final rows = payloadSummary()?['records'];
+    if (rows is! List) return;
+    for (final row in rows.whereType<Map>()) {
+      if (row['rawHex'] case final String raw when raw.isNotEmpty) {
+        yield (
+          source: [
+            if (row['sfi'] case final int sfi) 'SFI ${_file(sfi)}',
+            if (row['recordNumber'] case final int number) '#$number',
+            if (row['errors'] case final List errors)
+              ...errors.whereType<String>(),
+          ].join(' · '),
+          rawHex: raw,
+        );
+      }
+    }
+  }
+
+  static String _file(int value) =>
+      '0x${value.toRadixString(16).toUpperCase().padLeft(2, '0')}';
 
   /// 从快照 / 诊断投影恢复；损坏条目返回 null，由调用方按容错策略保留原文。
   static ApplicationEvidence? tryParse(Object? raw) {
@@ -209,6 +284,27 @@ class ApplicationEvidence {
         ? TransportFailureKind.values.asNameMap()[kindName]
         : null;
     final notesRaw = json['notes'];
+    final observations = json['observations'];
+    final rawPayload = json['payload'];
+    final transportFailure = failureMap == null
+        ? null
+        : TransportFailure(
+            kind: failureKind ?? TransportFailureKind.unknown,
+            message: failureMap['message']?.toString() ?? '',
+            code: failureMap['code']?.toString(),
+          );
+    final Object? payload;
+    if (json['appId'] == 'tuCash' && json['confirmed'] == true) {
+      payload = TUnionCashLog.fromPayload(rawPayload);
+    } else if (rawPayload is Map && rawPayload['kind'] == 'parsed_card') {
+      payload = Map<String, dynamic>.from(rawPayload);
+    } else {
+      payload = restoreLocalApplication(
+        rawPayload,
+        readError: json['readError']?.toString(),
+        transportFailure: transportFailure,
+      );
+    }
     return ApplicationEvidence(
       appId: json['appId']?.toString() ?? '',
       displayName: json['displayName']?.toString() ?? '',
@@ -220,16 +316,21 @@ class ApplicationEvidence {
       balanceFen: json['balanceFen'] is int ? json['balanceFen'] as int : null,
       recordCount: json['recordCount'] is int ? json['recordCount'] as int : 0,
       readError: json['readError']?.toString(),
-      transportFailure: failureMap == null
-          ? null
-          : TransportFailure(
-              kind: failureKind ?? TransportFailureKind.unknown,
-              message: failureMap['message']?.toString() ?? '',
-              code: failureMap['code']?.toString(),
-            ),
-      payload: json['appId'] == 'tuCash' && json['confirmed'] == true
-          ? TUnionCashLog.fromPayload(json['payload'])
-          : null,
+      transportFailure: transportFailure,
+      payload: payload,
+      records: payload is ReadResult
+          ? payload.records
+          : [
+              if (json['records'] case final List rows)
+                for (final row in rows.whereType<Map>())
+                  restoreApplicationRecord(row),
+            ],
+      observations: {
+        if (observations is Map)
+          for (final entry in observations.entries)
+            if (entry.key is String && entry.value is String)
+              entry.key as String: entry.value as String,
+      },
       notes: [
         for (final note in notesRaw is List ? notesRaw : const [])
           if (note is String) note,

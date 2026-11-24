@@ -1,6 +1,8 @@
 library;
 
 import '../../iso7816/apdu_exchange_engine.dart';
+import '../../iso7816/ber_tlv.dart';
+import '../../transport/transport_failure.dart';
 import 'local_card_models.dart';
 
 export '../../iso7816/apdu_exchange_engine.dart';
@@ -25,11 +27,41 @@ class ApduExchange {
     ExchangePolicy policy = ExchangePolicy.local,
   }) async {
     lastExchange = null;
-    final result = await ApduExchangeEngine(transceive)
+    var result = await ApduExchangeEngine(transceive)
         .exchange(CommandApdu.parse(apdu), policy: policy);
+    if (result.isSuccess &&
+        apdu.length >= 5 &&
+        apdu[1] == 0xA4 &&
+        apdu[2] == 4 &&
+        apdu[4] > 0 &&
+        apdu.length >= 5 + apdu[4] &&
+        BerTlvParser.selectedAidMatches(
+              result.response!.data,
+              apdu.sublist(5, 5 + apdu[4]),
+            ) ==
+            false) {
+      result = ApduExchangeResult(
+        command: result.command,
+        effectiveCommand: result.effectiveCommand,
+        response: result.response,
+        frames: result.frames,
+        failure: const TransportFailure(
+          kind: TransportFailureKind.unsupportedProfile,
+          message: 'SELECT 返回的应用名与请求不一致',
+        ),
+      );
+    }
     lastExchange = result;
     onExchange?.call(result);
-    if (result.frames.any((frame) => frame.failure != null)) {
+    // A well-framed, short optional file remains a local decode miss. A frame
+    // without SW1/SW2, a broken continuation or a resource limit ends I/O.
+    if (result.frames.any(
+          (frame) =>
+              frame.failure != null ||
+              (frame.response?.length ?? 0) < 2 ||
+              frame.response!.any((b) => b < 0 || b > 255),
+        ) ||
+        result.failure?.kind == TransportFailureKind.resourceLimit) {
       throw ApduTransportException(result);
     }
     return result;

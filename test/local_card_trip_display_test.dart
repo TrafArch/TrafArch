@@ -30,12 +30,13 @@ import 'package:transit_card_analyzer/platform/storage/log_exporter.dart';
 import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
 import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/local/local_card_models.dart';
+import 'package:transit_card_analyzer/protocols/transit/multiapp/application_evidence.dart';
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_models.dart';
 
 import 'support/test_database.dart';
 
 class _App extends AppDependencies {
-  _App(this.card)
+  _App(this.card, {this.applications = const []})
     : super(
         database: testDatabase(),
         bundle: MissingTestAssets(),
@@ -44,6 +45,8 @@ class _App extends AppDependencies {
       );
 
   final ParsedCard card;
+  @override
+  final List<ApplicationEvidence> applications;
 
   @override
   ParsedCard? get parsedCard => card;
@@ -353,6 +356,41 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('类型字节'), findsNothing);
     expect(find.text('000106'), findsOneWidget);
+  });
+
+  testWidgets('PAY.TICL 行程只出现一次，相同原码的深圳钱包记录仍独立', (tester) async {
+    final same = _trip(rawBody: [0, 0x59]);
+    final primary = _walletCard(CardParserIds.lingnanTong, localTrips: [same]);
+    final ticl = _walletCard(
+      CardParserIds.lingnanTong,
+      localTrips: [same],
+    ).localCard!;
+    final shenzhen = _walletCard(
+      CardParserIds.shenzhenTunion,
+      localTrips: [same],
+    ).localCard!;
+    final app = _App(
+      primary,
+      applications: [
+        ApplicationEvidence.succeeded('lingnan', 'PAY.TICL', payload: ticl),
+        ApplicationEvidence.succeeded('shenzhen', 'PAY.SZT', payload: shenzhen),
+      ],
+    );
+    addTearDown(app.dispose);
+    await tester.pumpWidget(
+      MaterialApp(home: Scaffold(body: TripsPage(app: app))),
+    );
+    await tester.pumpAndSettle();
+    final lists = tester.widgetList<LocalCardTripList>(
+      find.byType(LocalCardTripList),
+    );
+    expect(lists.map((list) => list.profile), [
+      LocalTripProfile.lingnan,
+      LocalTripProfile.shenzhen,
+    ]);
+    expect(lists.map((list) => list.trips.single.rawBody), [
+      [0, 0x59], [0, 0x59],
+    ]);
   });
 
   testWidgets('旧岭南通恢复现场名称和行程均使用当前展示规则', (tester) async {

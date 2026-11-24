@@ -7,12 +7,106 @@ import 'package:transit_card_analyzer/protocols/transport/transport_failure.dart
 
 // 一芯多应用卡只读取交通应用，APDU 由离线夹具重放。
 void main() {
+  test(
+    'Unrelated DF echoed by a successful local SELECT cannot claim that wallet',
+    () async {
+      final link = _ChipLink(tuPresent: false);
+      final scan = await LocalCardReader((cmd) async {
+        if (cmd.length > 5 && cmd[1] == 0xA4 && cmd[2] == 4) {
+          return _bytes('6F0584035455559000');
+        }
+        return link.call(cmd);
+      }).scan();
+      expect(scan.result, isNull);
+      expect(scan.applications.where((a) => a.confirmed), isEmpty);
+      expect(scan.applications.last.probed, isTrue);
+    },
+  );
+
+  test('TU and CU do not consume the third transport wallet', () async {
+    final link = _ChipLink(cuPresent: true, macauPresent: true);
+    final result = (await LocalCardReader(link.call).read())!;
+    final confirmed = result.applications.where((a) => a.confirmed);
+    expect(confirmed.map((a) => a.appId), containsAll(['tu', 'cu', 'macau']));
+    expect(confirmed.singleWhere((a) => a.appId == 'cu').balanceFen, 500);
+    expect(confirmed.singleWhere((a) => a.appId == 'macau').balanceFen, 165);
+    expect(result.parsedCard.info.balanceFen, 10000);
+    _expectNoBankCommands(link);
+  });
+
+  test('Every registered transit application is physically selected when all reject', () async {
+    final names = <String>{};
+    final scan = await LocalCardReader((command) async {
+      if (command.length >= 5 && command[1] == 0xA4 && command[4] > 0) {
+        names.add(_hex(command.sublist(5, 5 + command[4])));
+      }
+      return [0x6A, 0x82];
+    }).scan();
+    expect(names, {
+      '3F00',
+      '5041592E41505059',
+      '5041592E5449434C',
+      'A000000632010105',
+      'A00000000386980701',
+      'A000000632010106',
+      'B0C4C3C5CDA8C7AEB0FC',
+      '5041592E535A54',
+      '4150312E5748435443',
+      '1001',
+      '91560000144D4F542E424D4143303031',
+      '535558494E2E4444463031',
+      '535A504B5F5A5959',
+      'D156000015B9ABB9B2D3A6D3C3',
+    });
+    expect(scan.result, isNull);
+    expect(scan.applications.every((a) => a.probed && !a.confirmed), isTrue);
+  });
+
   test('Only the bank app is available: transit detection never selects it or its directories', () async {
     final link = _ChipLink(tuPresent: false, bankInPse: true);
 
     expect(await LocalCardReader(link.call).read(), isNull);
     _expectNoBankCommands(link);
   });
+
+  test(
+    'An independently confirmed cash log survives a missing TU wallet',
+    () async {
+      final link = _ChipLink(tuPresent: false, cashPresent: true);
+      final result = (await LocalCardReader(link.call).read())!;
+      expect(result.parsedCard.parserId, CardParserIds.tunionCash);
+      expect(result.parsedCard.info.balanceFen, isNull);
+      expect(result.parsedCard.info.applicationSerial, isNull);
+      expect(
+        result.applications.where((a) => a.confirmed).map((a) => a.appId),
+        ['tuCash'],
+      );
+      expect(
+        result.applications.singleWhere((a) => a.appId == 'tuCash').recordCount,
+        1,
+      );
+      _expectNoBankCommands(link);
+    },
+  );
+
+  test(
+    'Truncated first response stops the session and preserves probe states',
+    () async {
+      var calls = 0;
+      final scan = await LocalCardReader((_) async {
+        calls++;
+        return [0x90];
+      }).scan();
+      expect(calls, 1);
+      expect(scan.result, isNull);
+      expect(scan.terminalError, isNotNull);
+      expect(
+        scan.applications.first.transportFailure?.kind,
+        TransportFailureKind.malformedFrame,
+      );
+      expect(scan.applications.skip(1).every((a) => !a.probed), isTrue);
+    },
+  );
 
   test('TU reads the known transit cash log AID directly', () async {
     final link = _ChipLink(cashPresent: true);
@@ -119,16 +213,18 @@ void main() {
     expect(app('cu').confirmed, isTrue);
     expect(app('cu').state, ApplicationProbeState.readSucceeded);
     expect(app('cu').balanceFen, 500);
-    expect(
-      result.applications.where((a) => a.appId == 'macau'),
-      isEmpty,
-      reason: 'CU 已确认的卡不再重复探测澳门通钱包',
-    );
+    expect(app('macau').state, ApplicationProbeState.selectRejected);
+    expect(link.macauSelects, 1);
     _expectNoBankCommands(link);
     expect(
-      link.commands.where((c) => c == '00A40000023F0000').length,
-      1,
-      reason: 'TU 已确认后的快速 CU 探测不再重置 MF',
+      link.commands,
+      containsAllInOrder([
+        '00A4040008A00000063201010500',
+        '00A4040009A0000000038698070100',
+        '00A4040008A00000063201010500',
+        _cashSelect,
+        _ChipLink._macauSelect,
+      ]),
     );
   });
 
@@ -150,7 +246,7 @@ void main() {
     expect(macau.confirmed, isTrue);
     expect(macau.balanceFen, 165);
     expect(macau.recordCount, 1);
-    expect(link.commands.where((c) => c == '00A40000023F0000').length, 1);
+    expect(link.macauSelects, 1);
   });
 
   test('CU with a bank application only reads CU', () async {

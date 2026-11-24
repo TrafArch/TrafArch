@@ -887,7 +887,10 @@ class CityUnionRawFileView implements CityUnionFileView {
   @override
   final List<String> errors;
 
+  final int? recordNumber;
+
   CityUnionRawFileView({
+    this.recordNumber,
     required this.sfi,
     required List<int> raw,
     String? reason,
@@ -900,6 +903,7 @@ class CityUnionRawFileView implements CityUnionFileView {
   @override
   Map<String, dynamic> toJson() => {
     'sfi': CityUnionCodec.sfiLabel(sfi),
+    'recordNumber': ?recordNumber,
     'fileLabel': fileLabel,
     'rawHex': rawHex,
     'errors': errors,

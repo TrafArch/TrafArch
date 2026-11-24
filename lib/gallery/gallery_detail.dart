@@ -306,6 +306,9 @@ extension _GalleryDetail on _GalleryViewState {
           ],
         ),
       ),
+      if (live != null)
+        ApplicationEvidencePanel(applications: live.applicationsFor(card.id, archived: card.saved)),
+      if (live != null) ..._felicaSystemPanels(live.felicaSystemsFor(card.id, archived: card.saved)),
       Padding(
         padding: const EdgeInsets.only(top: 16, bottom: 8),
         child: Row(

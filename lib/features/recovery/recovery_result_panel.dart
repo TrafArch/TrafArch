@@ -12,7 +12,6 @@ import '../archive/application/cu_archive_projection.dart';
 import '../archive/domain/card_session_snapshot.dart';
 import '../archive/domain/card_types.dart';
 import '../../protocols/transit/card_parser.dart';
-import '../../protocols/transit/multiapp/application_evidence.dart';
 import '../../protocols/transit/tunion/tunion_cash_log.dart';
 import '../archive/presentation/archive_trip_presenter.dart';
 import '../archive/presentation/local_card_history_records.dart';
@@ -70,18 +69,15 @@ class RecoveryResultPanel extends StatelessWidget {
     final cu = batch == null
         ? null
         : projectCuArchive(ArchiveHistoryResult(card: null, batches: [batch]));
-    final applicationRows =
-        snapshot?.snapshot?.extensions['applicationEvidence'];
-    final applications = <ApplicationEvidence>[
-      if (applicationRows is List)
-        for (final row in applicationRows) ?ApplicationEvidence.tryParse(row),
-    ];
+    final applications = capture.applications(snapshot?.snapshot);
     final cashLog = applications
         .map((application) => application.payload)
         .whereType<TUnionCashLog>()
         .firstOrNull;
     final frozenSuica = capture.summary['suicaTrips'];
     final decoded = summary['decoded'];
+    final systems = (decoded is Map ? decoded['systemResults'] : null) ??
+        decodedSnapshot?.extensions['felicaSystems'];
     final amusementIc = decoded is Map
         ? AmusementIcData.fromJson(decoded['amusementIc'])
         : null;
@@ -178,6 +174,17 @@ class RecoveryResultPanel extends StatelessWidget {
           ),
         ],
         if (cashLog != null) TUnionCashLogView(log: cashLog),
+        if (systems is Map)
+          for (final entry in systems.entries)
+            if (entry.value case final Map fields)
+              ListTile(
+                title: Text('FeliCa ${entry.key} · ${fields['displayName'] ?? '未知系统'}'),
+                subtitle: Text([
+                  if (fields['idm'] case final String idm) 'IDm $idm',
+                  if (fields['stateText'] case final String state) state,
+                ].join(' · ')),
+                onTap: () => _evidence(context, fields),
+              ),
         if (suicaTrips.isNotEmpty)
           SuicaTripList(
             trips: suicaTrips,

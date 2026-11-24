@@ -9,9 +9,7 @@ import '../local_card_models.dart';
 
 /// 上海交通卡（交通联合版）识别常量。
 ///
-/// 该卡种默认按 TU（JT/T 978.2）+ CU（CJ/T 331-2016）双标卡处理，
-/// 由专用识别器 [ShanghaiTransitUnionCardParser] 独立识读，不归入普通
-/// 交通联合卡解析器。
+/// 供历史快照和展示使用。采集层分别探测 TU 与 CU。
 abstract final class ShanghaiTransitUnionIds {
   /// 展示 / 日志用模块名。
   static const String moduleName = '上海交通卡（交通联合版）';

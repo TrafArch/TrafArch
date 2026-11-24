@@ -45,7 +45,7 @@ Iterable<Map<String, Object?>> captureResponseFields(
     final body = felica ? response : response.sublist(0, response.length - 2);
     try {
       final decoded = switch (result) {
-        TransitReadOutcome(:final card) => _transit(card, frame, body, command),
+        TransitReadOutcome() => _transit(result, frame, body, command),
         FelicaReadOutcome() => _felica(result, body, command),
         UnsupportedReadOutcome() => null,
       };
@@ -70,17 +70,19 @@ Map<String, Object?> _decoded(
 }) => {'parserId': parser, 'state': state, 'fields': fields};
 
 Map<String, Object?>? _transit(
-  ParsedCard card,
+  TransitReadOutcome outcome,
   Map<String, Object?> frame,
   List<int> body,
   List<int> command,
 ) {
+  final card = outcome.card;
   if (frame['transport'] == 'nfc-f') return null;
   final coordinate = classifyRawCommand(command);
   final sfi = coordinate.sfi;
   final aid = _compact(frame['selectedApplication'] as String?);
   final stage = frame['protocolStage'] as String?;
-  final tu = aid.startsWith('A0000006320101');
+  final directory = _compact(frame['selectedDirectory'] as String?);
+  final tu = aid == 'A000000632010105';
   final cu = aid == 'A00000000386980701';
   if (cu) {
     final matches = card.cityUnionFiles
@@ -181,7 +183,31 @@ Map<String, Object?>? _transit(
     }
     return null;
   }
-  final local = card.localCard;
+  if (tu || cu) return null;
+  final appId = switch ((directory, aid)) {
+    ('1001', _) when stage == 'DF 1001' => 'df1001',
+    ('3F00', '') when stage == 'DF 1001' => 'df1001',
+    ('3F00', '') when stage == '苏州·计次卡' => 'suzhou_cika',
+    ('3F00', '') when stage == '武汉通（AP1.WHCTC）' => 'wuhan',
+    (_, '5041592E41505059') => 'lingnan_appy',
+    (_, '5041592E5449434C') => 'lingnan',
+    (_, '5041592E535A54') => 'shenzhen',
+    (_, '4150312E5748435443') => 'wuhan',
+    (_, 'B0C4C3C5CDA8C7AEB0FC') => 'macau',
+    (_, '535558494E2E4444463031') => 'suzhou_suxin',
+    (_, '535A504B5F5A5959') => 'suzhou_cika',
+    (_, 'D156000015B9ABB9B2D3A6D3C3') => 'tft',
+    _ => null,
+  };
+  final application = outcome.applications
+      .where((a) => a.confirmed && a.appId == appId)
+      .firstOrNull;
+  final selected = application?.payload;
+  final local = outcome.applications.isEmpty
+      ? card.localCard
+      : selected is ReadResult
+      ? selected
+      : null;
   if (local == null) return null;
   // Local parsers differ even when they share a file number. Match their own
   // retained bytes, command and stage, never the final parser alone.
@@ -192,7 +218,11 @@ Map<String, Object?>? _transit(
       : local.info.isSZT
       ? '深圳通（PAY.SZT）'
       : null;
-  if (tu || cu || expectedStage != null && stage != expectedStage) return null;
+  if (outcome.applications.isEmpty &&
+      expectedStage != null &&
+      stage != expectedStage) {
+    return null;
+  }
   final parser = local.info.isLNT
       ? CardParserIds.lingnanTong
       : local.info.isBmac
@@ -201,8 +231,10 @@ Map<String, Object?>? _transit(
   final records = local.records
       .where(
         (r) =>
-            r.rawBody != null &&
-            _sameHex(body, _hex(r.rawBody!)) &&
+            (r.rawBody ?? r.response) != null &&
+            _sameHex(body, _hex((r.rawBody ?? r.response)!)) &&
+            (r.directory != '1002' || directory == '1002') &&
+            (r.directory != 'TFT' || directory != '1002') &&
             (r.commandHex != null ||
                 r.recordNumber > 0 && r.fileSelector > 0) &&
             (r.commandHex == null || _compact(r.commandHex) == _hex(command)) &&
@@ -400,7 +432,8 @@ Map<String, Object?> processFields(TUnionProcessRecord record) {
 Map<String, Object?> _localRecord(ApduRecord r, ReadResult result) => {
   'recordNumber': r.recordNumber,
   'typeCode': r.posType,
-  'balanceDelta': r.balanceDelta,
+  if (r.tripDelta == null) 'balanceDelta': r.balanceDelta,
+  'tripDelta': ?r.tripDelta,
   'terminalHex': r.terminalHex,
   'time': r.timestamp.millisecondsSinceEpoch == 0
       ? null
@@ -425,18 +458,30 @@ Map<String, Object?>? _felica(
 ) {
   final parsed = FelicaResponse.parse(response);
   if (command.length < 2 || parsed.code != command[1] + 1) return null;
-  if (result.card.idm != null &&
-      _compact(result.card.idm) != _hex(parsed.idm)) {
+  final card = result.card.systemResults.isEmpty
+      ? result.card
+      : result.card.systemResults.values
+            .where(
+              (system) => system.frames.any(
+                (frame) =>
+                    frame.response != null &&
+                    _hex(frame.command) == _hex(command) &&
+                    _hex(frame.response!) == _hex(response),
+              ),
+            )
+            .singleOrNull;
+  if (card == null ||
+      card.idm != null && _compact(card.idm) != _hex(parsed.idm)) {
     return null;
   }
   // Product data needs a proven block association; retain protocol header for
   // other frames rather than guessing a product field from a byte offset.
-  return _decoded('felica.${result.card.cardProductType.name}', {
+  return _decoded('felica.${card.cardProductType.name}', {
     'responseCode': parsed.code,
     'idm': _hex(parsed.idm),
     'payloadHex': _hex(parsed.data),
     'records': [
-      for (final tx in result.card.transactions)
+      for (final tx in card.transactions)
         if (parsed.code == 7 &&
             response.length >= 13 &&
             response[10] == 0 &&

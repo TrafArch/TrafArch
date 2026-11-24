@@ -66,6 +66,8 @@ PendingCardSave? captureSuicaArchive(
     ),
     extensions: {
       'captureAttemptId': attemptId,
+      if (card.systemResults.isNotEmpty)
+        'felicaSystems': captureFelicaSystems(card),
       'suica': {
         'version': 1,
         'idm': fingerprint.split(':').last,

@@ -250,6 +250,10 @@ class FelicaScanResult {
   final List<FelicaRawBlock> rawBlocks;
   final List<FelicaFrameEvidence> frames;
   final List<int> systemCodes;
+
+  /// Results from individually polled systems of a multi-system card.
+  /// A listed system with no entry was not attempted.
+  final Map<int, FelicaScanResult> systemResults;
   final DateTime scannedAt;
 
   /// 产品对外交通功能摘要；未确认具体产品时为 null（不猜测）。
@@ -272,6 +276,7 @@ class FelicaScanResult {
     this.rawBlocks = const [],
     this.frames = const [],
     this.systemCodes = const [],
+    this.systemResults = const {},
     this.transitCapability,
     this.crossBorder,
     this.amusementIc,
@@ -321,6 +326,7 @@ class FelicaScanResult {
     List<FelicaRawBlock>? rawBlocks,
     List<FelicaFrameEvidence>? frames,
     List<int>? systemCodes,
+    Map<int, FelicaScanResult>? systemResults,
     FelicaCardType? cardProductType,
     String? transitCapability,
     CrossBorderPaymentInfo? crossBorder,
@@ -336,6 +342,7 @@ class FelicaScanResult {
     rawBlocks: rawBlocks ?? this.rawBlocks,
     frames: frames ?? this.frames,
     systemCodes: systemCodes ?? this.systemCodes,
+    systemResults: systemResults ?? this.systemResults,
     transitCapability: transitCapability ?? this.transitCapability,
     crossBorder: crossBorder ?? this.crossBorder,
     amusementIc: amusementIc ?? this.amusementIc,

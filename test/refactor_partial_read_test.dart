@@ -126,9 +126,14 @@ void main() {
       final trip = partial.localCard!.trips.single;
       expect(trip.response, _localTrip);
       expect(trip.terminalHex, '100001020304');
-      expect(trip.balanceDelta, -2);
+      expect(trip.balanceDelta, 32768); // type 02 credit, amount bytes 00 80 00
       expect(trip.recordNumber, 1);
       expect(partial.localCard!.extras.dateRaw, [0x24, 0x10]);
+      expect(partial.localCard!.extras.amount, 0x123456);
+      expect(
+        partial.localCard!.extras.slots['displayDate'],
+        DateTime(2024, 10, 21),
+      );
       expect(partial.localCard!.transportFailure, same(_tagLost));
       expect(partial.localCard!.readError, isA<ApduTransportException>());
       expect(link.callsAfterFailure, 0);
@@ -273,6 +278,8 @@ _CardLink _tuLink({required int failedSfi, bool invalidSerial = false}) =>
 _CardLink _beijingLink({required int balance, required bool failInHistory}) =>
     _CardLink((command) {
       switch (_hex(command)) {
+        case '00A40000023F00':
+          return _ok([]);
         case '00B084003C':
           final bytes = List<int>.filled(60, 0)
             ..[0] = 0x10
@@ -290,6 +297,7 @@ _CardLink _beijingLink({required int balance, required bool failInHistory}) =>
           if (!failInHistory) throw _tagLost;
           final bytes = List<int>.filled(50, 0);
           bytes.setRange(37, 40, [0x24, 0x10, 0x21]);
+          bytes.setRange(40, 43, [0x56, 0x34, 0x12]);
           return _ok(bytes);
         case '00B201C417':
           return _ok(_localTrip);

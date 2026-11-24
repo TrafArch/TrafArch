@@ -54,6 +54,8 @@ class ScanController extends OwnedNotifier {
   String? _errorCode;
   String? releaseError;
   String? _closing;
+  String? _released;
+  final _pendingCloses = <String, Future<void>>{};
   TransportFailure? _terminalFailure;
   int? progress;
   bool autoScanConsumed = false;
@@ -104,6 +106,7 @@ class ScanController extends OwnedNotifier {
     notifyListeners();
     var discoveryReturned = false;
     var rejectedBeforeRegistration = false;
+    var releaseRequested = false;
     try {
       final native = channel;
       final found = native is SessionNfcChannel
@@ -178,7 +181,22 @@ class ScanController extends OwnedNotifier {
         },
       );
       if (!_current(id)) return;
+      // All physical frames have been copied. The attempt ID remains owned by
+      // this scan for decoding/publication, independently of the radio handle.
+      releaseRequested = true;
+      await _close(id);
+      if (!_current(id)) return;
       outcome = result;
+      final applications = switch (result) {
+        TransitReadOutcome(:final applications) ||
+        UnsupportedReadOutcome(:final applications) => applications,
+        FelicaReadOutcome() => null,
+      };
+      _terminalFailure ??= applications
+          ?.map((a) => a.transportFailure)
+          .whereType<TransportFailure>()
+          .where((f) => f.stopsSession)
+          .firstOrNull;
       for (final decoded in captureResponseFields(result, recording.frames)) {
         recording.sink?.event(
           'response_fields',
@@ -266,10 +284,13 @@ class ScanController extends OwnedNotifier {
         phase = ScanPhase.failed;
       }
     } finally {
-      if (!rejectedBeforeRegistration) {
+      if (!rejectedBeforeRegistration && !releaseRequested) {
         // Even a stale attempt closes only its own native handle.
         await _close(id);
-      } else if (!disposed && _closing == id && _session == null) {
+      } else if (rejectedBeforeRegistration &&
+          !disposed &&
+          _closing == id &&
+          _session == null) {
         // A concurrent stop may have already received STALE_SESSION for it.
         _closing = null;
         releaseError = null;
@@ -310,6 +331,7 @@ class ScanController extends OwnedNotifier {
       'recordNumber': coordinates.recordNumber,
       'protocolStage': recording?.stage,
       'selectedApplication': recording?.selectedApplication,
+      'selectedDirectory': recording?.selectedDirectory,
     };
     var recorded = false;
     recording?.sink?.event(
@@ -344,27 +366,22 @@ class ScanController extends OwnedNotifier {
         context: context,
       );
       if (!isFelica &&
+          recording != null &&
           bytes.length >= 5 &&
           bytes[1] == 0xA4 &&
-          bytes[2] == 4 &&
           bytes[4] > 0 &&
           bytes.length >= 5 + bytes[4] &&
           response.length >= 2 &&
           response[response.length - 2] == 0x90 &&
           response.last == 0) {
-        recording?.selectedApplication = _hex(bytes.sublist(5, 5 + bytes[4]));
-      }
-      if (!isFelica &&
-          bytes.length >= 7 &&
-          bytes[1] == 0xA4 &&
-          bytes[2] == 0 &&
-          bytes[4] == 2 &&
-          bytes[5] == 0x3F &&
-          bytes[6] == 0 &&
-          response.length >= 2 &&
-          response[response.length - 2] == 0x90 &&
-          response.last == 0) {
-        recording?.selectedApplication = null;
+        final name = _hex(bytes.sublist(5, 5 + bytes[4]));
+        if (bytes[2] == 4) {
+          recording.selectedApplication = name;
+          recording.selectedDirectory = null;
+        } else if (bytes[2] == 0 && bytes[4] == 2) {
+          if (name == '3F 00') recording.selectedApplication = null;
+          recording.selectedDirectory = name;
+        }
       }
       recorded = true;
       if (!_current(id)) {
@@ -491,18 +508,32 @@ class ScanController extends OwnedNotifier {
     ]);
   }
 
-  Future<void> _close(String id) async {
+  Future<void> _close(String id) {
+    if (_released == id) return Future.value();
+    final pending = _pendingCloses[id];
+    if (pending != null) return pending;
+    final done = Completer<void>();
+    _pendingCloses[id] = done.future;
+    _release(id).whenComplete(() {
+      _pendingCloses.remove(id);
+      done.complete();
+    });
+    return done.future;
+  }
+
+  Future<void> _release(String id) async {
     final recording = _recordings[id];
     recording?.closing();
     try {
       final native = channel;
       if (native is SessionNfcChannel) {
         await native.closeSession(id);
-      } else if (_session == id) {
+      } else if (_session == id || (_session == null && _closing == id)) {
         await native.stopScan();
       } else {
         return;
       }
+      _released = id;
       recording?.closed();
       if (!disposed && (_session == id || _closing == id)) {
         releaseError = null;
@@ -535,21 +566,7 @@ class ScanController extends OwnedNotifier {
     _errorCode = null;
     notifyListeners();
     if (id != null) {
-      if (channel is SessionNfcChannel) {
-        await _close(id);
-      } else {
-        try {
-          await channel.stopScan();
-          if (!disposed && _closing == id) releaseError = null;
-        } catch (e) {
-          if (!disposed && _session == null && _closing == id) {
-            releaseError = 'NFC 连接释放失败：$e';
-            logEvent(releaseError!);
-            _recordings[id]?.closed(error: e);
-            notifyListeners();
-          }
-        }
-      }
+      await _close(id);
       if (!disposed && _closing == id && releaseError == null) {
         _closing = null;
       }
@@ -583,6 +600,7 @@ class _ScanRecording {
   bool _closed = false;
   String? stage;
   String? selectedApplication;
+  String? selectedDirectory;
   final frames = <Map<String, Object?>>[];
 
   void frame(

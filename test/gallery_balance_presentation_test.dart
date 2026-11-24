@@ -5,6 +5,29 @@ import 'package:transit_card_analyzer/protocols/transit/local/local_card_models.
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_models.dart';
 
 void main() {
+  test(
+    'generic TU and a coexisting local wallet keep independent balances',
+    () {
+      final local = ReadResult(
+        info: CardInfo()..balance = 876,
+        records: const [],
+        extras: CardExtras(),
+      );
+      for (final observed in <int?>[0, 123, null]) {
+        final card = ParsedCard(
+          parserId: CardParserIds.tunion,
+          parserName: 'TU',
+          info: TUnionCardInfo(balanceFen: observed),
+          transactions: const [],
+          localCard: local,
+        );
+        expect(
+          GalleryBalancePresentation.observedCardBalanceMinor(card),
+          observed,
+        );
+      }
+    },
+  );
   test('a local wallet supplies the 2.x balance when TU balance is absent', () {
     final localInfo = CardInfo()
       ..isSZT = true

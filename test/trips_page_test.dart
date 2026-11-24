@@ -10,6 +10,7 @@ import 'dart:io';
 
 import 'package:drift/drift.dart' show DatabaseConnection, driftRuntimeOptions;
 import 'package:drift/native.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -70,10 +71,6 @@ void main() {
   testWidgets('10条交易与30条1E全部展示保存，摘要不以交易数截断记录数', (tester) async {
     // 合成复现泉城通日志的容量差异；不包含用户卡号或真实行程。
     final channel = _FakeNfcChannel()
-      ..enqueue(0xA4, [0x6A, 0x82]) // 前置 APPY Case 4
-      ..enqueue(0xA4, [0x6A, 0x82]) // APPY 无 Le 兼容
-      ..enqueue(0xA4, [0x6A, 0x82])
-      ..enqueue(0xA4, [0x90, 0x00])
       ..enqueue(0xB0, _sw9000(_publicFile()))
       ..enqueue(0xB0, _sw9000(_holderFile()))
       ..enqueue(0xB0, _sw9000(_managementFile()))
@@ -769,7 +766,16 @@ void main() {
       await tester.tap(find.text('老卡片'));
       await tester.pumpAndSettle();
 
-      expect(find.text('行程记录 · 1 个已保存批次'), findsOneWidget);
+      final historyHeading = find.text('行程记录 · 1 个已保存批次');
+      final archiveScroll = find
+          .ancestor(of: find.text('读取时的应用'), matching: find.byType(Scrollable))
+          .first;
+      await tester.scrollUntilVisible(
+        historyHeading,
+        250,
+        scrollable: archiveScroll,
+      );
+      expect(historyHeading, findsOneWidget);
       expect(find.text('苏洋'), findsOneWidget);
       final savedTransactionCard = find.ancestor(
         of: find.text('苏洋'),
@@ -1068,16 +1074,20 @@ final Map<String, String> _octopusAssets = {
   }),
 };
 
-/// 按 INS 脚本化的假 NFC 通道：队列耗尽后返回 6A82（记录未找到）。
+/// 此卡只含 TU 钱包。切换 MF 后须重新 SELECT 钱包才能读取它的文件。
 class _FakeNfcChannel implements NfcChannel {
   final Map<int, List<List<int>>> _queues = {};
   final commands = <List<int>>[];
+  bool _tuSelected = false;
 
   void enqueue(int ins, List<int> response) =>
       _queues.putIfAbsent(ins, () => []).add(response);
 
   /// 清空脚本队列（同一测试内重复扫描前调用，保证脚本从头对齐）。
-  void reset() => _queues.clear();
+  void reset() {
+    _tuSelected = false;
+    _queues.clear();
+  }
 
   /// 电子钱包完整读取脚本：选择 MF → 选择钱包 AID → 读三个标准文件
   /// → GET BALANCE → 0x18 交易明细整体读取。
@@ -1095,10 +1105,6 @@ class _FakeNfcChannel implements NfcChannel {
     List<int>? cycleRecord,
     List<int>? publicFile,
   }) {
-    enqueue(0xA4, const [0x6A, 0x82]); // 前置 APPY Case 4
-    enqueue(0xA4, const [0x6A, 0x82]); // APPY 无 Le 兼容
-    enqueue(0xA4, const [0x90, 0x00]);
-    enqueue(0xA4, _sw9000(const []));
     enqueue(0xB0, _sw9000(publicFile ?? _publicFile()));
     enqueue(0xB0, _sw9000(_holderFile()));
     enqueue(0xB0, _sw9000(_managementFile()));
@@ -1141,6 +1147,27 @@ class _FakeNfcChannel implements NfcChannel {
   Future<List<int>> transceive(List<int> apdu) async {
     commands.add(List.of(apdu));
     final ins = apdu.length > 1 ? apdu[1] : -1;
+    if (ins == 0xA4) {
+      _tuSelected = listEquals(apdu, const [
+        0x00,
+        0xA4,
+        0x04,
+        0x00,
+        0x08,
+        0xA0,
+        0,
+        0,
+        0x06,
+        0x32,
+        0x01,
+        0x01,
+        0x05,
+        0x00,
+      ]);
+      final mf = listEquals(apdu, const [0x00, 0xA4, 0, 0, 2, 0x3F, 0, 0]);
+      return _tuSelected || mf ? [0x90, 0] : [0x6A, 0x82];
+    }
+    if (!_tuSelected) return [0x6A, 0x82];
     final queue = _queues[ins];
     if (queue == null || queue.isEmpty) return const [0x6A, 0x82];
     return queue.removeAt(0);

@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../archive/domain/pending_card_save.dart';
 import '../archive/domain/card_archive_identity.dart';
 import '../archive/domain/card_session_snapshot.dart';
+import '../../protocols/transit/multiapp/application_evidence.dart';
 
 /// Temporary continuation data. Captured JSON is never reparsed by a protocol
 /// reader, migrated, imported, or silently committed to the card archive.
@@ -23,6 +24,12 @@ class RecoveryCapture {
   final String? snapshotJson;
   final bool canSave;
   final bool interrupted;
+
+  List<ApplicationEvidence> applications(CardSessionSnapshot? snapshot) {
+    return ApplicationEvidence.parseList(
+      snapshot?.extensions['applicationEvidence'] ?? summary['applications'],
+    );
+  }
 
   RecoveryCapture withoutPendingSave() => RecoveryCapture(
     readAt: readAt,

@@ -18,14 +18,31 @@ class FelicaSummaryPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
-    children: _felicaPanel(context, felica),
+    children: felica.systemResults.isEmpty
+        ? _felicaPanel(context, felica)
+        : [
+            summaryField(context, '系统码', felica.systemCodeText),
+            for (final entry in felica.systemResults.entries)
+              ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                title: Text(
+                  '${entry.key.toRadixString(16).toUpperCase().padLeft(4, '0')} · ${entry.value.displayName}',
+                ),
+                subtitle: Text(entry.value.stateText),
+                children: _felicaPanel(context, entry.value, showName: false),
+              ),
+          ],
   );
-  List<Widget> _felicaPanel(BuildContext context, FelicaScanResult felica) {
+  List<Widget> _felicaPanel(
+    BuildContext context,
+    FelicaScanResult felica, {
+    bool showName = true,
+  }) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final crossBorder = felica.crossBorder;
     return [
-      ...summaryNameLine(context, felica.displayName),
+      if (showName) ...summaryNameLine(context, felica.displayName),
       summaryField(context, '识别状态', felica.stateText),
       if (felica.cardProductType == FelicaCardType.suica)
         SuicaIdentitySummary(idm: SuicaArchiveIdentity.normalizeIdm(felica.idm))

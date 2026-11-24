@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import '../../../protocols/transit/multiapp/application_evidence.dart';
+import '../../../shared/presentation/application_evidence_panel.dart';
 import 'package:flutter/services.dart';
 
 import '../../../shared/presentation/adaptive_layout.dart';
@@ -244,6 +246,13 @@ class ArchiveDetailContent extends StatelessWidget {
               : !canIdentifyForManualNumber
               ? '无法确认档案身份，暂不能编辑卡面编号；原始资料已保留。'
               : null,
+        ),
+      if (section != ArchiveDetailSection.records)
+        ApplicationEvidencePanel(
+          title: '读取时的应用',
+          applications: ApplicationEvidence.parseList(
+            history.latestCapture?.snapshot?.extensions['applicationEvidence'],
+          ),
         ),
       if (section != ArchiveDetailSection.information) ...[
         const SizedBox(height: 12),

@@ -1,9 +1,11 @@
 library;
 
+import '../../tunion/tunion_codec.dart';
 import '../apdu_exchange.dart';
 import '../card_aid.dart';
 import '../local_card_models.dart';
 import '../local_hex.dart';
+import 'df1001_directory.dart';
 
 /// 北京互通卡探测：0x04 / 0x05 / SELECT 1001 / BALANCE
 class BeijingLocalCard {
@@ -11,12 +13,16 @@ class BeijingLocalCard {
   final ApduExchange _apdu;
 
   Future<bool> probe(CardInfo info, List<ApduRecord> records) async {
-    final r0x04 = await _apdu(
-      const [0x00, 0xB0, 0x84, 0x00, 0x3C],
-      '0x04',
-      records: records,
-      strict: true,
-    );
+    final directory = Df1001Directory(_apdu);
+    if (!await directory.select(records) || !identify(directory, info)) {
+      return false;
+    }
+    await readBalance(directory.basic, info, records);
+    return true;
+  }
+
+  static bool identify(Df1001Directory directory, CardInfo info) {
+    final r0x04 = directory.issuer;
     if (r0x04 == null || r0x04.length < 32) return false;
     if (!(r0x04[0] == 16 &&
         r0x04[1] == 0 &&
@@ -31,30 +37,45 @@ class BeijingLocalCard {
     info.cityCode = 1000;
     info.expiryDate = _bcdDate(r0x04.sublist(28, 32));
 
-    final r0x05 = await _apdu(
-      const [0x00, 0xB0, 0x85, 0x00, 0x20],
-      '0x05',
-      records: records,
-      strict: true,
-    );
-    await _apdu(CardAid.select1001, 'SELECT 1001', records: records);
+    info.isBeijing = true;
+    return true;
+  }
+
+  Future<void> readBalance(
+    List<int>? r0x05,
+    CardInfo info,
+    List<ApduRecord> records,
+  ) async {
     final balance = await _apdu(
       CardAid.balanceCheck,
       'BALANCE CHECK',
       records: records,
       strict: true,
     );
-    if (balance == null) return false;
-
+    if (balance == null || balance.length != 4) return;
     if (!_isAllZero(balance)) {
       info.balance = LocalHex.readBEInt(balance.sublist(1));
-      return true;
-    }
-    if (r0x05 != null && r0x05.length >= 9) {
+    } else if (r0x05 != null && r0x05.length >= 9) {
       info.balance = -LocalHex.readBEInt(r0x05.sublist(6, 9));
-      return true;
     }
-    return false;
+  }
+
+  Future<void> readExtras(List<ApduRecord> records, CardExtras extras) async {
+    final raw = await _apdu(
+      const [0, 0xB0, 0x95, 0, 0x32],
+      '0x15',
+      records: records,
+      strict: true,
+      verbose: true,
+    );
+    if (raw == null || raw.length != 50 || raw[37] == 0) return;
+    extras.dateRaw = raw.sublist(37, 39);
+    // This DF stores the three-byte amount least significant byte first.
+    extras.amount = raw[40] | (raw[41] << 8) | (raw[42] << 16);
+    extras.slots['displayCategory'] = 'f806b';
+    extras.slots['displayAmount'] = extras.amount;
+    final date = TUnionCodec.parseBcdDate([0x20, ...raw.sublist(37, 40)]);
+    if (date != null) extras.slots['displayDate'] = date;
   }
 
   static bool _isAllZero(List<int> b) {

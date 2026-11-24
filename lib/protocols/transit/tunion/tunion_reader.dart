@@ -1,5 +1,6 @@
 library;
 
+import '../../iso7816/ber_tlv.dart';
 import '../card_parser.dart';
 import 'tunion_apdu.dart';
 import 'tunion_codec.dart';
@@ -14,7 +15,7 @@ enum TuProcessReadAction { unchanged, restoreApplication, stopSession }
 /// 交通联合通用单元（TU）：SELECT + JT/T 978.2 完整识读（新模块主体）。
 ///
 /// 本单元已内联原 `TUnionParser` 的全部读取实现（老模块移除）：
-/// - 应用选择：MF 复位 / 电子钱包 + 电子现金双 AID / CLA 0x00、0x80 双尝试；
+/// - 应用选择：MF 复位 / 交通联合电子钱包 AID / CLA 0x00、0x80 双尝试；
 /// - 文件读取：0x15 / 0x16 / 0x17 / 0x18 / 0x1A / 0x1E + GET BALANCE，
 ///   产出 [ParsedCard]（parserId [CardParserIds.tunion]）供既有分析与展示链路；
 /// - 同步回填新架构 [CardInfo] 字段与行程流水（[ApduRecord.type] == 2）。
@@ -114,6 +115,7 @@ class CommonUnitTu {
 
   /// 已验证身份对应的完整或部分结果；读取异常仍由调用方独立处理。
   ParsedCard? parsedCard;
+  final observations = <String, String>{};
   bool _transactionFileObserved = false;
 
   /// Another application terminated the session before TU process reads.
@@ -121,8 +123,7 @@ class CommonUnitTu {
 
   /// 最近一次读取到的交通联合卡信息（含应用序列号 / 发卡机构标识）。
   ///
-  /// 即使 [read] 因应用序列号校验失败返回 null 也会保留，供上海交通卡
-  /// （交通联合版）识别器以卡号前缀 / 发卡机构标识做辅助判定。
+  /// 即使 [read] 因应用序列号校验失败返回 null，也保留原始身份字段。
   TUnionCardInfo? _lastCardInfo;
 
   /// 最近一次读取的卡信息（失败时同样保留）；未读取时为 null。
@@ -135,10 +136,12 @@ class CommonUnitTu {
   List<int>? get selectedAid => _selectedAid;
 
   Future<bool> select(CardInfo info, List<ApduRecord> records) async {
-    // 发现标记不是当前选中应用的缓存（另一单元可能已切换应用）。
     _selectedAid = null;
     _fciDiscretionary = null;
-    if (!await _selectApplication(const [walletAid, cashAid])) return false;
+    _lastCardInfo = null;
+    parsedCard = null;
+    observations.clear();
+    if (!await _selectApplication(walletAid)) return false;
     info.isTU = true;
     return true;
   }
@@ -193,7 +196,7 @@ class CommonUnitTu {
         final action = await beforeProcessRecords(wallet);
         processRecordsSkipped = action == TuProcessReadAction.stopSession;
         if (action == TuProcessReadAction.restoreApplication &&
-            !await _selectApplication([aid])) {
+            !await _selectApplication(aid)) {
           throw const FormatException('未能恢复交通联合应用，未继续读取过程记录');
         }
       }
@@ -241,21 +244,20 @@ class CommonUnitTu {
   // ---- TU 应用与文件读取 ----
 
   /// 应用选择：先复位选择主文件（MF），失败则忽略；
-  /// 然后直接尝试交通联合钱包与电子现金 AID（CLA 0x00 / 0x80）。
-  Future<bool> _selectApplication(List<List<int>> candidateAids) async {
+  /// 然后选择本次钱包 AID（CLA 0x00 / 0x80）。
+  Future<bool> _selectApplication(List<int> aid) async {
     await _exchange(TUnionApdu.selectFile(const [0x3F, 0x00]));
-    return _selectAid(candidateAids);
-  }
-
-  Future<bool> _selectAid(List<List<int>> candidateAids) async {
-    for (final aid in candidateAids) {
-      for (final cla in const [0x00, 0x80]) {
-        final resp = await _exchange(TUnionApdu.select(aid, cla: cla));
-        if (!_isSuccess(resp)) continue;
-        _selectedAid = aid;
-        _fciDiscretionary = _extractFciDiscretionary(_stripSw(resp));
-        return true;
+    for (final cla in const [0x00, 0x80]) {
+      final resp = await _exchange(TUnionApdu.select(aid, cla: cla));
+      if (!_isSuccess(resp)) continue;
+      final fci = _stripSw(resp);
+      if (BerTlvParser.selectedAidMatches(fci, aid) == false) continue;
+      _selectedAid = aid;
+      if (fci.isNotEmpty) {
+        observations['SELECT FCI'] = TUnionCodec.hexBytes(fci)!;
       }
+      _fciDiscretionary = _extractFciDiscretionary(fci);
+      return true;
     }
     return false;
   }
@@ -289,6 +291,9 @@ class CommonUnitTu {
       final resp = await _exchange(TUnionApdu.getBalance(cla: cla, p1: 0x03));
       if (!_isSuccess(resp)) continue;
       _overdraftQueryRawHex = TUnionCodec.hexBytes(_stripSw(resp));
+      if (_overdraftQueryRawHex case final raw?) {
+        observations['GET BALANCE P1=03'] = raw;
+      }
       break;
     }
     return null;
@@ -297,7 +302,12 @@ class CommonUnitTu {
   Future<int?> _queryBalance(int p1) async {
     for (final cla in const [0x80, 0x00]) {
       final resp = await _exchange(TUnionApdu.getBalance(cla: cla, p1: p1));
-      if (!_isSuccess(resp) || resp.length < 6) continue;
+      if (!_isSuccess(resp)) continue;
+      final raw = TUnionCodec.hexBytes(_stripSw(resp));
+      if (raw != null) {
+        observations['GET BALANCE P1=${TUnionCodec.hexByte(p1)}'] = raw;
+      }
+      if (resp.length != 6) continue;
       return (resp[0] << 24) | (resp[1] << 16) | (resp[2] << 8) | resp[3];
     }
     return null;
@@ -645,28 +655,34 @@ class CommonUnitTu {
   Future<List<int>?> _readTransparentFile(int sfi, int length) async {
     final out = <int>[];
 
-    final whole = await _exchange(
-      TUnionApdu.readBinary(sfi, offset: 0, le: 0x00),
-    );
-    if (_isSuccess(whole)) {
-      out.addAll(_stripSw(whole));
-    }
-
-    while (out.length < length) {
-      final want = (length - out.length) > _readBinaryChunk
-          ? _readBinaryChunk
-          : length - out.length;
-      final resp = await _exchange(
-        TUnionApdu.readBinary(sfi, offset: out.length, le: want),
+    try {
+      final whole = await _exchange(
+        TUnionApdu.readBinary(sfi, offset: 0, le: 0x00),
       );
-      if (!_isSuccess(resp)) break;
-      final chunk = _stripSw(resp);
-      if (chunk.isEmpty) break;
-      if (_matchesFromStart(out, chunk)) break;
-      out.addAll(chunk);
-      if (chunk.length < want) break;
-    }
+      if (_isSuccess(whole)) {
+        out.addAll(_stripSw(whole));
+      }
 
+      while (out.length < length) {
+        final want = (length - out.length) > _readBinaryChunk
+            ? _readBinaryChunk
+            : length - out.length;
+        final resp = await _exchange(
+          TUnionApdu.readBinary(sfi, offset: out.length, le: want),
+        );
+        if (!_isSuccess(resp)) break;
+        final chunk = _stripSw(resp);
+        if (chunk.isEmpty) break;
+        if (_matchesFromStart(out, chunk)) break;
+        out.addAll(chunk);
+        if (chunk.length < want) break;
+      }
+    } finally {
+      if (out.isNotEmpty) {
+        observations['SFI 0x${TUnionCodec.hexByte(sfi)}'] =
+            TUnionCodec.hexBytes(out)!;
+      }
+    }
     if (out.isEmpty) return null;
     final data = out.length > length ? out.sublist(0, length) : out;
     if (data.every((b) => b == 0x00 || b == 0xFF)) return null;
@@ -687,6 +703,7 @@ class CommonUnitTu {
       if (!_isSuccess(resp)) break;
       final data = _stripSw(resp);
       if (data.length >= 11 && data.any((b) => b != 0x00 && b != 0xFF)) {
+        observations['SFI 0x17 #$i'] = TUnionCodec.hexBytes(data)!;
         return data;
       }
     }

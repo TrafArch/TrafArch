@@ -380,6 +380,74 @@ class ArchiveHistory {
     for (final batch in batches) {
       final snapshot = batch.decoded.snapshot;
       if (snapshot == null) continue;
+      void add(String section, Map<String, dynamic> fields) {
+        final raw = fields['rawBody'];
+        final key = jsonEncode(
+          _canonical({
+            'type': section,
+            'profile': ?fields['profile'],
+            'directory': ?fields['directory'],
+            if (fields['directory'] != null)
+              'fileSelector': fields['fileSelector'],
+            'recordNumber': fields['recordNumber'],
+            'rawBody': raw,
+            if (raw == null) 'timestamp': fields['timestamp'],
+          }),
+        );
+        unique.putIfAbsent(
+          key,
+          () => LocalCardHistoryRecord(
+            cardType: section,
+            fields: Map.unmodifiable(fields),
+            batchId: batch.id,
+          ),
+        );
+      }
+
+      final evidence = snapshot.extensions['applicationEvidence'];
+      final projected = <String>{};
+      final legacyPrimary = snapshot.extensions['localCardTrips'];
+      final primaryLabel = legacyPrimary is Map
+          ? legacyPrimary['cardKindLabel']
+          : null;
+      if (evidence is List) {
+        for (final app in evidence.whereType<Map>()) {
+          final id = app['appId'];
+          if (app['confirmed'] != true || id is! String) continue;
+          // Prefer historical, application-specific projections when present.
+          if (switch (id) {
+            'lingnan' => snapshot.extensions['lingnanTong'] is Map,
+            'shenzhen' =>
+              snapshot.extensions['shenzhenTong'] is Map ||
+                  primaryLabel == '深圳通',
+            'wuhan' => primaryLabel == '武汉通',
+            'df1001' || 'beijing' => primaryLabel == '北京互通卡',
+            'macau' => snapshot.extensions['macauPass'] is Map,
+            _ => false,
+          }) {
+            continue;
+          }
+          final payload = app['payload'];
+          if (payload is! Map ||
+              payload['kind'] != 'read_result' ||
+              payload['records'] is! List) {
+            continue;
+          }
+          projected.add(id);
+          for (final row in (payload['records'] as List).whereType<Map>()) {
+            if (id == 'macau' &&
+                row['label'] == '澳门通交易记录' &&
+                row['recordNumber'] != 0) {
+              add('macauPass', Map<String, dynamic>.from(row));
+            } else if (row['type'] == 2) {
+              add('localCardTrips', {
+                ...Map<String, dynamic>.from(row),
+                'profile': id,
+              });
+            }
+          }
+        }
+      }
       for (final section in const [
         'lingnanTong',
         'shenzhenTong',
@@ -388,6 +456,17 @@ class ArchiveHistory {
       ]) {
         final payload = snapshot.extensions[section];
         if (payload is! Map) continue;
+        // Captures from before per-application records use only this section.
+        // New captures keep directory/file provenance in applicationEvidence.
+        if (section == 'localCardTrips' &&
+            projected.contains(switch (payload['cardKindLabel']) {
+              '苏州·苏薪卡' => 'suzhou_suxin',
+              '苏州·计次卡' => 'suzhou_cika',
+              '天府通' => 'tft',
+              _ => null,
+            })) {
+          continue;
+        }
         final rows = payload['records'];
         if (rows is! List) continue;
         for (final row in rows) {
@@ -401,23 +480,7 @@ class ArchiveHistory {
               payload['cardKindLabel'] == '深圳通') {
             fields['profile'] = 'shenzhen';
           }
-          final raw = fields['rawBody'];
-          final key = jsonEncode(
-            _canonical({
-              'type': section,
-              'recordNumber': fields['recordNumber'],
-              'rawBody': raw,
-              if (raw == null) 'timestamp': fields['timestamp'],
-            }),
-          );
-          unique.putIfAbsent(
-            key,
-            () => LocalCardHistoryRecord(
-              cardType: section,
-              fields: Map.unmodifiable(fields),
-              batchId: batch.id,
-            ),
-          );
+          add(section, fields);
         }
       }
     }

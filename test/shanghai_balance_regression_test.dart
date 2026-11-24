@@ -142,7 +142,8 @@ void main() {
         home: Scaffold(body: RecentScanSection(app: app)),
       ),
     );
-    expect(app.parsedCard!.parserId, CardParserIds.shanghaiTunion);
+    expect(app.parsedCard!.parserId, CardParserIds.tunion);
+    expect(app.lastIdentified!.identity.cardType, 'shanghai_transit_union');
     expect(app.cardInfo!.cityCode, '2900');
     expect(find.text('¥108.00'), findsOneWidget);
     channel.balanceFen = 10000;
@@ -151,6 +152,10 @@ void main() {
     expect(find.text('¥100.00'), findsOneWidget);
     expect(find.text('¥108.00'), findsNothing);
     expect(app.pendingCardSave!.balanceFen, 10000);
+    await tester.runAsync(() => app.setIncludeShanghaiOverdraft(false));
+    await tester.pump();
+    expect(app.balanceDisplay.balanceFen(app.cardInfo!.balanceFen), 9200);
+    expect(app.applications.singleWhere((a) => a.appId == 'tu').balanceFen, 10000);
     expect(channel.balanceCommands, everyElement([0x80, 0x5C, 0, 2, 4]));
     await tester.pumpWidget(const SizedBox());
     await tester.pump();

@@ -100,7 +100,8 @@ class TransitSummaryPanel extends StatelessWidget {
     // 卡号（完整，不脱敏）：识别结果优先，回退解析字段，最后回退 UID。
     final String? parsedCardNumber;
     if (isLocal) {
-      final number = local?.info.cardNumber ?? '';
+      final number =
+          local?.info.displayCardNumber ?? local?.info.cardNumber ?? '';
       parsedCardNumber = number.isEmpty ? null : number;
     } else if (isCityUnion) {
       parsedCardNumber = publicInfo?.cityCardNumber;
@@ -149,6 +150,17 @@ class TransitSummaryPanel extends StatelessWidget {
       if (cardKind != null)
         summaryField(context, '卡种', app.cardKindName(cardKind) ?? cardKind),
       summaryField(context, '卡号', cardNumber),
+      if (local?.info.isCika == true) ...[
+        summaryField(
+          context,
+          '剩余次数',
+          local!.info.observedRemainingTrips == null
+              ? '未知'
+              : '${local.info.observedRemainingTrips} 次',
+        ),
+        if (local.info.expiryDate case final date?)
+          summaryField(context, '有效期至', summaryDate(date)),
+      ],
       // 仅读到 NFC 标签（未解析成功）时补充 UID，与模块文档说明一致。
       if (parsed == null && result != null)
         summaryField(context, 'UID', result.uid),

@@ -320,7 +320,11 @@ class AppDependencies extends OwnedNotifier {
                     else if (_view?.balanceInterpretation case final balance?)
                       'balanceText': balance.accountBalanceText,
                     if (scan.outcome case final result?) ...{
-                      ...captureCardInfo(result),
+                      ...captureCardInfo(
+                        result,
+                        includeApplications:
+                            _completedCapture?.sessionDataJson == null,
+                      ),
                       'decoded': captureReadResult(result),
                     },
                     if (suicaTrips.isNotEmpty)
@@ -493,14 +497,38 @@ class AppDependencies extends OwnedNotifier {
   bool get isOctopusCard =>
       (parsedCard != null &&
           BalanceInterpretation.fromParsedCard(parsedCard!).isOctopusTunion) ||
-      felicaResult?.systemCodes.contains(0x8008) == true;
-  OctopusBalanceResult? get currentOctopusResult =>
-      isOctopusCard &&
-          _view != null &&
-          identical(_octopusView, _view) &&
-          identical(_octopusResult, octopus.result)
-      ? _octopusResult
-      : null;
+      switch (felicaResult) {
+        final f? when f.systemResults.isNotEmpty =>
+          f.cardProductType.isOctopusFamily &&
+              f.systemResults[0x8008]?.cardProductType.isOctopusFamily == true,
+        final f? => f.systemCodes.contains(0x8008),
+        null => false,
+      };
+  OctopusBalanceResult? get currentOctopusResult {
+    if (!isOctopusCard) return null;
+    if (_view != null &&
+        identical(_octopusView, _view) &&
+        identical(_octopusResult, octopus.result) &&
+        _octopusResult != null) {
+      return _octopusResult;
+    }
+    final system = felicaResult?.systemResults[0x8008];
+    if (system == null) return null;
+    final idm = system.idm?.replaceAll(' ', '').toUpperCase();
+    final wallet = system.wallets
+        .where(
+          (w) => w.kind == FelicaWalletKind.octopusHkd && w.balanceVerified,
+        )
+        .firstOrNull;
+    return wallet == null || !_validIdm(idm)
+        ? null
+        : OctopusBalanceResult(
+            idmHex: idm!,
+            balanceMinor: wallet.balanceMinorUnits!,
+            readAt: system.scannedAt,
+          );
+  }
+
   String? get octopusBalanceText {
     if (!isOctopusCard) return null;
     final hkd = currentOctopusResult?.balanceMinor;
@@ -566,6 +594,7 @@ class AppDependencies extends OwnedNotifier {
     includeShanghaiOverdraft: includeShanghaiOverdraft,
     parserId: parsedCard?.parserId,
     applicationId: parsedCard?.selectedAidHex,
+    cardType: lastIdentified?.identity.cardType,
     currencyCode: cardCurrency.code,
   );
   String? get cardCityCode => _view?.cardCityCode;
@@ -729,7 +758,11 @@ class AppDependencies extends OwnedNotifier {
       }
       final view = _view;
       if (view == null) return;
-      if (isOctopusCard) await _queryCurrentOctopus(request, view);
+      if (isOctopusCard &&
+          view.felicaResult?.systemResults.isNotEmpty != true &&
+          scan.phase == ScanPhase.complete) {
+        await _queryCurrentOctopus(request, view);
+      }
       if (!disposed &&
           request == _scanRequest &&
           !nfcReleaseFailed &&
@@ -821,9 +854,15 @@ class AppDependencies extends OwnedNotifier {
     // when that read actually found the Octopus system. A missing IDm still
     // relies on the documented continuous-tap context.
     final felica = view.felicaResult;
-    final felicaIdm = felica != null && felica.systemCodes.contains(0x8008)
-        ? felica.idm?.replaceAll(' ', '').toUpperCase()
+    final observed = felica?.systemResults.isNotEmpty == true
+        ? felica!.systemResults[0x8008]
+        : felica;
+    final felicaIdm = observed != null && observed.systemCodes.contains(0x8008)
+        ? observed.idm?.replaceAll(' ', '').toUpperCase()
         : null;
+    if (felica?.systemResults.isNotEmpty == true && !_validIdm(felicaIdm)) {
+      return;
+    }
     final expectedIdm = _validIdm(felicaIdm) ? felicaIdm : null;
     final cancellationRevision = octopus.cancellationRevision;
     await octopus.read(expectedCardIdm: expectedIdm);

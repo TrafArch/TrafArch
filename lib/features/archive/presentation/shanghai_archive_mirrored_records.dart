@@ -1,4 +1,3 @@
-import '../../../protocols/transit/card_parser.dart';
 import '../../../protocols/transit/tunion/tunion_models.dart';
 import '../../transit_analysis/cu_transaction_analysis.dart';
 import '../../trips/shanghai_mirrored_records.dart';
@@ -28,14 +27,12 @@ ShanghaiMirroredRecords partitionShanghaiArchiveMirroredRecords({
   final matchedCounts = <String, Map<CuTransactionView, int>>{};
   for (final entry in observations.entries) {
     final snapshot = batches[entry.key]?.decoded.snapshot;
-    if (ambiguousBatches.contains(entry.key) ||
-        snapshot == null ||
-        (snapshot.context.systemId != CardParserIds.shanghaiTunion &&
-            snapshot.context.systemId != CardParserIds.harbinTunion)) {
+    if (ambiguousBatches.contains(entry.key) || snapshot == null) {
       continue;
     }
     final matched = partitionShanghaiMirroredRecords(
       parserId: snapshot.context.systemId,
+      displayCardType: snapshot.context.displayCardType,
       tunionTransactions: _capturedTransactions(snapshot),
       cityUnionTransactions: entry.value,
     );

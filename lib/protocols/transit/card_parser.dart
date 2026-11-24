@@ -11,18 +11,20 @@ abstract final class CardParserIds {
   /// 交通联合电子钱包（JT/T 978.2）。
   static const String tunion = 'tunion';
 
-  /// 上海交通卡（交通联合版）：TU + CU 双标卡独立卡种。
-  /// 由 [ShanghaiTransitUnionCardParser] 以「辅助前缀 + 应用结构」双重确认，
-  /// 不归入普通交通联合解析器（[tunion]）。
+  /// 独立的交通联合电子现金日志，没有电子钱包卡号或余额。
+  static const String tunionCash = 'tunion_cash';
+
+  /// 历史上海交通卡快照的稳定标识。新读取使用 [tunion]。
   static const String shanghaiTunion = 'shanghai_tunion';
 
-  /// 哈尔滨城市通：已确认 TU 身份后探测独立 CU 应用。
+  /// 历史哈尔滨城市通快照的稳定标识。新读取使用 [tunion]。
   static const String harbinTunion = 'harbin_tunion';
 
   static const String lingnanTong = 'lingnan_tong';
   static const String lingnanTunion = 'lingnan_tunion';
   static const String shenzhenTunion = 'shenzhen_tunion';
   static const String beijingBmac = 'beijing_bmac';
+  static const String motBmac = 'mot_bmac';
 
   /// 城市一卡通（住建部 City Union，CJ/T 331-2016）。
   static const String cityUnion = 'city_union';
@@ -93,6 +95,16 @@ class ParsedCard {
   /// 双应用卡上城市一卡通（CU）应用的电子钱包余额（分）；非双应用或未读到
   /// 余额时为 null。与 [info]（交通联合钱包余额）分属两套独立钱包。
   final int? cityUnionBalanceFen;
+
+  /// The general TU and CU summaries follow their own wallet observation,
+  /// including null and zero. Older branded summaries support a local balance
+  /// fallback for cards whose TU wallet could not be read.
+  int? get primaryBalanceFen => switch (parserId) {
+    CardParserIds.tunion || CardParserIds.cityUnion => info.balanceFen,
+    CardParserIds.shenzhenTunion || CardParserIds.lingnanTunion =>
+      info.balanceFen ?? localCard?.info.observedBalance,
+    _ => localCard?.info.observedBalance ?? info.balanceFen,
+  };
 
   const ParsedCard({
     this.parserId = '',

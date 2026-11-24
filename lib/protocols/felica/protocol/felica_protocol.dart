@@ -87,6 +87,8 @@ class FelicaProtocol {
   FelicaProtocol(this._transceive);
   final FelicaTransceive _transceive;
   final _frames = <FelicaFrameEvidence>[];
+  FelicaProtocolException? _terminalFailure;
+  FelicaProtocolException? get terminalFailure => _terminalFailure;
   var _responseBytes = 0;
   var _attempts = 0;
   static const maxFrames = 256;
@@ -95,8 +97,14 @@ class FelicaProtocol {
 
   Future<FelicaPollingResult> polling({
     int systemCode = FelicaCommand.systemCodeWildcard,
+    int requestCode = 0,
+    int timeSlot = 0,
   }) => _exchange(
-    FelicaCommand.polling(systemCode: systemCode),
+    FelicaCommand.polling(
+      systemCode: systemCode,
+      requestCode: requestCode,
+      timeSlot: timeSlot,
+    ),
     'Polling',
     expectedCode: 0x01,
     decode: (resp) {
@@ -256,10 +264,11 @@ class FelicaProtocol {
     List<int>? expectedIdm,
     required T Function(FelicaResponse response) decode,
   }) async {
+    if (_terminalFailure case final error?) throw error;
     final request = List<int>.unmodifiable(frame);
     final idm = expectedIdm == null ? null : List<int>.of(expectedIdm);
     if (_attempts >= maxFrames || _responseBytes > maxResponseBytes) {
-      throw FelicaProtocolException(
+      throw _terminalFailure = FelicaProtocolException(
         stage,
         'FeliCa 交换预算已耗尽',
         reason: FelicaFailureReason.transport,
@@ -342,12 +351,17 @@ class FelicaProtocol {
         request: request,
         cause: error,
         stackTrace: stack,
+        transportFailure: TransportFailure(
+          kind: TransportFailureKind.malformedFrame,
+          message: error.message,
+        ),
       );
       throw failure;
     } on FelicaProtocolException catch (error) {
       failure = error;
       rethrow;
     } finally {
+      if (failure?.stopsSession == true) _terminalFailure = failure;
       _frames.add(
         FelicaFrameEvidence(
           stage: stage,

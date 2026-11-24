@@ -3,16 +3,22 @@ import '../../archive/domain/card_types.dart';
 
 const unrecognizedCardTypeLabel = '暂无可识别卡种';
 
-String transitTypeLabel(String? parserId) => cardTypeLabel(switch (parserId) {
-  CardParserIds.shanghaiTunion => CardTypes.shanghaiTransitUnion,
-  CardParserIds.harbinTunion => CardTypes.harbinTransitUnion,
-  CardParserIds.lingnanTong => CardTypes.lingnanTong,
-  CardParserIds.beijingBmac => CardTypes.beijingBmac,
-  CardParserIds.lingnanTunion => CardTypes.lingnanTunion,
-  CardParserIds.shenzhenTunion => CardTypes.shenzhenTunion,
-  CardParserIds.cityUnion => CardTypes.cityUnion,
-  _ => CardTypes.chinaTunion,
-});
+String transitTypeLabel(String? parserId) {
+  if (parserId == CardParserIds.tunionCash) return '交通联合电子现金';
+  if (parserId == CardParserIds.motBmac) return 'MOT.BMAC001';
+  return cardTypeLabel(switch (parserId) {
+    CardParserIds.shanghaiTunion => CardTypes.shanghaiTransitUnion,
+    CardParserIds.harbinTunion => CardTypes.harbinTransitUnion,
+    CardParserIds.lingnanTong => CardTypes.lingnanTong,
+    CardParserIds.beijingBmac => CardTypes.beijingBmac,
+    CardParserIds.lingnanTunion => CardTypes.lingnanTunion,
+    CardParserIds.shenzhenTunion => CardTypes.shenzhenTunion,
+    CardParserIds.cityUnion => CardTypes.cityUnion,
+    CardParserIds.localCard => CardTypes.localCard,
+    CardParserIds.tunion => CardTypes.chinaTunion,
+    _ => '',
+  });
+}
 
 String transitDisplayName({
   required String? parserId,

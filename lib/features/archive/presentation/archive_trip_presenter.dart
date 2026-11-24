@@ -126,7 +126,7 @@ ArchiveTripProjection _presentArchiveRecords(
             includeShanghaiOverdraft: includeShanghaiOverdraft,
             parserId: record.context.systemId,
             applicationId: record.context.applicationId,
-            cardType: cardType,
+            cardType: record.context.displayCardType ?? cardType,
             currencyCode: record.context.currencyCode,
           );
     final links = transactionProcesses[record];

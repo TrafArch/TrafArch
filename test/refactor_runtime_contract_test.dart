@@ -334,6 +334,27 @@ void main() {
     },
   );
 
+  test(
+    'physical release precedes the completion and archive callback',
+    () async {
+      final channel = _Sessions();
+      final scan = _scan(channel, _Coordinator());
+      addTearDown(scan.dispose);
+      final releasedAtPublication = <String>[];
+      scan.onCompleted = (_, id, _, isCurrent) async {
+        expect(isCurrent(), isTrue);
+        releasedAtPublication.addAll(channel.closed);
+      };
+      final pending = scan.scanOnce();
+      final id = channel.pending.keys.single;
+      channel.pending[id]!.complete(_tag(id));
+      await pending;
+      expect(releasedAtPublication, [id]);
+      await scan.stop();
+      expect(channel.closed, [id]);
+    },
+  );
+
   test('mismatched echoed session is rejected before parsing', () async {
     final channel = _Sessions();
     final coordinator = _Coordinator();

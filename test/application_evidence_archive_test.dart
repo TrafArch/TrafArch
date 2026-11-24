@@ -118,7 +118,7 @@ void main() {
     );
   });
 
-  testWidgets('卡片信息详情不显示逐应用探测快照', (tester) async {
+  testWidgets('卡片信息详情按捕获时的应用展示独立余额', (tester) async {
     final database = testDatabase();
     final repository = CardRepository(database);
     addTearDown(database.close);
@@ -151,7 +151,12 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('卡片信息'), findsOneWidget);
-    expect(find.textContaining('逐应用探测'), findsNothing);
+    await tester.scrollUntilVisible(
+      find.text('读取时的应用'),
+      240,
+      scrollable: find.byWidgetPredicate((w) => w is Scrollable && w.axisDirection == AxisDirection.down).first,
+    );
+    expect(find.textContaining('余额 9000 分'), findsOneWidget);
   });
 }
 

@@ -11,9 +11,10 @@ import 'package:transit_card_analyzer/protocols/transit/local/cards/shenzhentong
 import 'package:transit_card_analyzer/protocols/transit/local/local_card_models.dart';
 import 'package:transit_card_analyzer/protocols/transit/local/local_hex.dart';
 import 'package:transit_card_analyzer/protocols/transport/transport_failure.dart';
+import 'package:transit_card_analyzer/protocols/transit/multiapp/application_evidence.dart';
 
 void main() {
-  test('深圳 TU 身份门控要求已确认应用和精确数字前缀', () {
+  test('深圳 TU 展示识别要求已确认应用和精确数字前缀', () {
     for (final serial in ['03104870400000000001', '00310487040000000001']) {
       expect(
         Shenzhentong.matchesTuIdentity(confirmed: true, cardNumber: serial),
@@ -33,7 +34,7 @@ void main() {
   });
 
   for (final serial in ['03104870400000000001', '03100000000000000001']) {
-    test('TU 精确号段触发地方应用 serial=$serial', () async {
+    test('PAY.SZT 与地区无关，TU 目录只影响卡名 serial=$serial', () async {
       final link = _TuLink(serial: serial);
       final outcome = (await LocalCardReader(link.call).read())!;
       final isShenzhen = serial.startsWith('031048704');
@@ -43,10 +44,16 @@ void main() {
         isShenzhen ? CardParserIds.shenzhenTunion : CardParserIds.tunion,
       );
       expect(CardParserIds.isTUnionFamily(card.parserId), isTrue);
-      expect(link.sztSelects, isShenzhen ? 1 : 0);
-      expect(link.cuSelects, isShenzhen ? 0 : 2);
+      expect(link.sztSelects, 1);
+      expect(link.cuSelects, 4);
       expect(link.tuReads, 1);
       expect(card.info.balanceFen, 500);
+      final szt = outcome.applications.singleWhere(
+        (app) => app.appId == 'shenzhen',
+      );
+      expect(szt.confirmed, isTrue);
+      expect(szt.balanceFen, 12345);
+      expect(szt.recordCount, 2);
       if (isShenzhen) {
         final service = CardIdentificationService(KnowledgeBase.empty());
         final identified = service.identify(card)!;
@@ -65,7 +72,7 @@ void main() {
         expect(card.localCard!.trips, hasLength(2));
         expect(outcome.readResult.info.cardNumber, isNot('4045620583'));
         expect(outcome.readResult.trips, isEmpty);
-        expect(card.localCard!.extras.slots['szt.confirmed'], isTrue);
+        expect(szt.payload, same(card.localCard));
         expect(card.dualApplication, isFalse, reason: '该字段专指 TU+CU，不冒充 CU');
       }
     });
@@ -75,12 +82,21 @@ void main() {
     test('TU 余额拒绝仍触发 PAY.SZT，地方选择失败保留 TU failSelect=$failSelect', () async {
       final link = _TuLink(rejectTuBalance: true, failSztSelect: failSelect);
       final outcome = (await LocalCardReader(link.call).read())!;
-      expect(outcome.parsedCard.parserId, CardParserIds.shenzhenTunion);
+      expect(
+        outcome.parsedCard.parserId,
+        failSelect ? CardParserIds.tunion : CardParserIds.shenzhenTunion,
+      );
       expect(outcome.parsedCard.info.balanceFen, isNull);
+      expect(
+        outcome.applications.singleWhere((app) => app.appId == 'tu').state,
+        ApplicationProbeState.partial,
+      );
       expect(link.sztSelects, 1);
-      final local = outcome.parsedCard.localCard!;
-      expect(local.info.isSZT, !failSelect);
-      expect(local.extras.slots['szt.confirmed'], !failSelect);
+      final evidence = outcome.applications.singleWhere(
+        (a) => a.appId == 'shenzhen',
+      );
+      expect(evidence.confirmed, !failSelect);
+      expect(evidence.balanceFen, failSelect ? null : 12345);
     });
   }
 
@@ -88,7 +104,12 @@ void main() {
     test('双应用中断保留独立部分结果且不继续 APDU at=$failAt', () async {
       final link = _TuLink(failAt: failAt);
       final outcome = (await LocalCardReader(link.call).read())!;
-      expect(outcome.parsedCard.parserId, CardParserIds.shenzhenTunion);
+      expect(
+        outcome.parsedCard.parserId,
+        failAt == '805C000204'
+            ? CardParserIds.tunion
+            : CardParserIds.shenzhenTunion,
+      );
       expect(
         outcome.readResult.transportFailure!.kind,
         TransportFailureKind.tagLost,
@@ -96,7 +117,7 @@ void main() {
       expect(link.afterFailure, 0);
       expect(link.sztSelects, failAt == '805C000204' ? 0 : 1);
       expect(
-        outcome.parsedCard.localCard!.extras.slots['szt.probed'],
+        outcome.applications.singleWhere((a) => a.appId == 'shenzhen').probed,
         failAt != '805C000204',
       );
       if (failAt == '00B201C400') {
@@ -142,7 +163,7 @@ void main() {
     expect(trips[0].fileSelector, 0xC4);
     final selected = commands.indexOf('00A40400075041592E535A54');
     expect(selected, greaterThanOrEqualTo(0));
-    expect(commands.sublist(selected + 1), [
+    expect(commands.skip(selected + 1).take(5), [
       '00B0950020',
       '805C000204',
       '00B201C400',

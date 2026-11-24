@@ -1,4 +1,5 @@
 import '../../protocols/transit/card_parser.dart';
+import '../archive/domain/card_types.dart';
 import '../../protocols/transit/tunion/tunion_models.dart';
 import '../transit_analysis/cu_transaction_analysis.dart';
 
@@ -18,11 +19,15 @@ class ShanghaiMirroredRecords {
 
 ShanghaiMirroredRecords partitionShanghaiMirroredRecords({
   required String? parserId,
+  String? displayCardType,
   required Iterable<TUnionTransaction> tunionTransactions,
   required Iterable<CuTransactionView> cityUnionTransactions,
 }) {
   if (parserId != CardParserIds.shanghaiTunion &&
-      parserId != CardParserIds.harbinTunion) {
+      parserId != CardParserIds.harbinTunion &&
+      !(parserId == CardParserIds.tunion &&
+          (displayCardType == CardTypes.shanghaiTransitUnion ||
+              displayCardType == CardTypes.harbinTransitUnion))) {
     return ShanghaiMirroredRecords(
       independent: cityUnionTransactions,
       mirrored: const [],

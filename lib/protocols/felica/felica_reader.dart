@@ -3,6 +3,8 @@ library;
 import 'cards/card_adapter_registry.dart';
 import 'cards/felica_card_adapter.dart';
 import 'cards/felica_card_profiles.dart';
+import 'cards/octopus_adapter.dart';
+import '../octopus/octopus_balance_reader.dart';
 import 'models/felica_models.dart';
 import 'felica_failure_mapping.dart';
 import 'protocol/felica_frame_evidence.dart';
@@ -97,6 +99,23 @@ class FelicaReader {
       }
       onProgress?.call(35);
 
+      final knownSystems = [
+        for (final code in const [
+          FelicaKnownSystemCodes.suica,
+          FelicaKnownSystemCodes.octopus,
+          FelicaKnownSystemCodes.lite,
+        ])
+          if (systemCodes.contains(code)) code,
+      ];
+      if (systemCodes.toSet().length > 1 && knownSystems.isNotEmpty) {
+        return await _readSystems(
+          protocol,
+          knownSystems,
+          systemCodes,
+          statuses,
+        );
+      }
+
       var context = FelicaCardContext(
         idm: idmHex,
         idmBytes: polling.idm,
@@ -151,6 +170,87 @@ class FelicaReader {
         frames: protocol.frames,
       );
     }
+  }
+
+  Future<FelicaScanResult> _readSystems(
+    FelicaProtocol protocol,
+    List<int> knownSystems,
+    List<int> advertised,
+    List<FelicaReadStatus> discovery,
+  ) async {
+    final results = <int, FelicaScanResult>{};
+    // Preserve the existing Suica / Octopus / Lite preference for the top-level
+    // summary. Each adapter sees only what the current Polling selected.
+    FelicaScanResult? primary;
+    for (final code in knownSystems) {
+      final start = protocol.frames.length;
+      String? selectedIdm;
+      FelicaScanResult result;
+      try {
+        onStage?.call(
+          'FeliCa 系统 ${code.toRadixString(16).padLeft(4, '0').toUpperCase()}',
+        );
+        final octopus = code == FelicaKnownSystemCodes.octopus;
+        final polling = await protocol.polling(
+          systemCode: code,
+          requestCode: octopus ? OctopusBalanceReader.pollingFrame[4] : 0,
+          timeSlot: octopus ? OctopusBalanceReader.pollingFrame[5] : 0,
+        );
+        selectedIdm = polling.idmHex;
+        final context = FelicaCardContext(
+          idm: selectedIdm,
+          idmBytes: polling.idm,
+          systemCodes: [code],
+          protocol: protocol,
+          serviceProbes: {},
+        );
+        final adapter = await _registry.select(context);
+        result = octopus && adapter is OctopusAdapter
+            ? await adapter.read(context, readSelectedBalance: true)
+            : await adapter.read(context);
+      } on FelicaProtocolException catch (error) {
+        result = _failure(
+          error.readState,
+          error.stage,
+          error.message,
+          selectedIdm,
+          const [],
+          [code],
+          failure: error,
+        );
+      }
+      result = result.copyWith(
+        frames: List.unmodifiable(protocol.frames.skip(start)),
+      );
+      results[code] = result;
+      if (primary == null ||
+          (primary.cardType == FelicaCardProfiles.generic.cardType &&
+              result.cardType != FelicaCardProfiles.generic.cardType)) {
+        primary = result;
+      }
+      if (protocol.terminalFailure != null) break;
+    }
+    onProgress?.call(95);
+    return primary!.copyWith(
+      systemCodes: advertised,
+      systemResults: Map.unmodifiable(results),
+      frames: protocol.frames,
+      statuses: [
+        ...discovery,
+        ...primary.statuses,
+        for (final entry in results.entries)
+          if (!identical(entry.value, primary))
+            for (final status in entry.value.statuses)
+              FelicaReadStatus(
+                stage:
+                    '${entry.key.toRadixString(16).toUpperCase().padLeft(4, '0')} / ${status.stage}',
+                state: status.state,
+                message: status.message,
+                rawResponse: status.rawResponse,
+                transportFailure: status.transportFailure,
+              ),
+      ],
+    );
   }
 
   static FelicaScanResult _failure(
