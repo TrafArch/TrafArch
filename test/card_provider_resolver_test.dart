@@ -12,7 +12,10 @@ void main() {
     'format_version': 1,
     'chip_providers': [
       {'code': '0004', 'name': '恩智浦半导体（上海）', 'source_row': 4},
+      {'code': '000E', 'name': '三星电子', 'source_row': 6},
       {'code': '0081', 'name': '北京中电华大电子设计', 'source_row': 16},
+      {'code': 'FF0E', 'name': '上海华虹集成电路', 'source_row': 37},
+      {'code': 'FF10', 'name': '芯昇科技', 'source_row': 32},
     ],
     'ic_card_providers': [
       {'code': '8631', 'name': '深圳市澄天伟业', 'source_row': 38},
@@ -49,57 +52,81 @@ void main() {
     timestamp: DateTime(2026, 11, 22),
   );
 
-  test('Android MT history yields both names from the bundled registry', () async {
-    final bundled = CardProviderResolver(await CardProviderRegistryAsset.load(rootBundle));
-    // Published Changchun card prefix. The serial in the tail is synthetic.
-    const history = '4d 54 00 8c 00 30 86 65 12 34 56 78';
-    final result = bundled.resolve(tag(historicalBytes: history));
-    expect(result.chip.displayText, '北京清华同方微电子（008C）');
-    expect(result.icCard.displayText, '金邦达（8665）');
-    expect(bundled.resolve(tag(ats: history)).chip.code, '008C');
-  });
+  test(
+    'Android MT history yields both names from the bundled registry',
+    () async {
+      final bundled = CardProviderResolver(
+        await CardProviderRegistryAsset.load(rootBundle),
+      );
+      // Published Changchun card prefix. The serial in the tail is synthetic.
+      const history = '4d 54 00 8c 00 30 86 65 12 34 56 78';
+      final result = bundled.resolve(tag(historicalBytes: history));
+      expect(result.chip.displayText, '北京清华同方微电子（008C）');
+      expect(result.icCard.displayText, '金邦达（8665）');
+      expect(bundled.resolve(tag(ats: history)).chip.code, '008C');
+      expect(
+        bundled.resolve(tag(historicalBytes: '', ats: history)).icCard.code,
+        '8665',
+      );
+    },
+  );
 
   test('MT preserves each HEX code even when neither is registered', () {
-    final missing = resolver.resolve(tag(historicalBytes: '4D5400FE002086EE12345678'));
+    final missing = resolver.resolve(
+      tag(historicalBytes: '4D5400FE002086EE12345678'),
+    );
     expect(missing.chip.displayText, '未知（00FE）');
     expect(missing.icCard.displayText, '未知（86EE）');
-    final partial = resolver.resolve(tag(historicalBytes: '4D5400040000000012345678'));
+    final partial = resolver.resolve(
+      tag(historicalBytes: '4D5400040000000012345678'),
+    );
     expect(partial.chip.state, CardProviderFieldState.found);
     expect(partial.icCard.displayText, '未知（0000）');
   });
 
   test('PC/SC wrapped MT history uses the positions inside the history', () {
     // Beijing transport card envelope from pcsc-tools/smartcard_list.txt.
-    final result = resolver.resolve(tag(historicalBytes: '3B 8A 80 01 4D 54 00 05 00 20 86 64 00 01 D4'));
+    final result = resolver.resolve(
+      tag(historicalBytes: '3B 8A 80 01 4D 54 00 05 00 20 86 64 00 01 D4'),
+    );
     expect(result.chip.code, '0005');
     expect(result.icCard.code, '8664');
   });
 
-  test('unrelated, malformed and truncated histories cannot supply MT codes', () {
-    for (final value in [
-      '4D 54 43 4F 53 73 02 05 04', // MTCOS
-      '4D 54 00 81 00 30 86',
-      '4D 54 XX 00 81 00 30 86 60 00 00 00 00',
-      '80 4D 54 00 81 00 30 86 60 00 00 00 00',
-      '80 00 81 54 31 00 86 60',
-    ]) {
-      expect(resolver.resolve(tag(historicalBytes: value)).hasProviderCode, isFalse, reason: value);
-    }
-  });
+  test(
+    'unrelated, malformed and truncated histories cannot supply MT codes',
+    () {
+      for (final value in [
+        '4D 54 43 4F 53 73 02 05 04', // MTCOS
+        '4D 54 00 81 00 30 86',
+        '4D 54 XX 00 81 00 30 86 60 00 00 00 00',
+        '80 4D 54 00 81 00 30 86 60 00 00 00 00',
+        '80 00 81 54 31 00 86 60',
+        '3B 8A 80 01 4D 54 00 05 00 20 86 64 00 01 D5', // Incorrect TCK
+        '3B 8A 80 01 4D 54 00 05 00 20 86 64 00 01', // Missing TCK
+      ]) {
+        expect(
+          resolver.resolve(tag(historicalBytes: value)).hasProviderCode,
+          isFalse,
+          reason: value,
+        );
+      }
+    },
+  );
 
   test('resolves both providers from the known ATR layout', () {
-    final result = resolver.resolve(
-      tag(
-        historicalBytes: '3B 6D 00 00 00 81 54 31 00 86 60 11 08 16 00 00 00',
-      ),
-    );
-
-    expect(result.chip.state, CardProviderFieldState.found);
-    expect(result.chip.code, '0081');
-    expect(result.chip.displayText, '北京中电华大电子设计（0081）');
-    expect(result.icCard.state, CardProviderFieldState.found);
-    expect(result.icCard.code, '8660');
-    expect(result.icCard.displayText, '东信和平-EP（8660）');
+    for (final atr in [
+      '3B 6D 00 00 00 81 54 31 00 86 60 11 08 16 00 00 00',
+      '3B 8B 80 01 00 81 54 31 00 86 60 11 08 16 00 07',
+    ]) {
+      final result = resolver.resolve(tag(historicalBytes: atr));
+      expect(result.chip.state, CardProviderFieldState.found, reason: atr);
+      expect(result.chip.code, '0081');
+      expect(result.chip.displayText, '北京中电华大电子设计（0081）');
+      expect(result.icCard.state, CardProviderFieldState.found);
+      expect(result.icCard.code, '8660');
+      expect(result.icCard.displayText, '东信和平-EP（8660）');
+    }
   });
 
   test('resolves a historical block whose chip high byte was stripped', () {
@@ -109,6 +136,26 @@ void main() {
 
     expect(result.chip.code, '0081');
     expect(result.icCard.code, '8660');
+  });
+
+  test('a stripped chip code needs a unique high-byte match', () {
+    final extended = resolver.resolve(
+      tag(historicalBytes: '10 54 31 00 86 60'),
+    );
+    expect(extended.chip.displayText, '芯昇科技（FF10）');
+    final ambiguous = resolver.resolve(
+      tag(historicalBytes: '0E 54 31 00 86 60'),
+    );
+    expect(ambiguous.chip.displayText, '未提供');
+    expect(ambiguous.icCard.code, '8660');
+  });
+
+  test('a full legacy provider block preserves unregistered codes', () {
+    final result = resolver.resolve(
+      tag(historicalBytes: '00 FE 54 31 00 86 EE 11 08 16'),
+    );
+    expect(result.chip.displayText, '未知（00FE）');
+    expect(result.icCard.displayText, '未知（86EE）');
   });
 
   test('keeps duplicate registry codes explicitly ambiguous', () {

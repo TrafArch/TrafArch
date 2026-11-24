@@ -58,6 +58,11 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp>
   bool _switching = false;
   String? _switchError;
   bool _startupUpdateShown = false;
+  bool _disableAnimations = WidgetsBinding
+      .instance
+      .platformDispatcher
+      .accessibilityFeatures
+      .disableAnimations;
 
   @override
   void initState() {
@@ -81,6 +86,18 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp>
     _app.dispose();
     _monetEnabled.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAccessibilityFeatures() {
+    final disabled = WidgetsBinding
+        .instance
+        .platformDispatcher
+        .accessibilityFeatures
+        .disableAnimations;
+    if (_disableAnimations != disabled && mounted) {
+      setState(() => _disableAnimations = disabled);
+    }
   }
 
   @override
@@ -204,6 +221,10 @@ class _TransitCardAnalyzerAppState extends State<TransitCardAnalyzerApp>
               theme: AppTheme.light(monet ? lightDynamic : null),
               darkTheme: AppTheme.dark(monet ? darkDynamic : null),
               themeMode: ThemeMode.system,
+              themeAnimationDuration: _disableAnimations
+                  ? Duration.zero
+                  : const Duration(milliseconds: 200),
+              themeAnimationCurve: Curves.easeInOutCubic,
               builder: (context, child) => FoldableDisplayScope(
                 child: AnnotatedRegion<SystemUiOverlayStyle>(
                   value: AppTheme.systemUiOverlayStyle(

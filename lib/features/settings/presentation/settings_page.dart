@@ -185,14 +185,12 @@ class _SettingsPageState extends State<SettingsPage> {
                     Card(
                       child: SwitchListTile(
                         secondary: const Icon(Icons.dashboard_outlined),
-                        title: const Text('启用 2.x 主界面'),
+                        title: const Text('返回 2.x 主界面'),
                         subtitle: Text(
                           beta.switchError ??
                               (beta.switching
-                                  ? '正在切换到 2.x 主界面…'
-                                  : beta.live
-                                  ? '当前使用 1.x 备用界面，重启后会恢复 2.x。'
-                                  : '打开 2.x 界面的内置样例。'),
+                                  ? '正在返回到 2.x 主界面…'
+                                  : '当前使用 1.x 备用界面；开启后返回 2.x，重启应用也会自动恢复 2.x。'),
                         ),
                         value: beta.enabled,
                         onChanged: beta.switching ? null : beta.onChanged,

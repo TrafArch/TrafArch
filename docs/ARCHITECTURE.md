@@ -11,10 +11,12 @@
 专家页的“芯片提供机构”和“IC卡提供机构”由 `assets/data/card_provider_registry.json`
 提供名称。该 JSON 保留源工作簿 SHA256、149 条来源行和重复备案码；运行时由
 `KnowledgeBase` 与参考数据同时加载，更新 TU/CU 的覆盖资源缺失时会回退内置 JSON。
-`ResetProviderParser` 只从已知 ATR／复位数据布局提取两个 4 位 HEX 备案码，
-`CardProviderResolver` 再分别按芯片与 IC 卡号段查表。未知、无备案码及重复码
-保持区分，不在原始字节中任意搜索号码，也不按 BCD 解释。1.x 专家“信息获取”
-以字段行展示；2.x 使用同一套专家展开卡、字段行、间距和主题颜色展示。
+`ResetProviderParser` 按已知复位布局读取两字节 HEX 备案码。交通联合部分实卡
+的 ATS 历史字节以 `4D 54` 开头，第 3–4 字节是芯片备案码，第 7–8 字节是 IC
+卡备案码。解析器兼容 PC/SC 的 `3B 8n 80 01` 封装，并校验历史字节长度和 TCK。
+`CardProviderResolver` 分别查表，明确提取但未收录的备案码显示为「未知（备案码）」，
+数据缺失或布局未识别时显示「未提供」。重复备案码列出所有匹配机构。1.x 专家
+「信息获取」使用字段行，2.x 使用同一套专家展开卡、字段行、间距和主题颜色。
 
 两套 UI 共用 `QrReadContent`、`QrAcquisition` 与 `QrController`。`AppDependencies.runQrAcquisition` 先等待普通及八达通 NFC 会话关闭，并独占相机／相册获取；离开路由或内存恢复使在途结果失效。2.x 知识库以当前 `KnowledgeBase.packagePaths` 启动后台只读索引；已校验包的实例变更后废弃旧索引，独立预览加载器不参与实卡路径。2.x 的主要页、档案详情、扫码和设置映射为现有恢复路由；恢复只展示冻结读卡证据，不重查参考库或自动归档。诊断由既有 `DiagnosticsController` 写本机文件，反馈只打开用户主动选择的外部链接。
 

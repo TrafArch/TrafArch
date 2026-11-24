@@ -168,7 +168,7 @@ class _JourneyTicket extends StatelessWidget {
         amount != null ||
         journey.fareAdjustmentAmountText != null ||
         (seat != null && journey.state != JourneyState.inProgress);
-    final showBalance = balance != null || amount != null;
+    final showBalance = !bus && (balance != null || amount != null);
     final radius = BorderRadius.circular(22);
     return Card(
       margin: const EdgeInsets.only(bottom: 14),
@@ -194,9 +194,11 @@ class _JourneyTicket extends StatelessWidget {
                     isCrossCity: journey.isCrossCity,
                   ),
                   const SizedBox(width: 8),
-                  Expanded(
+                  Flexible(
                     child: Text(
                       '$city$mode',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w700,
                         color: scheme.onSurfaceVariant,
@@ -204,8 +206,29 @@ class _JourneyTicket extends StatelessWidget {
                     ),
                   ),
                   if (remote) ...[
-                    _TagBadge(text: '异地用卡', tertiary: true, scheme: scheme),
                     const SizedBox(width: 4),
+                    _TagBadge(text: '异地用卡', tertiary: true, scheme: scheme),
+                  ],
+                  if (bus && amount != null) ...[
+                    const Spacer(),
+                    Flexible(
+                      fit: FlexFit.loose,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          amount,
+                          maxLines: 1,
+                          textAlign: TextAlign.end,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: journey.events.first.payload.isConsume
+                                ? scheme.error
+                                : scheme.primary,
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                   IconButton(
                     onPressed: onTap,
@@ -251,21 +274,38 @@ class _JourneyTicket extends StatelessWidget {
                   ],
                   if (first.endpoint.timeText case final time?) ...[
                     const SizedBox(height: 6),
-                    Text(time, style: theme.textTheme.bodyMedium),
+                    Text(
+                      _displayJourneyTime(time),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontSize: 14,
+                        height: 20 / 14,
+                      ),
+                    ),
                   ],
                 ],
               ],
-              const SizedBox(height: 20),
-              SizedBox(
-                height: 1,
-                width: double.infinity,
-                child: CustomPaint(
-                  painter: _TicketDivider(scheme.outlineVariant),
+              if (!(bus && amount != null)) const SizedBox(height: 20),
+              if (!(bus && amount != null))
+                SizedBox(
+                  height: 1,
+                  width: double.infinity,
+                  child: CustomPaint(
+                    painter: _TicketDivider(scheme.outlineVariant),
+                  ),
                 ),
-              ),
               const SizedBox(height: 14),
               LayoutBuilder(
                 builder: (context, constraints) {
+                  if (bus) {
+                    if (seat != null &&
+                        journey.state != JourneyState.inProgress) {
+                      return Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(seat, style: theme.textTheme.bodySmall),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  }
                   final footer = Row(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -316,7 +356,8 @@ class _JourneyTicket extends StatelessWidget {
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(dateLabel, style: theme.textTheme.bodySmall),
+                        if (!bus)
+                          Text(dateLabel, style: theme.textTheme.bodySmall),
                         if (hasAmountDetails || showBalance) ...[
                           const SizedBox(height: 8),
                           Align(
@@ -330,8 +371,10 @@ class _JourneyTicket extends StatelessWidget {
                   return Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(dateLabel, style: theme.textTheme.bodySmall),
-                      const SizedBox(width: 12),
+                      if (!bus) ...[
+                        Text(dateLabel, style: theme.textTheme.bodySmall),
+                        const SizedBox(width: 12),
+                      ],
                       Expanded(
                         child: Align(
                           alignment: Alignment.centerRight,
@@ -408,11 +451,20 @@ class _JourneyEndpoints extends StatelessWidget {
         gap(8),
         TableRow(
           children: [
-            label(_journeyTimeText(start), theme.textTheme.titleMedium),
+            label(
+              _journeyTimeText(start),
+              theme.textTheme.bodyMedium?.copyWith(
+                fontSize: 14,
+                height: 20 / 14,
+              ),
+            ),
             _JourneyDuration(duration: duration),
             label(
               _journeyTimeText(end, startDate: start.time),
-              theme.textTheme.titleMedium,
+              theme.textTheme.bodyMedium?.copyWith(
+                fontSize: 14,
+                height: 20 / 14,
+              ),
               right: true,
             ),
           ],
@@ -458,6 +510,11 @@ class _JourneyStationLabel extends StatelessWidget {
   }
 }
 
+String _displayJourneyTime(String value) => value.replaceFirstMapped(
+  RegExp(r'(\d{1,2}:\d{2}):\d{2}(?:\.\d+)?'),
+  (match) => match[1]!,
+);
+
 String _journeyTimeText(JourneyEndpoint endpoint, {DateTime? startDate}) {
   final time = endpoint.time;
   final dayOffset = startDate == null || time == null
@@ -467,7 +524,7 @@ String _journeyTimeText(JourneyEndpoint endpoint, {DateTime? startDate}) {
               DateTime.utc(startDate.year, startDate.month, startDate.day),
             )
             .inDays;
-  final text = endpoint.timeText ?? '';
+  final text = _displayJourneyTime(endpoint.timeText ?? '');
   return '$text${dayOffset > 0 ? '  +$dayOffset天' : ''}';
 }
 
@@ -508,9 +565,12 @@ class _JourneyStop extends StatelessWidget {
         if (endpoint.timeText case final text?) ...[
           const SizedBox(height: 8),
           Text(
-            text,
+            _displayJourneyTime(text),
             textAlign: right ? TextAlign.end : TextAlign.start,
-            style: theme.textTheme.titleMedium,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontSize: 14,
+              height: 20 / 14,
+            ),
           ),
         ],
       ],

@@ -29,6 +29,12 @@ abstract class LiveRegionLines {
     String cityKey,
     String system,
   );
+
+  Future<List<StationCodeEntry>> searchEntries(
+    String cityKey,
+    String system,
+    String query,
+  );
 }
 
 class LiveRegionDataset extends StationDataset {
@@ -70,6 +76,14 @@ class LiveRegionDataset extends StationDataset {
       return Future<List<RegionLineCoverage>>.value(const []);
     }
     return _linesFuture ??= _db.linesForRegion(city, _overview.system);
+  }
+
+  Future<List<StationCodeEntry>> searchEntries(String query) {
+    final city = cityCode;
+    if (city == null || city.isEmpty) {
+      return Future<List<StationCodeEntry>>.value(const []);
+    }
+    return _db.searchEntries(city, _overview.system, query);
   }
 
   @override

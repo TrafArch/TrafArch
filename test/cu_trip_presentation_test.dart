@@ -220,7 +220,7 @@ void main() {
       expect(find.byType(TripEntryCard), findsNWidgets(3));
       expect(find.text('上海轨道交通'), findsOneWidget);
       expect(find.text('上海公共汽电车'), findsOneWidget);
-      expect(find.text('2026年11月7日'), findsNWidgets(2));
+      expect(find.text('2026年11月7日'), findsOneWidget);
       expect(find.text('异地用卡'), findsNWidgets(3));
       expect(find.text('历史行程 2'), findsOneWidget);
       expect(find.text('其他记录 1'), findsOneWidget);
@@ -241,12 +241,7 @@ void main() {
             matching: find.byType(Scrollable),
           )
           .first;
-      for (final label in [
-        '终端原始编码',
-        '金额原始字段',
-        '金额四字节原始值',
-        '原始数据（HEX）',
-      ]) {
+      for (final label in ['终端原始编码', '金额原始字段', '金额四字节原始值', '原始数据（HEX）']) {
         await tester.scrollUntilVisible(
           find.text(label),
           100,

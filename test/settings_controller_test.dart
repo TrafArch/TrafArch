@@ -1,8 +1,30 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/features/settings/application/settings_controller.dart';
 import 'package:transit_card_analyzer/platform/storage/app_logger.dart';
 import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
 import 'package:transit_card_analyzer/shared/domain/archive_conflict_policy.dart';
+
+class _BlockingSettingsStore implements SettingsStore {
+  final values = <String, String>{};
+  final writes = <(String, String)>[];
+  final firstWriteStarted = Completer<void>();
+  final releaseFirstWrite = Completer<void>();
+
+  @override
+  Future<String?> read(String key) async => values[key];
+
+  @override
+  Future<void> write(String key, String value) async {
+    writes.add((key, value));
+    if (writes.length == 1) {
+      firstWriteStarted.complete();
+      await releaseFirstWrite.future;
+    }
+    values[key] = value;
+  }
+}
 
 void main() {
   group('SettingsController 已存在记录策略', () {
@@ -103,6 +125,44 @@ void main() {
       await reloaded.initialize();
       expect(reloaded.includeShanghaiOverdraft, isFalse);
     });
+  });
+
+  test('快速反向立即更新并跳过队列中已过期的写入', () async {
+    final store = _BlockingSettingsStore();
+    final controller = SettingsController(
+      store,
+      AppLogger(store: MemoryLogStore()),
+    );
+    addTearDown(controller.dispose);
+    await controller.initialize();
+
+    final blockingWrite = controller.setAutoSaveEnabled(true);
+    await store.firstWriteStarted.future;
+    final notificationsBeforeToggle = () {
+      var notifications = 0;
+      void listener() => notifications++;
+      controller.addListener(listener);
+      return (
+        read: () => notifications,
+        dispose: () => controller.removeListener(listener),
+      );
+    }();
+    final oldIntent = controller.setMonetEnabled(false);
+    final latestIntent = controller.setMonetEnabled(true);
+
+    expect(controller.monetEnabled, isTrue);
+    expect(notificationsBeforeToggle.read(), 2);
+    expect(store.writes, [(SettingsKeys.autoSaveEnabled, 'true')]);
+
+    store.releaseFirstWrite.complete();
+    await Future.wait([blockingWrite, oldIntent, latestIntent]);
+    expect(store.values[SettingsKeys.monetEnabled], 'true');
+    expect(
+      store.writes.where((write) => write.$1 == SettingsKeys.monetEnabled),
+      [(SettingsKeys.monetEnabled, 'true')],
+    );
+    expect(notificationsBeforeToggle.read(), 2);
+    notificationsBeforeToggle.dispose();
   });
 
   group('SettingsController 莫奈取色', () {

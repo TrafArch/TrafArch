@@ -9,10 +9,18 @@ class FloatingNavBar extends StatelessWidget {
     super.key,
     required this.index,
     required this.onSelect,
+    this.hapticEnabled,
   });
 
   final int index;
   final ValueChanged<int> onSelect;
+
+  /// 点击时读取"是否允许触感反馈"的回调；为空时保持旧行为（始终振动）。
+  ///
+  /// 用回调而不是布尔值，是为了在点击那一刻才读取设置：设置页改动后无需
+  /// 重建壳页，底栏也不会拿着构建时的旧值。1.x 设置页没有震动开关，
+  /// 偏好由 2.x 设置页写入并持久化，这里只负责尊重它。
+  final bool Function()? hapticEnabled;
 
   static const List<({IconData icon, String label})> _tabs = [
     (icon: Icons.home_outlined, label: '首页'),
@@ -70,7 +78,9 @@ class FloatingNavBar extends StatelessWidget {
                   progress: progress[i],
                   compact: compact,
                   onTap: () {
-                    if (i != index) HapticFeedback.selectionClick();
+                    if (i != index && (hapticEnabled?.call() ?? true)) {
+                      HapticFeedback.selectionClick();
+                    }
                     onSelect(i);
                   },
                 );

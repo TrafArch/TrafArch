@@ -18,6 +18,7 @@ Future<void> mountBar(
   bool reduceMotion = false,
   double width = UiConstants.floatingNavBarWidth,
   double textScale = 1,
+  bool Function()? hapticEnabled,
   ValueChanged<int>? onSelect,
 }) async {
   var index = 0;
@@ -35,6 +36,7 @@ Future<void> mountBar(
                 width: width,
                 child: FloatingNavBar(
                   index: index,
+                  hapticEnabled: hapticEnabled ?? () => true,
                   onSelect: (i) {
                     onSelect?.call(i);
                     setState(() => index = i);
@@ -47,6 +49,27 @@ Future<void> mountBar(
       ),
     ),
   );
+}
+
+/// 拦截系统平台通道，收集触感反馈调用。
+List<Object?> interceptHaptics(WidgetTester tester) {
+  final haptics = <Object?>[];
+  tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+    SystemChannels.platform,
+    (call) async {
+      if (call.method == 'HapticFeedback.vibrate') {
+        haptics.add(call.arguments);
+      }
+      return null;
+    },
+  );
+  addTearDown(
+    () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      null,
+    ),
+  );
+  return haptics;
 }
 
 Finder itemAncestor(int index, Type type) => find
@@ -268,5 +291,51 @@ void main() {
     expect(calls, 3);
     expect(haptics, 1);
     semantics.dispose();
+  });
+
+  testWidgets('震动偏好关闭时切换标签不振动，但仍正常回调', (tester) async {
+    final haptics = interceptHaptics(tester);
+    var calls = 0;
+    await mountBar(
+      tester,
+      hapticEnabled: () => false,
+      onSelect: (_) => calls++,
+    );
+
+    await tester.tap(find.byIcon(icons[1]));
+    await tester.pumpAndSettle();
+    expect(calls, 1);
+    expect(haptics, isEmpty, reason: '关闭震动后底栏切换不得振动');
+
+    await tester.tap(find.byIcon(icons[2]));
+    await tester.pumpAndSettle();
+    expect(calls, 2);
+    expect(haptics, isEmpty);
+
+    await tester.tap(find.byIcon(icons[1]));
+    await tester.pumpAndSettle();
+    expect(calls, 3);
+    expect(haptics, isEmpty);
+  });
+
+  testWidgets('每次点击读取最新震动偏好，不缓存构建时的取值', (tester) async {
+    final haptics = interceptHaptics(tester);
+    var enabled = false;
+    await mountBar(tester, hapticEnabled: () => enabled);
+
+    await tester.tap(find.byIcon(icons[1]));
+    await tester.pumpAndSettle();
+    expect(haptics, isEmpty);
+
+    // 设置页改了偏好但底栏没有重建：点击时仍应读到新值。
+    enabled = true;
+    await tester.tap(find.byIcon(icons[2]));
+    await tester.pumpAndSettle();
+    expect(haptics, ['HapticFeedbackType.selectionClick']);
+
+    enabled = false;
+    await tester.tap(find.byIcon(icons[3]));
+    await tester.pumpAndSettle();
+    expect(haptics, hasLength(1), reason: '关闭后再次静默');
   });
 }

@@ -8,6 +8,7 @@ import 'package:transit_card_analyzer/features/trips/journey_transport_icon.dart
 import 'package:transit_card_analyzer/gallery/gallery_app.dart';
 import 'package:transit_card_analyzer/gallery/gallery_controller.dart';
 import 'package:transit_card_analyzer/gallery/gallery_data.dart';
+import 'package:transit_card_analyzer/gallery/gallery_design.dart';
 import 'package:transit_card_analyzer/gallery/gallery_theme.dart';
 
 import 'support/gallery_scroll.dart';
@@ -36,7 +37,7 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('trip reference typography keeps arrival regular', (
+  testWidgets('trip reference typography bolds stations and trims the clock', (
     tester,
   ) async {
     await mount(tester);
@@ -57,14 +58,14 @@ void main() {
     );
     expect(
       tester.widget<Text>(find.text('徐家汇').first).style!.fontWeight,
-      FontWeight.w400,
+      FontWeight.w600,
     );
     for (final (value, size, lineHeight, weight) in [
-      ('今天', 26.0, 32.0, FontWeight.w600),
-      ('08:07', 16.0, 22.0, FontWeight.w400),
-      ('08:42', 16.0, 22.0, FontWeight.w400),
-      ('未记录', 16.0, 22.0, FontWeight.w400),
-      ('徐家汇', 18.0, 26.0, FontWeight.w400),
+      ('今天', 18.0, 26.0, FontWeight.w600),
+      ('08:07', 14.0, 20.0, FontWeight.w400),
+      ('08:42', 14.0, 20.0, FontWeight.w400),
+      ('未记录', 14.0, 20.0, FontWeight.w400),
+      ('徐家汇', 18.0, 26.0, FontWeight.w600),
       ('轨道交通', 16.0, 22.0, FontWeight.w400),
       ('上海', 14.0, 20.0, FontWeight.w400),
       ('−¥4.00', 18.0, 24.0, FontWeight.w400),
@@ -83,18 +84,71 @@ void main() {
     await tester.tap(find.text('陆家嘴'));
     await tester.pumpAndSettle();
     for (final text in tester.widgetList<Text>(find.text('08:42'))) {
-      expect(text.style!.fontSize, 16);
+      expect(text.style!.fontSize, 14);
       expect(text.style!.fontWeight, FontWeight.w400);
     }
     controller.back();
     await tester.pumpAndSettle();
     controller.openCard(controller.current);
     await tester.pumpAndSettle();
-    expect(tester.widget<Text>(find.text('今天')).style!.fontSize, 26);
+    expect(tester.widget<Text>(find.text('今天')).style!.fontSize, 18);
     expect(
       tester.widget<Text>(find.text('08:42')).style!.fontWeight,
       FontWeight.w400,
     );
+  });
+
+  testWidgets('date group headings track the section role and large fonts', (
+    tester,
+  ) async {
+    await mount(tester);
+    final heading = find.byKey(const ValueKey('trip-date-今天'));
+    expect(heading, findsOneWidget);
+    final label = find.descendant(of: heading, matching: find.text('今天'));
+    final style = tester.widget<Text>(label).style!;
+    expect(style.fontSize, GalleryTypography.section.fontSize);
+    expect(style.height, 26 / 18);
+    expect(style.fontWeight, FontWeight.w600);
+    for (final scale in [1.5, 2.0]) {
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: '$scale');
+      final box = tester.getRect(heading);
+      final text = tester.getRect(label);
+      // 标题在自身留白内完整绘制，未被裁切。
+      expect(box.contains(text.topLeft), isTrue, reason: '$scale');
+      expect(
+        box.contains(text.bottomRight - const Offset(.1, .1)),
+        isTrue,
+        reason: '$scale',
+      );
+      expect(text.height, greaterThanOrEqualTo(18 * scale));
+    }
+    tester.platformDispatcher.clearTextScaleFactorTestValue();
+    controller.openCard(controller.current);
+    await tester.pumpAndSettle();
+    for (final text in tester.widgetList<Text>(find.text('今天'))) {
+      expect(text.style!.fontSize, GalleryJourneyTypography.date.fontSize);
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('trip rows drop seconds from recorded clock times', (
+    tester,
+  ) async {
+    final sample = {
+      ...controller.trips.first,
+      'entryTime': '08:07:45',
+      'time': '08:42:10',
+    };
+    controller.trips
+      ..clear()
+      ..add(sample);
+    await mount(tester);
+    expect(find.text('08:07'), findsWidgets);
+    expect(find.text('08:42'), findsWidgets);
+    expect(find.text('08:07:45'), findsNothing);
+    expect(find.text('08:42:10'), findsNothing);
   });
 
   testWidgets('logo follows spending city and preserves the existing badge', (
@@ -203,13 +257,16 @@ void main() {
       findsNothing,
     );
     for (final value in ['07:52', '49 路', '汉口路江西中路']) {
-      expect(find.descendant(of: row, matching: find.text(value)), findsOneWidget);
+      expect(
+        find.descendant(of: row, matching: find.text(value)),
+        findsOneWidget,
+      );
     }
     final time = tester.widget<Text>(
       find.descendant(of: row, matching: find.text('07:52')),
     );
-    // 单向公交仅记录上车，时间与常规时间同为 16dp 且不加粗。
-    expect(time.style!.fontSize, 16);
+    // 单向公交仅记录上车，时间与常规时间同为 14dp 且不加粗。
+    expect(time.style!.fontSize, 14);
     expect(time.style!.fontWeight, FontWeight.w400);
     expect(find.text('公交'), findsWidgets);
     expect(find.text('上海'), findsWidgets);

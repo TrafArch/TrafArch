@@ -10,6 +10,8 @@ import 'package:transit_card_analyzer/gallery/gallery_data.dart';
 import 'package:transit_card_analyzer/gallery/gallery_knowledge_index.dart';
 import 'package:transit_card_analyzer/gallery/gallery_theme.dart';
 
+import 'support/gallery_scroll.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late GalleryKnowledgeIndex index;
@@ -155,9 +157,30 @@ void main() {
       expect(loads, 1);
       await tester.tap(find.widgetWithText(ListTile, '290000100018').first);
       await tester.pumpAndSettle();
-      expect(controller.page, GalleryPage.knowledgeStation);
+      // US-008：编码结果并入二级城市页，不再有站点详情页（spec §2.1/§12）。
+      expect(controller.page, GalleryPage.knowledgeCity);
+      expect(controller.knowledgeCityLine, '10号线');
+      expect(controller.knowledgeCityStation, '航中路');
+      expect(controller.knowledgeCityCode, '290000100018');
+      expect(find.text('匹配编码 290000100018'), findsOneWidget);
       expect(find.text('航中路'), findsOneWidget);
-      expect(find.text('匹配编码'), findsOneWidget);
+      final city = controller.selectedKnowledgeCity!;
+      final lineIndex = city.lines.indexWhere(
+        (line) => line.name == controller.knowledgeCityLine,
+      );
+      final stationIndex = city.lines[lineIndex].stations.indexWhere(
+        (station) => station.name == '航中路',
+      );
+      expect(stationIndex, greaterThanOrEqualTo(0));
+      final row = find.byKey(
+        ValueKey('knowledge-city-station-${city.system}:$lineIndex:$stationIndex'),
+      );
+      expect(row, findsOneWidget);
+      final tokens = Theme.of(tester.element(row)).extension<GalleryTokens>()!;
+      expect(
+        (tester.widget<Container>(row).decoration! as BoxDecoration).color,
+        tokens.tone,
+      );
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
       expect(controller.page, GalleryPage.knowledgeSearch);
@@ -174,7 +197,7 @@ void main() {
   );
 
   testWidgets(
-    'city and line detail routes preserve the search scroll when popping',
+    'city and line results keep the search query and scroll when popping',
     (tester) async {
       final controller = await openKnowledge(tester, () async => index);
       await tester.tap(entry);
@@ -185,14 +208,12 @@ void main() {
       await tester.tap(find.widgetWithText(ListTile, '上海').first);
       await tester.pumpAndSettle();
       expect(controller.page, GalleryPage.knowledgeCity);
-      await tester.tap(find.byType(ListTile).first);
-      await tester.pumpAndSettle();
-      expect(controller.page, GalleryPage.knowledgeLine);
+      expect(controller.selectedKnowledgeCity?.name, '上海');
+      expect(controller.knowledgeCityLine, isNull);
+      expect(find.text('城市编码'), findsOneWidget);
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
-      expect(controller.page, GalleryPage.knowledgeCity);
-      await tester.binding.handlePopRoute();
-      await tester.pumpAndSettle();
+      expect(controller.page, GalleryPage.knowledgeSearch);
       await tester.enterText(input, '号线');
       await tester.pump(const Duration(milliseconds: 280));
       await tester.pumpAndSettle();
@@ -204,11 +225,17 @@ void main() {
       final visible = find
           .descendant(of: results, matching: find.byType(ListTile))
           .hitTestable();
+      // 线路结果定位到城市详情页，并预先展开目标线路（US-008）。
+      final lineResult = tester.widget<ListTile>(visible.first);
+      final lineTitle = (lineResult.title! as Text).data!;
       await tester.tap(visible.first);
       await tester.pumpAndSettle();
-      expect(controller.page, GalleryPage.knowledgeLine);
+      expect(controller.page, GalleryPage.knowledgeCity);
+      expect(controller.knowledgeCityLine, lineTitle);
+      expect(find.text(lineTitle), findsWidgets);
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
+      expect(controller.page, GalleryPage.knowledgeSearch);
       expect(scroll.offset, closeTo(saved, .1));
       expect(tester.widget<TextField>(input).controller!.text, '号线');
     },
@@ -233,6 +260,80 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('没有找到相关内容'), findsOneWidget);
       expect(attempts, 2);
+    },
+  );
+
+  testWidgets(
+    'declared line counts agree across the card, city page and both entries',
+    (tester) async {
+      final controller = await openKnowledge(tester, () async => index);
+      final list = find.byKey(
+        PageStorageKey('gallery-${controller.generation}-knowledge'),
+      );
+      // TU 上海的样例快照：声明 25 条线路，浏览列表有 26 条（含未标注线路）。
+      final cityLabel = find.text('上海');
+      await tester.scrollUntilVisible(
+        cityLabel,
+        300,
+        scrollable: galleryVerticalScroll(within: list),
+      );
+      await tester.ensureVisible(cityLabel);
+      await tester.pumpAndSettle();
+      final card = find
+          .ancestor(of: cityLabel, matching: find.byType(InkWell))
+          .first;
+      expect(
+        find.descendant(of: card, matching: find.textContaining('收录 25 条线路')),
+        findsOneWidget,
+      );
+
+      await tester.tap(cityLabel);
+      await tester.pumpAndSettle();
+      expect(controller.page, GalleryPage.knowledgeCity);
+      final fromRegion = controller.selectedKnowledgeCity!;
+      expect(fromRegion.name, '上海');
+      expect(fromRegion.lineCount, 25);
+      expect(fromRegion.lines, hasLength(26));
+      expect(find.text('25'), findsOneWidget);
+      expect(find.text('收录 25 条线路'), findsOneWidget);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      await tester.tap(entry);
+      await tester.pumpAndSettle();
+      await tester.enterText(input, '上海');
+      await tester.pump(const Duration(milliseconds: 280));
+      await tester.pumpAndSettle();
+      // 搜索结果摘要也走声明值（两个体系的上海快照都是 25）。
+      expect(find.textContaining('25 条线路 ·'), findsWidgets);
+      await tester.tap(find.widgetWithText(ListTile, '上海').first);
+      await tester.pumpAndSettle();
+      expect(controller.page, GalleryPage.knowledgeCity);
+      final fromCityView = controller.selectedKnowledgeCity!;
+      expect(fromCityView.system, 'TU');
+      expect(fromCityView.lineCount, 25);
+      // 搜索索引来自发布包全量线路（26 条，含「未标注线路」），与声明值
+      // 不同，恰好说明两个入口都按统一口径取声明值。
+      expect(fromCityView.lines, hasLength(26));
+      expect(find.text('25'), findsOneWidget);
+      expect(find.text('收录 25 条线路'), findsOneWidget);
+
+      final city = index.cities.firstWhere(
+        (city) => city.system == 'TU' && city.name == '上海',
+      );
+      expect(city.lines, hasLength(26));
+      expect(GalleryKnowledgeCityView.fromCity(city).lineCount, 25);
+      final root = jsonDecode(
+        File('assets/gallery/fixtures.json').readAsStringSync(),
+      ) as GalleryRecord;
+      final regions =
+          (((root['knowledge'] as Map)['systems'] as Map)['tu']
+                  as Map)['regions']
+              as List;
+      final region = regions.cast<GalleryRecord>().firstWhere(
+        (region) => region['name'] == '上海',
+      );
+      expect(GalleryKnowledgeCityView.fromRegion('TU', region).lineCount, 25);
     },
   );
 }

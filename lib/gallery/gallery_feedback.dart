@@ -120,6 +120,7 @@ class _GalleryFeedbackHostState extends State<GalleryFeedbackHost>
                 : 2500,
             textLength * 100,
           );
+    // 展示时长按文案长度计算，属消息调度；只有进入/退出动效取 Token。
     _timer = Timer(
       Duration(milliseconds: duration) +
           (_reduceMotion ? Duration.zero : GalleryMotion.feedbackIn),

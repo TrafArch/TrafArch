@@ -216,8 +216,8 @@ class _FaceCropRegionState extends State<_FaceCropRegion> {
         ),
         const SizedBox(height: 10),
         AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
+          duration: _GalleryMotion.highlight,
+          curve: _GalleryMotion.decelerate,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(widget.radius),
             border: _active ? Border.all(color: t.onTone, width: 2) : null,
@@ -536,6 +536,13 @@ extension _GalleryFaceCropper on _GalleryViewState {
         if (session.seed != null) card.monetSeed = session.seed;
         c.faceCrop = null;
       }, '保存卡面图片');
+      unawaited(
+        _preferences.saveFaceImage(card).then((saved) {
+          if (!saved && mounted) {
+            _toast(_preferences.faceError ?? '卡面图片未能保存到本机');
+          }
+        }),
+      );
     }
     c.back();
   }
@@ -665,7 +672,11 @@ extension _GalleryFaceCropper on _GalleryViewState {
                           children: [
                             _text(
                               card.name,
+                              // 与首页 face-title 一致（spec 2.x 卡包卡名对齐）：
+                              // 20sp / 26 行高，w600 与颜色逻辑沿用 card 角色。
                               role: GalleryTypography.card,
+                              size: 20,
+                              height: 26 / 20,
                               color: _walletForeground(card),
                             ),
                             _gap(4),

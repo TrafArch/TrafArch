@@ -130,8 +130,8 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('nav-cards')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 60));
-      expect(tester.getTopLeft(home).dx, 0);
-      expect(tester.getTopLeft(cards).dx, 0);
+      expect(tester.getTopLeft(home).dx, lessThan(0));
+      expect(tester.getTopLeft(cards).dx, greaterThan(0));
       final beforeReverse = opacity(GalleryPage.home);
       expect(beforeReverse, inExclusiveRange(0, 1));
       expect(opacity(GalleryPage.cards), inExclusiveRange(0, 1));
@@ -438,7 +438,7 @@ void main() {
               .widget<Text>(find.byKey(const ValueKey('face-title-shanghai')))
               .style!
               .fontSize,
-          16,
+          20,
         );
         expect(
           tester
@@ -447,14 +447,14 @@ void main() {
               )
               .style!
               .fontSize,
-          16,
+          14,
         );
         expect(
           tester
               .widget<Text>(find.byKey(const ValueKey('face-number-shanghai')))
               .style!
               .fontSize,
-          23,
+          20,
         );
         expect(
           tester
@@ -504,7 +504,10 @@ void main() {
     c.themeMode = ThemeMode.light;
     await mount(tester);
     final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
-    expect(app.themeAnimationDuration, const Duration(milliseconds: 200));
+    // An animated theme cross-fade rebuilds the whole 2.x tree per frame and
+    // dropped frames while switching brightness in settings, so colours update
+    // in one frame; layout and state stay untouched.
+    expect(app.themeAnimationDuration, Duration.zero);
     expect(app.themeAnimationCurve, Curves.easeInOutCubic);
     GalleryTokens tokens() => Theme.of(
       tester.element(find.byKey(const ValueKey('gallery-brand-mark'))),
