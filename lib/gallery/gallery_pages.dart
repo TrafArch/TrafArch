@@ -27,6 +27,14 @@ extension _GalleryPages on _GalleryViewState {
         state == GalleryReadState.failed ||
         (nfcMessage != null && hasRead && live?.hasFreshCurrent == false);
     final showResult = hasRead && !reading && !failed;
+    final partial =
+        showResult &&
+        live != null &&
+        live.hasFreshCurrent &&
+        live.currentCard.id == card.id &&
+        live.currentApplications.any(
+          (app) => app.confirmed && app.state == ApplicationProbeState.partial,
+        );
     final recent = c.trips.where((r) => r['kind'] != 'event').firstOrNull;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -55,35 +63,34 @@ extension _GalleryPages on _GalleryViewState {
           Row(
             children: [
               Icon(
-                failed
-                    ? Icons.error_outline_rounded
+                partial
+                    ? Icons.warning_amber_rounded
                     : Icons.check_circle_outline,
                 size: 16,
-                color: failed ? t.warn : t.ok,
+                color: partial ? t.warn : t.ok,
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Semantics(
                   liveRegion: true,
                   child: _text(
-                    failed
-                        ? '读取失败，保留上次结果'
-                        : live == null
+                    live == null
                         ? '今天 09:41 读取成功'
+                        : partial
+                        ? '${card.when} 部分读取'
                         : '${card.when} 读取完成',
                     role: GalleryTypography.caption,
-                    color: failed ? t.warn : t.onTone,
+                    color: partial ? t.warn : t.onTone,
                   ),
                 ),
               ),
-              if (!failed)
-                _chip(
-                  card.saved
-                      ? c.autoSave
-                            ? '已自动保存'
-                            : '已保存'
-                      : '未保存',
-                ),
+              _chip(
+                card.saved
+                    ? c.autoSave
+                          ? '已自动保存'
+                          : '已保存'
+                    : '未保存',
+              ),
             ],
           ),
         ],
@@ -183,6 +190,12 @@ extension _GalleryPages on _GalleryViewState {
                 ],
               ),
               padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
+            )
+          else if (partial)
+            _empty(
+              '本次未读到交易记录',
+              '可在「专家」中查看本次读取详情',
+              icon: Icons.route_outlined,
             )
           else
             _empty('暂无行程记录', '这张卡片没有可展示的行程', icon: Icons.route_outlined),

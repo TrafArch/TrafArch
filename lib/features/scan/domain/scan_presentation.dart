@@ -17,6 +17,8 @@ import '../../../protocols/transit/tunion/tunion_process_parser.dart';
 import 'card_read_outcome.dart';
 import '../../../shared/domain/remote_card_use.dart';
 import '../../trips/suica_trip_presenter.dart';
+import '../../archive/domain/card_types.dart';
+import '../../trips/shanghai_mirrored_records.dart';
 
 /// Immutable display projection, rebuilt once when an attempt completes.
 /// Original protocol data remains available independently of derived trips.
@@ -27,13 +29,23 @@ class ScanPresentation {
       cardProviders = CardProviderResolver(knowledge.cardProviders)
           .resolve(tag) {
     final card = parsedCard;
-    analysis = card != null && CardParserIds.isTUnionFamily(card.parserId)
-        ? AnalysisEngine(knowledge).analyze(card)
-        : null;
     cityUnionTransactions = analyzeCuTransactions(
       card?.cityUnionFiles ?? const [],
       knowledge,
     );
+    analysis = card != null && CardParserIds.isTUnionFamily(card.parserId)
+        ? AnalysisEngine(knowledge).analyze(
+            card,
+            walletMirrors: partitionShanghaiMirroredRecords(
+              parserId: card.parserId,
+              displayCardType: CardTypes.regionalTunionType(
+                card.info.applicationSerial,
+              ),
+              tunionTransactions: card.transactions,
+              cityUnionTransactions: cityUnionTransactions,
+            ).walletMirrors,
+          )
+        : null;
     railTransitRecord = _deriveRail();
     busTransitRecord = _deriveBus();
     suicaTrips = List.unmodifiable(

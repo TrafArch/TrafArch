@@ -181,6 +181,7 @@ void main() {
     final result = _partition([_tu(first)], [first, second]);
     expect(result.mirrored, [first]);
     expect(result.independent, [second]);
+    expect(result.walletMirrors, isEmpty);
   });
 
   test(
@@ -225,6 +226,11 @@ void main() {
       final result = _partition([_tu(first), _tu(second)], [first, second]);
       expect(result.mirrored, [first, second]);
       expect(result.independent, isEmpty);
+      expect(result.walletMirrors, isEmpty);
+      expect(
+        _partition([_tu(first), _tu(second)], [first]).walletMirrors,
+        isEmpty,
+      );
     },
   );
 }

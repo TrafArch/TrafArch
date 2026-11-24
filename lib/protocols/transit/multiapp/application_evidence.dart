@@ -23,7 +23,7 @@ enum ApplicationProbeState {
 class ApplicationEvidence {
   const ApplicationEvidence({
     required this.appId,
-    required this.displayName,
+    required String displayName,
     this.state = ApplicationProbeState.notProbed,
     this.probed = false,
     this.confirmed = false,
@@ -37,11 +37,13 @@ class ApplicationEvidence {
     this.transportFailure,
     this.payload,
     this.notes = const [],
-  });
+  }) : _capturedDisplayName = displayName;
 
   /// 稳定应用标识（tu / cu / lingnan / shenzhen / macau 等）。
   final String appId;
-  final String displayName;
+  final String _capturedDisplayName;
+  String get displayName =>
+      appId == 'suzhou_suxin' ? suzhouCitizenCardName : _capturedDisplayName;
   final ApplicationProbeState state;
 
   /// 是否实际发出过探测指令（区别于受门控跳过）。
@@ -148,7 +150,7 @@ class ApplicationEvidence {
     final summary = payloadSummary();
     return {
       'appId': appId,
-      'displayName': displayName,
+      'displayName': _capturedDisplayName,
       'state': state.name,
       'probed': probed,
       'confirmed': confirmed,

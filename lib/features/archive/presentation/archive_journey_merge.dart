@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../../../protocols/transit/tunion/tunion_process_parser.dart';
+import '../../reference_data/domain/tunion_terminal_decoder.dart';
 import '../../transit_analysis/balance_interpretation.dart';
 import '../../trips/journey_presentation.dart';
 import '../../trips/trip_cards_view.dart';
@@ -42,6 +43,10 @@ ArchiveTransactionObservation? archiveTransactionObservation(
     'rawHex': raw,
   };
   return ArchiveTransactionObservation(
+    hasWalletMirror: switch (record.fields['location']) {
+      {'ruleId': TerminalLocation.cuWalletMirrorRule} => true,
+      _ => false,
+    },
     occurrenceIdentity: jsonEncode(_canonical(occurrence)),
     identity: jsonEncode(
       _canonical({

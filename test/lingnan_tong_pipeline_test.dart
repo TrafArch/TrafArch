@@ -3,6 +3,10 @@ import 'package:transit_card_analyzer/features/archive/application/card_identifi
 import 'package:transit_card_analyzer/features/archive/domain/card_types.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/tunion_knowledge_base.dart';
 import 'package:transit_card_analyzer/features/scan/application/local_card_reader.dart';
+import 'package:transit_card_analyzer/features/scan/domain/card_read_outcome.dart';
+import 'package:transit_card_analyzer/features/scan/domain/scan_presentation.dart';
+import 'package:transit_card_analyzer/features/trips/local_card_trip_presenter.dart';
+import 'package:transit_card_analyzer/features/trips/trip_filters.dart';
 import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/local/apdu_exchange.dart';
 import 'package:transit_card_analyzer/protocols/transit/local/local_card_models.dart';
@@ -25,6 +29,11 @@ List<_Step> _rejectAppy() => [
   _Step.reject(_ticl.substring(0, _ticl.length - 2)),
 ];
 const _tuFare = '0001000000000000C80612345678901220240501083000';
+const _tuCompositeFare = '0001000000000000C80912345678901220240501083000';
+// TU 1E: EP exit (04), rail (01), same time and terminal as the TU fare.
+const _tuMetroExit =
+    '0400001234567890120101000200000000000000C800002710'
+    '2024050108300058400101584000000000000000000000';
 const _serial = '00310487039534635882';
 const _tagLost = TransportFailure(
   kind: TransportFailureKind.tagLost,
@@ -78,14 +87,14 @@ class _Replay {
   }
 }
 
-List<_Step> _tu({String serial = _serial}) => [
+List<_Step> _tu({String serial = _serial, bool metroExit = false}) => [
   _Step(_mf),
   _Step(_tuSelect),
   _Step('00B0950000', '02002900123456780101${serial}2024010120291231AABB'),
   _Step('00B0960000', _hex(List<int>.filled(55, 0)..[0] = 1)),
   _Step('00B0970000', _hex(List<int>.filled(60, 0)..[6] = 0x31)),
   _Step('805C000204', '00002710'),
-  _Step('00B201C500', _tuFare),
+  _Step('00B201C500', metroExit ? _tuCompositeFare : _tuFare),
   _Step.reject('00B202C400'),
   ..._rejectCu(),
   _Step(_mf),
@@ -93,16 +102,20 @@ List<_Step> _tu({String serial = _serial}) => [
   _Step.reject('00B201D400'),
   _Step.reject('00B201D500'),
   _Step.reject('00B201F500'),
-  _Step.reject('00B201F400'),
+  if (metroExit) ...[
+    _Step('00B201F400', _tuMetroExit),
+    _Step.reject('00B202F400'),
+  ] else
+    _Step.reject('00B201F400'),
 ];
 
-List<_Step> _lnt({bool lost = false}) => [
+List<_Step> _lnt({bool lost = false, String? fare}) => [
   _Step(_appy),
   _Step('00B0950046', realInfo),
   _Step('00B2014416', '18140024080100000000000000000000000000000000'),
   _Step(_ticl),
   _Step('805C000204', '00000F00'),
-  _Step('00B201C417', realFares.first),
+  _Step('00B201C417', fare ?? realFares.first),
   if (lost) _Step.lost('00B202C417') else _Step.reject('00B202C417'),
 ];
 
@@ -173,6 +186,59 @@ void _expectLnt(ReadResult local) {
 }
 
 void main() {
+  for (final shenzhen in [false, true]) {
+    final product = shenzhen ? '深圳通' : '岭南通';
+    test('$product双应用逐应用探测区分 TU 地铁出站与地方钱包流水', () async {
+      final replay = _Replay([
+        if (shenzhen) ..._rejectAppy() else ..._lnt(fare: realFares[4]),
+        ..._tu(
+          serial: shenzhen ? '00310487040000000001' : _serial,
+          metroExit: true,
+        ),
+        for (final step in _remainingWallets())
+          if (shenzhen && step.command == '00A40400075041592E535A54') ...[
+            _Step(step.command),
+            _Step.reject('00B0950020'),
+            _Step('805C000204', '00003039'),
+            _Step(
+              '00B201C400',
+              '00020000000000012C0900123456789020261031123456',
+            ),
+            _Step.reject('00B202C400'),
+          ] else
+            step,
+      ]);
+      final scan = await LocalCardReader(replay.call).scan();
+      final card = scan.result!.parsedCard;
+      final view = ScanPresentation(
+        TransitReadOutcome(card, applications: scan.applications),
+        KnowledgeBase.empty(),
+      );
+      final trip = view.analysis!.trips.single;
+      expect(
+        card.parserId,
+        shenzhen ? CardParserIds.shenzhenTunion : CardParserIds.lingnanTunion,
+      );
+      expect(trip.rideStatusName, '出站');
+      expect(trip.appTypeName, '城市轨道交通');
+      expect(trip.cityCode, '5840');
+      expect(trip.amountFen, 200);
+      final app = scan.applications.singleWhere(
+        (a) => a.appId == (shenzhen ? 'shenzhen' : 'lingnan'),
+      );
+      final wallet =
+          ApplicationEvidence.tryParse(app.toJson())!.payload! as ReadResult;
+      final local = describeLocalTrip(
+        wallet.trips.single,
+        profile: localTripProfileOf({'profile': app.appId}),
+        currencySymbol: '¥',
+      );
+      expect(local.mode, shenzhen ? TripModeFilter.other : TripModeFilter.rail);
+      expect(wallet.trips.single.balanceDelta, shenzhen ? -300 : -600);
+      replay.verify();
+    });
+  }
+
   test('TICL-only purse has a balance and no APPY identity', () async {
     final replay = _Replay([
       ..._rejectAppy().take(2),
