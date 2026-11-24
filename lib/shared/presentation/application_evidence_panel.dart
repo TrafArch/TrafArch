@@ -1,6 +1,47 @@
 import 'package:flutter/material.dart';
 
 import '../../protocols/transit/multiapp/application_evidence.dart';
+import '../../protocols/transit/local/local_card_models.dart';
+
+List<String> applicationObservationText(ApplicationEvidence application) {
+  final wallet = application.payload;
+  final local = wallet is ReadResult ? wallet : null;
+  final info = local?.info;
+  final number = application.cardNumber ?? info?.displayCardNumber;
+  final balance = application.balanceFen ?? info?.observedBalance;
+  final isWallet = switch (application.appId) {
+    'lingnan_appy' || 'mot_bmac' || 'tuCash' => false,
+    'df1001' => local != null,
+    _ => true,
+  };
+  final slots = local?.extras.slots;
+  return [
+    if (number != null) '卡号 $number',
+    if (info?.isSuxin == true && info!.cardNumber.isNotEmpty)
+      '原始卡号 ${info.cardNumber}',
+    if (info?.isCika == true)
+      info!.observedRemainingTrips == null
+          ? '剩余次数未知'
+          : '剩余 ${info.observedRemainingTrips} 次'
+    else if (isWallet && balance != null)
+      '余额 $balance 分'
+    else if (isWallet && application.confirmed)
+      '余额未知',
+    if (info?.expiryDate case final date?)
+      '有效期至 ${date.toIso8601String().split('T').first}',
+    if (slots?['suxin.statsDate'] case final String date)
+      '统计日期 ${date.split('T').first}',
+    if (slots?['suxin.statsCount'] case final int count) '统计次数 $count 次',
+    if (slots?['tft.statsMonth'] case final int month) '统计月份 $month',
+    if (slots?['tft.statsCount'] case final int count) '统计次数 $count 次',
+    if (slots?['tft.statsAmountFen'] case final int amount) '统计金额 $amount 分',
+    if (slots?['tft.monthlyCounts'] case final Map counts)
+      for (final e in counts.entries) '${e.key} · ${e.value} 次',
+    if (application.recordCount > 0) '${application.recordCount} 条记录',
+    if (application.state == ApplicationProbeState.confirmed) '尚未读到应用数据',
+    if (application.state == ApplicationProbeState.selectRejected) '选择被拒绝',
+  ];
+}
 
 /// 逐应用探测状态的中文标签（实时专家页与恢复现场共用）。
 String applicationProbeStateLabel(ApplicationProbeState state) =>
@@ -39,9 +80,7 @@ class ApplicationEvidencePanel extends StatelessWidget {
           children: [
             Text(
               title,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleSmall
+              style: Theme.of(context).textTheme.titleSmall
                   ?.copyWith(color: colors.primary),
             ),
             for (final application in applications)
@@ -60,14 +99,7 @@ class _ApplicationRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final details = <String>[
-      if (application.cardNumber case final cardNumber?)
-        '卡号 $cardNumber',
-      if (application.balanceFen case final balance?)
-        '余额 $balance 分',
-      if (application.recordCount > 0)
-        '${application.recordCount} 条记录',
-    ];
+    final details = applicationObservationText(application);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -95,12 +127,20 @@ class _ApplicationRow extends StatelessWidget {
                     details.join(' · '),
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
+                for (final note in application.notes.where(
+                  (note) => note != application.readError?.toString(),
+                ))
+                  Text(note, style: Theme.of(context).textTheme.bodySmall),
+                if (application.rawRecords.isNotEmpty)
+                  TextButton(
+                    onPressed: () => _showRecords(context, application),
+                    child: const Text('查看记录原码'),
+                  ),
                 if (application.readError case final error?)
                   Text(
                     '$error',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: colors.error,
-                    ),
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(color: colors.error),
                   ),
               ],
             ),
@@ -109,6 +149,36 @@ class _ApplicationRow extends StatelessWidget {
       ),
     );
   }
+}
+
+void _showRecords(BuildContext context, ApplicationEvidence application) {
+  final records = application.rawRecords.toList();
+  showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text('${application.displayName} · 记录原码'),
+      content: SizedBox(
+        width: 420,
+        child: ListView.separated(
+          shrinkWrap: true,
+          itemCount: records.length,
+          separatorBuilder: (_, _) => const Divider(),
+          itemBuilder: (context, index) {
+            final row = records[index];
+            return SelectableText(
+              [if (row.source.isNotEmpty) row.source, row.rawHex].join('\n'),
+            );
+          },
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('关闭'),
+        ),
+      ],
+    ),
+  );
 }
 
 Color _stateColor(ApplicationProbeState state, ColorScheme colors) =>

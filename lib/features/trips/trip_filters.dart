@@ -24,6 +24,10 @@ TripSourceFilter tripSourceOf(TripEntry entry) => switch (entry) {
 TripModeFilter tripModeOf(TripEntry entry) => switch (entry) {
   RailRecordEntry() => TripModeFilter.rail,
   BusRecordEntry() => TripModeFilter.bus,
+  ProcessTripEntry(:final record) when record.isRecharge =>
+    TripModeFilter.other,
+  TransactionTripEntry(:final trip) when trip.isRecharge =>
+    TripModeFilter.other,
   ProcessTripEntry(:final record) =>
     record.isBus
         ? TripModeFilter.bus

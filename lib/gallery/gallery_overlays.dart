@@ -146,7 +146,10 @@ extension _GalleryOverlays on _GalleryViewState {
   String _overlayTitle(GalleryOverlay type) => switch (type) {
     GalleryOverlay.save => '保存卡片',
     GalleryOverlay.face => '更换卡面',
-    GalleryOverlay.trip => '行程详情',
+    GalleryOverlay.trip =>
+      _entry.trip?['kind'] == 'recharge' || _entry.trip?['kind'] == 'other'
+          ? '交易详情'
+          : '行程详情',
     GalleryOverlay.cardMenu => '卡片管理',
     GalleryOverlay.rename => '重命名',
     GalleryOverlay.delete => '删除本卡',
@@ -154,7 +157,6 @@ extension _GalleryOverlays on _GalleryViewState {
     GalleryOverlay.mode => '交通方式',
     GalleryOverlay.export => _entry.exportTitle,
     GalleryOverlay.importPreview => _entry.exportTitle,
-    GalleryOverlay.rawFeedback => '反馈内容预览',
     GalleryOverlay.contributors => '贡献者',
     GalleryOverlay.licenseDetail => '许可证详情',
   };
@@ -244,29 +246,9 @@ extension _GalleryOverlays on _GalleryViewState {
     GalleryOverlay.importPreview => Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _text(
-          '文件内容预览 · 不会修改当前样例',
-          role: GalleryTypography.caption,
-          color: t.warn,
-        ),
+        _text('文件摘要', role: GalleryTypography.caption, color: t.muted),
         _gap(14),
-        _hexBox(_entry.exportText),
-        _gap(14),
-        _button('关闭预览', c.back, primary: true),
-      ],
-    ),
-    GalleryOverlay.rawFeedback => Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _text(
-          '反馈草稿保留在本页，不会自动提交。',
-          role: GalleryTypography.label,
-          color: t.muted,
-        ),
-        _gap(14),
-        _hexBox(
-          'TrafArch 2.x 界面\n设计版本：2.4.0\n场景：${c.sceneId ?? c.page.name}\n数据：内置样例\n\n请描述看到的问题、操作步骤和期望结果。',
-        ),
+        _text(_entry.exportText, role: GalleryTypography.body),
         _gap(14),
         _button('关闭预览', c.back, primary: true),
       ],
@@ -501,21 +483,32 @@ extension _GalleryOverlays on _GalleryViewState {
           '记录来源',
           ((trip['sources'] as List?) ?? [trip['source'] ?? '未记录']).join(' / '),
         ),
-        _kv(
-          '交通方式',
-          trip['mode'] as String? ??
-              (trip['kind'] == 'rail' ? '城市轨道交通' : '公共汽电车'),
-        ),
+        if (trip['kind'] == 'recharge')
+          _kv('交易类型', '充值')
+        else
+          _kv(
+            '交通方式',
+            trip['mode'] as String? ??
+                switch (trip['kind']) {
+                  'rail' => '城市轨道交通',
+                  'bus' => '公共汽电车',
+                  _ => '其他',
+                },
+          ),
+        if (trip['kind'] == 'recharge' || trip['kind'] == 'other')
+          _kv('交易时间', trip['time'] as String?),
         _kv('受理城市', trip['city'] as String? ?? '未记录'),
         _kv('交易金额', trip['amount'] as String?),
         if (trip['kind'] != 'event')
           _kv('交易后余额', trip['balanceAfter'] as String?),
-        _gap(16),
-        _text(
-          '本行程为内置样例摘要。未保留各侧原始字段，不据此补造记录。',
-          role: GalleryTypography.caption,
-          color: t.muted,
-        ),
+        if (_GalleryLiveScope.of(context) == null) ...[
+          _gap(16),
+          _text(
+            '本行程为内置样例摘要。未保留各侧原始字段，不据此补造记录。',
+            role: GalleryTypography.caption,
+            color: t.muted,
+          ),
+        ],
       ],
     );
   }

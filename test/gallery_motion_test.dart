@@ -818,33 +818,49 @@ void main() {
     },
   );
 
-  testWidgets(
-    'long detail ledgers only lay out nearby transactions and retain swipe navigation',
-    (tester) async {
+  for (final acrossDays in [false, true]) {
+    testWidgets('long detail ledgers only lay out nearby transactions and retain swipe navigation '
+        '(${acrossDays ? "150 days" : "same day"})', (tester) async {
       final sample = c.ledger(c.current).first;
+      final firstDay = DateTime.utc(2026, 11, 21);
       c.trips
         ..clear()
         ..addAll(
-          List.generate(
-            150,
-            (index) => {
+          List.generate(150, (index) {
+            final day = firstDay.subtract(
+              Duration(days: acrossDays ? index : 0),
+            );
+            return {
               ...sample,
+              'date': '${day.year}年${day.month}月${day.day}日',
+              'isoDate': day.toIso8601String().split('T').first,
               'entryStation': '测试站点 $index',
               'exitStation': '终点 $index',
-            },
-          ),
+            };
+          }),
         );
       c.openCard(c.current);
       await mount(tester);
       expect(find.text('测试站点 0'), findsOneWidget);
-      expect(find.text('测试站点 149'), findsNothing);
+      final detail = find.byKey(
+        PageStorageKey('gallery-${c.generation}-detail-${c.current.id}'),
+      );
+      expect(detail, findsOneWidget);
+      expect(
+        find.descendant(
+          of: detail,
+          matching: find.text('测试站点 149', skipOffstage: false),
+          skipOffstage: false,
+        ),
+        findsNothing,
+      );
       await tester.fling(find.text('测试站点 0'), const Offset(-240, 0), 1200);
       await tester.pumpAndSettle();
       expect(c.detailTab, 1);
       expect(find.text('测试站点 0'), findsNothing);
       expect(tester.takeException(), isNull);
-    },
-  );
+    });
+  }
 
   testWidgets('save and rename popup actions share the main button corners', (
     tester,

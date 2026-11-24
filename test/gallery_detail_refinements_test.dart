@@ -178,6 +178,54 @@ void main() {
     tester.platformDispatcher.clearTextScaleFactorTestValue();
   });
 
+  testWidgets('recent transactions group all trips from the same day', (
+    tester,
+  ) async {
+    final card = c.current;
+    final sample = {...c.trips.first, 'isoDate': '2026-11-21'};
+    c.liveLedgers = {
+      card.id: [
+        {...sample, 'date': '11月21日', 'entryStation': '中关村'},
+        {...sample, 'date': null, 'isoDate': null, 'entryStation': '西单'},
+        {...sample, 'date': '11月21日', 'entryStation': '五道口'},
+      ],
+    };
+    c.openCard(card);
+    await mount(tester);
+
+    expect(find.text('11月21日'), findsOneWidget);
+    final labels = ['11月21日', '中关村', '五道口', '日期未记录', '西单'];
+    final positions = labels
+        .map((label) => tester.getTopLeft(find.text(label)).dy)
+        .toList();
+    expect(positions, orderedEquals(positions.toList()..sort()));
+  });
+
+  testWidgets('recent transactions distinguish the same date across years', (
+    tester,
+  ) async {
+    final card = c.current;
+    final sample = {...c.trips.first, 'date': '11月21日'};
+    c.liveLedgers = {
+      card.id: [
+        {...sample, 'isoDate': '2026-11-21', 'entryStation': '中关村'},
+        {...sample, 'isoDate': '2025-11-21', 'entryStation': '西单'},
+        {...sample, 'isoDate': null, 'entryStation': '五道口'},
+      ],
+    };
+    c.openCard(card);
+    await mount(tester);
+
+    final labels = ['2026年11月21日', '中关村', '2025年11月21日', '西单', '11月21日', '五道口'];
+    for (final label in labels) {
+      expect(find.text(label), findsOneWidget);
+    }
+    final positions = labels
+        .map((label) => tester.getTopLeft(find.text(label)).dy)
+        .toList();
+    expect(positions, orderedEquals(positions.toList()..sort()));
+  });
+
   testWidgets(
     'short ledger still contracts to the capsule by riding content up',
     (tester) async {

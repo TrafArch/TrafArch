@@ -37,6 +37,9 @@ class LingnanTong {
   Future<bool> selectAppy(List<ApduRecord> records, [CardExtras? extras]) =>
       _select(CardAid.payAppy, 'appy', records, extras ?? CardExtras());
 
+  Future<bool> selectTicl(List<ApduRecord> records, CardExtras extras) =>
+      _select(CardAid.payTicl, 'ticl', records, extras);
+
   // Both application names are eight bytes. Keep shared Case 3 AIDs unchanged;
   // LNT needs Case 4 (Le=00) before any MF or TU selection.
   Future<bool> _select(
@@ -67,6 +70,7 @@ class LingnanTong {
       if (response != null) {
         records.add(
           ApduRecord()
+            ..directory = 'PAY.${name.toUpperCase()}'
             ..commandHex = _hex(command)
             ..response = response.raw
             ..label = 'SELECT PAY.${name.toUpperCase()}',
@@ -87,9 +91,25 @@ class LingnanTong {
     List<ApduRecord> records,
     CardExtras extras,
   ) async {
+    await readAppy(info, records, extras);
+    if (await selectTicl(records, extras)) {
+      await readTicl(
+        info,
+        records,
+        extras,
+        appyStats: extras.slots['lnt.statsRaw'] as List<int>?,
+        issueDate: info.issueDate,
+      );
+    }
+  }
+
+  Future<void> readAppy(
+    CardInfo info,
+    List<ApduRecord> records,
+    CardExtras extras,
+  ) async {
     info.isYCT = true;
     info.isLNT = true;
-    info.currencyCode = 'CNY';
     // Only an explicit card status failure permits another info-file variant.
     for (final command in const [
       [0x00, 0xB0, 0x95, 0x00, 0x46],
@@ -104,6 +124,13 @@ class LingnanTong {
       final body = response.data;
       info.rawInfo = List<int>.of(body);
       extras.slots['lnt.infoRaw'] = List<int>.of(body);
+      records.add(
+        ApduRecord()
+          ..directory = 'PAY.APPY'
+          ..commandHex = _hex(command)
+          ..response = response.raw
+          ..label = '岭南通基本信息',
+      );
       if (body.length >= 16) {
         final number = _hex(body.sublist(11, 16));
         if (RegExp(r'^[0-9]+$').hasMatch(number)) info.cardNumber = number;
@@ -115,19 +142,34 @@ class LingnanTong {
       break;
     }
 
-    Future<List<int>?> stats() => _apdu.call(
-      const [0x00, 0xB2, 0x01, 0x44, 0x16],
-      'LNT monthly statistics',
-      records: records,
-      verbose: true,
-    );
-    var monthly = await stats();
-    final ticl = await _select(CardAid.payTicl, 'ticl', records, extras);
-    if (!ticl) return;
-    if (monthly == null || monthly.length < 5) monthly = await stats();
+    final stats = await _readStats(records);
+    if (stats != null) extras.slots['lnt.statsRaw'] = stats;
+  }
+
+  Future<List<int>?> _readStats(List<ApduRecord> records) => _apdu.call(
+    const [0x00, 0xB2, 0x01, 0x44, 0x16],
+    'LNT monthly statistics',
+    records: records,
+    verbose: true,
+  );
+
+  Future<void> readTicl(
+    CardInfo info,
+    List<ApduRecord> records,
+    CardExtras extras, {
+    List<int>? appyStats,
+    DateTime? issueDate,
+  }) async {
+    info.isYCT = true;
+    info.isLNT = true;
+    info.currencyCode = 'CNY';
+    var monthly = appyStats;
+    if (monthly == null || monthly.length < 5) {
+      monthly = await _readStats(records);
+      if (monthly != null) extras.slots['lnt.statsRaw'] = monthly;
+    }
     int? statsMonth;
     if (monthly != null) {
-      extras.slots['lnt.statsRaw'] = List<int>.of(monthly);
       if (monthly.length >= 5) {
         final year = _bcd(monthly[3]);
         final month = _bcd(monthly[4]);
@@ -175,6 +217,7 @@ class LingnanTong {
       final subtype = body[22];
       final amount = _be(body.sublist(6, 9));
       final record = ApduRecord()
+        ..directory = 'PAY.TICL'
         ..type = 2
         ..rawBody = Uint8List.fromList(body)
         ..recordNumber = n
@@ -199,7 +242,7 @@ class LingnanTong {
         'yearInferred': true,
       });
       // Update immediately so a later transport failure still leaves partial dates.
-      _dateFares(fares, metadata, statsMonth, info.issueDate);
+      _dateFares(fares, metadata, statsMonth, issueDate);
     }
   }
 

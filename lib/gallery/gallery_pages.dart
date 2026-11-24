@@ -15,8 +15,17 @@ extension _GalleryPages on _GalleryViewState {
   Widget _homeContent(GalleryReadState state, bool hasRead) {
     final live = _GalleryLiveScope.of(context);
     final card = c.current;
-    final reading = state == GalleryReadState.reading;
-    final failed = state == GalleryReadState.failed;
+    final nfcMessage = live?.app.nfcUnavailableMessage;
+    final readAction =
+        nfcMessage != null ||
+            live?.closing == true ||
+            live?.app.qrAcquiring == true
+        ? null
+        : c.read;
+    final reading = nfcMessage == null && state == GalleryReadState.reading;
+    final failed =
+        state == GalleryReadState.failed ||
+        (nfcMessage != null && hasRead && live?.hasFreshCurrent == false);
     final showResult = hasRead && !reading && !failed;
     final recent = c.trips.where((r) => r['kind'] != 'event').firstOrNull;
     return Column(
@@ -34,8 +43,10 @@ extension _GalleryPages on _GalleryViewState {
           child: !showResult
               ? _GalleryReadPrompt(
                   reading: reading,
-                  failed: failed,
+                  failed: failed && nfcMessage == null,
                   compact: _compactHeight,
+                  nfcMessage: nfcMessage,
+                  failureMessage: live?.error,
                 )
               : _face(card),
         ),
@@ -90,9 +101,7 @@ extension _GalleryPages on _GalleryViewState {
                 width: showResult ? double.infinity : 240,
                 child: _button(
                   failed ? '重新读取' : '开始读取',
-                  live?.closing == true || live?.app.qrAcquiring == true
-                      ? null
-                      : () => c.read(),
+                  readAction,
                   primary: true,
                   icon: Icons.contactless_outlined,
                 ),
@@ -105,7 +114,7 @@ extension _GalleryPages on _GalleryViewState {
                   child: _button(
                     card.saved ? '再次读取' : '保存卡片',
                     card.saved
-                        ? () => c.read()
+                        ? readAction
                         : () => c.showOverlay(GalleryOverlay.save),
                     primary: true,
                     icon: card.saved
@@ -119,7 +128,7 @@ extension _GalleryPages on _GalleryViewState {
                     card.saved ? '更换卡面' : '再次读取',
                     card.saved
                         ? () => c.showOverlay(GalleryOverlay.face, card: card)
-                        : () => c.read(),
+                        : readAction,
                     icon: card.saved
                         ? Icons.palette_outlined
                         : Icons.refresh_rounded,
@@ -127,6 +136,17 @@ extension _GalleryPages on _GalleryViewState {
                 ),
               ],
             ),
+        if (showResult && nfcMessage != null) ...[
+          _gap(8),
+          Semantics(
+            liveRegion: true,
+            child: _text(
+              nfcMessage,
+              role: GalleryTypography.label,
+              color: t.warn,
+            ),
+          ),
+        ],
         if (failed && hasRead) ...[
           _gap(20),
           _text('读取失败，保留上次结果', role: GalleryTypography.label, color: t.warn),
@@ -144,7 +164,9 @@ extension _GalleryPages on _GalleryViewState {
                     children: [
                       Expanded(
                         child: _text(
-                          '最近一次行程',
+                          recent['kind'] == 'rail' || recent['kind'] == 'bus'
+                              ? '最近一次行程'
+                              : '最近一笔记录',
                           role: GalleryTypography.caption,
                           color: t.muted,
                         ),
@@ -193,10 +215,6 @@ extension _GalleryPages on _GalleryViewState {
   Widget _trips() {
     final live = _GalleryLiveScope.of(context);
     final trips = c.filteredTrips;
-    final grouped = <String, List<GalleryRecord>>{};
-    for (final trip in trips) {
-      grouped.putIfAbsent(trip['date'] as String, () => []).add(trip);
-    }
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth - 32;
@@ -291,34 +309,22 @@ extension _GalleryPages on _GalleryViewState {
                       icon: Icons.route_outlined,
                     )
                   else
-                    ...grouped.entries.expand(
-                      (entry) => [
-                        Padding(
-                          // 18sp 分组标题比 26sp 需要更收紧的上下留白。
-                          key: ValueKey('trip-date-${entry.key}'),
-                          padding: const EdgeInsets.fromLTRB(2, 18, 2, 10),
-                          child: Semantics(
-                            header: true,
-                            child: _text(
-                              entry.key,
-                              role: GalleryJourneyTypography.date,
-                            ),
-                          ),
-                        ),
-                        _panel(
-                          Column(
-                            children: [
-                              for (int i = 0; i < entry.value.length; i++) ...[
-                                if (i > 0) Divider(height: 1, color: t.line),
-                                _trip(entry.value[i]),
-                              ],
+                    for (final group in _tripsByDate(trips).entries) ...[
+                      _tripDateHeading(group.key),
+                      _panel(
+                        Column(
+                          children: [
+                            for (final (index, trip)
+                                in group.value.indexed) ...[
+                              if (index > 0) Divider(height: 1, color: t.line),
+                              _trip(trip),
                             ],
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
-                          radius: 24,
+                          ],
                         ),
-                      ],
-                    ),
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        radius: 24,
+                      ),
+                    ],
                 ],
               ),
             ),
@@ -327,6 +333,40 @@ extension _GalleryPages on _GalleryViewState {
       },
     );
   }
+
+  Map<String, List<GalleryRecord>> _tripsByDate(Iterable<GalleryRecord> trips) {
+    final labelsByDay = <DateTime, String>{};
+    final daysByLabel = <String, Set<DateTime>>{};
+    for (final trip in trips) {
+      final day = galleryRecordedDate(trip);
+      if (day == null) continue;
+      final label = labelsByDay.putIfAbsent(
+        day,
+        () => trip['date'] as String? ?? _dateLabel(day),
+      );
+      daysByLabel.putIfAbsent(label, () => {}).add(day);
+    }
+    final grouped = <String, List<GalleryRecord>>{};
+    for (final trip in trips) {
+      final day = galleryRecordedDate(trip);
+      final label = labelsByDay[day] ?? trip['date'] as String? ?? '日期未记录';
+      // Keep undated legacy rows under their recorded label if the year is ambiguous.
+      final title = day != null && daysByLabel[label]!.length > 1
+          ? '${day.year}年${day.month}月${day.day}日'
+          : label;
+      grouped.putIfAbsent(title, () => []).add(trip);
+    }
+    return grouped;
+  }
+
+  Widget _tripDateHeading(String label) => Padding(
+    key: ValueKey('trip-date-$label'),
+    padding: const EdgeInsets.fromLTRB(2, 18, 2, 10),
+    child: Semantics(
+      header: true,
+      child: _text(label, role: GalleryJourneyTypography.date),
+    ),
+  );
 
   /// One pinned surface contracts with scrolling, without overlapping copies.
   Widget _tripsSummary(double progress) => Container(
@@ -528,6 +568,8 @@ extension _GalleryPages on _GalleryViewState {
                 _text('过程记录', role: GalleryTypography.caption, color: t.muted),
               ],
             )
+          : !rail && trip['kind'] != 'bus'
+          ? _transactionRow(trip)
           : Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -677,6 +719,49 @@ extension _GalleryPages on _GalleryViewState {
           )
         : body;
   }
+
+  Widget _transactionRow(GalleryRecord record) => Column(
+    key: const ValueKey('gallery-transaction'),
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Wrap(
+        spacing: 12,
+        runSpacing: 6,
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Icon(
+                record['kind'] == 'recharge'
+                    ? Icons.account_balance_wallet_outlined
+                    : Icons.receipt_long_outlined,
+                color: t.onTone,
+                size: 23,
+              ),
+              _text(
+                record['title'] as String,
+                role: GalleryJourneyTypography.mode,
+              ),
+            ],
+          ),
+          _text(
+            galleryDisplayAmount(record['amount'] as String),
+            role: GalleryJourneyTypography.amount,
+          ),
+        ],
+      ),
+      _gap(6),
+      _text(
+        _tripClock(record['time'] as String? ?? '时间未记录'),
+        role: GalleryJourneyTypography.time,
+        color: t.muted,
+      ),
+    ],
+  );
 
   Widget _cards() {
     final cards = c.savedCards;

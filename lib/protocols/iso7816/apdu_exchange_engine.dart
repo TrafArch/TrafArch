@@ -181,7 +181,7 @@ class ApduExchangeEngine {
           policy.strictLength &&
           le != null &&
           !(policy.zeroLeIsOpenLength && effective.encodedLe == 0);
-      if (checkLength && response.data.length < le) {
+      if (checkLength && response.isSuccess && response.data.length < le) {
         failure = const TransportFailure(
           kind: TransportFailureKind.malformedFrame,
           message: 'APDU 响应短于最终命令 Le',

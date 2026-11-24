@@ -194,6 +194,10 @@ void main() {
       expect(controller.phase, OctopusBalancePhase.failed);
       expect(controller.result, isNull);
       expect(controller.error, isNotNull);
+      final error = controller.error;
+      controller.adapterEnabled();
+      expect(controller.error, error);
+      expect(controller.phase, OctopusBalancePhase.failed);
       expect(nfc.closed, nfc.scanned);
     });
   }
@@ -528,17 +532,51 @@ void main() {
     expect(nfc.closed, hasLength(1));
   });
 
-  test('原生拒绝注册且返回 STALE_SESSION 视为无需继续释放', () async {
+  for (final code in ['NFC_DISABLED', 'NFC_UNAVAILABLE']) {
+    test('$code 拒绝注册后重新开启 NFC 会清除提示并保留上次实读余额', () async {
+      final nfc = _Nfc();
+      final controller = _controller(nfc);
+      addTearDown(controller.dispose);
+      await controller.read();
+      final previous = controller.result!;
+      nfc.scanFailure = PlatformException(code: code);
+      nfc.closeFailure = PlatformException(code: 'STALE_SESSION');
+      await controller.read();
+      expect(controller.busy, isFalse);
+      expect(controller.releaseError, isNull);
+      expect(controller.error, contains('NFC'));
+      expect(controller.phase, OctopusBalancePhase.failed);
+      controller.adapterEnabled();
+      expect(controller.error, isNull);
+      expect(controller.phase, OctopusBalancePhase.idle);
+      expect(controller.result, same(previous));
+      expect(controller.lastAttemptSucceeded, isFalse);
+    });
+  }
+
+  test('开启 NFC 不会覆盖被中断的八达通会话的真实释放失败', () async {
     final nfc = _Nfc()
-      ..scanFailure = PlatformException(code: 'NFC_DISABLED')
-      ..closeFailure = PlatformException(code: 'STALE_SESSION');
+      ..discovery = Completer<NfcScanResult?>()
+      ..closeFailure = PlatformException(code: 'NFC_CLOSE_FAILED');
     final controller = _controller(nfc);
     addTearDown(controller.dispose);
-    await controller.read();
+    final read = controller.read();
+    nfc.discovery!.completeError(
+      PlatformException(
+        code: 'NFC_DISABLED',
+        details: {'sessionId': nfc.scanned.single},
+      ),
+    );
+    await read;
+    controller.adapterEnabled();
+    expect(controller.error, isNull);
+    expect(controller.phase, OctopusBalancePhase.failed);
+    expect(controller.busy, isTrue);
+    expect(controller.releaseError, isNotNull);
+    nfc.closeFailure = null;
+    await controller.cancel();
     expect(controller.busy, isFalse);
     expect(controller.releaseError, isNull);
-    expect(controller.error, contains('NFC'));
-    expect(controller.phase, OctopusBalancePhase.failed);
   });
 
   test('日志默认关闭，由注入 recorder 决定是否存储', () async {

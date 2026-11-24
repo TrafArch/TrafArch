@@ -184,7 +184,7 @@ void main() {
     }
   });
 
-  testWidgets('苏州日志经完整扫描入口在行程页显示3条公交和1条其他记录', (tester) async {
+  testWidgets('苏州日志经完整扫描入口按时间混排3条公交与1条充值', (tester) async {
     await tester.binding.setSurfaceSize(const Size(800, 2000));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final database = _memoryDatabase();
@@ -217,14 +217,14 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    _expectBusCards();
+    _expectBusCards(tester);
     expect(find.text('记录 4 条'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
   });
 
-  testWidgets('苏州恢复历史投影的行程卡片组件显示3条公交和1条其他记录', (tester) async {
+  testWidgets('苏州恢复历史投影按时间混排3条公交与1条充值', (tester) async {
     await tester.binding.setSurfaceSize(const Size(800, 2000));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final saved = (await tester.runAsync(() => _saveAndRestore(view)))!;
@@ -248,7 +248,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    _expectBusCards();
+    _expectBusCards(tester);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
@@ -294,9 +294,12 @@ void _expectBusJourneys<T>(Iterable<JourneyPresentation<T>> journeys) {
   );
 }
 
-void _expectBusCards() {
-  expect(find.text('历史行程 3'), findsOneWidget);
-  expect(find.text('其他记录 1'), findsOneWidget);
+void _expectBusCards(WidgetTester tester) {
+  expect(find.text('历史行程 4'), findsOneWidget);
+  expect(find.textContaining('其他记录'), findsNothing);
+  expect(find.text('充值'), findsOneWidget);
+  final cards = tester.widgetList<TripEntryCard>(find.byType(TripEntryCard));
+  expect(cards.map((card) => _compact(card.info.rawHex)), _transactions);
   expect(find.byType(TripEntryCard), findsNWidgets(4));
   for (final line in ['301路', '204路', '8路']) {
     expect(find.text(line), findsOneWidget);

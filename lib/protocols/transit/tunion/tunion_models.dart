@@ -313,7 +313,9 @@ class TUnionTripRecord {
   /// 仅适用于 0x1E 的消费与充值类型，不复用 0x18 的类型码。
   bool get isConsume =>
       const {0x02, 0x04, 0x05, 0x06, 0x07, 0x08}.contains(journeyTypeCode);
-  bool get isRecharge => typeCode == 0x09 || typeCode == 0x0A;
+  bool get isRecharge => isRechargeType(typeCode);
+
+  static bool isRechargeType(int code) => code == 0x09 || code == 0x0A;
 
   /// 标准进站类型及受理方证据确认的沈阳地方进站类型。
   bool get isEntry => journeyTypeCode == 0x01 || journeyTypeCode == 0x03;

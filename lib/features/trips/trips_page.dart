@@ -113,14 +113,50 @@ class CurrentTripsBody extends StatelessWidget {
               parser == CardParserIds.localCard &&
                   app.localReadResult?.info.isSZT == true
         ? LocalTripProfile.shenzhen
+        : app.localReadResult?.info.isWHCTC == true
+        ? LocalTripProfile.wuhan
         : LocalTripProfile.general;
-    final localTrips =
+    final primaryLocal =
         parser == CardParserIds.localCard ||
             parser == CardParserIds.lingnanTong ||
             parser == CardParserIds.lingnanTunion ||
             parser == CardParserIds.shenzhenTunion
-        ? (app.localReadResult?.trips ?? const <ApduRecord>[])
-        : const <ApduRecord>[];
+        ? app.localReadResult
+        : null;
+    final localApplications = {
+      for (final application in app.applications)
+        if (application.payload case final ReadResult wallet
+            when application.confirmed && wallet.trips.isNotEmpty)
+          application.appId: (
+            wallet,
+            localTripProfileOf({'profile': application.appId}),
+          ),
+    };
+    // Older results carry a primary wallet instead of a per-application row.
+    // An APPY + PAY.TICL summary can be a different ReadResult for the same purse.
+    final primaryAppId = switch (primaryLocal?.info) {
+      CardInfo(isLNT: true) || CardInfo(isYCT: true) => 'lingnan',
+      CardInfo(isSZT: true) => 'shenzhen',
+      CardInfo(isWHCTC: true) => 'wuhan',
+      CardInfo(isSuxin: true) => 'suzhou_suxin',
+      CardInfo(isCika: true) => 'suzhou_cika',
+      CardInfo(isTFT: true) => 'tft',
+      CardInfo(isBmac: true) || CardInfo(isBeijing: true) =>
+        localApplications.containsKey('beijing') ? 'beijing' : 'df1001',
+      CardInfo(isMacauPass: true) => 'macau',
+      _ => null,
+    };
+    final localWallets = [
+      ...localApplications.values,
+      if (primaryLocal != null &&
+          primaryLocal.trips.isNotEmpty &&
+          !localApplications.containsKey(primaryAppId))
+        (primaryLocal, localProfile),
+    ];
+    final localTripCount = localWallets.fold(
+      0,
+      (total, entry) => total + entry.$1.trips.length,
+    );
     // 0x18 交易明细为主干，0x1A 按侧拆分、0x1E 未关联记录独立保留，
     // 合并为按时间倒序的行程流。
     final stream = buildTripStream(
@@ -131,6 +167,7 @@ class CurrentTripsBody extends StatelessWidget {
     );
     final cuRecords = partitionShanghaiMirroredRecords(
       parserId: stream.isEmpty ? null : app.parsedCard?.parserId,
+      displayCardType: app.lastIdentified?.identity.cardType,
       tunionTransactions: app.parsedCard?.transactions ?? const [],
       cityUnionTransactions: cuTransactions,
     );
@@ -138,7 +175,7 @@ class CurrentTripsBody extends StatelessWidget {
     final noRecords =
         stream.isEmpty &&
         cuTransactions.isEmpty &&
-        localTrips.isEmpty &&
+        localWallets.isEmpty &&
         cashCount == 0;
     final emptyRecords = Card(
       child: ListTile(
@@ -160,14 +197,14 @@ class CurrentTripsBody extends StatelessWidget {
             (app.isOctopusCard ||
                 analysis != null ||
                 app.cityUnionDetected ||
-                localTrips.isNotEmpty)) ...[
+                localWallets.isNotEmpty)) ...[
           _SessionHeader(
             analysis: analysis,
             app: app,
             recordCount:
                 stream.length +
                 cuRecords.independent.length +
-                localTrips.length +
+                localTripCount +
                 cashCount,
           ),
           const SizedBox(height: 12),
@@ -176,13 +213,13 @@ class CurrentTripsBody extends StatelessWidget {
         if (cashLog != null && cashCount > 0) TUnionCashLogView(log: cashLog),
         if (stream.isNotEmpty)
           TripStreamView(stream: stream, app: app, isRemote: app.isRemoteUse),
-        if (localTrips.isNotEmpty)
+        for (final (wallet, profile) in localWallets)
           LocalCardTripList(
-            trips: localTrips,
-            profile: localProfile,
+            trips: wallet.trips,
+            profile: profile,
             currencySymbol: app.cardCurrency.symbol,
             cityNameOf: app.cityNameOf,
-            titlePrefix: app.localReadResult?.info.cardKindLabel,
+            titlePrefix: wallet.info.cardKindLabel,
             initialFilters: app.recoveryFilters['live:local'],
             onFiltersChanged: (values) =>
                 app.recoveryFilters['live:local'] = values,
@@ -223,13 +260,18 @@ class _SessionHeader extends StatelessWidget {
     if (app.isOctopusCard) return _octopusSummary(context);
     final identity = analysis?.identity;
     final wallet = analysis?.wallet;
+    final parsed = app.parsedCard;
     final local = app.localReadResult;
-    final isLocal = local != null;
+    final isLocal =
+        local != null &&
+        !CardParserIds.isTUnionFamily(parsed?.parserId) &&
+        !app.cityUnionDetected;
     final cardNumber = app.cityUnionDetected
         ? app.lastIdentified?.cardNumber ??
               app.cityUnionPublicInfo?.cityCardNumber
         : isLocal
-        ? (local.info.cardNumber.isEmpty ? null : local.info.cardNumber)
+        ? local.info.displayCardNumber ??
+              (local.info.cardNumber.isEmpty ? null : local.info.cardNumber)
         : wallet?.cardNumber;
     final prefix = analysis == null ? null : app.cardPrefixOf(cardNumber);
     final cardName = app.cityUnionDetected
@@ -240,10 +282,16 @@ class _SessionHeader extends StatelessWidget {
               identity?.cardFamily ??
               identity?.operatorName ??
               '—';
-    final balance = isLocal
-        ? local.info.observedBalance
-        : wallet?.balanceFen ??
-              (app.cityUnionDetected ? app.parsedCard?.info.balanceFen : null);
+    final balance = parsed?.primaryBalanceFen;
+    final balanceText = isLocal && local.info.isCika
+        ? local.info.observedRemainingTrips == null
+              ? '剩余次数未知'
+              : '剩余 ${local.info.observedRemainingTrips} 次'
+        : app.balanceDisplay.formatBalance(
+                balance,
+                symbol: wallet?.currency.symbol ?? app.cardCurrency.symbol,
+              ) ??
+              '—';
 
     return Card(
       child: Padding(
@@ -274,12 +322,7 @@ class _SessionHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  app.balanceDisplay.formatBalance(
-                        balance,
-                        symbol:
-                            wallet?.currency.symbol ?? app.cardCurrency.symbol,
-                      ) ??
-                      '—',
+                  balanceText,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                     color: scheme.primary,

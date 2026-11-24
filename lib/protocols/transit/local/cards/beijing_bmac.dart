@@ -4,6 +4,7 @@ import '../apdu_exchange.dart';
 import '../card_aid.dart';
 import '../local_card_models.dart';
 import '../local_hex.dart';
+import 'df1001_directory.dart';
 
 class BeijingBmac {
   BeijingBmac(this._apdu);
@@ -16,15 +17,16 @@ class BeijingBmac {
     List<ApduRecord> records,
     CardExtras extras,
   ) async {
-    if (await _apdu(CardAid.selectMf, 'BMAC MF', records: records) == null) {
-      return false;
-    }
-    final issuer = await _apdu(
-      const [0x00, 0xB0, 0x84, 0x00, 0x3C],
-      'BMAC 发行信息',
-      records: records,
-      strict: true,
-    );
+    final directory = Df1001Directory(_apdu);
+    return await directory.select(records) && identify(directory, info, extras);
+  }
+
+  static bool identify(
+    Df1001Directory directory,
+    CardInfo info,
+    CardExtras extras,
+  ) {
+    final issuer = directory.issuer;
     if (issuer == null || issuer.length != 60) return false;
     final serial = issuer.sublist(0, 8);
     final effective = _date(issuer.sublist(24, 28));
@@ -36,17 +38,8 @@ class BeijingBmac {
         expiry.isBefore(effective)) {
       return false;
     }
-    final basic = await _apdu(
-      const [0x00, 0xB0, 0x85, 0x00, 0x20],
-      'BMAC 基本信息',
-      records: records,
-      strict: true,
-    );
+    final basic = directory.basic;
     if (basic == null || basic.length != 32) return false;
-    if (await _apdu(CardAid.select1001, 'BMAC DF 1001', records: records) ==
-        null) {
-      return false;
-    }
     info
       ..isBmac = true
       ..cardNumber = LocalHex.bytesToHex(serial)

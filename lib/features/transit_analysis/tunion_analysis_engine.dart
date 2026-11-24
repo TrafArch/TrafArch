@@ -77,6 +77,7 @@ class AnalysisEngine {
       basicPos: (t) => t.terminalId,
       eventTime: (p) => p.time,
       eventPos: (p) => p.terminalId,
+      compatible: (txn, cycle) => txn.isRecharge == cycle.isRecharge,
     );
     final sideLinks = matchTunionDisplayEvents(
       card.transactions,
@@ -85,6 +86,7 @@ class AnalysisEngine {
       basicPos: (t) => t.terminalId,
       eventTime: (p) => p.time,
       eventPos: (p) => p.terminal,
+      compatible: (txn, _) => !txn.isRecharge,
     );
     final rideAnnotations = _buildRideAnnotations(
       card,

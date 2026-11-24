@@ -49,6 +49,31 @@ void main() {
       expect(trip.timestamp.minute, 30);
     });
 
+    test('MF 或其文件拒绝时仍选择 AP1.WHCTC；余额只来自选中的应用', () async {
+      for (final allowMf in [false, true]) {
+        var selected = false;
+        final balanceUnder = <bool>[];
+        final link = _CardLink((command) {
+          final cmd = _hex(command);
+          if (cmd == '00A40000023F00') return allowMf ? _ok([]) : [0x6a, 0x82];
+          if (cmd == '00B08A0000' || cmd == '00B0850000') return [0x6a, 0x82];
+          if (cmd == _selectWhctc) {
+            selected = true;
+            return _ok([]);
+          }
+          if (cmd == '805C000204') {
+            balanceUnder.add(selected);
+            return _ok([0, 0, 0, selected ? 250 : 100]);
+          }
+          return [0x6a, 0x82];
+        });
+        final result = (await LocalCardReader(link.call).read())!;
+        expect(result.readResult.info.observedBalance, 250);
+        expect(result.readResult.info.cardNumber, isEmpty);
+        expect(balanceUnder, [true]);
+      }
+    });
+
     test('余额高位为符号位时按参考实现还原为正数', () async {
       final link = _CardLink((command) {
         if (_hex(command) == '805C000204') {

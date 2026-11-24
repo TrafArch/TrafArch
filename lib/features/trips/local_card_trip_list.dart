@@ -54,7 +54,10 @@ class LocalCardTripList extends StatelessWidget {
           ? '${switch (profile) {
               LocalTripProfile.lingnan => '岭南通',
               LocalTripProfile.shenzhen => '深圳通',
-              LocalTripProfile.general => '地方交通卡',
+              LocalTripProfile.suxin => '苏州·苏薪卡',
+              LocalTripProfile.cika => '苏州·计次卡',
+              LocalTripProfile.tft => '天府通',
+              LocalTripProfile.general || LocalTripProfile.wuhan => '地方交通卡',
             }} · ${trips.length} 条记录'
           : '记录 ${trips.length} 条',
       initialFilters: initialFilters,

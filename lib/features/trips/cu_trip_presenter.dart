@@ -18,8 +18,8 @@ enum CuTripSourceFilter {
 const cuTripSourceLabels = {
   CuTripSourceFilter.transaction: '0x18 交易',
   CuTripSourceFilter.recharge: '0x10 充值',
-  CuTripSourceFilter.shanghaiForeign: '0x06 异地交易',
-  CuTripSourceFilter.foreign: '0x1A 异地交易',
+  CuTripSourceFilter.shanghaiForeign: '0x06 交易',
+  CuTripSourceFilter.foreign: '0x1A 交易',
   CuTripSourceFilter.other: '其他文件',
 };
 
@@ -34,21 +34,26 @@ TripCardPresentation<CuTripSourceFilter> describeCuTrip(
   bool showQingdaoMetroLink = true,
 }) {
   final record = transaction.record;
-  final metro = showQingdaoMetroLink ? transaction.qingdaoMetro : null;
+  final isRecharge = record.kind == CityUnionTransactionKind.recharge;
+  final metro = showQingdaoMetroLink && !isRecharge
+      ? transaction.qingdaoMetro
+      : null;
   final location = metro == null ? transaction.location.value : null;
   final kind =
       CityUnionLookupRules.presentation(transaction.carrier)?.$1 ??
       location?.kind;
   final mode = metro != null
       ? TripModeFilter.rail
-      : record.kind == CityUnionTransactionKind.recharge
+      : isRecharge
       ? TripModeFilter.other
       : switch (kind) {
           'bus' || 'custom_bus' || 'brt' => TripModeFilter.bus,
           'metro' || 'rail' || 'maglev' || 'tram' => TripModeFilter.rail,
           _ => TripModeFilter.other,
         };
-  final line = mode == TripModeFilter.bus
+  final line = isRecharge
+      ? null
+      : mode == TripModeFilter.bus
       ? formatJourneyBusLine(location?.line)
       : location?.line;
   final city =
@@ -57,15 +62,17 @@ TripCardPresentation<CuTripSourceFilter> describeCuTrip(
   final amountText = transaction.amountText(symbol: currencySymbol);
   final info = TripEntryInfo(
     sourceLabel: transaction.sourceLabel,
-    title:
-        '${metro == null ? transaction.kindLabel : (metro.isEntry ? '进站' : '出站')} · '
-        '${metro == null ? transaction.locationLabel : '站点未记录'} · '
-        '序号 ${record.sequence}',
+    title: isRecharge
+        ? '充值'
+        : '${metro == null ? transaction.kindLabel : (metro.isEntry ? '进站' : '出站')} · '
+              '${metro == null ? transaction.locationLabel : '站点未记录'} · '
+              '序号 ${record.sequence}',
     line: line,
     timeText: transaction.timeLabel,
     amountText: amountText ?? '金额未知',
-    isConsume: record.kind != CityUnionTransactionKind.recharge,
-    category: metro == null
+    isConsume: !isRecharge,
+    isRecharge: isRecharge,
+    category: metro == null && !isRecharge
         ? CityUnionLookupRules.presentation(transaction.carrier)?.$2
         : null,
     badges: metro != null

@@ -194,6 +194,126 @@ void main() {
     },
   );
 
+  test('原始或曾标为异地消费的 CU 0x06 充值按原文恢复一次', () {
+    const bytes = [
+      0,
+      8,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0x01,
+      0xF4,
+      2,
+      0x20,
+      0,
+      0x11,
+      0x01,
+      1,
+      0,
+      0x20,
+      0x24,
+      9,
+      0x20,
+      0x12,
+      0,
+      0,
+    ];
+    final legacy = CuTransactionView(
+      record: CityUnionFileParser.parseWalletRecord(
+        0x06,
+        bytes,
+        kind: CityUnionTransactionKind.foreignConsumption,
+        recordNumber: 3,
+      ),
+      transactionTime: DateTime.utc(2024, 9, 20, 4),
+      location: _capturedView().location,
+    );
+    final raw = {
+      'kind': 'cu_file',
+      ...CityUnionRawFileView(sfi: 0x06, recordNumber: 3, raw: bytes).toJson(),
+    };
+    final old = _batch('old', captureCuProjection([legacy]), raw: [raw]);
+    final backup = _batch(
+      'raw',
+      null,
+      raw: [
+        raw,
+        {...raw, 'sfi': '0x19'},
+        {...raw, 'rawHex': '00 02'},
+        {...raw, 'kind': 'unrelated'},
+      ],
+    );
+    final result = projectCuArchive(
+      ArchiveHistoryResult(card: null, batches: [old, backup]),
+    );
+    final recharge = result.transactions.single;
+    expect(recharge.kindLabel, '充值');
+    expect(recharge.amountText(), '+¥5.00');
+    expect(recharge.transactionTime, DateTime.utc(2024, 9, 20, 4));
+    expect(recharge.location.candidates, isEmpty);
+    expect(result.sources[recharge]!.map((s) => s.path), [
+      'cuProjection.transactions[0]',
+      'rawEvidence[0]',
+    ]);
+    expect(old.decoded.snapshot!.encode(), old.decoded.rawJson);
+    expect(backup.decoded.snapshot!.encode(), backup.decoded.rawJson);
+  });
+
+  test('仅 CU 的旧 0x18 消费和新读取的同一 02 充值只产生一笔入账', () {
+    final data = [
+      0,
+      7,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0xF4,
+      2,
+      0x10,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0x20,
+      0x24,
+      9,
+      0x20,
+      0x12,
+      0,
+      0,
+    ];
+    CuTransactionView view(CityUnionTransactionKind kind) => CuTransactionView(
+      record: CityUnionFileParser.parseWalletRecord(
+        0x18,
+        data,
+        kind: kind,
+        recordNumber: 2,
+      ),
+      transactionTime: DateTime.utc(2024, 9, 20, 4),
+      location: ReferenceMatch(ReferenceMatchStatus.unknown, const []),
+    );
+    final old = _batch(
+      'old',
+      captureCuProjection([view(CityUnionTransactionKind.consumption)]),
+    );
+    final recent = _batch(
+      'recent',
+      captureCuProjection([view(CityUnionTransactionKind.recharge)]),
+    );
+    final cu = projectCuArchive(
+      ArchiveHistoryResult(card: null, batches: [old, recent]),
+    );
+    expect(cu.transactions, hasLength(1));
+    expect(cu.transactions.single.amountText(), '+¥5.00');
+    expect(cu.sources.values.single.map((s) => s.batchId), ['old', 'recent']);
+    expect(old.decoded.snapshot!.encode(), old.decoded.rawJson);
+  });
+
   test('CU repeat reads merge source attribution while different SFIs stay separate', () {
     final recent = captureCuProjection([
       _capturedView(recordNumber: 1),
@@ -368,8 +488,9 @@ CuTransactionView _capturedView({int recordNumber = 5, int sfi = 0x06}) =>
 
 ArchiveBatchEvidence _batch(
   String id,
-  Map<String, dynamic> projection, {
+  Map<String, dynamic>? projection, {
   ArchiveContext context = const ArchiveContext(),
+  List<Map<String, dynamic>> raw = const [],
 }) => ArchiveBatchEvidence(
   id: id,
   readAt: 1,
@@ -379,7 +500,8 @@ ArchiveBatchEvidence _batch(
   decoded: CardSessionSnapshot.decodeResult(
     CardSessionSnapshot(
       context: context,
-      extensions: {'cuProjection': projection},
+      extensions: {'cuProjection': ?projection},
+      rawEvidence: raw,
     ).encode(),
   ),
   issues: const [],

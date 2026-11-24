@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 
 import '../domain/archive_export_options.dart';
@@ -95,6 +93,8 @@ class _ImportedArchiveRecordsState extends State<ImportedArchiveRecords> {
     null => '未提供',
     String() => value,
     num() || bool() => '$value',
-    _ => jsonEncode(value),
+    Map() => '${value.length} 个字段',
+    List() => '${value.length} 项',
+    _ => '格式未知',
   };
 }

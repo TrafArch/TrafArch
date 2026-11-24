@@ -16,6 +16,7 @@ export 'models/cross_border_payment.dart';
 export 'models/amusement_ic_data.dart';
 export 'models/felica_card_type.dart';
 export 'models/felica_models.dart';
+export 'models/felica_capture.dart';
 export 'models/suica_transaction_details.dart';
 export 'parsers/felica_block_parser.dart';
 export 'parsers/amusement_ic_parser.dart';

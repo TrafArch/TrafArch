@@ -184,6 +184,40 @@ void main() {
   });
 
   test(
+    'Shanghai 06 recharge copies fold per file and preserve older credits',
+    () {
+      final bytes = _bytes(type: 2);
+      final main = _cu(bytes, kind: CityUnionTransactionKind.recharge);
+      final copy = _cu(bytes, sfi: 6, kind: CityUnionTransactionKind.recharge);
+      final extraSlot = _cu(
+        bytes,
+        sfi: 6,
+        recordNumber: 2,
+        kind: CityUnionTransactionKind.recharge,
+      );
+      final older = _cu(
+        _bytes(sequence: 8, type: 2),
+        sfi: 6,
+        kind: CityUnionTransactionKind.recharge,
+      );
+      final debit = _cu(_bytes(type: 9), sfi: 6);
+      final rows = [copy, older, extraSlot, debit, main];
+      final result = _partition([_tu(main)], rows);
+      expect(result.independent, [older, extraSlot, debit]);
+      expect(result.mirrored, [copy, main]);
+      final cuOnly = _partition([], rows);
+      expect(cuOnly.independent, [older, extraSlot, debit, main]);
+      expect(cuOnly.mirrored, [copy]);
+      final harbin = partitionShanghaiMirroredRecords(
+        parserId: CardParserIds.harbinTunion,
+        tunionTransactions: [_tu(main)],
+        cityUnionTransactions: rows,
+      );
+      expect(harbin.independent, [copy, older, extraSlot, debit]);
+    },
+  );
+
+  test(
     'two matching TU observations can fold two preserved CU observations',
     () {
       final first = _cu(_bytes(), recordNumber: 1);
@@ -230,11 +264,16 @@ List<int> _bytes({int sequence = 14, int amount = 400, int type = 9}) => [
   0x04,
 ];
 
-CuTransactionView _cu(List<int> bytes, {int sfi = 0x18, int recordNumber = 1}) {
+CuTransactionView _cu(
+  List<int> bytes, {
+  int sfi = 0x18,
+  int recordNumber = 1,
+  CityUnionTransactionKind kind = CityUnionTransactionKind.consumption,
+}) {
   final record = CityUnionFileParser.parseWalletRecord(
     sfi,
     bytes,
-    kind: CityUnionTransactionKind.consumption,
+    kind: kind,
     recordNumber: recordNumber,
   );
   return CuTransactionView(

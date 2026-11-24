@@ -73,6 +73,22 @@ class TlvParseResult {
 }
 
 abstract final class BerTlvParser {
+  /// Empty SELECT bodies are common. When the FCI declares a DF name,
+  /// it must identify the AID requested by the wallet reader.
+  /// Returns null when no DF name was declared.
+  static bool? selectedAidMatches(List<int> body, List<int> aid) {
+    final names = parse(body).roots
+        .where((tag) => tag.tagHex == '6F')
+        .expand((tag) => tag.children)
+        .where((tag) => tag.tagHex == '84');
+    if (names.isEmpty) return null;
+    return names.every(
+      (tag) =>
+          tag.value.length == aid.length &&
+          aid.indexed.every((byte) => tag.value[byte.$1] == byte.$2),
+    );
+  }
+
   static TlvParseResult parse(
     List<int> bytes, {
     TlvPolicy policy = TlvPolicy.discovery,

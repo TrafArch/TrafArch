@@ -24,25 +24,22 @@ class WuhanTongCard {
 
   /// 探测并读取卡号 / 有效期 / 余额；应用选择失败返回 false（继续后续探测）。
   Future<bool> probe(CardInfo info, List<ApduRecord> records) async {
-    await _apdu(CardAid.selectMf, 'SELECT MF', records: records);
-    final serial = await _apdu(
-      const [0x00, 0xB0, 0x80 | _sfiSerial, 0x00, 0x00],
-      'SFI 10',
-      records: records,
-    );
-    if (serial == null) return false;
-    final infoFile = await _apdu(
-      const [0x00, 0xB0, 0x80 | _sfiInfo, 0x00, 0x00],
-      'SFI 5',
-      records: records,
-    );
-    if (infoFile == null) return false;
-
-    var balance = await _apdu(
-      CardAid.balanceCheck,
-      'BALANCE CHECK',
-      records: records,
-    );
+    List<int>? serial;
+    List<int>? infoFile;
+    if (await _apdu(CardAid.selectMf, 'SELECT MF', records: records) != null) {
+      serial = await _apdu(
+        const [0x00, 0xB0, 0x80 | _sfiSerial, 0x00, 0x00],
+        'WHCTC MF / SFI 10',
+        records: records,
+        verbose: true,
+      );
+      infoFile = await _apdu(
+        const [0x00, 0xB0, 0x80 | _sfiInfo, 0x00, 0x00],
+        'WHCTC MF / SFI 5',
+        records: records,
+        verbose: true,
+      );
+    }
     final selected = await _apdu(
       CardAid.payWhctc,
       'SELECT AP1.WHCTC',
@@ -53,20 +50,20 @@ class WuhanTongCard {
     info.isWHCTC = true;
     info.cityCode = cityCode;
     info.rawInfo = infoFile;
-    if (serial.length >= 5) {
+    if (serial != null && serial.length >= 5) {
       info.cardNumber = LocalHex.bytesToHex(serial.sublist(0, 5));
     }
-    if (infoFile.length >= 24) {
+    if (infoFile != null && infoFile.length >= 24) {
       info.expiryDate = _bcdDate(infoFile.sublist(16, 20));
       info.startDate = _bcdDate(infoFile.sublist(20, 24));
     }
 
-    balance ??= await _apdu(
+    final balance = await _apdu(
       CardAid.balanceCheck,
       'BALANCE CHECK',
       records: records,
     );
-    if (balance != null && balance.length >= 4) {
+    if (balance != null && balance.length == 4) {
       info.balance = _balanceOf(balance.sublist(0, 4));
     }
     return true;

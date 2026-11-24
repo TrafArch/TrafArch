@@ -24,17 +24,22 @@ class _HomePageState extends State<HomePage> {
   AppDependencies get app => widget.app;
   bool get scanning => app.scanning;
   bool _recoveryObserved = false;
+  late bool _nfcUnavailable;
 
   @override
   void initState() {
     super.initState();
+    _nfcUnavailable = app.nfcUnavailableMessage != null;
     app.addListener(_refresh);
     _scheduleAutoScan();
   }
 
   void _refresh() {
     if (mounted) setState(() {});
-    if (!_recoveryObserved && app.recoveryReady) {
+    final unavailable = app.nfcUnavailableMessage != null;
+    final justEnabled = _nfcUnavailable && !unavailable;
+    _nfcUnavailable = unavailable;
+    if (app.recoveryReady && (!_recoveryObserved || justEnabled)) {
       _recoveryObserved = true;
       _scheduleAutoScan();
     }
@@ -44,6 +49,8 @@ class _HomePageState extends State<HomePage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted &&
           widget.active &&
+          ModalRoute.isCurrentOf(context) != false &&
+          app.nfcUnavailableMessage == null &&
           app.recoveryReady &&
           !app.autoScanConsumed &&
           !scanning) {
@@ -57,6 +64,7 @@ class _HomePageState extends State<HomePage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.app != widget.app) {
       oldWidget.app.removeListener(_refresh);
+      _nfcUnavailable = app.nfcUnavailableMessage != null;
       app.addListener(_refresh);
       _scheduleAutoScan();
     }
@@ -128,13 +136,17 @@ class _HomePageState extends State<HomePage> {
                   ),
                   child: AdaptiveSupportingContent(
                     primary: ScanControls(
-                      scanning: scanning,
+                      scanning: scanning && app.nfcUnavailableMessage == null,
+                      nfcUnavailableMessage: app.nfcUnavailableMessage,
                       progress: app.octopus.busy ? null : app.readProgress,
                       statusText: _statusText,
                       buttonLabel: _buttonLabel,
-                      onScanCard: () {
-                        if (widget.active && !scanning) app.scanOnce();
-                      },
+                      onScanCard:
+                          widget.active &&
+                              !scanning &&
+                              app.nfcUnavailableMessage == null
+                          ? app.scanOnce
+                          : null,
                     ),
                     secondary: RepaintBoundary(
                       child: app.recoveredCapture == null

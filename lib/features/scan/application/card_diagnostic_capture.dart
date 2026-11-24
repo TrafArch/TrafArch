@@ -4,45 +4,52 @@ import '../domain/card_read_outcome.dart';
 import 'response_diagnostic_capture.dart';
 
 /// Uses already-read fields only. NFC UID/IDm never masquerades as a card number.
-Map<String, Object?> captureCardInfo(CardReadOutcome result) =>
-    switch (result) {
-      TransitReadOutcome(:final card, :final applications) => {
-        'cardNumber': card.localCard?.info.cardNumber.isNotEmpty == true
-            ? card.localCard!.info.cardNumber
-            : card.info.displayCardNumber,
-        'applicationSerialRaw': card.info.applicationSerial,
-        'cardName': card.parserName,
-        'cardType': card.parserId,
-        'cardKindRaw': card.info.cardKind,
-        'cardTypeRaw': card.info.cardTypeId,
-        'parserId': card.parserId,
-        'parserName': card.parserName,
-        'selectedAid': card.selectedAidHex,
-        'dualApplication': card.dualApplication,
-        'applications': [
-          for (final application in applications) application.toJson(),
-        ],
-        'identificationState': 'parser',
-      },
-      FelicaReadOutcome(:final card) => {
-        'cardNumber': null,
-        'idm': card.idm,
-        if (card.amusementIc case final data?) ...{
-          'accessCode': data.accessCode,
-          'issuer': data.issuer,
-        },
-        'cardName': card.displayName,
-        'cardType': card.cardType,
-        'productType': card.cardProductType.name,
-        'identificationState': 'parser',
-      },
-      UnsupportedReadOutcome() => {
-        'cardNumber': null,
-        'cardName': null,
-        'cardType': null,
-        'identificationState': 'unknown',
-      },
-    };
+Map<String, Object?> captureCardInfo(
+  CardReadOutcome result, {
+  bool includeApplications = true,
+}) => switch (result) {
+  TransitReadOutcome(:final card, :final applications) => {
+    'cardNumber': CardParserIds.isTUnionFamily(card.parserId)
+        ? card.info.displayCardNumber
+        : card.localCard?.info.displayCardNumber ??
+              card.localCard?.info.cardNumber ??
+              card.info.displayCardNumber,
+    'applicationSerialRaw': card.info.applicationSerial,
+    'cardName': card.parserName,
+    'cardType': card.parserId,
+    'cardKindRaw': card.info.cardKind,
+    'cardTypeRaw': card.info.cardTypeId,
+    'parserId': card.parserId,
+    'parserName': card.parserName,
+    'selectedAid': card.selectedAidHex,
+    'dualApplication': card.dualApplication,
+    if (includeApplications)
+      'applications': [
+        for (final application in applications) application.toJson(),
+      ],
+    'identificationState': 'parser',
+  },
+  FelicaReadOutcome(:final card) => {
+    'cardNumber': null,
+    'idm': card.idm,
+    if (card.amusementIc case final data?) ...{
+      'accessCode': data.accessCode,
+      'issuer': data.issuer,
+    },
+    'cardName': card.displayName,
+    'cardType': card.cardType,
+    'productType': card.cardProductType.name,
+    'identificationState': 'parser',
+  },
+  UnsupportedReadOutcome(:final applications) => {
+    'cardNumber': null,
+    'cardName': null,
+    'cardType': null,
+    'identificationState': 'unknown',
+    if (includeApplications && applications.isNotEmpty)
+      'applications': [for (final app in applications) app.toJson()],
+  },
+};
 
 Iterable<Map<String, Object?>> captureProcessRecords(ParsedCard card) sync* {
   for (final record in card.transitProcessRecords) {

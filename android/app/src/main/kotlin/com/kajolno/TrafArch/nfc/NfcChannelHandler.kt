@@ -1,19 +1,38 @@
 package com.kajolno.TrafArch.nfc
 
 import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.nfc.NfcAdapter
 import com.kajolno.TrafArch.platform.OnceResult
 import io.flutter.plugin.common.BinaryMessenger
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
-internal class NfcChannelHandler(activity: Activity, messenger: BinaryMessenger) {
+internal class NfcChannelHandler(private val activity: Activity, messenger: BinaryMessenger) {
     private val sessions = NfcSessionController(activity)
     private val channel = MethodChannel(messenger, "transit_card_analyzer/nfc")
     private val octopusChannel = MethodChannel(messenger, "transit_card_analyzer/octopus_nfc")
+    private val statusChannel = EventChannel(messenger, "transit_card_analyzer/nfc_status")
+    private val status = NfcAdapterStatusStream(sessions::adapterEnabled, sessions::onAdapterPowerChanged)
+    private var disposed = false
+    private val powerReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == NfcAdapter.ACTION_ADAPTER_STATE_CHANGED) {
+                status.onAdapterState(intent.getIntExtra(NfcAdapter.EXTRA_ADAPTER_STATE, -1))
+            }
+        }
+    }
 
     init {
         bind(channel, felicaOnly = false)
         bind(octopusChannel, felicaOnly = true)
+        // This filter contains only Android's protected NFC system broadcast.
+        activity.registerReceiver(powerReceiver, IntentFilter(NfcAdapter.ACTION_ADAPTER_STATE_CHANGED))
+        statusChannel.setStreamHandler(status)
     }
 
     private fun bind(target: MethodChannel, felicaOnly: Boolean) {
@@ -57,10 +76,18 @@ internal class NfcChannelHandler(activity: Activity, messenger: BinaryMessenger)
         }
     }
 
-    fun onResume() = sessions.onResume()
+    fun onResume() {
+        status.refresh()
+        sessions.onResume()
+    }
     fun onPause() = sessions.onPause()
 
     fun dispose() {
+        if (disposed) return
+        disposed = true
+        activity.unregisterReceiver(powerReceiver)
+        status.onCancel(null)
+        statusChannel.setStreamHandler(null)
         channel.setMethodCallHandler(null)
         octopusChannel.setMethodCallHandler(null)
         sessions.dispose()

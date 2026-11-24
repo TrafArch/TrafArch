@@ -126,9 +126,13 @@ class _GalleryReadPrompt extends StatefulWidget {
     required this.reading,
     required this.failed,
     required this.compact,
+    required this.nfcMessage,
+    required this.failureMessage,
   });
   final bool reading, failed;
   final bool compact;
+  final String? nfcMessage;
+  final String? failureMessage;
 
   @override
   State<_GalleryReadPrompt> createState() => _GalleryReadPromptState();
@@ -202,15 +206,17 @@ class _GalleryReadPromptState extends State<_GalleryReadPrompt>
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).extension<GalleryTokens>()!;
-    final title = widget.reading
-        ? '把交通卡贴近手机背面'
-        : widget.failed
-        ? '未能读到卡片'
-        : '贴卡，了解你的每一次出行';
+    final title =
+        widget.nfcMessage ??
+        (widget.reading
+            ? '把交通卡贴近手机背面'
+            : widget.failed
+            ? '未能读到卡片'
+            : '贴卡，了解你的每一次出行');
     final subtitle = widget.reading
         ? '正在读取余额与行程\n请保持贴卡，直到读取完成'
         : widget.failed
-        ? '调整卡片位置后再试一次'
+        ? widget.failureMessage ?? '调整卡片位置后再试一次'
         : '支持交通联合、城市一卡通\n及部分 FeliCa 卡片';
     return Column(
       key: const ValueKey('home-read-prompt'),

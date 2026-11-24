@@ -12,6 +12,7 @@ import 'package:transit_card_analyzer/protocols/transit/city_union/city_union_mo
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_models.dart';
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_process_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/local/local_card_models.dart';
+import 'package:transit_card_analyzer/protocols/transit/multiapp/application_evidence.dart';
 import 'package:transit_card_analyzer/protocols/felica/models/felica_models.dart';
 import 'package:transit_card_analyzer/protocols/felica/models/felica_card_type.dart';
 import 'package:transit_card_analyzer/shared/diagnostics/diagnostic_event.dart';
@@ -39,6 +40,41 @@ Map<String, Object?> _frame(
 };
 
 void main() {
+  test('secondary TICL frames decode with the selected wallet on a Shenzhen TU card', () {
+    final purse = ReadResult(
+      info: CardInfo()
+        ..isLNT = true
+        ..balance = 100
+        ..currencyCode = 'CNY',
+      records: [],
+      extras: CardExtras()..slots['lnt.balanceRaw'] = [0, 0, 0, 100],
+    );
+    final result = TransitReadOutcome(
+      const ParsedCard(
+        parserId: CardParserIds.shenzhenTunion,
+        parserName: '深圳通',
+        info: TUnionCardInfo(),
+        transactions: [],
+      ),
+      applications: [
+        ApplicationEvidence.succeeded(
+          'lingnan',
+          '岭南通钱包（PAY.TICL）',
+          payload: purse,
+        ),
+      ],
+    );
+    final command = [0x80, 0x5C, 0, 2, 4];
+    final body = [0, 0, 0, 100];
+    final frames = captureResponseFields(result, [
+      _frame(0, '5041592E5449434C', command, body, stage: '岭南通钱包（PAY.TICL）'),
+      _frame(1, '5041592E41505059', command, body, stage: '岭南通资料（PAY.APPY）'),
+    ]).toList();
+    expect(frames[0]['parserId'], CardParserIds.lingnanTong);
+    expect((frames[0]['fields'] as Map)['balanceMinorUnits'], 100);
+    expect(frames[1]['state'], 'unparsed');
+  });
+
   test('完整导出response为冻结解析字段，raw与原始日志不变', () async {
     final logger = AppLogger(store: MemoryLogStore())..enabled = true;
     addTearDown(logger.close);

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/app/app_dependencies.dart';
@@ -9,6 +11,44 @@ import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
 import 'support/test_database.dart';
 
 void main() {
+  testWidgets('legacy home waits for NFC to be enabled before its first scan', (
+    tester,
+  ) async {
+    final states = StreamController<NfcAdapterState>.broadcast(sync: true);
+    addTearDown(states.close);
+    final channel = _NoopNfcChannel();
+    final app = AppDependencies(
+      database: testDatabase(),
+      settingsStore: MemorySettingsStore(),
+      bundle: MissingTestAssets(),
+      channel: channel,
+      nfcAdapterStates: states.stream,
+    );
+    await tester.runAsync(app.init);
+    states.add(NfcAdapterState.disabled);
+    await tester.pumpWidget(
+      TransitCardAnalyzerApp(
+        createDependencies: () => app,
+        enableUpdateChecks: false,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('请先打开系统 NFC'), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, '开始读取'))
+          .onPressed,
+      isNull,
+    );
+    expect(channel.discoveries, 0);
+
+    states.add(NfcAdapterState.enabled);
+    await tester.pumpAndSettle();
+    expect(channel.discoveries, 1);
+    expect(find.textContaining('请先打开系统 NFC'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   for (final width in [390.0, 800.0]) {
     testWidgets('switching tabs at ${width}dp does not setState during build', (
       tester,
@@ -40,8 +80,13 @@ void main() {
 }
 
 class _NoopNfcChannel implements NfcChannel {
+  int discoveries = 0;
   @override
-  Future<NfcScanResult?> scanOnce() async => null;
+  Future<NfcScanResult?> scanOnce() async {
+    discoveries++;
+    return null;
+  }
+
   @override
   Future<void> stopScan() async {}
   @override

@@ -47,6 +47,8 @@ PendingCardSave? captureAmusementIcArchive(
     ),
     extensions: {
       'captureAttemptId': attemptId,
+      if (card.systemResults.isNotEmpty)
+        'felicaSystems': captureFelicaSystems(card),
       'amusementIc': {
         'version': 1,
         'identityKind': 'amusement-ic-access-code',

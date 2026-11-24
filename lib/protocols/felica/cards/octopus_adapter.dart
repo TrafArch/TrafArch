@@ -1,6 +1,10 @@
 library;
 
 import '../detection/octopus_detector.dart';
+import '../../octopus/octopus_balance_reader.dart';
+import '../felica_failure_mapping.dart';
+import '../felica_hex.dart';
+import '../protocol/felica_protocol.dart';
 import '../models/cross_border_payment.dart';
 import '../models/felica_card_type.dart';
 import '../models/felica_models.dart';
@@ -45,7 +49,10 @@ class OctopusAdapter implements FelicaCardAdapter {
       context.systemCodes.contains(FelicaKnownSystemCodes.octopus);
 
   @override
-  Future<FelicaScanResult> read(FelicaCardContext context) async {
+  Future<FelicaScanResult> read(
+    FelicaCardContext context, {
+    bool readSelectedBalance = false,
+  }) async {
     final product = detector.detect(evidenceBuilder(context));
     final profile = product ?? FelicaCardProfiles.octopus;
 
@@ -55,6 +62,72 @@ class OctopusAdapter implements FelicaCardAdapter {
           ? '$_serviceUnavailable；产品类型未确认，不预设第二钱包'
           : _serviceUnavailable,
     );
+    final statuses = <FelicaReadStatus>[];
+    final blocks = <FelicaRawBlock>[];
+    if (readSelectedBalance) {
+      const stage = '八达通港币余额';
+      int? minor;
+      List<int>? block;
+      FelicaReadState state = FelicaReadState.failed;
+      String message;
+      FelicaProtocolException? error;
+      if (!OctopusBalanceReader.isValidIdm(context.idm ?? '')) {
+        message = '8008 系统未返回有效 IDm';
+      } else {
+        try {
+          final response = await context.protocol.readWithoutEncryption(
+            idm: context.idmBytes,
+            serviceCodes: const [OctopusBalanceReader.serviceCode],
+            blockListElements: const [OctopusBalanceReader.blockListElement],
+          );
+          if (response.ok) {
+            block = response.blocks.single;
+            minor = OctopusBalanceReader.decodeBalanceBlock(block);
+            message = '已读取 0117 服务余额块';
+            state = FelicaReadState.success;
+          } else {
+            message = '余额块拒绝读取（${FelicaHex.wordCode(response.statusCode)}）';
+            state = FelicaReadState.accessDenied;
+          }
+        } on FelicaProtocolException catch (failure) {
+          error = failure;
+          message = failure.message;
+          state = failure.readState;
+        }
+      }
+      blocks.add(
+        FelicaRawBlock(
+          label: '0117 / 0',
+          bytes: block ?? const [],
+          error: minor == null ? message : null,
+        ),
+      );
+      statuses.add(
+        FelicaReadStatus(
+          stage: stage,
+          state: state,
+          message: message,
+          rawResponse: error?.raw,
+          transportFailure: error?.transportFailure,
+        ),
+      );
+      final index = wallets.indexWhere(
+        (wallet) => wallet.kind == FelicaWalletKind.octopusHkd,
+      );
+      final wallet = wallets[index];
+      wallets[index] = FelicaWallet(
+        walletId: wallet.walletId,
+        kind: wallet.kind,
+        name: wallet.name,
+        balanceMinorUnits: minor,
+        currency: wallet.currency,
+        fractionDigits: wallet.fractionDigits,
+        readState: minor == null
+            ? FelicaWalletReadState.failed
+            : FelicaWalletReadState.success,
+        errorMessage: minor == null ? message : null,
+      );
+    }
 
     return FelicaScanResult(
       cardType: profile.cardType,
@@ -68,12 +141,15 @@ class OctopusAdapter implements FelicaCardAdapter {
           : null,
       transitCapability: _transitCapabilityText(profile.type),
       statuses: [
-        FelicaReadStatus(
-          stage: product == null ? '八达通卡型识别' : '八达通产品识别',
-          state: FelicaReadState.unsupported,
-          message: _statusMessage(product),
-        ),
+        if (!readSelectedBalance)
+          FelicaReadStatus(
+            stage: product == null ? '八达通卡型识别' : '八达通产品识别',
+            state: FelicaReadState.unsupported,
+            message: _statusMessage(product),
+          ),
+        ...statuses,
       ],
+      rawBlocks: blocks,
       scannedAt: DateTime.now(),
     );
   }

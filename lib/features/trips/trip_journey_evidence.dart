@@ -78,6 +78,7 @@ Map<TripEntry, LiveJourneyEvidence> buildLiveJourneyEvidence({
   final transactionApplicationCounts = <TunionApplicationSide, int>{};
   for (final entry in stream) {
     if (entry case TransactionTripEntry(:final trip)) {
+      if (trip.isRecharge) continue;
       final key =
           trip.displayProcessKey ??
           (trip.matchedProcessTrip == null

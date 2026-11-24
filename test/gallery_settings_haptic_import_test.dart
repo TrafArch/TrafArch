@@ -249,10 +249,16 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('选择 TrafArch 数据仍进入原有导入预览', (tester) async {
+  testWidgets('样例导入预览只显示文件信息，不回显 NFC 帧 JSON', (tester) async {
     final backup = jsonEncode({
       'cards': [
-        {'name': '上海公共交通卡', 'number': '1234'},
+        {
+          'name': '上海公共交通卡',
+          'number': '1234',
+          'rawEvidence': [
+            {'kind': 'physical_frame', 'sessionId': 'imported-session'},
+          ],
+        },
       ],
     });
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -277,9 +283,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(c.overlay, GalleryOverlay.importPreview);
-    expect(find.text('文件内容预览 · 不会修改当前样例'), findsOneWidget);
+    expect(find.text('导入预览'), findsOneWidget);
     expect(find.textContaining('识别到 1 张卡片记录'), findsOneWidget);
     expect(find.textContaining('backup.json'), findsOneWidget);
+    expect(find.textContaining('physical_frame'), findsNothing);
+    expect(find.textContaining('imported-session'), findsNothing);
 
     await tester.pumpWidget(const SizedBox.shrink());
   });

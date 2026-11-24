@@ -20,23 +20,21 @@ extension _GalleryDetail on _GalleryViewState {
     final ledger = c.ledger(card);
     final body = switch (c.detailTab) {
       1 => _spendingChildren(card),
-      2 => _cardInformation(card),
+      2 => [_cardInformation(card)],
       _ => <Widget>[
         if (ledger.isEmpty) _empty('暂无交易记录', '卡内记录可能不完整'),
-        for (final record in ledger)
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _sectionTitle(
-                record['date'] as String? ?? '日期未记录',
-                role: GalleryJourneyTypography.date,
-              ),
-              _panel(
-                _trip(record),
+        for (final group in _tripsByDate(ledger).entries) ...[
+          _tripDateHeading(group.key),
+          for (final (index, trip) in group.value.indexed) ...[
+            if (index > 0) _gap(8),
+            Builder(
+              builder: (_) => _panel(
+                _trip(trip),
                 padding: const EdgeInsets.symmetric(horizontal: 14),
               ),
-            ],
-          ),
+            ),
+          ],
+        ],
         _gap(16),
         _text(
           '仅展示样例中保留的记录，可能不代表完整历史。',
@@ -286,83 +284,22 @@ extension _GalleryDetail on _GalleryViewState {
     );
   }
 
-  List<Widget> _cardInformation(GalleryCard card) {
-    final live = _GalleryLiveScope.of(context);
-    final raw = live == null ? c.data.raw[card.id] : c.liveRaw[card.id];
-    return [
-      _panel(
-        Column(
-          children: [
-            for (final row in <(String, String)>[
-              ('完整卡号', card.pan),
-              ('发卡地', card.city),
-              ('卡种', card.type),
-              ('有效期', card.valid == '—' ? '未知' : '${card.valid}（未记录日）'),
-              ('当前余额', card.balance(c.includeOverdraft)),
-              ('最近读取', card.when),
-              ('协议', card.type),
-            ])
-              _kv(row.$1, row.$2),
-          ],
-        ),
-      ),
-      Padding(
-        padding: const EdgeInsets.only(top: 16, bottom: 8),
-        child: Row(
-          key: const ValueKey('detail-raw-header'),
-          children: [
-            Expanded(child: _text('原始数据', role: GalleryTypography.section)),
-            if (raw is Map) ...[
-              _icon(
-                Icons.copy_outlined,
-                '复制原始数据',
-                () {
-                  Clipboard.setData(ClipboardData(text: _rawText(raw)));
-                  _toast(live == null ? '已复制模拟原始数据' : '已复制原始读取证据');
-                },
-                outlined: false,
-                grouped: true,
-              ),
-              _icon(
-                Icons.feedback_outlined,
-                '原始数据反馈预览',
-                () => c.showOverlay(GalleryOverlay.rawFeedback),
-                outlined: false,
-                grouped: true,
-              ),
-            ],
-          ],
-        ),
-      ),
-      _text(
-        live == null ? '模拟样例' : '捕获时的原始读取证据',
-        role: GalleryTypography.caption,
-        color: t.muted,
-      ),
-      _gap(8),
-      if (raw is Map)
-        _hexBox(
-          live == null
-              ? 'SFI 0x18\n${raw['sfi18']}\n\nSFI 0x1E\n${raw['sfi1e']}'
-              : _rawText(raw),
-        )
-      else
-        _text(
-          live == null ? '本样例未保留原始数据' : '本次批次未保留可展示的原始证据',
-          role: GalleryTypography.caption,
-          color: t.muted,
-        ),
-    ];
-  }
-
-  String _rawText(Map raw) {
-    final text = raw['text'];
-    if (text is String) return text;
-    return [
-      if (raw['sfi18'] != null) 'SFI 0x18\n${raw['sfi18']}',
-      if (raw['sfi1e'] != null) 'SFI 0x1E\n${raw['sfi1e']}',
-    ].join('\n\n');
-  }
+  Widget _cardInformation(GalleryCard card) => _panel(
+    Column(
+      children: [
+        for (final row in <(String, String)>[
+          ('完整卡号', card.pan),
+          ('发卡地', card.city),
+          ('卡种', card.type),
+          ('有效期', card.valid == '—' ? '未知' : '${card.valid}（未记录日）'),
+          ('当前余额', card.balance(c.includeOverdraft)),
+          ('最近读取', card.when),
+          ('协议', card.type),
+        ])
+          _kv(row.$1, row.$2),
+      ],
+    ),
+  );
 
   Future<void> _selectSpendingPeriod(
     GallerySpendingPeriod period,

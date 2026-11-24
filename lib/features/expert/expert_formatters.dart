@@ -1,6 +1,7 @@
 import '../transit_analysis/tunion_analysis_models.dart';
 import '../transit_analysis/shanghai_balance_display.dart';
 import '../../protocols/transit/tunion/tunion_models.dart';
+import '../../protocols/transit/city_union/city_union_codec.dart';
 import '../../protocols/transit/city_union/city_union_models.dart';
 
 String expertValue(String? v) => v ?? '未知';
@@ -26,6 +27,15 @@ String cuRecordSubtitle(CityUnionFileView record) => switch (record) {
         '${r.transactionTypeName}',
   _ => '${record.rawHex.split(' ').length} 字节 · 未按标准解析',
 };
+
+String cuRecordSource(CityUnionFileView record, int ordinal) {
+  final slot = switch (record) {
+    CityUnionWalletTransaction r => r.recordNumber,
+    CityUnionRawFileView r => r.recordNumber,
+    _ => null,
+  };
+  return '${CityUnionCodec.sfiLabel(record.sfi)} · 记录 ${slot ?? ordinal}';
+}
 
 /// City Union 字段展示值：标准解码值优先（缺失回退原始 HEX），
 /// 附标准说明与字段级异常；原始字节始终保留在原始数据区。

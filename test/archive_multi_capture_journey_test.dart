@@ -137,6 +137,33 @@ void main() {
     _expectUnchanged(history, payloads, before);
   });
 
+  test('新增的卡种展示标签不会把旧档案中同一次乘车显示两遍', () {
+    final payloads = [
+      for (final tagged in [false, true])
+        _snapshot(
+          trips: [_trip(entry: true), _trip(entry: false)],
+          processes: [_cycle(entry: true), _cycle(entry: false)],
+          context: ArchiveContext.fromJson({
+            ..._context.toJson(),
+            if (tagged) 'displayCardType': 'china_tunion',
+          }),
+          marker: tagged ? 'with-display-type' : 'before-display-type',
+        ),
+    ];
+    final history = _history(payloads);
+    final before = _savedFields(history);
+
+    final journeys = _journeys(history);
+
+    expect(journeys, hasLength(1));
+    expect(journeys.single.state, JourneyState.completed);
+    expect(journeys.single.events.expand((event) => event.sourceIds).toSet(), {
+      'read-0',
+      'read-1',
+    });
+    _expectUnchanged(history, payloads, before);
+  });
+
   test('同一原始1A进站由进行中更新为完成后只呈现完成行程并保留两批证据', () {
     final payloads = [
       _snapshot(rails: [_rail(status: 1, withExit: false)], marker: 'entry'),

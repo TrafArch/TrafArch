@@ -149,6 +149,18 @@ native results; it does not manufacture an empty successful response.
 
 ## Lifecycle and ordering
 
+The separate EventChannel `transit_card_analyzer/nfc_status` sends an adapter
+snapshot on subscription and tracks Android adapter-state broadcasts. Its string
+values are `enabled`, `disabled` (including transitions), and `unavailable`
+(no adapter). Resume reconciles the current state after background changes.
+Only a fully enabled adapter can start a read.
+
+If `scanOnce` rejects an attempt before registration with `NFC_DISABLED` or
+`NFC_UNAVAILABLE`, there is no session to close. If power is lost after
+registration, pending discovery or exchange replies carry `NFC_DISABLED` with
+`details.sessionId`. The accepted session still goes through normal retirement
+and its ID-scoped close barrier.
+
 Native states are `WAITING`, `DISCOVERING`, `CONNECTED`, `METADATA_ONLY`, `CLOSED`.
 Reader callbacks capture the registering session. The main looper claims only the
 first discovery for that same active waiting session. The worker registers every
@@ -172,6 +184,11 @@ just before an already-entered `connect()` completed. **A successor cannot conne
 until this sweep finishes**, and background cleanup never disables successor reader
 mode or reads successor handles. No tag `connect`, `transceive`, `readBlock` or
 `close` runs on the main looper.
+
+The ordinary Dart scan waits for the captured session's close reply after acquisition
+and before reference-data processing, completion callbacks and archive writes. A
+physical release error remains visible alongside any usable observations. Each
+published FeliCa system uses the IDm returned by polling that system.
 
 Repeated close of a known retired ID joins the same retirement or returns its
 recorded outcome. It never performs another close or touches the current session.

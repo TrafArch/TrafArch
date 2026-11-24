@@ -60,6 +60,7 @@ class CommonUnitCu {
   ParsedCard? parsedCard;
 
   List<int>? _selectedAid;
+  bool _fciNamesWallet = false;
 
   /// 已选中的应用 AID；未选择时为 null。
   List<int>? get selectedAid => _selectedAid;
@@ -67,186 +68,107 @@ class CommonUnitCu {
   Future<bool> select(CardInfo info, List<ApduRecord> records) async {
     // 历史发现标记不能证明当前仍选中 CU，必须实际选择应用。
     _selectedAid = null;
+    parsedCard = null;
+    observations.clear();
+    _fciNamesWallet = false;
+    balanceResponses.clear();
+    stalePublicFile = false;
     if (!await _selectApplication()) return false;
     info.isCU = true;
     return true;
   }
 
-  /// 快速二次探测（TU 已确认后的 CU 存在性）：不重置 MF、不尝试无 Le
-  /// 兼容分支，只按 CLA 00 / 80 带 Le 选择一次。TU 未命中时仍走 [select]
-  /// 的完整兼容路径，避免影响独立 CU 卡。
-  Future<bool> selectPrimary(CardInfo info) async {
-    _selectedAid = null;
-    for (final cla in const [0x00, 0x80]) {
-      final resp = await _exchange(TUnionApdu.select(walletAid, cla: cla));
-      if (_isSuccess(resp)) {
-        _selectedAid = walletAid;
-        info.isCU = true;
-        return true;
-      }
-    }
-    return false;
-  }
+  /// Each successful response is kept with its purse selector (P2).
+  final balanceResponses = <String, String>{};
+  final observations = <String, String>{};
+  bool stalePublicFile = false;
 
-  /// A recognized TU wallet with both Qingdao issuer and management evidence.
-  static bool hasQingdaoWallet(ParsedCard card) =>
-      card.selectedAidHex == 'A000000632010105' &&
-      card.info.issuerId?.startsWith('01984520') == true &&
-      card.info.cityCode == '4520';
-
-  /// Case 3 compatibility for the Qingdao wallet when fast CU selection fails.
-  /// The app's NFC transaction list comes from CU 0x18; 0x19 is monthly
-  /// metro statistics and supplies no transaction rows.
-  Future<ParsedCard?> readQingdaoWallet(
-    ParsedCard tunion,
-    CardInfo info,
-    List<ApduRecord> records,
-  ) async {
-    _selectedAid = null;
-    parsedCard = null;
-    await _exchange(const [0x00, 0xA4, 0x00, 0x00, 0x02, 0x3F, 0x00]);
-    final selection = await _exchange([
-      0x00,
-      0xA4,
-      0x04,
-      0x00,
-      walletAid.length,
-      ...walletAid,
-    ]);
-    if (!_isSuccess(selection)) return null;
-    final fci = BerTlvParser.parse(_stripSw(selection));
-    if (fci.accepted &&
-        fci.roots
-            .where((tag) => tag.tagHex == '6F')
-            .any(
-              (tag) => tag.children
-                  .where((child) => child.tagHex == '84')
-                  .any((name) => !_listEquals(name.value, walletAid)),
-            )) {
-      return null;
-    }
-
-    final data = await _readTransparentFile(
-      CityUnionFileIds.publicBasicInfo,
-      _publicFileSize,
-    );
-    if (data == null) return null;
-    final public = _parseSafely(CityUnionFileIds.publicBasicInfo, data);
-    if (public is! CjT331PublicInfo ||
-        public.issuerCode == null ||
-        (public.displayCityCode ?? 0) == 0 ||
-        public.industryCode == null ||
-        public.applicationSerialNumber == null ||
-        public.fields.any(
-          (field) => field.key == 'applicationStartDate' && field.hasError,
-        )) {
-      return null;
-    }
-
-    _selectedAid = walletAid;
-    info.isCU = true;
-    final files = <CityUnionFileView>[public];
-    final mirrors = <String, int>{};
-    for (final record in tunion.transactions) {
-      if (record.rawHex case final raw?) {
-        final hex = raw.replaceAll(' ', '').toUpperCase();
-        mirrors.update(hex, (count) => count + 1, ifAbsent: () => 1);
-      }
-    }
-    try {
-      await _readRecords(
-        CityUnionFileIds.walletLocalConsumption,
-        CityUnionTransactionKind.consumption,
-        files,
-        maxRecords: 10,
-        mixedWalletTypes: true,
-        rawReason: (record) {
-          if (!(const {0x02, 0x06, 0x09}).contains(record.transactionType) ||
-              record.fields.any(
-                (field) =>
-                    field.hasError &&
-                    (field.key == 'transactionDate' ||
-                        field.key == 'transactionTime'),
-              ) ||
-              record.transactionDate == null ||
-              record.transactionTime == null ||
-              (record.amountRaw == 0 &&
-                  record.sequence == 0 &&
-                  record.terminalNumber == '000000000000') ||
-              (record.kind == CityUnionTransactionKind.recharge &&
-                  record.amountRaw == 0) ||
-              record.interpretedAmountFen?.abs() != record.amountRaw) {
-            return '琴岛通交易字段不完整或无法按现有 CU 金额口径核实';
-          }
-          final hex = record.rawHex.replaceAll(' ', '');
-          if (mirrors[hex] case final count? when count > 0) {
-            mirrors[hex] = count - 1;
-            return '与同次读取的交通联合 0x18 交易原始字节一致';
-          }
-          return null;
-        },
-      );
-      final debits = files.whereType<CityUnionWalletTransaction>().where(
-        (record) => record.kind == CityUnionTransactionKind.consumption,
-      );
-      if (debits.any((record) => record.amountRaw == 0) &&
-          debits.any((record) => record.amountRaw > 0)) {
-        for (final slot in const [3, 7]) {
-          final response = await _exchange(
-            TUnionApdu.readRecord(0x19, slot, le: 0x20),
-          );
-          if (_isSuccess(response)) {
-            files.add(QingdaoMetroTap(slot, _stripSw(response)));
-          }
-        }
-      }
-    } finally {
-      _publish(info, records, files, balance: null);
-    }
-    return parsedCard;
-  }
-
-  /// 完整识读：读取标准文件并生成统一视图列表。
-  ///
-  /// [readBalance] 为 true 时额外读取电子钱包余额（GET BALANCE，相对当前
-  /// 选中的住建部应用）——仅在双应用卡的次应用探测中启用；默认 false 时
-  /// 保留 CU 文件读取顺序；失败证据与部分数据分别保存。
+  /// Read application-relative files first. The optional display-number file
+  /// lives under MF and is read only after wallet records are safe.
   Future<ParsedCard?> read(
     CardInfo info,
     List<ApduRecord> records, {
     bool readBalance = false,
+    ParsedCard? tuWallet,
   }) async {
     if (_selectedAid == null) return null;
-
+    parsedCard = null;
+    stalePublicFile = false;
+    balanceResponses.clear();
     final files = <CityUnionFileView>[];
     int? balance;
     try {
       await _readPublicInfo(files);
-      balance = readBalance && _selectedAid != null
-          ? await _readBalance(
-              files.whereType<CjT331PublicInfo>().firstOrNull?.displayCityCode,
-            )
-          : null;
-      // 状态字拒绝不妨碍读取记录；传输异常必须终止会话并保留已读数据。
-      if (_selectedAid != null) {
-        await _readRecords(0x18, CityUnionTransactionKind.consumption, files);
-        _report(0.55);
-        await _readRecords(0x10, CityUnionTransactionKind.recharge, files);
-        _report(0.75);
-        final city = files
-            .whereType<CjT331PublicInfo>()
-            .firstOrNull
-            ?.displayCityCode;
-        await _readRecords(
-          city == 2000 || city == 2153 ? 0x06 : 0x1A,
-          CityUnionTransactionKind.foreignConsumption,
-          files,
-        );
-        _report(0.95);
+      final public = files.whereType<CjT331PublicInfo>().firstOrNull;
+      // Some cards acknowledge SELECT but continue serving the previous
+      // application's files. Compare the independently observed TU identity.
+      final tu = tuWallet?.info;
+      if (public != null &&
+          tu != null &&
+          tu.issuerId != null &&
+          tu.applicationSerial != null) {
+        final raw = public.rawHex.replaceAll(' ', '');
+        stalePublicFile =
+            raw.startsWith(tu.issuerId!) &&
+            raw.substring(20, 40) == tu.applicationSerial;
+        if (stalePublicFile) {
+          observations['SFI 0x15'] = raw;
+          files.clear();
+          return null;
+        }
       }
+
+      if (readBalance) balance = await _readBalance();
+      final mirrors = <String, int>{};
+      final independentIdentity =
+          _fciNamesWallet &&
+          public?.issuerCode != null &&
+          public?.industryCode != null &&
+          public?.applicationSerialNumber != null &&
+          !public!.fields.any(
+            (f) => f.key == 'applicationStartDate' && f.hasError,
+          );
+      if (!independentIdentity && tuWallet != null) {
+        for (final record in tuWallet.transactions) {
+          final raw = record.rawHex?.replaceAll(' ', '').toUpperCase();
+          if (raw != null) {
+            mirrors.update(raw, (n) => n + 1, ifAbsent: () => 1);
+          }
+        }
+      }
+      for (final sfi in const [0x18, 0x10, 0x1A, 0x06, 0x19]) {
+        await _readRecords(sfi, files, mirrors);
+      }
+      final debits = files.whereType<CityUnionWalletTransaction>().where(
+        (r) => r.sfi == 0x18 && r.kind == CityUnionTransactionKind.consumption,
+      );
+      if (debits.any((r) => r.amountRaw == 0) &&
+          debits.any((r) => r.amountRaw > 0)) {
+        for (final slot in const [3, 7]) {
+          final resp = await _exchange(
+            TUnionApdu.readRecord(0x19, slot, le: 0x20),
+          );
+          if (!_isSuccess(resp)) continue;
+          final data = _stripSw(resp);
+          final tap = QingdaoMetroTap(slot, data);
+          if (tap.clock != null) {
+            files.add(tap);
+          } else if (data.length != 23 && !_isBlankRecord(data)) {
+            files.add(
+              CityUnionRawFileView(
+                sfi: 0x19,
+                recordNumber: slot,
+                raw: data,
+                reason: '第 $slot 槽未确认时间布局',
+              ),
+            );
+          }
+        }
+      }
+      if (public != null) await _readDisplayNumber(public, files);
       _report(1);
     } finally {
-      _publish(info, records, files, balance: balance);
+      if (!stalePublicFile) _publish(info, records, files, balance: balance);
     }
     return parsedCard;
   }
@@ -263,7 +185,7 @@ class CommonUnitCu {
       info: const TUnionCardInfo().withBalance(balance),
       transactions: const [],
       cityUnionFiles: List.unmodifiable(files),
-      selectedAidHex: CityUnionCodec.hex(_selectedAid ?? const []),
+      selectedAidHex: CityUnionCodec.hex(walletAid),
     );
     _applyToCardInfo(info, files);
     if (balance != null) info.balance = balance;
@@ -293,6 +215,13 @@ class CommonUnitCu {
         TUnionApdu.select(walletAid, cla: cla),
       );
       if (_isSuccess(resp)) {
+        final fci = _stripSw(resp);
+        final matches = BerTlvParser.selectedAidMatches(fci, walletAid);
+        if (matches == false) continue;
+        _fciNamesWallet = matches == true;
+        if (fci.isNotEmpty) {
+          observations['SELECT FCI'] = CityUnionCodec.hex(fci);
+        }
         _selectedAid = walletAid;
         return true;
       }
@@ -300,7 +229,7 @@ class CommonUnitCu {
     return false;
   }
 
-  /// 读取公共信息及城市补充信息，恢复应用后再读取余额与记录。
+  /// 读取当前 CU 应用的 0x15 公共信息并保留非标准长度。
   Future<void> _readPublicInfo(List<CityUnionFileView> out) async {
     final public = await _readTransparentFile(
       CityUnionFileIds.publicBasicInfo,
@@ -326,70 +255,83 @@ class CommonUnitCu {
       }
     }
     _report(0.3); // 0x15 公共应用基本信息读取完成
+  }
 
-    final publicInfo = out.whereType<CjT331PublicInfo>().firstOrNull;
-    if (publicInfo?.displayCityCode == 2120) {
-      _selectedAid = null;
-      List<int>? extra;
-      // 传输异常直接终止会话，不能在 finally 中再次发送 SELECT。
-      final mf = await _selectMf();
-      if (_isSuccess(mf)) {
-        extra = await _readTransparentFile(0x05, 0x2C);
-      }
-      // 状态字失败仍恢复 CU；恢复失败时不能在 MF 下读取余额或记录。
-      await _selectApplication();
-      if (extra != null && extra.length >= 44) {
-        final ascii = extra.sublist(32, 44);
-        if (ascii.every((b) => b >= 0x20 && b <= 0x7E)) {
-          out[out.indexOf(publicInfo!)] = publicInfo.withCityDisplayNumber(
-            String.fromCharCodes(ascii),
-          );
-        }
-      }
-      if (_selectedAid == null) return;
+  Future<void> _readDisplayNumber(
+    CjT331PublicInfo public,
+    List<CityUnionFileView> files,
+  ) async {
+    _selectedAid = null;
+    final mf = await _selectMf();
+    if (!_isSuccess(mf)) return;
+    final extra = await _readTransparentFile(0x05, 0x2C);
+    if (extra == null) return;
+    observations['MF SFI 0x05'] = CityUnionCodec.hex(extra);
+    if (extra.length != 44) return;
+    final digits = extra.sublist(32);
+    if (digits.every((b) => b >= 0x30 && b <= 0x39)) {
+      files[files.indexOf(public)] = public.withCityDisplayNumber(
+        String.fromCharCodes(digits),
+      );
     }
   }
 
-  /// The role comes from the CU read profile, not the numeric SFI alone.
+  /// 0x1A may hold standard recharge or a consumption channel. 0x19
+  /// may hold foreign transactions or 32-byte statistics. A file number
+  /// alone provides neither a transaction type nor a debit/credit sign.
   Future<void> _readRecords(
     int sfi,
-    CityUnionTransactionKind kind,
-    List<CityUnionFileView> out, {
-    int maxRecords = _maxRecordNumber,
-    bool mixedWalletTypes = false,
-    String? Function(CityUnionWalletTransaction)? rawReason,
-  }) async {
+    List<CityUnionFileView> out,
+    Map<String, int> mirrors,
+  ) async {
     List<int>? firstData;
-    for (var i = 1; i <= maxRecords; i++) {
-      final resp = await _exchange(TUnionApdu.readRecord(sfi, i, le: 0x17));
+    for (var slot = 1; slot <= _maxRecordNumber; slot++) {
+      final resp = await _exchange(
+        TUnionApdu.readRecord(sfi, slot, le: sfi == 0x19 ? 0 : 0x17),
+      );
       if (!_isSuccess(resp)) break;
       final data = _stripSw(resp);
       if (data.isEmpty) break;
       if (_isBlankRecord(data)) continue;
-      if (firstData != null && _listEquals(data, firstData)) break;
+      if (firstData != null && _listEquals(firstData, data)) break;
       firstData ??= data;
-      try {
-        final record = CityUnionFileParser.parseWalletRecord(
+      final kind = CityUnionFileParser.walletRecordKind(sfi, data);
+      CityUnionWalletTransaction? record;
+      String? reason;
+      if (kind == null) {
+        reason = '记录长度或交易类型与钱包布局不符';
+      } else {
+        record = CityUnionFileParser.parseWalletRecord(
           sfi,
           data,
-          kind: mixedWalletTypes && data.length > 9 && data[9] == 0x02
-              ? CityUnionTransactionKind.recharge
-              : kind,
-          recordNumber: i,
+          kind: kind,
+          recordNumber: slot,
         );
-        final reason = rawReason?.call(record);
-        out.add(
-          reason == null
-              ? record
-              : CityUnionRawFileView(
-                  sfi: sfi,
-                  raw: data,
-                  reason: '第 $i 槽 · $reason',
-                ),
-        );
-      } on FormatException catch (e) {
-        out.add(CityUnionRawFileView(sfi: sfi, raw: data, reason: e.message));
+        final verifyWalletFields =
+            sfi == 0x18 ||
+            (sfi == 0x06 && kind == CityUnionTransactionKind.recharge);
+        if (verifyWalletFields &&
+            !CityUnionFileParser.hasVerifiableWalletFields(record)) {
+          reason = '交易日期、时间或金额无法核实';
+        } else if (sfi == 0x18) {
+          final raw = CityUnionCodec.hex(data);
+          final count = mirrors[raw] ?? 0;
+          if (count > 0) {
+            mirrors[raw] = count - 1;
+            reason = '与同次读取的交通联合 0x18 交易原始字节一致';
+          }
+        }
       }
+      out.add(
+        reason == null
+            ? record!
+            : CityUnionRawFileView(
+                sfi: sfi,
+                recordNumber: slot,
+                raw: data,
+                reason: '第 $slot 槽 · $reason',
+              ),
+      );
     }
   }
 
@@ -507,20 +449,22 @@ class CommonUnitCu {
 
   /// 读取电子钱包余额（GET BALANCE，相对当前选中的住建部 CU 应用）。
   /// 跳过首字节；金额最高字节为 FF 且补码大于 -100000 时认负数。
-  Future<int?> _readBalance(int? city) async {
-    for (final cla in const [0x80, 0x00]) {
-      final resp = await _exchange([
-        cla,
-        0x5C,
-        0x00,
-        city == 2150 ? 0x01 : 0x02,
-        0x04,
-      ]);
-      if (!_isSuccess(resp) || resp.length != 6) continue;
-      final value = (resp[1] << 16) | (resp[2] << 8) | resp[3];
-      final signed = value - 0x1000000;
-      return resp[1] == 0xFF && signed > -100000 ? signed : value;
+  Future<int?> _readBalance() async {
+    for (final selector in const [0x02, 0x01]) {
+      for (final cla in const [0x80, 0x00]) {
+        final resp = await _exchange([cla, 0x5C, 0x00, selector, 0x04]);
+        if (!_isSuccess(resp)) continue;
+        final data = _stripSw(resp);
+        final key = CityUnionCodec.hexByte(selector);
+        balanceResponses[key] = CityUnionCodec.hex(data);
+        observations['GET BALANCE P2=$key'] = balanceResponses[key]!;
+        break;
+      }
     }
-    return null;
+    final raw = balanceResponses.values.toSet().singleOrNull;
+    if (raw == null || raw.length != 8) return null;
+    final value = int.parse(raw.substring(2), radix: 16);
+    final signed = value - 0x1000000;
+    return raw.substring(2, 4) == 'FF' && signed > -100000 ? signed : value;
   }
 }

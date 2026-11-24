@@ -82,6 +82,7 @@ class ScanPresentation {
   /// 本次会话逐应用探测证据（一芯多应用卡各应用并列保留）。
   List<ApplicationEvidence> get applications => switch (outcome) {
     TransitReadOutcome(:final applications) => applications,
+    UnsupportedReadOutcome(:final applications) => applications,
     _ => const [],
   };
   CjT331PublicInfo? get cityUnionPublicInfo {

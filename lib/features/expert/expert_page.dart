@@ -35,7 +35,7 @@ class ExpertPage extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
           children: [
             const Text('专家分析 · 上次读取'),
-            RecoveryResultPanel(app: app),
+            RecoveryResultPanel(app: app, showProbeDetails: true),
           ],
         ),
       );

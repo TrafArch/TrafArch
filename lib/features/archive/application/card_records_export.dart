@@ -98,16 +98,15 @@ String buildArchiveHistoryExport(
           buffer.writeln('  · （损坏的应用探测条目已保留在原始快照）');
           continue;
         }
-        final details = <String>[
-          if (application.cardNumber case final cardNumber?) '卡号 $cardNumber',
-          if (application.balanceFen case final balance?) '余额 $balance 分',
-          if (application.recordCount > 0) '${application.recordCount} 条记录',
-        ];
+        final details = applicationObservationText(application);
         buffer.writeln(
           '  · ${application.displayName}：'
           '${applicationProbeStateLabel(application.state)}'
           '${details.isEmpty ? '' : ' · ${details.join(' · ')}'}',
         );
+        for (final record in application.rawRecords) {
+          buffer.writeln('    ${record.source}  ${record.rawHex}');
+        }
       }
     }
     for (final entry in history.latestObservedFields.entries) {

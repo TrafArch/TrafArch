@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -191,24 +189,7 @@ class ArchiveDetailContent extends StatelessWidget {
       batches: history.batches,
       includeShanghaiOverdraft: includeShanghaiOverdraft,
       cardType: history.card!.cardType,
-      onDiagnostics: (record) => _showEvidence(
-        context,
-        '诊断与原始证据',
-        const JsonEncoder.withIndent('  ').convert({
-          'context': record.context.toJson(),
-          'cardCityCode': record.cardCityCode,
-          'record': record.fields,
-          'sources': [
-            for (final source in record.sources)
-              {
-                'batchId': source.batchId,
-                'path': source.path,
-                'capturedParseVersion': source.capturedParseVersion,
-                'provenance': source.provenance,
-              },
-          ],
-        }),
-      ),
+      onDiagnostics: (record) => _showRecordSources(context, record.sources),
     );
     // 通用地方卡行程（武汉通 / 北京互通卡 / 深圳通本地 / 苏州苏薪·计次 /
     // 天府通）及岭南通 / 深圳通地方钱包与 TU / CU 共用票据式行程卡；
@@ -257,8 +238,8 @@ class ArchiveDetailContent extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Text(
               summaryCount == 0
-                  ? '部分历史记录无法完整显示，已保留原始记录，可在批次诊断中查看。'
-                  : '部分历史记录无法完整显示，已保留原始记录，可在批次与摘要诊断中查看。',
+                  ? '部分历史记录无法完整显示，可在批次诊断中查看原因。'
+                  : '部分历史记录无法完整显示，可在批次与摘要诊断中查看原因。',
             ),
           ),
         const SizedBox(height: 8),
@@ -353,7 +334,6 @@ class ArchiveDetailContent extends StatelessWidget {
   }
 }
 
-/// Technical evidence is an explicit secondary route, never the trip tap.
 class _ArchiveDiagnosticsPage extends StatelessWidget {
   const _ArchiveDiagnosticsPage({required this.history});
   final ArchiveHistoryResult history;
@@ -367,32 +347,18 @@ class _ArchiveDiagnosticsPage extends StatelessWidget {
         child: ListView(
           children: [
             for (final batch in history.batches)
-              ExpansionTile(
+              ListTile(
                 title: Text(
                   '${batch.origin == 'imported_summary' ? '导入时保留的摘要' : '批次'}'
                   ' · ${batch.decoded.status.name}',
                 ),
                 subtitle: Text(
-                  '${batch.id}\n${batch.origin} · ${batch.timeSource}',
+                  [
+                    batch.id,
+                    '${batch.origin} · ${batch.timeSource}',
+                    for (final issue in batch.issues) issue.toString(),
+                  ].join('\n'),
                 ),
-                children: [
-                  for (final issue in batch.issues)
-                    ListTile(title: Text(issue.toString())),
-                  TextButton(
-                    onPressed: () => _showEvidence(
-                      context,
-                      batch.origin == 'imported_summary'
-                          ? '保留摘要中的原始快照'
-                          : '批次原文',
-                      batch.decoded.rawJson,
-                    ),
-                    child: Text(
-                      batch.origin == 'imported_summary'
-                          ? '查看摘要中的原始快照'
-                          : '查看完整原始快照',
-                    ),
-                  ),
-                ],
               ),
           ],
         ),
@@ -403,20 +369,34 @@ class _ArchiveDiagnosticsPage extends StatelessWidget {
 
 String _archiveDiagnosticsTitle(ArchiveHistoryResult history) =>
     history.batches.any((batch) => batch.origin == 'imported_summary')
-    ? '批次、摘要与原始快照'
-    : '批次诊断与原始快照';
+    ? '批次与摘要诊断'
+    : '批次诊断';
 
-void _showEvidence(BuildContext context, String title, String raw) {
+void _showRecordSources(
+  BuildContext context,
+  List<ArchiveRecordSource> sources,
+) {
   showDialog<void>(
     context: context,
     anchorPoint: (context.findRenderObject() as RenderBox?)?.localToGlobal(
       Offset.zero,
     ),
     builder: (context) => AlertDialog(
-      title: Text(title),
+      title: const Text('记录来源'),
       content: SizedBox(
         width: double.maxFinite,
-        child: SingleChildScrollView(child: SelectableText(raw)),
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            for (final source in sources)
+              ListTile(
+                title: Text(source.path),
+                subtitle: Text(
+                  '批次 ${source.batchId}\n解析版本 ${source.capturedParseVersion}',
+                ),
+              ),
+          ],
+        ),
       ),
       actions: [
         TextButton(

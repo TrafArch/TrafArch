@@ -1,3 +1,4 @@
+import '../../../protocols/felica/models/felica_capture.dart';
 import '../../../protocols/transit/card_parser.dart';
 import '../domain/card_read_outcome.dart';
 
@@ -12,9 +13,11 @@ Iterable<Map<String, Object?>> captureParserRecords(
       yield _record(parser, 'identity', {
         'parserName': card.parserName,
         'selectedAid': card.selectedAidHex,
-        'cardNumber': card.localCard?.info.cardNumber.isNotEmpty == true
-            ? card.localCard!.info.cardNumber
-            : card.info.displayCardNumber,
+        'cardNumber': CardParserIds.isTUnionFamily(card.parserId)
+            ? card.info.displayCardNumber
+            : card.localCard?.info.displayCardNumber ??
+                  card.localCard?.info.cardNumber ??
+                  card.info.displayCardNumber,
         'applicationSerialRaw': card.info.applicationSerial,
         'issuerId': card.info.issuerId,
         'cardTypeId': card.info.cardTypeId,
@@ -52,6 +55,8 @@ Iterable<Map<String, Object?>> captureParserRecords(
           'issueDate': local.info.issueDate?.toIso8601String(),
           'expiryDate': local.info.expiryDate?.toIso8601String(),
           'rawInfo': local.info.rawInfo,
+          'displayCardNumber': ?local.info.displayCardNumber,
+          'remainingTrips': ?local.info.observedRemainingTrips,
         });
         yield _record(parser, 'balance', {
           'balanceMinorUnits': local.info.observedBalance,
@@ -62,16 +67,20 @@ Iterable<Map<String, Object?>> captureParserRecords(
             'commandHex': r.commandHex,
             'recordNumber': r.recordNumber,
             'fileSelector': r.fileSelector,
+            'directory': ?r.directory,
             'type': r.type,
             'typeCode': r.posType,
-            'balanceDelta': r.balanceDelta,
-            'balanceAfter': r.balanceAfter,
+            if (r.tripDelta == null && r.type == 2)
+              'balanceDelta': r.balanceDelta,
+            'tripDelta': ?r.tripDelta,
+            if (!local.info.isSuzhou && !local.info.isTFT)
+              'balanceAfter': r.balanceAfter,
             'terminalHex': r.terminalHex,
             'time': r.timestamp.millisecondsSinceEpoch == 0
                 ? null
                 : r.timestamp.toIso8601String(),
             'cityCode': r.cityCode,
-            'raw': r.rawBody?.toList(),
+            'raw': r.rawBody ?? r.response,
             'hasError': r.hasError,
           });
         }
@@ -89,6 +98,16 @@ Iterable<Map<String, Object?>> captureParserRecords(
       }
     case FelicaReadOutcome(:final card):
       final parser = 'felica.${card.cardProductType.name}';
+      for (final entry in card.systemResults.entries) {
+        yield _record(
+          'felica.${entry.value.cardProductType.name}',
+          'systemResult',
+          {
+            'systemCode': entry.key,
+            ...captureFelicaResult(entry.value, includeFrames: true),
+          },
+        );
+      }
       yield _record(parser, 'identity', {
         'cardType': card.cardType,
         'displayName': card.displayName,

@@ -2,14 +2,15 @@ import 'dart:convert';
 
 import '../../../shared/domain/remote_card_use.dart';
 import '../../../protocols/transit/card_parser.dart' show CardParserIds;
+import '../../../protocols/transit/city_union/city_union_file_parser.dart';
 import '../../../protocols/transit/city_union/city_union_models.dart';
+import '../../reference_data/data/city_union_lookup_rules.dart';
 import '../../reference_data/domain/reference_match.dart';
 import '../../reference_data/domain/station_codes.dart';
 import '../../transit_analysis/cu_transaction_analysis.dart';
 import 'archive_history.dart';
 
-/// This extension freezes the captured CU decoding and reference result. History
-/// never reparses raw card bytes or queries the current reference database.
+/// Keeps the captured CU decoding and reference results as source evidence.
 Map<String, dynamic> captureCuProjection(
   List<CuTransactionView> transactions,
 ) => {
@@ -86,43 +87,95 @@ CuArchiveProjection projectCuArchive(ArchiveHistoryResult history) {
   // Only identical frozen observations in the same context can share a row.
   // A changed match or unavailable reference package remains a separate view.
   for (final batch in history.batches) {
-    final projection = batch.decoded.snapshot?.extensions['cuProjection'];
-    if (projection == null) continue;
-    if (projection is! Map ||
-        projection['version'] is! int ||
-        projection['version'] != 1 ||
-        projection['transactions'] is! List) {
+    final snapshot = batch.decoded.snapshot;
+    if (snapshot == null) continue;
+    final projection = snapshot.extensions['cuProjection'];
+    if (projection != null &&
+        (projection is! Map ||
+            projection['version'] is! int ||
+            projection['version'] != 1 ||
+            projection['transactions'] is! List)) {
       issues.add('${batch.id}: CU 历史投影格式不支持，原始快照已保留');
       continue;
     }
-    final entries = projection['transactions'] as List;
-    final restored = <int, CuTransactionView>{};
+    final entries = projection == null
+        ? const []
+        : projection['transactions'] as List;
+    final restored = <String, ({CuTransactionView view, Object? original})>{};
     for (var index = 0; index < entries.length; index++) {
+      final path = 'cuProjection.transactions[$index]';
       try {
-        restored[index] = _restoreView(entries[index]);
-      } on FormatException {
-        issues.add(
-          '${batch.id}/cuProjection.transactions[$index]: CU 历史记录不完整，原始快照已保留',
+        restored[path] = (
+          view: _restoreView(entries[index]),
+          original: entries[index],
         );
+      } on FormatException {
+        issues.add('${batch.id}/$path: CU 历史记录不完整，原始快照已保留');
       }
     }
-    final completeMetro = completeQingdaoMetroLinks(restored.values);
+    // Older readers kept 0x06/02 only as a cu_file, even when it was the
+    // only wallet observation. A current capture carries both forms.
+    final projectedSlots = {
+      for (final observation in restored.values)
+        if (observation.view.record.sfi == 0x06)
+          (
+            observation.view.record.recordNumber,
+            observation.view.record.rawHex.replaceAll(' ', '').toUpperCase(),
+          ),
+    };
+    for (final (index, file) in snapshot.rawEvidence.indexed) {
+      if (file['kind'] != 'cu_file' || file['sfi'] != '0x06') continue;
+      final credit = _capturedRecharge(
+        0x06,
+        file['rawHex'],
+        file['recordNumber'],
+      );
+      if (credit == null ||
+          !projectedSlots.add((
+            credit.record.recordNumber,
+            credit.record.rawHex.replaceAll(' ', '').toUpperCase(),
+          ))) {
+        continue;
+      }
+      final path = 'rawEvidence[$index]';
+      restored[path] = (view: credit, original: file);
+    }
+    final completeMetro = completeQingdaoMetroLinks(
+      restored.values.map((entry) => entry.view),
+    );
+    final chargeCounts = <(int, String), int>{};
     for (final entry in restored.entries) {
-      final index = entry.key;
-      final path = 'cuProjection.transactions[$index]';
-      final candidate = entry.value;
+      final path = entry.key;
+      final candidate = entry.value.view;
       final view = completeMetro.contains(candidate.qingdaoMetro?.id)
           ? candidate
           : candidate.withQingdaoMetro(null);
-      final fields = _map(entries[index])..remove('qingdaoMetro');
-      final recordFields = _map(fields['record'])..remove('recordNumber');
-      final snapshot = batch.decoded.snapshot!;
+      final fields = _map(entry.value.original)..remove('qingdaoMetro');
       final context = snapshot.context;
+      final recharge = view.record is CjT331WalletRecharge;
+      final raw = view.record.rawHex.replaceAll(' ', '').toUpperCase();
       final key = jsonEncode(
         _canonical({
-          'fields': {...fields, 'record': recordFields},
+          // A legacy debit label, a raw-only capture, and an updated read
+          // represent the same credit if the whole wallet row matches.
+          'fields': recharge
+              ? {
+                  'sfi': view.record.sfi,
+                  'rawHex': raw,
+                  'occurrence': chargeCounts.update(
+                    (view.record.sfi, raw),
+                    (n) => n + 1,
+                    ifAbsent: () => 1,
+                  ),
+                }
+              : {
+                  ...fields,
+                  'record': _map(fields['record'])..remove('recordNumber'),
+                },
           'context': {
-            'systemId': context.systemId,
+            'systemId': recharge && context.isShanghaiTunionWallet
+                ? CardParserIds.shanghaiTunion
+                : context.systemId,
             'applicationId': context.applicationId,
             'currencyCode': context.currencyCode,
             'minorUnitDigits': context.minorUnitDigits,
@@ -150,7 +203,7 @@ CuArchiveProjection projectCuArchive(ArchiveHistoryResult history) {
               batch.id,
               path,
               batch.storedParseVersion,
-              entries[index],
+              entry.value.original,
             ),
           );
     }
@@ -175,6 +228,36 @@ CuArchiveProjection projectCuArchive(ArchiveHistoryResult history) {
         ),
     }),
     issues: List.unmodifiable(issues),
+  );
+}
+
+CuTransactionView? _capturedRecharge(int sfi, Object? raw, Object? slot) {
+  if (raw is! String || slot is! int || slot < 1 || slot > 255) return null;
+  final hex = raw.replaceAll(' ', '');
+  if (!RegExp(r'^[0-9a-fA-F]{46}$').hasMatch(hex)) return null;
+  final bytes = [
+    for (var i = 0; i < hex.length; i += 2)
+      int.parse(hex.substring(i, i + 2), radix: 16),
+  ];
+  final kind = CityUnionFileParser.walletRecordKind(sfi, bytes);
+  if (kind != CityUnionTransactionKind.recharge) return null;
+  final record = CityUnionFileParser.parseWalletRecord(
+    sfi,
+    bytes,
+    kind: CityUnionTransactionKind.recharge,
+    recordNumber: slot,
+  );
+  if (!CityUnionFileParser.hasVerifiableWalletFields(record)) return null;
+  final identity = CityUnionLookupRules.identifyTerminal(record.terminalHex);
+  return CuTransactionView(
+    record: record,
+    transactionTime: CityUnionLookupRules.transactionTime(
+      record.transactionDate,
+      record.transactionTime,
+    ),
+    regionCode: identity?.regionCode,
+    carrier: identity?.carrier,
+    location: ReferenceMatch(ReferenceMatchStatus.unknown, const []),
   );
 }
 
@@ -231,6 +314,19 @@ CuTransactionView _restoreView(Object? value) {
   if (millis != null) _integer(millis, -8640000000000000, 8640000000000000);
   final carrier = data['carrier'];
   if (carrier != null) _integer(carrier, 0, 65535);
+  if ((sfi == 0x06 || sfi == 0x18) && transactionType == '02') {
+    final credit = _capturedRecharge(sfi, raw, recordNumber);
+    if (credit != null &&
+        credit.record.sequence == recordData['sequence'] &&
+        credit.record.amountRaw == recordData['amountRaw'] &&
+        credit.record.terminalNumber == recordData['terminalNumber'] &&
+        credit.record.transactionDate == recordData['transactionDate'] &&
+        credit.record.transactionTime == recordData['transactionTime'] &&
+        (millis == null ||
+            millis == credit.transactionTime?.millisecondsSinceEpoch)) {
+      return credit;
+    }
+  }
   final capturedMetro = data['qingdaoMetro'];
   QingdaoMetroLink? metro;
   if (sfi == 0x18 &&

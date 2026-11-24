@@ -9,8 +9,135 @@ import 'package:transit_card_analyzer/protocols/transit/local/apdu_exchange.dart
 import 'package:transit_card_analyzer/protocols/transit/local/cards/beijing_bmac.dart';
 import 'package:transit_card_analyzer/protocols/transit/local/local_card_models.dart';
 import 'package:transit_card_analyzer/protocols/transport/transport_failure.dart';
+import 'package:transit_card_analyzer/protocols/transit/multiapp/application_evidence.dart';
+import 'package:transit_card_analyzer/protocols/transit/local/local_hex.dart';
 
 void main() {
+  const motSelect = '00A404001091560000144D4F542E424D4143303031';
+  const motRecord = '00B2011C32';
+  test('MOT.BMAC001 alone retains its raw file without inventing any wallet fields', () async {
+    final commands = <String>[];
+    final scan = await LocalCardReader((cmd) async {
+      final hex = LocalHex.bytesToHex(cmd);
+      commands.add(hex);
+      if (hex == motSelect) return [0x90, 0];
+      if (hex == motRecord) return [0xAB, 0xCD, 0x90, 0];
+      return [0x6A, 0x82];
+    }).scan();
+    final evidence = scan.applications.singleWhere(
+      (a) => a.appId == 'mot_bmac',
+    );
+    expect(evidence.confirmed, isTrue);
+    expect(evidence.observations['SFI 0x03 #1'], 'ABCD');
+    expect(evidence.recordCount, 0);
+    expect(evidence.cardNumber, isNull);
+    expect(evidence.balanceFen, isNull);
+    expect(scan.result?.parsedCard.parserName, 'MOT.BMAC001');
+    expect(scan.result?.parsedCard.info.balanceFen, isNull);
+    expect(
+      commands,
+      containsAllInOrder([
+        '00A40000021001',
+        motSelect,
+        motRecord,
+        '00A404000B535558494E2E4444463031',
+      ]),
+    );
+    expect(commands.where((c) => c == motSelect), hasLength(1));
+    expect(commands, isNot(contains('805C000204')));
+  });
+  test('MOT.BMAC001 tag loss preserves the selected application and stops the next probe', () async {
+    final commands = <String>[];
+    final scan = await LocalCardReader((cmd) async {
+      final hex = LocalHex.bytesToHex(cmd);
+      commands.add(hex);
+      if (hex == motSelect) return [0x90, 0];
+      if (hex == motRecord) throw _lost;
+      return [0x6A, 0x82];
+    }).scan();
+    final ev = scan.applications.singleWhere((e) => e.appId == 'mot_bmac');
+    expect(ev.confirmed, isTrue);
+    expect(ev.state, ApplicationProbeState.partial);
+    expect(ev.transportFailure?.kind, TransportFailureKind.tagLost);
+    expect(commands.last, motRecord);
+    expect(
+      scan.applications.singleWhere((e) => e.appId == 'suzhou_suxin').probed,
+      isFalse,
+    );
+  });
+
+  for (final mfPresent in [false, true]) {
+    test(
+      'one unclassified DF1001 after MF present=$mfPresent never claims a Beijing balance',
+      () async {
+        final commands = <String>[];
+        final scan = await LocalCardReader((cmd) async {
+          final hex = LocalHex.bytesToHex(cmd);
+          commands.add(hex);
+          if (hex == '00A40000023F00' && mfPresent) return [0x90, 0];
+          if (hex == '00A40000021001') return [0x90, 0];
+          if (hex == '805C000204') return [0, 0, 0, 23, 0x90, 0];
+          return [0x6A, 0x82];
+        }).scan();
+        expect(commands.where((c) => c == '00A40000021001'), hasLength(1));
+        final evidence = scan.applications.singleWhere(
+          (a) => a.appId == 'df1001',
+        );
+        expect(evidence.state, ApplicationProbeState.confirmed);
+        expect(evidence.displayName, 'DF 1001');
+        expect(evidence.balanceFen, isNull);
+        expect(
+          commands.skip(commands.indexOf('00A40000021001') + 1).first,
+          startsWith('00A404'),
+        );
+        expect(scan.result, isNull);
+      },
+    );
+  }
+
+  test('legacy issuer marker keeps the ten-byte number and original overdraft offset', () async {
+    final link = _Link()..balance = 0;
+    final result = await LocalCardReader((cmd) async {
+      final response = await link.call(cmd);
+      if (LocalHex.bytesToHex(cmd) == '00B084003C') {
+        response.setRange(0, 10, [0x10, 0, 0, 0, 0, 0, 0x12, 0x34, 0x56, 0x78]);
+      }
+      return response;
+    }).read();
+    final evidence = result!.applications.singleWhere(
+      (a) => a.appId == 'df1001',
+    );
+    expect(evidence.confirmed, isTrue);
+    expect(evidence.cardNumber, '10000000000012345678');
+    expect(evidence.balanceFen, -99);
+    expect(result.readResult.info.isBeijing, isTrue);
+    expect(result.readResult.info.isBmac, isFalse);
+    expect(
+      link.commands
+          .map(LocalHex.bytesToHex)
+          .where((hex) => hex == '00A40000021001'),
+      hasLength(1),
+    );
+  });
+  test('explicit different FID cannot supply a Beijing balance', () async {
+    final link = _Link();
+    final result = await LocalCardReader((cmd) async {
+      final response = await link.call(cmd);
+      if (LocalHex.bytesToHex(cmd) == '00A40000021001') {
+        return LocalHex.hexToBytes('620483023F009000');
+      }
+      return response;
+    }).scan();
+    expect(result.result, isNull);
+    final evidence = result.applications.singleWhere(
+      (a) => a.appId == 'df1001',
+    );
+    expect(evidence.confirmed, isFalse);
+    expect(
+      link.commands.map(LocalHex.bytesToHex),
+      isNot(contains('805C000204')),
+    );
+  });
   test('BMAC reads documented offsets and keeps ambiguous years raw', () async {
     final link = _Link();
     final info = CardInfo();

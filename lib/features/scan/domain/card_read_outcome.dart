@@ -26,5 +26,6 @@ final class FelicaReadOutcome extends CardReadOutcome {
 }
 
 final class UnsupportedReadOutcome extends CardReadOutcome {
-  const UnsupportedReadOutcome();
+  const UnsupportedReadOutcome({this.applications = const []});
+  final List<ApplicationEvidence> applications;
 }

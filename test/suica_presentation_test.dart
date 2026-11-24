@@ -204,7 +204,7 @@ void main() {
       final fields = Map.fromEntries(
         trip.entry.info.fields.map((field) => MapEntry(field.$1, field.$2)),
       );
-      expect(trip.entry.info.title, contains('充值'));
+      expect(trip.entry.info.title, '充值');
       expect(fields['发生地点'], '東京');
       expect(fields['地点原码'], '00/01/01');
       expect(
@@ -281,6 +281,22 @@ void main() {
       suppressed.entry.info.fields.where((f) => f.$1 == '进站原码').single.$2,
       contains('01'),
     );
+  });
+
+  test('公交充值按已保存的处理码恢复，保留原处理类型', () {
+    final trip = presentSuicaTrips([
+      _record(kind: SuicaRecordKind.bus, process: 0x1F, change: 500),
+    ]).single;
+    expect(trip.entry.info.title, '充值');
+    expect(trip.entry.mode, TripModeFilter.other);
+    final json = trip.toJson();
+    final frozen = json['info'] as Map<String, dynamic>;
+    frozen['title'] = '公交 / 路面电车 · 公交充值';
+    json['mode'] = 'bus';
+    final restored = SuicaTripPresentation.fromJson(json)!;
+    expect(restored.entry.info.title, '充值');
+    expect(restored.entry.mode, TripModeFilter.other);
+    expect(restored.entry.info.fields, contains(('处理类型', '公交充值')));
   });
 
   test(

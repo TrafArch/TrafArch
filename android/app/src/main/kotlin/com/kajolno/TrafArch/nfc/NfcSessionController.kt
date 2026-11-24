@@ -52,6 +52,8 @@ internal class NfcSessionController(private val activity: Activity) {
     private var lastRetirement: Pair<String, Retirement>? = null
     private val adapter: NfcAdapter? by lazy { NfcAdapter.getDefaultAdapter(activity) }
 
+    fun adapterEnabled(): Boolean? = adapter?.isEnabled
+
     fun start(requestedId: String?, result: OnceResult, felicaOnly: Boolean) {
         if (disposed) {
             result.error("NFC_STOPPED", "扫描已停止", null)
@@ -250,7 +252,7 @@ internal class NfcSessionController(private val activity: Activity) {
         else retirement.waiters.add(result)
     }
 
-    private fun retire(session: Session): Retirement {
+    private fun retire(session: Session, adapterDisabled: Boolean = false): Retirement {
         retirements[session.id]?.let { return it }
         val retirement = Retirement()
         retirements[session.id] = retirement
@@ -271,15 +273,25 @@ internal class NfcSessionController(private val activity: Activity) {
         val controlErrors = mutableListOf<String>()
         if (active === session) {
             active = null // Detach BEFORE switching discovery or scheduling blocking closes.
-            try {
-                if (foreground && !disposed) enableIdleReaderMode()
-                else adapter?.disableReaderMode(activity)
-            } catch (error: Exception) {
-                controlErrors.add(error.message ?: error.javaClass.simpleName)
+            // Power-off already stopped discovery. Restore the foreground idle reader on STATE_ON.
+            if (!adapterDisabled) {
+                try {
+                    if (foreground && !disposed) enableIdleReaderMode()
+                    else adapter?.disableReaderMode(activity)
+                } catch (error: Exception) {
+                    controlErrors.add(error.message ?: error.javaClass.simpleName)
+                }
             }
         }
-        session.discovery.error("NFC_STOPPED", "扫描已停止", null)
-        session.replies.forEach { it.error("NFC_STOPPED", "扫描已停止", null) }
+        fun cancelReply(result: OnceResult) {
+            if (adapterDisabled) {
+                result.error("NFC_DISABLED", "请先打开系统 NFC", mapOf("sessionId" to session.id))
+            } else {
+                result.error("NFC_STOPPED", "扫描已停止", null)
+            }
+        }
+        cancelReply(session.discovery)
+        session.replies.forEach(::cancelReply)
         session.replies.clear()
         // Remove queued commands/connect work, but never another session's retirement barrier.
         io.queue.toList().forEach { task ->
@@ -327,8 +339,21 @@ internal class NfcSessionController(private val activity: Activity) {
         }
     }
 
+    fun onAdapterPowerChanged(enabled: Boolean) {
+        if (!enabled) {
+            active?.let { retire(it, adapterDisabled = true) }
+        } else if (foreground && active == null) {
+            restoreForegroundReader()
+        }
+    }
+
     fun onResume() {
         foreground = true
+        if (adapterEnabled() == true) restoreForegroundReader()
+        else onAdapterPowerChanged(false)
+    }
+
+    private fun restoreForegroundReader() {
         val session = active
         if (session?.state == State.WAITING) enableDiscovery(session)
         else if (session == null) {

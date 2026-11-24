@@ -118,7 +118,9 @@ void main() {
     );
   });
 
-  testWidgets('卡片信息详情不显示逐应用探测快照', (tester) async {
+  testWidgets('普通档案详情保留卡片信息和行程，隐藏逐应用探测', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 2000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     final database = testDatabase();
     final repository = CardRepository(database);
     addTearDown(database.close);
@@ -151,7 +153,9 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('卡片信息'), findsOneWidget);
-    expect(find.textContaining('逐应用探测'), findsNothing);
+    expect(find.text('行程记录 · 1 个已保存批次'), findsOneWidget);
+    expect(find.text('读取时的应用'), findsNothing);
+    expect(find.textContaining('余额 9000 分'), findsNothing);
   });
 }
 

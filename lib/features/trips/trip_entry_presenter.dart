@@ -12,6 +12,7 @@ class TripEntryInfo {
   final String? timeText;
   final String? amountText;
   final bool isConsume;
+  final bool isRecharge;
   final String? subText;
   final String? category;
   final List<String> badges;
@@ -26,6 +27,7 @@ class TripEntryInfo {
     required this.sourceLabel,
     required this.title,
     required this.isConsume,
+    this.isRecharge = false,
     this.line,
     this.timeText,
     this.amountText,
@@ -46,6 +48,7 @@ class TripEntryInfo {
     timeText: timeText,
     amountText: amountText,
     isConsume: isConsume,
+    isRecharge: isRecharge,
     subText: subText,
     category: category,
     badges: badges,
@@ -95,20 +98,23 @@ TripEntryInfo _describeEntry(TripEntry entry, TripPresentationContext display) {
       ].where((b) => b.isNotEmpty).toList();
       return TripEntryInfo(
         sourceLabel: '0x18 交易明细',
-        title: <String>[
-          trip.rideStatusName ?? trip.typeName,
-          if (trip.stationLabel != null) trip.stationLabel!,
-          '序号 ${trip.sequence}',
-        ].join(' · '),
-        line: trip.lineLabel,
+        title: trip.isRecharge
+            ? '充值'
+            : <String>[
+                trip.rideStatusName ?? trip.typeName,
+                if (trip.stationLabel != null) trip.stationLabel!,
+                '序号 ${trip.sequence}',
+              ].join(' · '),
+        line: trip.isRecharge ? null : trip.lineLabel,
         timeText: trip.timeText,
         amountText: trip.amountText,
         isConsume: trip.isConsume,
+        isRecharge: trip.isRecharge,
         subText: balanceText == null
             ? null
             : '${trip.balanceAfterLabel} $balanceText',
-        category: trip.appTypeName,
-        badges: badges,
+        category: trip.isRecharge ? null : trip.appTypeName,
+        badges: trip.isRecharge ? const [] : badges,
         related: trip.matchedProcessTrip != null
             ? '已与 0x1E 过程记录唯一关联（时间 + 金额 + 终端互证）'
             : '无过程记录关联（独立保留）',
@@ -255,7 +261,7 @@ TripEntryInfo _describeEntry(TripEntry entry, TripPresentationContext display) {
         ],
       );
     case ProcessTripEntry(:final record):
-      final isBus = isTunionBusCycle(record);
+      final isBus = !record.isRecharge && isTunionBusCycle(record);
       final busLocation = isBus
           ? display.resolveBusLocation(
               record.cityCode,
@@ -263,7 +269,9 @@ TripEntryInfo _describeEntry(TripEntry entry, TripPresentationContext display) {
               context: busContextForCycle(record),
             )
           : null;
-      final match = isBus
+      final match = record.isRecharge
+          ? StationMatch.unmatched
+          : isBus
           ? busLocation!.match
           : display.resolveCycleStationMatch(
               normalizeTunionAcquirerCity(
@@ -288,14 +296,17 @@ TripEntryInfo _describeEntry(TripEntry entry, TripPresentationContext display) {
       final symbol = display.currency.symbol;
       return TripEntryInfo(
         sourceLabel: '0x1E 过程记录',
-        title: <String>[
-          record.statusShortName ?? record.typeName,
-          ?station,
-        ].join(' · '),
-        line:
-            busLocation?.lineLabel ??
-            match.lineName ??
-            (isBus ? record.lineCode : null),
+        title: record.isRecharge
+            ? '充值'
+            : <String>[
+                record.statusShortName ?? record.typeName,
+                ?station,
+              ].join(' · '),
+        line: record.isRecharge
+            ? null
+            : busLocation?.lineLabel ??
+                  match.lineName ??
+                  (isBus ? record.lineCode : null),
         timeText: _fmtTime(record.time),
         amountText: record.amountFen <= 0 && record.appTypeCode != 0x0A
             ? null
@@ -305,9 +316,12 @@ TripEntryInfo _describeEntry(TripEntry entry, TripPresentationContext display) {
                   ? '-'
                   : ''}$symbol${(record.amountFen / 100).toStringAsFixed(2)}',
         isConsume: record.isConsume && record.amountFen > 0,
+        isRecharge: record.isRecharge,
         subText: '记录余额 ${display.formatBalance(record.balanceFen)}',
-        category: record.appTypeLabel,
-        badges: isBus ? const [] : _confidenceBadges(match),
+        category: record.isRecharge ? null : record.appTypeLabel,
+        badges: isBus || record.isRecharge
+            ? const []
+            : _confidenceBadges(match),
         related: '未与 0x18 交易关联，作为独立过程事件保留',
         rawHex: record.rawHex,
         fields: [

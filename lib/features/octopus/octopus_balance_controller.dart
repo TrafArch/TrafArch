@@ -30,6 +30,7 @@ class OctopusBalanceController extends OwnedNotifier {
   OctopusBalancePhase phase = OctopusBalancePhase.idle;
   OctopusBalanceResult? result;
   String? error;
+  bool _adapterFailure = false;
   String? releaseError;
   bool lastAttemptSucceeded = false;
   _BalanceAttempt? _attempt;
@@ -52,8 +53,19 @@ class OctopusBalanceController extends OwnedNotifier {
       !attempt.cancelled &&
       attempt.closeFuture == null;
 
+  void adapterEnabled() {
+    if (disposed || !_adapterFailure) return;
+    _adapterFailure = false;
+    error = null;
+    if (phase == OctopusBalancePhase.failed && releaseError == null) {
+      phase = OctopusBalancePhase.idle;
+    }
+    notifyListeners();
+  }
+
   Future<void> read({String? expectedCardIdm}) async {
     if (disposed || busy) return;
+    _adapterFailure = false;
     final expectedIdm = expectedCardIdm?.trim().toUpperCase();
     if (expectedIdm != null && !_validIdm(expectedIdm)) {
       error = '本次卡片标识无效，请重新读卡。';
@@ -146,7 +158,9 @@ class OctopusBalanceController extends OwnedNotifier {
       if (!_current(attempt)) return;
       phase = OctopusBalancePhase.failed;
       attempt.outcome = DiagnosticOutcome.failed;
-      error = _failureMessage(failure);
+      final code = _failureCode(failure);
+      _adapterFailure = code == 'NFC_DISABLED' || code == 'NFC_UNAVAILABLE';
+      error = _failureMessage(failure, code);
       _record(
         attempt,
         'octopus_failure',
@@ -288,6 +302,7 @@ class OctopusBalanceController extends OwnedNotifier {
   void clearResult() {
     result = null;
     error = null;
+    _adapterFailure = false;
     lastAttemptSucceeded = false;
     if (busy) {
       unawaited(cancel());
@@ -487,7 +502,14 @@ Map<String, Object?> _safeFailure(Object failure) => switch (failure) {
   _ => {'code': 'UNEXPECTED'},
 };
 
-String _failureMessage(Object failure) {
+String _failureCode(Object failure) => switch (failure) {
+  PlatformException() => failure.code,
+  OctopusBalanceException() => failure.code,
+  TimeoutException() => 'timeout',
+  _ => '',
+};
+
+String _failureMessage(Object failure, String code) {
   if (failure is PlatformException &&
       _nativeClass(failure) == 'android.nfc.TagLostException') {
     return '手机与八达通的 NFC 连接已丢失，请重新贴卡。';
@@ -496,12 +518,6 @@ String _failureMessage(Object failure) {
       _discoveryPhase(failure) == 'connecting') {
     return '连接八达通 NFC-F 接口超时，请移开卡片后重新贴卡。';
   }
-  final code = switch (failure) {
-    PlatformException() => failure.code,
-    OctopusBalanceException() => failure.code,
-    TimeoutException() => 'timeout',
-    _ => '',
-  };
   return switch (code) {
     'identity' || 'tag_mismatch' => '请贴上与本次读取相同的同一张八达通卡。',
     'protocol' || 'invalid_response' => '八达通返回的数据无效，请重新贴卡。',

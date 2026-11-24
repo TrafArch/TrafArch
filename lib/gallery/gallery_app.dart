@@ -57,12 +57,14 @@ import '../platform/browser/feedback_browser.dart';
 import '../platform/qr/qr_image_picker.dart';
 import '../platform/storage/archive_document_store.dart';
 import '../protocols/felica/models/felica_card_type.dart';
+import '../protocols/felica/models/felica_capture.dart';
 import '../protocols/felica/models/jpy_amount_formatter.dart';
 import '../protocols/transit/card_parser.dart';
 import '../protocols/transit/city_union/city_union_models.dart';
 import '../protocols/transit/multiapp/application_evidence.dart';
 import '../protocols/transit/tunion/tunion_models.dart';
 import '../shared/app_support.dart';
+import '../shared/presentation/application_evidence_panel.dart';
 import '../shared/domain/archive_conflict_policy.dart';
 import 'gallery_controller.dart';
 import 'gallery_balance_presentation.dart';
@@ -507,8 +509,7 @@ class _GalleryViewState extends State<_GalleryView> {
 
   bool _importingRecords = false;
 
-  /// 导入与导出一样停留在预览层：读取用户选择的备份文件并展示内容，
-  /// 不覆盖当前内置样例。
+  /// 样例模式只预览文件名和卡片数量。
   Future<void> _importCardRecords() async {
     if (_importingRecords) return;
     setState(() => _importingRecords = true);
@@ -526,7 +527,7 @@ class _GalleryViewState extends State<_GalleryView> {
       }
       c.update(() {
         c.exportTitle = '导入预览';
-        c.exportText = '${document.name}\n$summary\n\n${document.content}';
+        c.exportText = '${document.name}\n$summary';
       }, '预览导入文件');
       c.showOverlay(GalleryOverlay.importPreview);
     } on MissingPluginException {

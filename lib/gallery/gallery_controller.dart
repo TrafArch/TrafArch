@@ -48,7 +48,6 @@ enum GalleryOverlay {
   mode,
   export,
   importPreview,
-  rawFeedback,
   contributors,
   licenseDetail,
 }
@@ -59,7 +58,6 @@ extension GalleryOverlaySurface on GalleryOverlay {
     GalleryOverlay.trip ||
     GalleryOverlay.export ||
     GalleryOverlay.importPreview ||
-    GalleryOverlay.rawFeedback ||
     GalleryOverlay.contributors ||
     GalleryOverlay.licenseDetail => true,
     _ => false,
@@ -220,7 +218,6 @@ class GalleryController extends ChangeNotifier {
   GalleryLiveAdapter? live;
   String currentCardId = 'shanghai';
   Map<String, List<GalleryRecord>> liveLedgers = const {};
-  Map<String, Map<String, dynamic>> liveRaw = const {};
 
   GalleryCard get current => cards.firstWhere(
     (card) => card.id == currentCardId,

@@ -284,7 +284,8 @@ void main() {
 
   test('malformed info response does not trigger fallback probes', () async {
     final f = Fixture()..shortOn = '00B0950046';
-    await f.read();
+    await expectLater(f.read(), throwsA(isA<ApduTransportException>()));
+    expect(f.commands.last, '00B0950046');
     expect(f.commands.where((c) => c.startsWith('00B0')), hasLength(1));
   });
 }

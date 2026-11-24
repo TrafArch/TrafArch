@@ -7,10 +7,15 @@ import '../../transport/transport_failure.dart';
 /// 单次 APDU 请求/响应记录（含行程记录字段）
 class ApduRecord {
   String? commandHex;
+
+  /// Selected application or DF that owns this APDU or transaction.
+  String? directory;
   List<int>? response;
   String? label;
   int type = 0; // 2 = 城市卡通用流水
   int balanceDelta = 0;
+  /// Signed number of rides on a count-based record (CIKA or TFT DF 1002).
+  int? tripDelta;
   int balanceAfter = 0;
   DateTime timestamp = DateTime.fromMillisecondsSinceEpoch(0);
   bool isMetro = false;
@@ -35,6 +40,9 @@ class ApduRecord {
 /// 一张被读取卡的汇总
 class CardInfo {
   String cardNumber = '';
+
+  /// Printed/display number when it differs from the stable raw card number.
+  String? displayCardNumber;
   String issuerCode = '';
   String issuerCode2 = '';
   String? currencyCode;
@@ -51,7 +59,10 @@ class CardInfo {
   int deposit = 0;
   int bonus = 0;
   int extraBalance = 0;
-  int remainingTrips = 0;
+  int? _remainingTrips;
+  int get remainingTrips => _remainingTrips ?? 0;
+  set remainingTrips(int value) => _remainingTrips = value;
+  int? get observedRemainingTrips => _remainingTrips;
   int validFromDays = 0;
   int cardTypeCode = 0;
   int subtypeCode = 0;
@@ -81,6 +92,7 @@ class CardInfo {
   /// 独立汇总副本；未观察到的余额保持 null，原始字节也独立复制。
   CardInfo copy() => CardInfo()
     ..cardNumber = cardNumber
+    ..displayCardNumber = displayCardNumber
     ..issuerCode = issuerCode
     ..issuerCode2 = issuerCode2
     ..currencyCode = currencyCode
@@ -91,7 +103,7 @@ class CardInfo {
     ..deposit = deposit
     ..bonus = bonus
     ..extraBalance = extraBalance
-    ..remainingTrips = remainingTrips
+    .._remainingTrips = _remainingTrips
     ..validFromDays = validFromDays
     ..cardTypeCode = cardTypeCode
     ..subtypeCode = subtypeCode

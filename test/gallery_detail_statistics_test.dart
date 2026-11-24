@@ -173,31 +173,24 @@ void main() {
   );
 
   testWidgets(
-    'raw actions sit beside their title and duplicate management buttons are removed',
+    'card information shows card fields without raw actions or duplicate management buttons',
     (tester) async {
       c.detailTab = 2;
       await mount(tester);
       await tester.scrollUntilVisible(
-        find.byKey(const ValueKey('detail-raw-header')),
+        find.text('协议'),
         150,
         scrollable: galleryVerticalScroll(),
       );
       await tester.pumpAndSettle();
-      final header = tester.getRect(
-        find.byKey(const ValueKey('detail-raw-header')),
-      );
+      expect(find.text('完整卡号'), findsOneWidget);
+      expect(find.text('原始数据'), findsNothing);
       for (final label in ['复制原始数据', '原始数据反馈预览']) {
-        expect(
-          header.contains(tester.getCenter(find.byTooltip(label))),
-          isTrue,
-        );
+        expect(find.byTooltip(label), findsNothing);
       }
       for (final label in ['重命名', '更换卡面', '导出记录', '删除本卡']) {
         expect(find.text(label), findsNothing);
       }
-      await tester.tap(find.byTooltip('原始数据反馈预览'));
-      await tester.pumpAndSettle();
-      expect(c.overlay, GalleryOverlay.rawFeedback);
       expect(tester.takeException(), isNull);
     },
   );

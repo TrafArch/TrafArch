@@ -1,3 +1,5 @@
+import '../../protocols/felica/models/felica_capture.dart';
+import '../../protocols/transit/multiapp/local_application_capture.dart';
 import '../scan/domain/card_read_outcome.dart';
 
 /// Freeze fields already produced by the reader. No protocol replay on restart.
@@ -61,12 +63,16 @@ Map<String, Object?> captureReadResult(CardReadOutcome result) =>
         if (card.localCard case final local?)
           'localCard': {
             'cardNumber': local.info.cardNumber,
+            'displayCardNumber': ?local.info.displayCardNumber,
+            if (local.info.isCika) 'countWallet': true,
+            'remainingTrips': ?local.info.observedRemainingTrips,
+            'expiryDate': ?local.info.expiryDate?.toIso8601String(),
             'issuerCode': local.info.issuerCode,
             'issuerCode2': local.info.issuerCode2,
             'currencyCode': local.info.currencyCode,
             'balance': local.info.observedBalance,
             'rawInfo': local.info.rawInfo,
-            'extras': local.extras.slots,
+            'extras': captureLocalObservations(local.extras.slots),
             'readError': local.readError?.toString(),
             'records': [
               for (final record in local.records)
@@ -82,70 +88,6 @@ Map<String, Object?> captureReadResult(CardReadOutcome result) =>
             ],
           },
       },
-      FelicaReadOutcome(:final card) => {
-        'cardType': card.cardType,
-        'productType': card.cardProductType.name,
-        'idm': card.idm,
-        'systemCodes': card.systemCodes,
-        'scannedAt': card.scannedAt.toIso8601String(),
-        'transitCapability': card.transitCapability,
-        if (card.amusementIc case final data?) 'amusementIc': data.toJson(),
-        'wallets': [
-          for (final wallet in card.wallets)
-            {
-              'id': wallet.walletId,
-              'kind': wallet.kind.name,
-              'name': wallet.name,
-              'balanceMinorUnits': wallet.balanceMinorUnits,
-              'currency': wallet.currency,
-              'fractionDigits': wallet.fractionDigits,
-              'readState': wallet.readState.name,
-              'balanceText': wallet.balanceText,
-              'note': wallet.note,
-              'errorMessage': wallet.errorMessage,
-            },
-        ],
-        'transactions': [
-          for (final tx in card.transactions)
-            {
-              'time': tx.time?.toIso8601String(),
-              'amountMinorUnits': tx.amountMinorUnits,
-              'currency': tx.currency,
-              'type': tx.type,
-              'locationCode': tx.locationCode,
-              'rawHex': tx.rawHex,
-              'decoded': tx.decoded,
-              'sequence': tx.sequence,
-              'note': tx.note,
-              'walletKind': tx.walletKind.name,
-              'amountIsBalance': tx.amountIsBalance,
-              if (tx.suica != null) 'suica': tx.suica!.toJson(),
-              'crossBorder': tx.crossBorder,
-            },
-        ],
-        'statuses': [
-          for (final status in card.statuses)
-            {
-              'stage': status.stage,
-              'state': status.state.name,
-              'message': status.message,
-              'rawResponse': status.rawResponse,
-              'failure': status.transportFailure?.toString(),
-            },
-        ],
-        'rawBlocks': [
-          for (final block in card.rawBlocks)
-            {'label': block.label, 'bytes': block.bytes, 'error': block.error},
-        ],
-        if (card.crossBorder case final info?)
-          'crossBorder': {
-            'sourceCurrency': info.sourceCurrency,
-            'targetCurrency': info.targetCurrency,
-            'numerator': info.exchangeRateNumerator,
-            'denominator': info.exchangeRateDenominator,
-            'updatedAt': info.rateUpdatedAt?.toIso8601String(),
-            'expiresAt': info.rateExpiresAt?.toIso8601String(),
-          },
-      },
+      FelicaReadOutcome(:final card) => captureFelicaResult(card),
       UnsupportedReadOutcome() => const {},
     };
