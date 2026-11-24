@@ -6,14 +6,16 @@ class ScanControls extends StatelessWidget {
     super.key,
     required this.scanning,
     required this.progress,
+    required this.nfcUnavailableMessage,
     required this.statusText,
     required this.buttonLabel,
     required this.onScanCard,
   });
   final bool scanning;
   final int? progress;
+  final String? nfcUnavailableMessage;
   final String statusText, buttonLabel;
-  final VoidCallback onScanCard;
+  final VoidCallback? onScanCard;
   @override
   Widget build(BuildContext context) => Card(
     child: Padding(
@@ -27,12 +29,14 @@ class ScanControls extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            '请将卡片贴近手机背面',
+            nfcUnavailableMessage ?? '请将卡片贴近手机背面',
             style: Theme.of(context).textTheme.headlineSmall,
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 8),
-          Text(statusText, textAlign: TextAlign.center),
+          if (nfcUnavailableMessage == null) ...[
+            const SizedBox(height: 8),
+            Text(statusText, textAlign: TextAlign.center),
+          ],
           if (scanning) ...[
             const SizedBox(height: 16),
             ReadProgressBar(

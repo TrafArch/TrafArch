@@ -149,6 +149,18 @@ native results; it does not manufacture an empty successful response.
 
 ## Lifecycle and ordering
 
+The separate EventChannel `transit_card_analyzer/nfc_status` sends an adapter
+snapshot on subscription and tracks Android adapter-state broadcasts. Its string
+values are `enabled`, `disabled` (including transitions), and `unavailable`
+(no adapter). Resume reconciles the current state after background changes.
+Only a fully enabled adapter can start a read.
+
+If `scanOnce` rejects an attempt before registration with `NFC_DISABLED` or
+`NFC_UNAVAILABLE`, there is no session to close. If power is lost after
+registration, pending discovery or exchange replies carry `NFC_DISABLED` with
+`details.sessionId`. The accepted session still goes through normal retirement
+and its ID-scoped close barrier.
+
 Native states are `WAITING`, `DISCOVERING`, `CONNECTED`, `METADATA_ONLY`, `CLOSED`.
 Reader callbacks capture the registering session. The main looper claims only the
 first discovery for that same active waiting session. The worker registers every

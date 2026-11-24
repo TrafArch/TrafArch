@@ -1,8 +1,19 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/services.dart';
 
 import 'nfc_models.dart';
+
+enum NfcAdapterState { enabled, disabled, unavailable }
+
+Stream<NfcAdapterState> watchNfcAdapterState() {
+  if (!Platform.isAndroid) return const Stream.empty();
+  const channel = EventChannel('transit_card_analyzer/nfc_status');
+  return channel.receiveBroadcastStream().map(
+    (event) => NfcAdapterState.values.byName(event as String),
+  );
+}
 
 /// NFC 硬件通道层（原 NfcService 拆分后的纯通道，无任何业务状态）。
 ///

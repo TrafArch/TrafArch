@@ -362,15 +362,135 @@ void main() {
   );
 
   testWidgets(
+    'turning NFC off ends the waiting prompt and turning it on restores manual reading',
+    (tester) async {
+      final states = StreamController<NfcAdapterState>.broadcast(sync: true);
+      addTearDown(states.close);
+      final fixture = await _showGallery(
+        tester,
+        _CardKind.suica,
+        nfcAdapterStates: states.stream,
+      );
+      final start = find.widgetWithText(TextButton, '开始读取');
+      final response = fixture.native.response = Completer<NfcScanResult?>();
+      await tester.tap(start);
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byKey(const ValueKey('home-read-progress')), findsOneWidget);
+
+      states.add(NfcAdapterState.disabled);
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.textContaining('请先打开系统 NFC'), findsOneWidget);
+      expect(find.byKey(const ValueKey('home-read-progress')), findsNothing);
+      expect(tester.widget<TextButton>(start).onPressed, isNull);
+
+      states.add(NfcAdapterState.enabled);
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextButton>(start).onPressed, isNotNull);
+      expect(fixture.native.discoveries, 1);
+      response.complete(fixture.native.tag);
+      fixture.native.response = null;
+      await tester.pumpAndSettle();
+      expect(fixture.app.hasCompletedRead, isFalse);
+      await _read(tester, '开始读取');
+      expect(find.text('1,000'), findsWidgets);
+
+      states.add(NfcAdapterState.disabled);
+      await tester.pumpAndSettle();
+      expect(find.text('1,000'), findsWidgets);
+      expect(find.textContaining('请先打开系统 NFC'), findsOneWidget);
+      expect(
+        tester
+            .widget<TextButton>(find.widgetWithText(TextButton, '再次读取'))
+            .onPressed,
+        isNull,
+      );
+      await _unmount(tester);
+    },
+  );
+
+  testWidgets(
+    'NFC off after close preserves the successful read and its pending auto-save',
+    (tester) async {
+      final states = StreamController<NfcAdapterState>.broadcast(sync: true);
+      addTearDown(states.close);
+      final fixture = await _showGallery(
+        tester,
+        _CardKind.suica,
+        nfcAdapterStates: states.stream,
+      );
+      final app = fixture.app;
+      var switchedOff = false;
+      void switchOffDuringSave() {
+        if (!switchedOff &&
+            app.hasCompletedRead &&
+            app.scanning &&
+            app.pendingCardSave != null) {
+          switchedOff = true;
+          states.add(NfcAdapterState.disabled);
+        }
+      }
+
+      app.addListener(switchOffDuringSave);
+      await _read(tester, '开始读取');
+      app.removeListener(switchOffDuringSave);
+      expect(switchedOff, isTrue);
+      expect(find.textContaining('请先打开系统 NFC'), findsOneWidget);
+      expect(find.text('1,000'), findsOneWidget);
+      expect(find.text('已自动保存'), findsOneWidget);
+      expect(
+        await tester.runAsync(app.cardRepository.getAllCards),
+        hasLength(1),
+      );
+
+      states.add(NfcAdapterState.enabled);
+      await tester.pumpAndSettle();
+      expect(find.text('读取失败，保留上次结果'), findsNothing);
+      expect(find.text('再次读取'), findsOneWidget);
+      await _unmount(tester);
+    },
+  );
+
+  testWidgets(
     'failed repeat retains the previous summary without exposing stale trips',
     (tester) async {
-      final fixture = await _showGallery(tester, _CardKind.suica);
+      final states = StreamController<NfcAdapterState>.broadcast(sync: true);
+      addTearDown(states.close);
+      final fixture = await _showGallery(
+        tester,
+        _CardKind.suica,
+        autoSave: false,
+        nfcAdapterStates: states.stream,
+      );
       await _read(tester, '开始读取');
       fixture.native.noTag = true;
       await _read(tester, '再次读取');
       expect(find.text('读取失败，保留上次结果'), findsOneWidget);
       expect(find.text('1,000'), findsOneWidget);
+      states.add(NfcAdapterState.disabled);
+      await tester.pumpAndSettle();
+      states.add(NfcAdapterState.enabled);
+      await tester.pumpAndSettle();
+      expect(find.text('1,000'), findsOneWidget);
       expect(find.text('重新读取'), findsOneWidget);
+      expect(fixture.app.pendingCardSave, isNull);
+
+      final response = fixture.native.response = Completer<NfcScanResult?>();
+      await tester.tap(find.text('重新读取'));
+      await tester.pump();
+      states.add(NfcAdapterState.disabled);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('请先打开系统 NFC'), findsOneWidget);
+      expect(find.text('1,000'), findsOneWidget);
+      expect(find.text('保存卡片'), findsNothing);
+      states.add(NfcAdapterState.enabled);
+      response.complete(fixture.native.tag);
+      await tester.pumpAndSettle();
+      expect(find.text('重新读取'), findsOneWidget);
+      expect(find.text('保存卡片'), findsNothing);
       expect(fixture.app.pendingCardSave, isNull);
       await _navigate(tester, 'trips');
       expect(find.text('暂无本次读取结果'), findsOneWidget);
@@ -1070,6 +1190,7 @@ Future<_Fixture> _showGallery(
   bool shenzhen = false,
   bool tuWallet = true,
   SettingsStore? settingsStore,
+  Stream<NfcAdapterState>? nfcAdapterStates,
 }) async {
   _size(tester);
   final fixture = _Fixture(
@@ -1078,6 +1199,7 @@ Future<_Fixture> _showGallery(
     shenzhen: shenzhen,
     tuWallet: tuWallet,
     settingsStore: settingsStore,
+    nfcAdapterStates: nfcAdapterStates,
   );
   addTearDown(fixture.app.dispose);
   await tester.runAsync(fixture.app.init);
@@ -1106,11 +1228,13 @@ class _Fixture {
     bool tuWallet = true,
     UpdateService? updateService,
     SettingsStore? settingsStore,
+    Stream<NfcAdapterState>? nfcAdapterStates,
   }) : native = shenzhen ? _ShenzhenReader(withTu: tuWallet) : _Reader(kind) {
     app = AppDependencies(
       database: testDatabase(),
       bundle: MissingTestAssets(),
       channel: native,
+      nfcAdapterStates: nfcAdapterStates,
       felicaChannel: native,
       logger: AppLogger(store: MemoryLogStore()),
       updateService: updateService,

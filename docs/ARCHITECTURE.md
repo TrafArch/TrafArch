@@ -303,6 +303,8 @@ flowchart TD
 
 ## 采集和取消
 
+Android 通过独立的 `transit_card_analyzer/nfc_status` 事件通道发布 NFC 适配器状态。`AppDependencies` 持有订阅，两套首页共享同一状态。关闭 NFC 会取消正在等待或读取的会话；重新开启后发起的新读取仍等待旧会话释放。
+
 ScanController 在发现标签前分配 UUID，并把它传到 ISO-DEP / NFC-F 通道。每个异步完成重新核对当前代次；旧结果不能更新新读取。物理指令和响应在采集边界保存不可变副本，后续 APDU 拼接不替代原始帧。原生返回的非空 sessionId 必须匹配。
 
 Android 主线程拥有 session 和回复集合，普通 I/O 走共享单线程队列。取消先从 active 脱离，关闭工作捕获旧 session 的句柄；abort 与最终 sweep 形成 retirement barrier，后续连接等它完成。释放超时和引擎销毁返回明确失败，不冒充物理连接已释放。旧 MethodChannel 名称和旧参数形式保留。

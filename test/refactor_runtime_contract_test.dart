@@ -344,13 +344,84 @@ void main() {
     await pending;
     expect(scan.phase, ScanPhase.failed);
     expect(scan.error, contains('STALE_SESSION'));
+    scan.adapterEnabled();
+    expect(scan.phase, ScanPhase.failed);
+    expect(scan.error, contains('STALE_SESSION'));
     expect(coordinator.reads, 0);
   });
+
+  for (final code in ['NFC_DISABLED', 'NFC_UNAVAILABLE']) {
+    test(
+      '$code before native registration leaves no connection to close',
+      () async {
+        final channel = _Sessions()
+          ..closeFailure = PlatformException(code: 'STALE_SESSION');
+        final scan = _scan(channel, _Coordinator());
+        addTearDown(scan.dispose);
+        final pending = scan.scanOnce();
+        channel.pending.values.single.completeError(
+          PlatformException(code: code),
+        );
+        await pending;
+        expect(scan.error, code);
+        expect(scan.releaseError, isNull);
+        scan.adapterEnabled();
+        expect(scan.phase, ScanPhase.idle);
+        expect(scan.error, isNull);
+        await scan.stop();
+        expect(scan.releaseError, isNull);
+        expect(channel.closed, isEmpty);
+      },
+    );
+  }
+
+  test(
+    'late start rejection clears a concurrent stop of the unknown ID',
+    () async {
+      final channel = _Sessions()
+        ..closeFailure = PlatformException(code: 'STALE_SESSION');
+      final scan = _scan(channel, _Coordinator());
+      addTearDown(scan.dispose);
+      final pending = scan.scanOnce();
+      final stopping = scan.stop();
+      channel.pending.values.single.completeError(
+        PlatformException(code: 'NFC_DISABLED'),
+      );
+      await Future.wait([pending, stopping]);
+      expect(scan.releaseError, isNull);
+      expect(scan.scanning, isFalse);
+    },
+  );
+
+  test(
+    'adapter disabled after session registration still requires physical close',
+    () async {
+      final channel = _Sessions()
+        ..closeFailure = PlatformException(code: 'NFC_CLOSE_FAILED');
+      final scan = _scan(channel, _Coordinator());
+      addTearDown(scan.dispose);
+      final pending = scan.scanOnce();
+      final id = channel.pending.keys.single;
+      channel.pending[id]!.completeError(
+        PlatformException(code: 'NFC_DISABLED', details: {'sessionId': id}),
+      );
+      await pending;
+      expect(channel.closed, [id]);
+      expect(scan.releaseError, contains('NFC_CLOSE_FAILED'));
+      scan.adapterEnabled();
+      expect(scan.error, isNull);
+      expect(scan.releaseError, contains('NFC_CLOSE_FAILED'));
+      channel.closeFailure = null;
+      await scan.stop();
+      expect(channel.closed, [id, id]);
+      expect(scan.releaseError, isNull);
+    },
+  );
 
   test(
     'release failure remains visible after otherwise successful parsing',
     () async {
-      final channel = _Sessions()..closeFails = true;
+      final channel = _Sessions()..closeFailure = StateError('release failed');
       final scan = _scan(channel, _Coordinator());
       addTearDown(scan.dispose);
       final pending = scan.scanOnce();
@@ -381,14 +452,14 @@ NfcScanResult _tag(String id) => NfcScanResult(
 class _Sessions implements SessionNfcChannel {
   final pending = <String, Completer<NfcScanResult?>>{};
   final closed = <String>[];
-  bool closeFails = false;
+  Object? closeFailure;
   @override
   Future<NfcScanResult?> scanSession(String sessionId) =>
       (pending[sessionId] = Completer<NfcScanResult?>()).future;
   @override
   Future<void> closeSession(String sessionId) async {
     closed.add(sessionId);
-    if (closeFails) throw StateError('release failed');
+    if (closeFailure case final failure?) throw failure;
   }
 
   @override

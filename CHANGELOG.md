@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-24 — 系统 NFC 开关即时影响读卡
+
+- 在系统快捷设置关闭 NFC 时，首页退出等卡或读取状态，并提示「请先打开系统 NFC」。关闭 NFC 后启动应用也会显示该提示。重新开启后可直接读取，2.x 无需重启或先重试一次。
+- 修复系统在创建读卡会话前拒绝扫描时，应用把它误报为连接释放失败、导致后续读卡受阻的问题。已经创建的会话仍需完成关闭后才能开始下一次读取。
+
 ## 2026-11-23 — 合并 main 提供方显示修复；版本名更新为 2.0.0-beta2
 
 - 合并 `origin/main` 的 `1879a4a`（芯片提供方、IC 卡提供方识别显示修复）：`card_provider_resolver` 采纳 main 的 historicalBytes／ATS 回退与未收录码兜底方案；`reset_provider_parser` 以 main 的锚定与 TCK 校验为主体，保留 2.x 侧 `_plausibleBlockStart` 守卫与 MT 块扫描。上游 pubspec／AppInfo 提交中自带的未解决冲突标记一并清除。

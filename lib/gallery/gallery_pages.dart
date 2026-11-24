@@ -15,8 +15,17 @@ extension _GalleryPages on _GalleryViewState {
   Widget _homeContent(GalleryReadState state, bool hasRead) {
     final live = _GalleryLiveScope.of(context);
     final card = c.current;
-    final reading = state == GalleryReadState.reading;
-    final failed = state == GalleryReadState.failed;
+    final nfcMessage = live?.app.nfcUnavailableMessage;
+    final readAction =
+        nfcMessage != null ||
+            live?.closing == true ||
+            live?.app.qrAcquiring == true
+        ? null
+        : c.read;
+    final reading = nfcMessage == null && state == GalleryReadState.reading;
+    final failed =
+        state == GalleryReadState.failed ||
+        (nfcMessage != null && hasRead && live?.hasFreshCurrent == false);
     final showResult = hasRead && !reading && !failed;
     final recent = c.trips.where((r) => r['kind'] != 'event').firstOrNull;
     return Column(
@@ -34,8 +43,10 @@ extension _GalleryPages on _GalleryViewState {
           child: !showResult
               ? _GalleryReadPrompt(
                   reading: reading,
-                  failed: failed,
+                  failed: failed && nfcMessage == null,
                   compact: _compactHeight,
+                  nfcMessage: nfcMessage,
+                  failureMessage: live?.error,
                 )
               : _face(card),
         ),
@@ -90,9 +101,7 @@ extension _GalleryPages on _GalleryViewState {
                 width: showResult ? double.infinity : 240,
                 child: _button(
                   failed ? '重新读取' : '开始读取',
-                  live?.closing == true || live?.app.qrAcquiring == true
-                      ? null
-                      : () => c.read(),
+                  readAction,
                   primary: true,
                   icon: Icons.contactless_outlined,
                 ),
@@ -105,7 +114,7 @@ extension _GalleryPages on _GalleryViewState {
                   child: _button(
                     card.saved ? '再次读取' : '保存卡片',
                     card.saved
-                        ? () => c.read()
+                        ? readAction
                         : () => c.showOverlay(GalleryOverlay.save),
                     primary: true,
                     icon: card.saved
@@ -119,7 +128,7 @@ extension _GalleryPages on _GalleryViewState {
                     card.saved ? '更换卡面' : '再次读取',
                     card.saved
                         ? () => c.showOverlay(GalleryOverlay.face, card: card)
-                        : () => c.read(),
+                        : readAction,
                     icon: card.saved
                         ? Icons.palette_outlined
                         : Icons.refresh_rounded,
@@ -127,6 +136,17 @@ extension _GalleryPages on _GalleryViewState {
                 ),
               ],
             ),
+        if (showResult && nfcMessage != null) ...[
+          _gap(8),
+          Semantics(
+            liveRegion: true,
+            child: _text(
+              nfcMessage,
+              role: GalleryTypography.label,
+              color: t.warn,
+            ),
+          ),
+        ],
         if (failed && hasRead) ...[
           _gap(20),
           _text('读取失败，保留上次结果', role: GalleryTypography.label, color: t.warn),

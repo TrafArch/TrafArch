@@ -21,6 +21,62 @@ import 'support/gallery_scroll.dart';
 import 'support/test_database.dart';
 
 void main() {
+  test(
+    'turning NFC off ends discovery and a quick retry waits for close',
+    () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      final states = StreamController<NfcAdapterState>.broadcast(sync: true);
+      addTearDown(states.close);
+      final native = _Nfc();
+      final app = _App(channel: native, nfcAdapterStates: states.stream);
+      addTearDown(app.dispose);
+      await app.init();
+
+      states.add(NfcAdapterState.enabled);
+      final first = app.scanOnceForGallery();
+      expect(app.scanning, isTrue);
+      final closing = native.close = Completer<void>();
+      addTearDown(() {
+        if (!closing.isCompleted) closing.complete();
+        if (!native.discovery.isCompleted) native.discovery.complete(null);
+      });
+      states.add(NfcAdapterState.disabled);
+      expect(app.scanning, isFalse);
+      expect(app.nfcUnavailableMessage, '请先打开系统 NFC');
+      await app.scanOnce();
+      expect(native.scans, 1);
+
+      states.add(NfcAdapterState.enabled);
+      final second = app.scanOnce();
+      expect(app.nfcUnavailableMessage, isNull);
+      expect(native.scans, 1, reason: '上次读取尚未释放');
+      native.discovery.complete(null);
+      closing.complete();
+      await Future.wait([first, second]);
+      expect(native.scans, 2);
+      expect(app.nfcReleaseFailed, isFalse);
+    },
+  );
+
+  test(
+    'an unavailable adapter blocks NFC and leaves QR acquisition usable',
+    () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      final states = StreamController<NfcAdapterState>.broadcast(sync: true);
+      addTearDown(states.close);
+      final native = _Nfc()..discovery.complete(null);
+      final app = _App(channel: native, nfcAdapterStates: states.stream);
+      addTearDown(app.dispose);
+      await app.init();
+
+      states.add(NfcAdapterState.unavailable);
+      await app.scanOnceForGallery();
+      expect(native.scans, 0);
+      expect(app.nfcUnavailableMessage, '当前设备没有 NFC');
+      expect(await app.runQrAcquisition((_) async {}), isTrue);
+    },
+  );
+
   testWidgets('2.x blocks QR on NFC failure and keeps one local picker owner', (
     tester,
   ) async {
@@ -274,6 +330,7 @@ Future<void> _unmount(WidgetTester tester) async {
 class _App extends AppDependencies {
   _App({
     required super.channel,
+    super.nfcAdapterStates,
     AppLogger? logger,
     LogExporter? exporter,
     this.active,

@@ -116,8 +116,23 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
   bool get hasCurrent => _current != null && !app.nfcReleaseFailed;
   bool get hasFreshCurrent =>
       _freshCurrent && _current != null && !app.nfcReleaseFailed;
+  bool get _hasCompletedCurrentRead =>
+      app.hasCompletedRead &&
+      app.lastResult != null &&
+      (_attempt == null || _readStamp(app) != _attemptStartedWith);
+
+  // A failed repeat may show the last card only as a previous result.
+  String? get _adapterInterruption =>
+      _current == null ? null : '本次读取已中断，请重新读取。';
 
   void _appChanged() {
+    if (_attempt != null &&
+        app.nfcUnavailableMessage != null &&
+        !_hasCompletedCurrentRead) {
+      // The adapter switch ends this attempt even if discovery replies later.
+      _attempt = null;
+      _error = _adapterInterruption;
+    }
     _restoreRoutes();
     final result = app.lastResult;
     if (app.hasCompletedRead && result != null) {
@@ -303,9 +318,7 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
         () => _fromRecovery(recovery),
       );
     }
-    if (app.hasCompletedRead &&
-        app.lastResult != null &&
-        (_attempt == null || _readStamp(app) != _attemptStartedWith)) {
+    if (_hasCompletedCurrentRead) {
       _freshCurrent = true;
       final pending = app.pendingCardSave;
       // A pending save can be replaced in place under the same id (verified
@@ -595,6 +608,7 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
   Future<void> start() async {
     if (_disposed ||
         busy ||
+        app.nfcUnavailableMessage != null ||
         _closing ||
         openingQr ||
         app.qrAcquiring ||
@@ -612,6 +626,8 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
       final result = app.lastResult;
       if (app.hasCompletedRead && result != null) {
         lastCard = _LiveCardSummary.fromRead(app, readAt: result.timestamp);
+      } else if (app.scan.failedForNfcAdapter) {
+        _error = _adapterInterruption;
       } else if (app.error != null) {
         _error = '读取未完成，请重新贴卡。';
       } else if (app.scan.phase != ScanPhase.cancelled) {
