@@ -295,14 +295,7 @@ class CommonUnitCu {
       if (_isBlankRecord(data)) continue;
       if (firstData != null && _listEquals(firstData, data)) break;
       firstData ??= data;
-      final type = data.length == 23 ? data[9] : null;
-      final kind = switch ((sfi, type)) {
-        (0x18 || 0x10 || 0x1A, 0x02) => CityUnionTransactionKind.recharge,
-        (0x18, 0x06 || 0x09) => CityUnionTransactionKind.consumption,
-        (0x06 || 0x1A || 0x19, 0x06 || 0x09) =>
-          CityUnionTransactionKind.foreignConsumption,
-        _ => null,
-      };
+      final kind = CityUnionFileParser.walletRecordKind(sfi, data);
       CityUnionWalletTransaction? record;
       String? reason;
       if (kind == null) {
@@ -314,7 +307,11 @@ class CommonUnitCu {
           kind: kind,
           recordNumber: slot,
         );
-        if (sfi == 0x18 && _uncertainWalletRecord(record)) {
+        final verifyWalletFields =
+            sfi == 0x18 ||
+            (sfi == 0x06 && kind == CityUnionTransactionKind.recharge);
+        if (verifyWalletFields &&
+            !CityUnionFileParser.hasVerifiableWalletFields(record)) {
           reason = '交易日期、时间或金额无法核实';
         } else if (sfi == 0x18) {
           final raw = CityUnionCodec.hex(data);
@@ -337,19 +334,6 @@ class CommonUnitCu {
       );
     }
   }
-
-  static bool _uncertainWalletRecord(CityUnionWalletTransaction record) =>
-      record.fields.any(
-        (f) =>
-            f.hasError &&
-            (f.key == 'transactionDate' || f.key == 'transactionTime'),
-      ) ||
-      (record.amountRaw == 0 &&
-          record.sequence == 0 &&
-          record.terminalNumber == '000000000000') ||
-      (record.kind == CityUnionTransactionKind.recharge &&
-          record.amountRaw == 0) ||
-      record.interpretedAmountFen?.abs() != record.amountRaw;
 
   /// 按 SFI 解析单条记录；布局不符时保留原始字节（不丢弃、不猜测）。
   CityUnionFileView _parseSafely(int sfi, List<int> data) {

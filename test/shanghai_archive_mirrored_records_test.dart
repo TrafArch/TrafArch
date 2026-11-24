@@ -5,6 +5,7 @@ import 'package:transit_card_analyzer/features/archive/application/archive_histo
 import 'package:transit_card_analyzer/features/archive/application/cu_archive_projection.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_session_snapshot.dart';
 import 'package:transit_card_analyzer/features/archive/presentation/shanghai_archive_mirrored_records.dart';
+import 'package:transit_card_analyzer/features/archive/presentation/archive_trip_presenter.dart';
 import 'package:transit_card_analyzer/features/reference_data/domain/reference_match.dart';
 import 'package:transit_card_analyzer/features/transit_analysis/cu_transaction_analysis.dart';
 import 'package:transit_card_analyzer/features/transit_analysis/tunion_analysis_models.dart';
@@ -13,6 +14,95 @@ import 'package:transit_card_analyzer/protocols/transit/city_union/city_union_fi
 import 'package:transit_card_analyzer/protocols/transit/city_union/city_union_models.dart';
 
 void main() {
+  const aid = 'A000000632010105';
+  for (final testCase in [
+    (credit: true, newAid: aid, expected: 1),
+    (credit: true, newAid: 'another-wallet', expected: 2),
+    (credit: false, newAid: aid, expected: 2),
+  ]) {
+    test('旧上海与新 TU 充值作用域：$testCase', () {
+      final old = _batch('old', applicationId: aid, recharge: testCase.credit);
+      final recent = _batch(
+        'new',
+        parser: CardParserIds.tunion,
+        displayCardType: 'shanghai_transit_union',
+        applicationId: testCase.newAid,
+        recharge: testCase.credit,
+      );
+      final batches = [recent, old];
+      final projection = presentArchiveTrips(
+        ArchiveHistory.projectRecords(batches),
+        batches: batches,
+        onDiagnostics: (_) {},
+      );
+      expect(projection.journeys, hasLength(testCase.expected));
+      if (testCase.expected == 1) {
+        expect(
+          projection.journeys.single.events.expand((e) => e.sourceIds).toSet(),
+          {'old', 'new'},
+        );
+      }
+    });
+  }
+
+  for (final sfi in [0x06, 0x18]) {
+    test('同一上海钱包新批次已证实充值镜像，旧批次只保留 CU 文件 $sfi', () {
+      final full = _batch('full', applicationId: aid, recharge: true, sfi: sfi);
+      final cuOnly = _batch(
+        'cu',
+        parser: CardParserIds.tunion,
+        displayCardType: 'shanghai_transit_union',
+        applicationId: aid,
+        includeTu: false,
+        recharge: true,
+        sfi: sfi,
+      );
+      final history = ArchiveHistoryResult(card: null, batches: [full, cuOnly]);
+      final cu = projectCuArchive(history);
+      expect(cu.transactions, hasLength(1));
+      final partition = partitionShanghaiArchiveMirroredRecords(
+        history: history,
+        cityUnion: cu,
+      );
+      expect(partition.independent, isEmpty);
+      expect(cu.sources[partition.mirrored.single]!.map((s) => s.batchId), [
+        'full',
+        'cu',
+      ]);
+    });
+  }
+
+  test('同批 CU 0x06 两个槽位有相同充值原文，一个 TU 观察只能解释一个槽位', () {
+    final history = ArchiveHistoryResult(
+      card: null,
+      batches: [
+        _batch(
+          'full',
+          applicationId: aid,
+          recharge: true,
+          sfi: 0x06,
+          duplicateCu: true,
+        ),
+        _batch(
+          'repeat',
+          applicationId: aid,
+          recharge: true,
+          sfi: 0x06,
+          duplicateCu: true,
+        ),
+      ],
+    );
+    final cu = projectCuArchive(history);
+    final partition = partitionShanghaiArchiveMirroredRecords(
+      history: history,
+      cityUnion: cu,
+    );
+    expect(cu.transactions, hasLength(2));
+    expect(partition.independent, hasLength(1));
+    expect(partition.mirrored, hasLength(1));
+    expect(cu.sources.values.map((s) => s.length), [2, 2]);
+  });
+
   test(
     'same captured Shanghai batch folds matching CU and preserves evidence',
     () {
@@ -179,10 +269,14 @@ void main() {
   });
 }
 
-CuTransactionView _view({int number = 1}) => CuTransactionView(
+CuTransactionView _view({
+  int number = 1,
+  int sfi = 0x18,
+  bool recharge = false,
+}) => CuTransactionView(
   record: CityUnionFileParser.parseWalletRecord(
-    0x18,
-    const [
+    sfi,
+    [
       0,
       14,
       0,
@@ -192,7 +286,7 @@ CuTransactionView _view({int number = 1}) => CuTransactionView(
       0,
       1,
       0x90,
-      9,
+      recharge ? 2 : 9,
       0x20,
       0,
       0x11,
@@ -207,7 +301,9 @@ CuTransactionView _view({int number = 1}) => CuTransactionView(
       4,
       4,
     ],
-    kind: CityUnionTransactionKind.consumption,
+    kind: recharge
+        ? CityUnionTransactionKind.recharge
+        : CityUnionTransactionKind.consumption,
     recordNumber: number,
   ),
   transactionTime: DateTime.utc(2026, 10, 24, 15, 4, 4),
@@ -220,17 +316,28 @@ ArchiveBatchEvidence _batch(
   bool includeTu = true,
   bool includeCu = true,
   bool duplicateCu = false,
+  bool recharge = false,
+  int sfi = 0x18,
+  String? displayCardType,
+  String? applicationId,
   int capturedOffsetMinutes = 480,
   String? mode,
 }) {
-  final view = _view();
+  final view = _view(sfi: sfi, recharge: recharge);
   final snapshot = CardSessionSnapshot(
-    context: ArchiveContext(systemId: parser),
+    context: ArchiveContext(
+      systemId: parser,
+      applicationId: applicationId,
+      currencyCode: 'CNY',
+      minorUnitDigits: 2,
+      clockBasis: 'device-local-card-time-unverified',
+      extensions: {'displayCardType': ?displayCardType},
+    ),
     extensions: {
       if (includeCu)
         'cuProjection': captureCuProjection([
           view,
-          if (duplicateCu) _view(number: 2),
+          if (duplicateCu) _view(number: 2, sfi: sfi, recharge: recharge),
         ]),
     },
     trips: [
@@ -239,9 +346,9 @@ ArchiveBatchEvidence _batch(
           time: DateTime(2026, 10, 24, 23, 4, 4),
           amountFen: mode == 'wrong-amount' ? 500 : 400,
           overdraftLimitFen: 0,
-          isConsume: mode != 'wrong-consume',
-          isCompositeConsume: mode != 'wrong-composite',
-          typeName: mode == 'wrong-type-name' ? '充值' : '复合消费',
+          isConsume: !recharge && mode != 'wrong-consume',
+          isCompositeConsume: !recharge && mode != 'wrong-composite',
+          typeName: recharge || mode == 'wrong-type-name' ? '充值' : '复合消费',
           sequence: 14,
           terminalId: '200011012618',
           rawHex: mode == 'wrong-raw'

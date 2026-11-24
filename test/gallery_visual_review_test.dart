@@ -168,7 +168,7 @@ void main() {
         c.update(() => c.detailTab = 2);
         await tester.pumpAndSettle();
         await tester.scrollUntilVisible(
-          find.byKey(const ValueKey('detail-raw-header')),
+          find.text('协议'),
           150,
           scrollable: galleryVerticalScroll(within: detail),
         );

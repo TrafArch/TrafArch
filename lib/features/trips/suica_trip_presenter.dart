@@ -56,31 +56,39 @@ class SuicaTripPresentation {
       final badges = info['badges'];
       final fields = info['fields'];
       if (badges is! List || fields is! List) return null;
+      final capturedFields = [
+        for (final field in fields)
+          if (field is List && field.length == 2)
+            (_requiredString(field[0]), _requiredString(field[1]))
+          else
+            throw const FormatException('Invalid Suica detail field'),
+      ];
+      final processCode = capturedFields
+          .where((field) => field.$1 == '处理码')
+          .firstOrNull
+          ?.$2;
+      final isRecharge = _isSuicaRecharge(int.tryParse(processCode ?? ''));
+      final title = _requiredString(info['title']);
+      final category = _optionalString(info['category']);
       final entryInfo = TripEntryInfo(
         sourceLabel: _requiredString(info['sourceLabel']),
-        title: _requiredString(info['title']),
+        title: isRecharge ? '充值' : title,
         line: _optionalString(info['line']),
         timeText: _optionalString(info['timeText']),
         amountText: _optionalString(info['amountText']),
         isConsume: info['isConsume'] as bool,
+        isRecharge: isRecharge,
         subText: _optionalString(info['subText']),
-        category: _optionalString(info['category']),
+        category: isRecharge ? null : category,
         badges: List.unmodifiable(badges.map(_requiredString)),
         rawHex: _optionalString(info['rawHex']),
-        fields: List.unmodifiable(
-          fields.map((field) {
-            if (field is! List || field.length != 2) {
-              throw const FormatException('Invalid Suica detail field');
-            }
-            return (_requiredString(field[0]), _requiredString(field[1]));
-          }),
-        ),
+        fields: List.unmodifiable(capturedFields),
       );
       final point = _restoreEndpoint(json['point']);
       if (point == null) return null;
       return _projection(
         info: entryInfo,
-        mode: mode,
+        mode: isRecharge ? TripModeFilter.other : mode,
         dateText: _requiredString(json['dateText']),
         state: state,
         point: point,
@@ -111,9 +119,10 @@ SuicaTripPresentation _presentSuicaTrip(
 }) {
   final details = tx.suica;
   final kind = details?.kind ?? SuicaRecordKind.unknown;
+  final isRecharge = _isSuicaRecharge(details?.processCode);
   final mode = switch (kind) {
-    SuicaRecordKind.rail => TripModeFilter.rail,
-    SuicaRecordKind.bus => TripModeFilter.bus,
+    SuicaRecordKind.rail when !isRecharge => TripModeFilter.rail,
+    SuicaRecordKind.bus when !isRecharge => TripModeFilter.bus,
     _ => TripModeFilter.other,
   };
   final kindLabel = details?.kindLabel ?? '未解析记录';
@@ -185,13 +194,14 @@ SuicaTripPresentation _presentSuicaTrip(
       : null;
   final info = TripEntryInfo(
     sourceLabel: 'Suica 090F 历史',
-    title: '$kindLabel · $processLabel',
+    title: isRecharge ? '充值' : '$kindLabel · $processLabel',
     timeText: timeText,
     amountText: amount,
     // The color represents the observed debit. It never changes processLabel.
     isConsume: change != null && change < 0,
+    isRecharge: isRecharge,
     subText: [if (balance != null) '交易后余额 $balance', ?route].join(' · '),
-    category: kindLabel,
+    category: isRecharge ? null : kindLabel,
     rawHex: tx.rawHex,
     fields: List.unmodifiable(fields),
   );
@@ -226,6 +236,9 @@ SuicaTripPresentation _presentSuicaTrip(
     balanceAfterText: balance,
   );
 }
+
+bool _isSuicaRecharge(int? process) =>
+    const {0x02, 0x14, 0x15, 0x17, 0x18, 0x1F, 0x48}.contains(process);
 
 SuicaTripPresentation _projection({
   required TripEntryInfo info,

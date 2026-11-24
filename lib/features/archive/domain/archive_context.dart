@@ -1,4 +1,6 @@
 import '../../../protocols/felica/models/jpy_amount_formatter.dart';
+import '../../../protocols/transit/card_parser.dart' show CardParserIds;
+import 'card_types.dart';
 
 /// Context captured with a read, never resolved from the current scan.
 /// Null values mean unknown, including for legacy snapshots.
@@ -17,6 +19,13 @@ class ArchiveContext {
     String value => value,
     _ => null,
   };
+
+  /// Both the retired regional reader and the generic TU reader report this wallet.
+  bool get isShanghaiTunionWallet =>
+      applicationId == 'A000000632010105' &&
+      (systemId == CardParserIds.shanghaiTunion ||
+          (systemId == CardParserIds.tunion &&
+              displayCardType == CardTypes.shanghaiTransitUnion));
 
   const ArchiveContext({
     this.systemId,

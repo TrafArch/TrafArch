@@ -491,8 +491,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('1 个批次'), findsOneWidget);
     _expectNoJson();
+    final sourceAction = find.descendant(
+      of: find.byType(BottomSheet).last,
+      matching: find.widgetWithIcon(TextButton, Icons.bug_report_outlined),
+    );
     await tester.scrollUntilVisible(
-      find.text('诊断与原始证据'),
+      sourceAction,
       300,
       scrollable: find
           .descendant(
@@ -501,10 +505,10 @@ void main() {
           )
           .first,
     );
-    await tester.tap(find.text('诊断与原始证据'));
+    await tester.tap(sourceAction);
     await tester.pumpAndSettle();
-    expect(find.textContaining('"sources"'), findsOneWidget);
-    expect(find.textContaining('"batchId"'), findsOneWidget);
+    _expectNoJson();
+    expect(find.text('记录来源'), findsOneWidget);
     expect(find.textContaining('trips[0]'), findsOneWidget);
     expect(
       (await repository.getArchiveRows(id)).batches.map((b) => b.payloadJson),
@@ -554,15 +558,21 @@ void main() {
       expect(find.textContaining('部分历史记录无法完整显示'), findsOneWidget);
       expect(find.textContaining('unsupported'), findsNothing);
       expect(find.textContaining('future'), findsNothing);
-      await tester.ensureVisible(find.text('批次诊断与原始快照'));
-      await tester.tap(find.text('批次诊断与原始快照'));
+      final diagnostics = find.widgetWithIcon(
+        TextButton,
+        Icons.bug_report_outlined,
+      );
+      await tester.ensureVisible(diagnostics);
+      await tester.tap(diagnostics);
       await tester.pumpAndSettle();
       expect(find.textContaining('unsupported'), findsOneWidget);
-      await tester.tap(find.textContaining('unsupported'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('查看完整原始快照').first);
-      await tester.pumpAndSettle();
-      expect(find.textContaining('kept verbatim'), findsOneWidget);
+      expect(find.textContaining('不支持的快照版本 99'), findsOneWidget);
+      expect(find.text('查看完整原始快照'), findsNothing);
+      expect(find.textContaining('kept verbatim'), findsNothing);
+      expect(
+        (await repository.getArchiveRows(id)).batches.map((b) => b.payloadJson),
+        contains(contains('kept verbatim')),
+      );
       await _close(tester);
     },
   );

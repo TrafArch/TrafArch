@@ -12,6 +12,55 @@ import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_process_pa
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_trip_matcher.dart';
 
 void main() {
+  test('旧档案钱包充值不能沿陈旧关联隐藏同批次的公交乘车记录', () {
+    final process = _reportedProcess(11);
+    final recharge = _reportedTransaction(
+      process,
+      extra: {
+        'typeName': '充值',
+        'consume': false,
+        'appTypeName': '公共汽电车',
+        'rideStatusName': '下车',
+      },
+    );
+    final before = jsonEncode(recharge.fields);
+    final events = _project([recharge, process]);
+    expect(events, hasLength(2));
+    final wallet = events.singleWhere((e) => e.sequence != null);
+    expect(wallet.mode, TripModeFilter.other);
+    expect(wallet.role, JourneyEventRole.unknown);
+    expect(wallet.endpoint.station, isNull);
+    expect(wallet.endpoint.line, isNull);
+    expect(wallet.payload.title, '充值');
+    expect(wallet.amountText, '+¥ 3.00');
+    expect(wallet.payload.fields, contains(('应用分类', '公共汽电车')));
+    expect(
+      events.singleWhere((e) => e.sequence == null).mode,
+      TripModeFilter.bus,
+    );
+    expect(jsonEncode(recharge.fields), before);
+  });
+
+  test('同批次城际应用中的钱包充值保留一条交易', () {
+    final cycle = _process(type: 0x09, app: 0x0A);
+    final process = _record(ArchiveRecordKind.process, cycle);
+    final recharge = _transaction(
+      sequence: 20,
+      minute: 0,
+      extra: {
+        'typeName': '充值',
+        'consume': false,
+        'appTypeName': '城际铁路',
+        'terminalId': '000000000001',
+        'matchedProcess': cycle,
+      },
+    );
+    final events = _project([recharge, process]);
+    expect(events, hasLength(1));
+    expect(events.single.payload.title, '充值');
+    expect(events.single.amountText, '+¥ 3.00');
+  });
+
   test('归档完成行程仅采用出站交易后余额且进行中不显示', () {
     final entry = _transaction(
       status: '进站',

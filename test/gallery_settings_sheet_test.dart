@@ -172,7 +172,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('import-source-archive')));
     await tester.pumpAndSettle();
     expect(c.overlay, GalleryOverlay.importPreview);
-    expect(find.text('文件内容预览 · 不会修改当前样例'), findsOneWidget);
+    expect(find.text('导入预览'), findsOneWidget);
     expect(find.textContaining('识别到 1 张卡片记录'), findsOneWidget);
     expect(find.textContaining('backup.json'), findsOneWidget);
     await tester.ensureVisible(find.text('关闭预览'));

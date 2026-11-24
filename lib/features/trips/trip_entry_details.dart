@@ -63,7 +63,7 @@ void showTripEntryDetails(
               TextButton.icon(
                 onPressed: onDiagnostics,
                 icon: const Icon(Icons.bug_report_outlined),
-                label: const Text('诊断与原始证据'),
+                label: const Text('查看记录来源'),
               )
             else ...[
               Text(

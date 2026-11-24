@@ -19,6 +19,10 @@ void main() {
                     'amount_raw': '001250',
                     'currency': null,
                     'customer_note': '客户字段',
+                    'capture': {'kind': 'physical_frame'},
+                    'frames': [
+                      {'response': 'private-response'},
+                    ],
                   },
                 ],
               ),
@@ -33,6 +37,9 @@ void main() {
     expect(find.text('0001'), findsOneWidget);
     expect(find.text('001250'), findsOneWidget);
     expect(find.text('客户字段'), findsOneWidget);
+    expect(find.text('capture'), findsOneWidget);
+    expect(find.textContaining('physical_frame'), findsNothing);
+    expect(find.textContaining('private-response'), findsNothing);
     expect(find.text('未提供'), findsWidgets);
     expect(find.textContaining('CNY'), findsNothing);
     expect(find.textContaining('¥'), findsNothing);

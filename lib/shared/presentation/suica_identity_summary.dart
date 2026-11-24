@@ -27,7 +27,7 @@ class SuicaIdentitySummary extends StatelessWidget {
         ),
         const SizedBox(height: 3),
         if (hasConflict)
-          Text('标识不一致，请查看原始快照', style: theme.textTheme.bodyMedium)
+          Text('已保存的卡片标识不一致', style: theme.textTheme.bodyMedium)
         else if (idm case final value?)
           SelectableText(
             value,

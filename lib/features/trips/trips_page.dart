@@ -113,6 +113,8 @@ class CurrentTripsBody extends StatelessWidget {
               parser == CardParserIds.localCard &&
                   app.localReadResult?.info.isSZT == true
         ? LocalTripProfile.shenzhen
+        : app.localReadResult?.info.isWHCTC == true
+        ? LocalTripProfile.wuhan
         : LocalTripProfile.general;
     final primaryLocal =
         parser == CardParserIds.localCard ||

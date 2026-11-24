@@ -531,6 +531,96 @@ void main() {
     expect(row['amount_unit'], '10^-2 CNY');
   });
 
+  test('旧充值误关联的乘车 1E 和 1A 在导出中独立保留', () {
+    final time = DateTime.fromMillisecondsSinceEpoch(1000);
+    final process = _cycleFields(typeCode: 3);
+    final rows = projectArchiveRecords([
+      _history([
+        _record(ArchiveRecordKind.transaction, {
+          'time': 1000,
+          'amountFen': 300,
+          'consume': false,
+          'typeName': '充值',
+          'matchedProcess': process,
+          'isEntry': true,
+          'rideStatusName': '上车',
+          'lineLabel': '公交1路',
+          'stationLabel': '公交站',
+          'location': {'lineCode': '01', 'stationCode': '02'},
+          'terminalId': '112233445566',
+          'displayProcessKey': tunionDisplayKey(
+            '1E',
+            time,
+            '0000000000000123',
+            null,
+            '3:300:00010002000000',
+          ),
+          'displayApplicationKey': tunionDisplayKey(
+            '1A-bus-true',
+            time,
+            '0011',
+            'AABB',
+          ),
+        }),
+        _record(ArchiveRecordKind.process, process),
+        _record(ArchiveRecordKind.bus, {
+          'entryTime': 1000,
+          'entryTerminalId': '0011',
+          'rawHex': 'AABB',
+        }),
+      ]),
+    ]);
+    expect(
+      rows.map((row) => row['source']),
+      unorderedEquals(['TU 0x18', 'TU 0x1E', 'TU 0x1A']),
+    );
+    final recharge = rows.singleWhere((row) => row['source'] == 'TU 0x18');
+    expect(recharge['record_type'], '充值');
+    expect(recharge['amount'], '3.00');
+    expect(recharge['amount_raw'], '300');
+    expect(recharge['time'], '1970-01-01T00:00:01.000Z');
+    expect(recharge['terminal'], '112233445566');
+    for (final key in [
+      'entry_time',
+      'exit_time',
+      'station',
+      'station_code',
+      'line',
+      'line_code',
+      'entry_station',
+      'entry_station_code',
+      'entry_line',
+      'entry_line_code',
+    ]) {
+      expect(recharge[key], isNull, reason: key);
+    }
+    final boarding = rows.singleWhere((row) => row['source'] == 'TU 0x1E');
+    expect(boarding['entry_time'], boarding['time']);
+    expect(boarding['entry_line_code'], '0001');
+    expect(boarding['entry_station_code'], '0002');
+  });
+
+  test('导出时同一充值过程仅合并至已确认充值的流水', () {
+    final load = _cycleFields(typeCode: 10);
+    final rows = projectArchiveRecords([
+      _history([
+        for (final consume in [true, false])
+          _record(ArchiveRecordKind.transaction, {
+            'time': 1000,
+            'amountFen': 300,
+            'consume': consume,
+            'typeName': consume ? '消费' : '充值',
+            'matchedProcess': load,
+          }),
+        _record(ArchiveRecordKind.process, load),
+      ]),
+    ]);
+    expect(
+      rows.map((row) => (row['amount'], row['source'])),
+      unorderedEquals([('-3.00', 'TU 0x18'), ('3.00', 'TU 0x18 + 0x1E')]),
+    );
+  });
+
   test('unknown 1E type retains raw amount without inventing recharge', () {
     final row = projectArchiveRecords([
       _history([

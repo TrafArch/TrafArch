@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -7,12 +7,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/app/app_dependencies.dart';
 import 'package:transit_card_analyzer/app/trafarch_app.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_name_extension.dart';
+import 'package:transit_card_analyzer/features/archive/domain/card_session_snapshot.dart';
 import 'package:transit_card_analyzer/features/home/presentation/pending_save_presenter.dart';
 import 'package:transit_card_analyzer/features/octopus/octopus_balance_controller.dart';
 import 'package:transit_card_analyzer/features/recovery/recovery_state.dart';
 import 'package:transit_card_analyzer/features/updates/update_service.dart';
 import 'package:transit_card_analyzer/gallery/gallery_app.dart';
 import 'package:transit_card_analyzer/gallery/gallery_controller.dart';
+import 'package:transit_card_analyzer/gallery/gallery_data.dart'
+    show GalleryRecord;
 import 'package:transit_card_analyzer/gallery/gallery_theme.dart';
 import 'package:transit_card_analyzer/gallery/gallery_preferences.dart';
 import 'package:transit_card_analyzer/platform/nfc/felica_channel.dart';
@@ -83,6 +86,13 @@ void main() {
         expect(find.text(balanceText), findsWidgets);
         if (kind == _CardKind.octopus) {
           expect(find.text('暂无行程记录'), findsOneWidget);
+        } else if (kind == _CardKind.tu || kind == _CardKind.cu) {
+          // These bare debits carry no transport-mode evidence.
+          expect(
+            find.byKey(const ValueKey('gallery-transaction')),
+            findsOneWidget,
+          );
+          expect(find.text('公交'), findsNothing);
         } else {
           expect(
             find
@@ -119,6 +129,282 @@ void main() {
       },
     );
   }
+
+  testWidgets(
+    'Shanghai TU/CU mirrors and CU-only older recharges appear once',
+    (tester) async {
+      final fixture = await _showGallery(
+        tester,
+        _CardKind.tu,
+        reader: _ShanghaiWalletReader(),
+      );
+      await _read(tester, '开始读取');
+      await _navigate(tester, 'trips');
+      final controller = _liveAdapter(tester).controller;
+      void checkRecords(List<GalleryRecord> rows) {
+        String amount(GalleryRecord row) =>
+            (row['amount'] as String).replaceAll(' ', '');
+        final credits = rows.where((row) => row['kind'] == 'recharge');
+        expect(credits.map((row) => (row['isoDate'], amount(row))), [
+          ('2024-05-04', '+¥20.00'),
+          ('2024-05-03', '+¥50.00'),
+          ('2024-05-02', '+¥20.00'),
+          ('2024-05-01', '+¥10.00'),
+        ]);
+        expect(credits.map((row) => row['title']), everyElement('充值'));
+        expect(rows.where((row) => row['kind'] != 'recharge').map(amount), [
+          '-¥4.00',
+        ]);
+        expect(rows.map((row) => row['isoDate']), [
+          '2024-05-04',
+          '2024-05-04',
+          '2024-05-03',
+          '2024-05-02',
+          '2024-05-01',
+        ]);
+      }
+
+      checkRecords(controller.trips);
+      await _navigate(tester, 'home');
+      fixture.native.readAt = _readAt.add(const Duration(minutes: 1));
+      await _read(tester, '再次读取');
+      expect(fixture.native.discoveries, 2);
+      checkRecords(controller.trips);
+      await _navigate(tester, 'cards');
+      await _settleIo(tester);
+      final saved = (await tester.runAsync(
+        fixture.app.cardRepository.getAllCards,
+      ))!.single;
+      await tester.tap(find.text(saved.displayName));
+      await _settleIo(tester);
+      checkRecords(controller.ledger(controller.selectedCard));
+
+      final liveRecords = controller.trips;
+      fixture.app.recoveredCapture = RecoveryCapture(
+        readAt: _readAt,
+        summary: {'cardName': saved.displayName},
+        frames: const [],
+        snapshotJson: saved.sessionDataJson,
+      );
+      await fixture.app.setAutoSaveEnabled(false);
+      await _settleIo(tester);
+      expect(identical(controller.trips, liveRecords), isFalse);
+      checkRecords(controller.trips);
+      await _unmount(tester);
+    },
+  );
+
+  testWidgets(
+    'skipping a saved card keeps its new recharge in the current read',
+    (tester) async {
+      final fixture = await _showGallery(tester, _CardKind.tu);
+      final app = fixture.app;
+      final previous = _Reader._transaction.toList()..[9] = 0x02;
+      fixture.native.transactions = [previous];
+      await _read(tester, '开始读取');
+      await _settleIo(tester);
+      final saved = (await tester.runAsync(app.cardRepository.getAllCards))!
+          .single;
+      await app.setArchiveConflictPolicy(ArchiveConflictPolicy.skip);
+
+      final next = previous.toList()
+        ..[1] = 2
+        ..setRange(7, 9, [0x13, 0x88])
+        ..[19] = 2;
+      fixture.native.transactions = [next, previous];
+      fixture.native.readAt = _readAt.add(const Duration(minutes: 1));
+      await _read(tester, '再次读取');
+      await _settleIo(tester);
+      expect(fixture.native.discoveries, 2);
+      expect(app.pendingCardSave, isNull);
+      final existing = (await tester.runAsync(app.cardRepository.getAllCards))!
+          .single;
+      expect(existing.sessionDataJson, saved.sessionDataJson);
+
+      await _navigate(tester, 'trips');
+      final controller = _liveAdapter(tester).controller;
+      List<String> credits(List<GalleryRecord> rows) => [
+        for (final row in rows)
+          if (row['kind'] == 'recharge')
+            (row['amount'] as String).replaceAll(' ', ''),
+      ];
+      expect(credits(controller.trips), ['+¥50.00', '+¥10.00']);
+      await _navigate(tester, 'cards');
+      await _settleIo(tester);
+      await tester.tap(find.text(saved.displayName));
+      await _settleIo(tester);
+      expect(credits(controller.ledger(controller.selectedCard)), ['+¥10.00']);
+      await _unmount(tester);
+    },
+  );
+
+  testWidgets('2.x keeps a wallet recharge between its adjacent transactions', (
+    tester,
+  ) async {
+    final fixture = await _showGallery(tester, _CardKind.tu);
+    // The wallet stores the newest record first. All three share a minute.
+    List<int> transaction(int sequence, int type, int seconds) =>
+        _Reader._transaction.toList()
+          ..[1] = sequence
+          ..[9] = type
+          ..[22] = seconds;
+    fixture.native.transactions = [
+      transaction(3, 0x06, 3),
+      transaction(2, 0x02, 2),
+      transaction(1, 0x06, 1),
+    ];
+    await _read(tester, '开始读取');
+    await _navigate(tester, 'trips');
+    expect(find.text('充值'), findsOneWidget);
+    final credit = find.text('+¥ 10.00');
+    expect(credit, findsOneWidget);
+    expect(find.text('公交'), findsNothing);
+    expect(find.byIcon(Icons.directions_bus_outlined), findsNothing);
+    final controller = _liveAdapter(tester).controller;
+    expect(controller.trips.map((record) => record['kind']), [
+      'other',
+      'recharge',
+      'other',
+    ]);
+    expect(controller.trips.map((record) => record['time']), [
+      '08:30:03',
+      '08:30:02',
+      '08:30:01',
+    ]);
+    await tester.tap(find.text('全部方式'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('menu-option-充值')));
+    await tester.pumpAndSettle();
+    expect(controller.filteredTrips, hasLength(1));
+    await tester.tap(credit);
+    await tester.pumpAndSettle();
+    expect(find.text('交易类型'), findsOneWidget);
+    expect(find.text('08:30:02'), findsOneWidget);
+    expect(find.text('交通方式'), findsNothing);
+    controller.back();
+    await tester.pumpAndSettle();
+    await _navigate(tester, 'cards');
+    await _settleIo(tester);
+    final saved = (await tester.runAsync(
+      fixture.app.cardRepository.getAllCards,
+    ))!.single;
+    await tester.tap(find.text(saved.displayName));
+    await _settleIo(tester);
+    expect(find.text('充值'), findsOneWidget);
+    expect(credit, findsOneWidget);
+    expect(find.text('公交'), findsNothing);
+    await _unmount(tester);
+  });
+
+  testWidgets('2.x preserves mixed-precision Suica block order', (
+    tester,
+  ) async {
+    final fixture = await _showGallery(tester, _CardKind.suica);
+    fixture.native.suicaBlocks = [
+      _Reader._suicaBlock.toList()
+        ..[1] = 0x02
+        ..[14] = 2,
+      _Reader._suicaBlock.toList()
+        ..[1] = 0x46
+        ..[6] = 0x49
+        ..[7] = 0xE0,
+    ];
+    await _read(tester, '开始读取');
+    await _navigate(tester, 'trips');
+    final records = _liveAdapter(tester).controller.trips;
+    expect(records, hasLength(2));
+    final record = records.first;
+    expect(record['kind'], 'recharge');
+    expect(record['isoDate'], isNotNull);
+    expect(record['time'], '时刻未记录');
+    expect(record.containsKey('entryTime'), isFalse);
+    expect(records.last['time'], '09:15');
+    expect(records.last['isoDate'], record['isoDate']);
+    expect(find.text('充值'), findsOneWidget);
+    expect(find.text('00:00'), findsNothing);
+    await _unmount(tester);
+  });
+
+  testWidgets('2.x retains a CU recharge date when the card clock is invalid', (
+    tester,
+  ) async {
+    final fixture = await _showGallery(tester, _CardKind.cu);
+    fixture.native.cuRecharge = _Reader._transaction.toList()
+      ..[9] = 0x02
+      ..[20] = 0xFF;
+    await _read(tester, '开始读取');
+    await _navigate(tester, 'trips');
+    final record = _liveAdapter(tester).controller.trips
+        .singleWhere((row) => row['kind'] == 'recharge');
+    expect(record['isoDate'], '2024-05-01');
+    expect(record['time'], '交易时间未知');
+    expect(record.containsKey('entryTime'), isFalse);
+    expect(record.containsKey('exitTime'), isFalse);
+    await _unmount(tester);
+  });
+
+  testWidgets('2.x shows application probes only in expert information', (
+    tester,
+  ) async {
+    final fixture = await _showGallery(
+      tester,
+      _CardKind.tu,
+      reader: _ShanghaiWalletReader(),
+    );
+    await _read(tester, '开始读取');
+    await _navigate(tester, 'expert');
+    await tester.tap(find.text('信息获取'));
+    await tester.pumpAndSettle();
+    expect(find.text('逐应用探测'), findsOneWidget);
+    expect(find.text('查看记录原码'), findsWidgets);
+
+    await _navigate(tester, 'cards');
+    await _settleIo(tester);
+    final saved = (await tester.runAsync(
+      fixture.app.cardRepository.getAllCards,
+    ))!.single;
+    await tester.tap(find.text(saved.displayName));
+    await _settleIo(tester);
+    await tester.tap(find.text('卡片信息'));
+    await tester.pumpAndSettle();
+    expect(find.text('完整卡号'), findsOneWidget);
+    await tester.ensureVisible(find.text('协议'));
+    await tester.pumpAndSettle();
+    expect(find.text('逐应用探测'), findsNothing);
+    expect(find.text('查看记录原码'), findsNothing);
+    await _unmount(tester);
+  });
+
+  testWidgets('saved card information omits captured frame JSON and raw actions', (
+    tester,
+  ) async {
+    final fixture = await _showGallery(tester, _CardKind.tu);
+    await _read(tester, '开始读取');
+    await _navigate(tester, 'cards');
+    await _settleIo(tester);
+    final saved = (await tester.runAsync(
+      fixture.app.cardRepository.getAllCards,
+    ))!.single;
+    final snapshot = CardSessionSnapshot.decode(saved.sessionDataJson!)!;
+    expect(
+      snapshot.rawEvidence.any((row) => row['kind'] == 'physical_frame'),
+      isTrue,
+    );
+
+    await tester.tap(find.text(saved.displayName));
+    await _settleIo(tester);
+    await tester.tap(find.text('卡片信息'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('协议'));
+    await tester.pumpAndSettle();
+    expect(find.text('完整卡号'), findsOneWidget);
+    expect(find.text('原始数据'), findsNothing);
+    expect(find.text('捕获时的原始读取证据'), findsNothing);
+    expect(find.textContaining('physical_frame'), findsNothing);
+    expect(find.byTooltip('复制原始数据'), findsNothing);
+    expect(find.byTooltip('原始数据反馈预览'), findsNothing);
+    await _unmount(tester);
+  });
 
   testWidgets('transit data parsing includes the 1.x expert fields', (
     tester,
@@ -308,11 +594,8 @@ void main() {
       await tester.tap(find.text(card.displayName));
       await _settleIo(tester);
       expect(find.text('最近交易'), findsOneWidget);
-      expect(
-        find.byKey(const ValueKey('trip-endpoints')).evaluate().isNotEmpty ||
-            find.byKey(const ValueKey('trip-one-way')).evaluate().isNotEmpty,
-        isTrue,
-      );
+      expect(find.byKey(const ValueKey('gallery-transaction')), findsOneWidget);
+      expect(find.text('公交'), findsNothing);
       await tester.tap(find.text('消费统计'));
       await tester.pumpAndSettle();
       expect(find.text('总消费'), findsOneWidget);
@@ -1187,6 +1470,7 @@ Future<_Fixture> _showGallery(
   WidgetTester tester,
   _CardKind kind, {
   bool autoSave = true,
+  _Reader? reader,
   bool shenzhen = false,
   bool tuWallet = true,
   SettingsStore? settingsStore,
@@ -1195,6 +1479,7 @@ Future<_Fixture> _showGallery(
   _size(tester);
   final fixture = _Fixture(
     kind,
+    reader: reader,
     autoSave: autoSave,
     shenzhen: shenzhen,
     tuWallet: tuWallet,
@@ -1224,12 +1509,15 @@ class _Fixture {
   _Fixture(
     _CardKind kind, {
     bool autoSave = true,
+    _Reader? reader,
     bool shenzhen = false,
     bool tuWallet = true,
     UpdateService? updateService,
     SettingsStore? settingsStore,
     Stream<NfcAdapterState>? nfcAdapterStates,
-  }) : native = shenzhen ? _ShenzhenReader(withTu: tuWallet) : _Reader(kind) {
+  }) : native =
+           reader ??
+           (shenzhen ? _ShenzhenReader(withTu: tuWallet) : _Reader(kind)) {
     app = AppDependencies(
       database: testDatabase(),
       bundle: MissingTestAssets(),
@@ -1279,6 +1567,9 @@ class _Reader implements NfcChannel, FelicaChannel {
   Completer<void>? closeReached;
   DateTime readAt = _readAt;
   int balanceFen = 10000;
+  List<List<int>> transactions = [_transaction];
+  List<List<int>> suicaBlocks = [_suicaBlock];
+  List<int>? cuRecharge;
   String? historicalBytes;
 
   NfcScanResult get tag => NfcScanResult(
@@ -1342,7 +1633,14 @@ class _Reader implements NfcChannel, FelicaChannel {
       };
     }
     if (frame[1] == 0xB2) {
-      if (frame[3] == 0xC4 && frame[2] == 1) return _ok(_transaction);
+      if (cu && frame[3] == 0x84 && frame[2] == 1 && cuRecharge != null) {
+        return _ok(cuRecharge!);
+      }
+      if (frame[3] == 0xC4 &&
+          frame[2] >= 1 &&
+          frame[2] <= transactions.length) {
+        return _ok(transactions[frame[2] - 1]);
+      }
       return missing;
     }
     return rejected;
@@ -1362,18 +1660,41 @@ class _Reader implements NfcChannel, FelicaChannel {
   List<int> _suicaBlocks(List<int> frame) {
     final countOffset = 11 + frame[10] * 2;
     final count = frame[countOffset];
+    final blocks = [
+      for (var index = 0; index < count; index++)
+        frame[countOffset + 2 + index * 2],
+    ];
     return _packet([
       0x07,
       ..._idmBytes,
       0,
       0,
       count,
-      for (var index = 0; index < count; index++)
-        ...(frame[countOffset + 2 + index * 2] == 0
-            ? [0x16, 1, 0, 2, 0x35, 0x70, 1, 2, 1, 3, 0xE8, 3, 0, 0, 1, 0]
+      for (final block in blocks)
+        ...(block < suicaBlocks.length
+            ? suicaBlocks[block]
             : List<int>.filled(16, 0)),
     ]);
   }
+
+  static const _suicaBlock = [
+    0x16,
+    1,
+    0,
+    2,
+    0x35,
+    0x70,
+    1,
+    2,
+    1,
+    3,
+    0xE8,
+    3,
+    0,
+    0,
+    1,
+    0,
+  ];
 
   static List<int> _ok(List<int> payload) => [...payload, 0x90, 0];
   static List<int> _packet(List<int> payload) => [
@@ -1470,6 +1791,69 @@ class _Reader implements NfcChannel, FelicaChannel {
     0x30,
     0,
   ];
+}
+
+// Synthetic responses reproduce the Shanghai capture's overlapping file
+// windows without retaining its card, terminal or transaction details.
+class _ShanghaiWalletReader extends _Reader {
+  _ShanghaiWalletReader() : super(_CardKind.tu);
+
+  String? application;
+  static List<int> _record(int sequence, int type, int fen, int day) =>
+      _Reader._transaction.toList()
+        ..[1] = sequence
+        ..[7] = fen >> 8
+        ..[8] = fen & 0xff
+        ..[9] = type
+        ..[19] = day;
+  final _credits = [
+    _record(6, 0x02, 2000, 4),
+    _record(5, 0x02, 5000, 3),
+    _record(4, 0x02, 2000, 2),
+    _record(3, 0x02, 1000, 1),
+  ];
+
+  @override
+  List<int> _apdu(List<int> frame) {
+    const rejected = [0x6A, 0x82];
+    if (frame[1] == 0xA4) {
+      final aid = frame.skip(5).take(frame[4]).toList();
+      if (listEquals(aid, [0x3F, 0x00])) {
+        application = null;
+        return _Reader._ok([]);
+      }
+      application = listEquals(aid, [0xA0, 0, 0, 6, 0x32, 1, 1, 5])
+          ? 'tu'
+          : listEquals(aid, [0xA0, 0, 0, 0, 3, 0x86, 0x98, 7, 1])
+          ? 'cu'
+          : null;
+      if (application == null) return rejected;
+      // Each application explicitly identifies its own AID in its FCI.
+      return _Reader._ok([0x6F, aid.length + 2, 0x84, aid.length, ...aid]);
+    }
+    if (application == null) return rejected;
+    if (frame[1] == 0x5C) return _Reader._ok([0, 0, 0x20, 0x08]);
+    if (frame[1] == 0xB0 && frame[2] == 0x95) {
+      final public = application == 'cu'
+          ? (_Reader._cuPublic.toList()..setRange(2, 4, [0x20, 0]))
+          : (_Reader._tuPublic.toList()
+              ..setRange(0, 4, [0x02, 0, 0x29, 0])
+              ..setRange(10, 20, [3, 0x10, 0x47, 0x70, 0, 0, 0, 0, 0, 1]));
+      return _Reader._ok(public);
+    }
+    if (frame[1] != 0xB2) return rejected;
+    final rows = switch (frame[3]) {
+      // The same wallet purchase and two recent credits are visible in both
+      // applications. The purchase shares the latest credit's clock and POS.
+      0xC4 => [_record(7, 0x09, 400, 4), ..._credits.take(2)],
+      0x34 when application == 'cu' => _credits,
+      _ => const <List<int>>[],
+    };
+    final index = frame[2] - 1;
+    return index >= 0 && index < rows.length
+        ? _Reader._ok(rows[index])
+        : [0x6A, 0x83];
+  }
 }
 
 class _ShenzhenReader extends _Reader {

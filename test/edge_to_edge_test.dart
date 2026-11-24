@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/app/app_dependencies.dart';
 import 'package:transit_card_analyzer/app/navigation/floating_nav_bar.dart';
 import 'package:transit_card_analyzer/app/trafarch_app.dart';
-import 'package:transit_card_analyzer/features/recovery/recovery_result_panel.dart';
+import 'package:transit_card_analyzer/features/expert/expert_page.dart';
 import 'package:transit_card_analyzer/features/recovery/recovery_state.dart';
 import 'package:transit_card_analyzer/features/trips/trip_entry_details.dart';
 import 'package:transit_card_analyzer/features/trips/trip_entry_presenter.dart';
@@ -204,7 +204,7 @@ void main() {
         matching: find.byType(ListView),
       );
       expect(tester.getRect(list).bottom, closeTo(844 - bottom, 0.1));
-      final lastAction = find.text('诊断与原始证据');
+      final lastAction = find.text('查看记录来源');
       await tester.scrollUntilVisible(
         lastAction,
         250,
@@ -224,7 +224,7 @@ void main() {
     });
   }
 
-  testWidgets('恢复证据页正文在横屏避开侧边刘海和系统导航栏', (tester) async {
+  testWidgets('恢复的专家页在横屏避开侧边刘海和系统导航栏', (tester) async {
     addTearDown(tester.view.reset);
     _window(
       tester,
@@ -239,15 +239,12 @@ void main() {
     );
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(
-          body: SingleChildScrollView(child: RecoveryResultPanel(app: app)),
-        ),
+        home: Scaffold(body: ExpertPage(app: app)),
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('查看上次读取的原始数据'));
-    await tester.pumpAndSettle();
-    final body = tester.getRect(find.byType(SingleChildScrollView).last);
+    expect(find.text('专家分析 · 上次读取'), findsOneWidget);
+    final body = tester.getRect(find.byType(ListView));
     expect(body.left, 44);
     expect(body.right, lessThanOrEqualTo(844 - 48));
     expect(body.bottom, lessThanOrEqualTo(390 - 24));

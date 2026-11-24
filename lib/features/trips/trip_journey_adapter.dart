@@ -40,16 +40,17 @@ JourneyEvent<TripEntryInfo> describeJourneyEvent(
 
   switch (entry) {
     case TransactionTripEntry(:final trip):
-      final process = trip.matchedProcessTrip;
+      final process = trip.isRecharge ? null : trip.matchedProcessTrip;
       mode = _transactionMode(trip);
-      role =
-          _statusRole(trip.rideStatusName, mode) ??
-          (process == null ? null : _processRole(process, mode)) ??
-          (trip.isEntry
-              ? JourneyEventRole.entry
-              : mode == TripModeFilter.bus && trip.isConsume
-              ? JourneyEventRole.single
-              : JourneyEventRole.unknown);
+      role = trip.isRecharge
+          ? JourneyEventRole.unknown
+          : _statusRole(trip.rideStatusName, mode) ??
+                (process == null ? null : _processRole(process, mode)) ??
+                (trip.isEntry
+                    ? JourneyEventRole.entry
+                    : mode == TripModeFilter.bus && trip.isConsume
+                    ? JourneyEventRole.single
+                    : JourneyEventRole.unknown);
       time = trip.time;
       cityCode = _cityCode(trip.cityCode);
       cityLabel = _text(trip.cityName);
@@ -65,13 +66,15 @@ JourneyEvent<TripEntryInfo> describeJourneyEvent(
         if (trip.amountFen >= 0 && trip.currency.code == 'CNY') {
           walletDeltaFen = trip.isConsume
               ? -trip.amountFen
-              : trip.typeName == '充值'
+              : trip.isRecharge
               ? trip.amountFen
               : null;
         }
       }
       balanceProcess = process;
-      station = mode == TripModeFilter.bus
+      station = trip.isRecharge
+          ? null
+          : mode == TripModeFilter.bus
           ? _busStation(
               trip.stationLabel,
               rawCode: trip.stationConfidence != StationMatchConfidence.exact,
@@ -86,7 +89,9 @@ JourneyEvent<TripEntryInfo> describeJourneyEvent(
       fareFen = record.amountFen;
       balanceProcess = record;
       isConsume = record.isConsume;
-      if (mode == TripModeFilter.bus) {
+      if (record.isRecharge) {
+        station = null;
+      } else if (mode == TripModeFilter.bus) {
         final location = display.resolveBusLocation(
           record.cityCode,
           record.lineStationCode,
@@ -258,6 +263,7 @@ JourneyEvent<TripEntryInfo> describeJourneyEvent(
 }
 
 TripModeFilter _transactionMode(TransitTrip trip) {
+  if (trip.isRecharge) return TripModeFilter.other;
   final process = trip.matchedProcessTrip;
   if (process != null && isTunionBusCycle(process)) return TripModeFilter.bus;
   final declared = tripModeOf(TransactionTripEntry(trip));
@@ -269,7 +275,9 @@ TripModeFilter _transactionMode(TransitTrip trip) {
   };
 }
 
-TripModeFilter _processMode(TUnionTripRecord record) => isTunionBusCycle(record)
+TripModeFilter _processMode(TUnionTripRecord record) => record.isRecharge
+    ? TripModeFilter.other
+    : isTunionBusCycle(record)
     ? TripModeFilter.bus
     : record.isRailTransit
     ? TripModeFilter.rail

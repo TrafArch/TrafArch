@@ -13,6 +13,34 @@ import 'cj_t331_wallet_recharge_parser.dart';
 class CityUnionFileParser {
   CityUnionFileParser._();
 
+  /// The same CU file can contain both credits and debits. Determine the
+  /// role from the observed 23-byte wallet layout and its transaction type.
+  static CityUnionTransactionKind? walletRecordKind(int sfi, List<int> data) {
+    if (data.length != CjT331WalletRechargeParser.recordLength) return null;
+    return switch ((sfi, data[9])) {
+      (0x18 || 0x10 || 0x1A || 0x06, 0x02) => CityUnionTransactionKind.recharge,
+      (0x18, 0x06 || 0x09) => CityUnionTransactionKind.consumption,
+      (0x06 || 0x1A || 0x19, 0x06 || 0x09) =>
+        CityUnionTransactionKind.foreignConsumption,
+      _ => null,
+    };
+  }
+
+  static bool hasVerifiableWalletFields(CityUnionWalletTransaction record) {
+    final invalidClock = record.fields.any(
+      (field) =>
+          field.hasError &&
+          (field.key == 'transactionDate' || field.key == 'transactionTime'),
+    );
+    final empty =
+        record.amountRaw == 0 &&
+        (record.kind == CityUnionTransactionKind.recharge ||
+            (record.sequence == 0 && record.terminalNumber == '000000000000'));
+    return !invalidClock &&
+        !empty &&
+        record.interpretedAmountFen?.abs() == record.amountRaw;
+  }
+
   /// The reader identifies a wallet role from SFI, length and transaction type.
   /// For example, 0x1A can contain recharge or foreign consumption records.
   /// Keep [parse] available for the standalone CJ/T standard table layouts.

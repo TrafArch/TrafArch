@@ -68,40 +68,23 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
   ArchiveHistoryResult? get currentHistory => _current?.history;
   String? get archiveIssue => _archiveIssue;
   SavedCard? savedCardFor(String id) => _archiveById[id]?.saved;
-  Object? felicaSystemsFor(String id, {bool archived = false}) {
-    final history = archived ? _archiveById[id]?.history : historyFor(id);
-    final snapshot = history?.latestCapture?.snapshot;
-    if (!archived && id == _current?.card.id && hasFreshCurrent) {
-      final decoded = app.recoveredCapture?.summary['decoded'];
-      if (decoded is Map) {
-        return decoded['systemResults'] ??
-            snapshot?.extensions['felicaSystems'];
-      }
-      if (app.felicaResult case final card?) return captureFelicaSystems(card);
+  Object? get currentFelicaSystems {
+    final snapshot = currentHistory?.latestCapture?.snapshot;
+    final decoded = app.recoveredCapture?.summary['decoded'];
+    if (decoded is Map) {
+      return decoded['systemResults'] ?? snapshot?.extensions['felicaSystems'];
     }
+    if (app.felicaResult case final card?) return captureFelicaSystems(card);
     return snapshot?.extensions['felicaSystems'];
   }
 
   ArchiveHistoryResult? historyFor(String id) =>
       id == _current?.card.id ? _current?.history : _archiveById[id]?.history;
-  List<ApplicationEvidence> applicationsFor(String id, {bool archived = false}) {
-    if (!archived && id == _current?.card.id && hasFreshCurrent) {
-      final recovery = app.recoveredCapture;
-      if (recovery != null) {
-        return recovery.applications(
-          _current?.history?.latestCapture?.snapshot,
-        );
-      }
-      return app.applications;
-    }
-    return ApplicationEvidence.parseList(
-      _archiveById[id]
-          ?.history
-          .latestCapture
-          ?.snapshot
-          ?.extensions['applicationEvidence'],
-    );
-  }
+  List<ApplicationEvidence> get currentApplications =>
+      app.recoveredCapture?.applications(
+        currentHistory?.latestCapture?.snapshot,
+      ) ??
+      app.applications;
 
   List<String> get sources => [
     '全部来源',
@@ -237,10 +220,6 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
       navigation.liveLedgers = {
         for (final item in _archive) item.card.id: item.records,
         if (live != null) live.card.id: live.records,
-      };
-      navigation.liveRaw = {
-        for (final item in _archive) item.card.id: item.raw,
-        if (live != null) live.card.id: live.raw,
       };
       _syncedArchive = _archive;
       _syncedCards = cards;
@@ -401,23 +380,35 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
         )
         .firstOrNull;
     final pending = app.pendingCardSave;
-    final history = pending?.sessionDataJson == null
-        ? saved?.history ??
-              _currentApplicationHistory(app.applications, summary.readAt)
-        : _historyFromSnapshot(
-            pending!.sessionDataJson!,
-            id: pending.pendingSaveId,
-            readAt: pending.readAt ?? summary.readAt,
-          );
+    final capture = pending ?? app.completedCardCapture;
+    // A skipped save clears the prompt but leaves the new read in memory.
+    // Only reuse a saved ledger if it contains this particular read.
+    final sameSavedRead =
+        saved != null &&
+        pending == null &&
+        (capture == null ||
+            saved.history.batches.any(
+              (batch) =>
+                  batch.decoded.snapshot?.extensions['captureAttemptId'] ==
+                  capture.pendingSaveId,
+            ));
+    final history = sameSavedRead
+        ? saved.history
+        : capture?.sessionDataJson != null
+        ? _historyFromSnapshot(
+            capture!.sessionDataJson!,
+            id: capture.pendingSaveId,
+            readAt: capture.readAt ?? summary.readAt,
+          )
+        : _currentApplicationHistory(app.applications, summary.readAt);
     final records = history == null
         ? const <GalleryRecord>[]
         : _galleryRecords(history, app.includeShanghaiOverdraft);
-    final unsaved = pending != null;
     final card = _liveCard(
-      id: !unsaved && saved != null
+      id: sameSavedRead
           ? saved.card.id
           : (fingerprint == null ? 'live-current' : 'live:$fingerprint'),
-      saved: !unsaved && saved != null,
+      saved: sameSavedRead,
       name: summary.name,
       cardNumber: summary.cardNumber,
       balance: summary.balance ?? '余额未知',
@@ -434,7 +425,6 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
       card: card,
       history: history,
       records: records,
-      raw: history == null ? const {} : _rawMap(history),
     );
   }
 
@@ -525,7 +515,6 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
       card: card,
       history: history,
       records: records,
-      raw: history == null ? const {} : _rawMap(history),
     );
   }
 
@@ -884,13 +873,11 @@ class _LiveReadCard {
     required this.card,
     required this.history,
     required this.records,
-    required this.raw,
   });
 
   final GalleryCard card;
   final ArchiveHistoryResult? history;
   final List<GalleryRecord> records;
-  final Map<String, dynamic> raw;
 }
 
 class _LiveArchiveCard {
@@ -899,7 +886,6 @@ class _LiveArchiveCard {
     required this.history,
     required this.card,
     required this.records,
-    required this.raw,
   });
 
   factory _LiveArchiveCard.fromArchive(
@@ -951,7 +937,6 @@ class _LiveArchiveCard {
       history: history,
       card: card,
       records: records,
-      raw: _rawMap(history),
     );
   }
 
@@ -959,7 +944,6 @@ class _LiveArchiveCard {
   final ArchiveHistoryResult history;
   final GalleryCard card;
   final List<GalleryRecord> records;
-  final Map<String, dynamic> raw;
 }
 
 GalleryCard _liveCard({
@@ -1112,22 +1096,6 @@ ArchiveHistoryResult? _historyFromSnapshot(
   );
 }
 
-Map<String, dynamic> _rawMap(ArchiveHistoryResult history) {
-  final sections = <String>[];
-  for (final batch in history.batches) {
-    final snapshot = batch.decoded.snapshot;
-    if (snapshot == null) continue;
-    for (final evidence in snapshot.rawEvidence) {
-      final text = const JsonEncoder.withIndent('  ').convert(evidence);
-      sections.add('${batch.id} · ${evidence['kind'] ?? 'evidence'}\n$text');
-    }
-  }
-  return {
-    'text': sections.isEmpty ? '本次读取未保留可展示的原始证据。' : sections.join('\n\n'),
-    'count': sections.length,
-  };
-}
-
 List<GalleryRecord> _galleryRecords(
   ArchiveHistoryResult history,
   bool includeOverdraft,
@@ -1139,7 +1107,6 @@ List<GalleryRecord> _galleryRecords(
     batches: history.batches,
     includeShanghaiOverdraft: includeOverdraft,
     cardType: cardType,
-    onDiagnostics: (_) {},
   );
   for (final journey in tu.journeys) {
     final first = journey.events.first.payload;
@@ -1147,8 +1114,9 @@ List<GalleryRecord> _galleryRecords(
     records.add(_recordFromPresentation(first, infos: infos, journey: journey));
   }
   final suica = projectSuicaArchive(history);
+  final suicaRecords = <GalleryRecord>[];
   for (final record in suica.records) {
-    records.add(
+    suicaRecords.add(
       _recordFromPresentation(
         record.presentation.entry,
         infos: [
@@ -1191,14 +1159,27 @@ List<GalleryRecord> _galleryRecords(
       ),
     );
   }
-  records.sort((a, b) {
-    final first = '${a['isoDate'] ?? ''} ${a['time'] ?? ''}';
-    final second = '${b['isoDate'] ?? ''} ${b['time'] ?? ''}';
-    final compared = second.compareTo(first);
-    return compared == 0
-        ? (a['title'] as String).compareTo(b['title'] as String)
-        : compared;
-  });
+  final clockTime = RegExp(r'\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?');
+  String sortKey(GalleryRecord record) {
+    final time = clockTime.stringMatch(record['time'] as String? ?? '');
+    return '${record['isoDate'] ?? ''} ${time ?? ''}';
+  }
+
+  // Equal or absent clocks keep the existing order from the card history.
+  mergeSort(records, compare: (a, b) => sortKey(b).compareTo(sortKey(a)));
+  if (suicaRecords.isNotEmpty) {
+    // 090F blocks are newest first even when only some have a minute clock.
+    // Across wallets the civil day is their shared ordering precision.
+    records.addAll(suicaRecords);
+    mergeSort(
+      records,
+      compare: (a, b) {
+        final first = a['isoDate'] as String? ?? '';
+        final second = b['isoDate'] as String? ?? '';
+        return second.compareTo(first);
+      },
+    );
+  }
   return List.unmodifiable(records);
 }
 
@@ -1218,18 +1199,27 @@ GalleryRecord _recordFromPresentation<T extends Enum>(
     for (final item in events) item.payload.info.sourceLabel,
     for (final item in infos) item.sourceLabel,
   };
-  final clock = _clockFor(start: start, end: end, info: info);
-  final kind = switch (entry.mode) {
-    TripModeFilter.rail => 'rail',
-    TripModeFilter.bus => 'bus',
-    TripModeFilter.other => 'other',
-  };
+  // A standalone operation has an event clock even without ride endpoints.
+  final clock = _clockFor(
+    start:
+        start ?? (end == null ? journey?.events.firstOrNull?.endpoint : null),
+    end: end,
+    info: info,
+    dateText: entry.dateText,
+  );
+  final kind = info.isRecharge
+      ? 'recharge'
+      : switch (entry.mode) {
+          TripModeFilter.rail => 'rail',
+          TripModeFilter.bus => 'bus',
+          TripModeFilter.other => 'other',
+        };
+  final ride = kind == 'rail' || kind == 'bus';
   final line = start?.line ?? info.line ?? end?.line;
-  final title = switch (entry.mode) {
-    TripModeFilter.rail when line != null && line.trim().isNotEmpty =>
-      '地铁 ${line.trim()}',
-    TripModeFilter.bus when line != null && line.trim().isNotEmpty =>
-      '公交 ${line.trim()}',
+  final title = switch (kind) {
+    'recharge' => '充值',
+    'rail' when line != null && line.trim().isNotEmpty => '地铁 ${line.trim()}',
+    'bus' when line != null && line.trim().isNotEmpty => '公交 ${line.trim()}',
     _ => info.title,
   };
   final entryStation = start?.station ?? info.subText?.split(' → ').firstOrNull;
@@ -1253,27 +1243,30 @@ GalleryRecord _recordFromPresentation<T extends Enum>(
     'date': clock.date,
     'isoDate': ?clock.isoDate,
     'time': clock.exitTime ?? clock.entryTime ?? info.timeText ?? '未记录',
-    'entryTime': ?clock.entryTime,
-    'exitTime': ?clock.exitTime,
-    'entryStation': ?entryStation,
-    'exitStation': ?exitStation,
-    if (start?.line != null) 'entryLine': start!.line,
-    if (end?.line != null) 'exitLine': end!.line,
+    if (ride) ...{
+      'entryTime': ?clock.entryTime,
+      'exitTime': ?clock.exitTime,
+      'entryStation': ?entryStation,
+      'exitStation': ?exitStation,
+      if (start?.line != null) 'entryLine': start!.line,
+      if (end?.line != null) 'exitLine': end!.line,
+      'oneWay': oneWay,
+      'transferKnown': true,
+    },
     'title': title,
     'sub': sub,
     'amount': amount,
     'balanceAfter': ?balanceAfter,
     'source': sourceLabels.first,
     'sources': sourceLabels.toList(growable: false),
-    'mode': switch (entry.mode) {
-      TripModeFilter.rail => '城市轨道交通',
-      TripModeFilter.bus => '公共汽电车',
-      TripModeFilter.other => '其他',
+    'mode': switch (kind) {
+      'rail' => '城市轨道交通',
+      'bus' => '公共汽电车',
+      'recharge' => '充值',
+      _ => '其他',
     },
     if (city.isNotEmpty) 'city': city,
     'foreign': info.remoteCityText != null,
-    'oneWay': oneWay,
-    'transferKnown': true,
     'rawHex': info.rawHex,
     'infoFields': [
       for (final field in info.fields) [field.$1, field.$2],
@@ -1313,6 +1306,7 @@ _clockFor({
   required JourneyEndpoint? start,
   required JourneyEndpoint? end,
   required TripEntryInfo info,
+  required String dateText,
 }) {
   final source = end ?? start;
   final text = source?.timeText ?? info.timeText;
@@ -1335,7 +1329,11 @@ _clockFor({
       break;
     }
   }
-  final time = source?.timeText ?? (date == null ? null : _hhmm(date));
+  final parsedClock = date != null && text != null && _looksTime(text)
+      ? _hhmm(date)
+      : null;
+  // The presentation can retain a civil date after a card clock fails validation.
+  date ??= galleryRecordedDate({'isoDate': dateText});
   final entryText =
       start?.timeText ?? (start?.time == null ? null : _hhmm(start!.time!));
   final exitText =
@@ -1346,7 +1344,7 @@ _clockFor({
         ? null
         : '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
     entryTime: entryText ?? (text != null && _looksTime(text) ? text : null),
-    exitTime: exitText ?? (end == null ? null : time),
+    exitTime: exitText ?? (end == null ? null : parsedClock),
   );
 }
 
@@ -1411,14 +1409,12 @@ extension _GalleryLivePages on _GalleryViewState {
                   initiallyOpen: section['open'] == true,
                   collapsible: section['fixedOpen'] != true,
                 ),
-              if (tab == ExpertReadTab.information)
+              if (tab == ExpertReadTab.information) ...[
                 ApplicationEvidencePanel(
-                  applications: live.applicationsFor(live.currentCard.id),
+                  applications: live.currentApplications,
                 ),
-              if (tab == ExpertReadTab.information)
-                ..._felicaSystemPanels(
-                  live.felicaSystemsFor(live.currentCard.id),
-                ),
+                ..._felicaSystemPanels(live.currentFelicaSystems),
+              ],
               _gap(),
               _text(
                 '以上为本次读取保存在内存中的字段，未捕获内容保持未知。',
@@ -1861,12 +1857,12 @@ extension _GalleryLivePages on _GalleryViewState {
   ) {
     final files = app.cityUnionFiles;
     final public = files.where((file) => file.sfi == 0x15).toList();
-    final local = files.where((file) => file.sfi == 0x18).toList();
+    final local = files.whereType<CjT331WalletLocalConsumption>().toList();
     final recharge = files.whereType<CjT331WalletRecharge>().toList();
     final foreign = files.whereType<CjT331WalletOfflineTransaction>().toList();
     final unparsed = files
         .whereType<CityUnionRawFileView>()
-        .where((file) => file.sfi != 0x15 && file.sfi != 0x18)
+        .where((file) => file.sfi != 0x15)
         .toList();
     final cityCode = public.whereType<CjT331PublicInfo>().firstOrNull?.cityCode;
     final sections = <GalleryRecord>[
@@ -1899,7 +1895,6 @@ extension _GalleryLivePages on _GalleryViewState {
     });
     void addRecords(
       String title,
-      String key,
       List<CityUnionFileView> records, {
       String? emptyHint,
     }) {
@@ -1919,7 +1914,7 @@ extension _GalleryLivePages on _GalleryViewState {
         final record = records[index];
         final station = _liveCuStationName(app, record, cityCode);
         sections.add({
-          'title': '$title · $key ${index + 1}',
+          'title': '$title · ${cuRecordSource(record, index + 1)}',
           'open': false,
           'rows': <List<String>>[
             if (record.fields.isEmpty)
@@ -1934,25 +1929,10 @@ extension _GalleryLivePages on _GalleryViewState {
       }
     }
 
-    addRecords(
-      '0x18 · 电子钱包本地消费交易明细',
-      '记录',
-      local,
-      emptyHint: '未读取到本地消费交易明细（文件不存在或记录未写入）',
-    );
-    addRecords(
-      '电子钱包充值交易明细',
-      '记录',
-      recharge,
-      emptyHint: '未读取到充值交易明细（文件不存在或记录未写入）',
-    );
-    addRecords(
-      '电子钱包异地消费交易明细',
-      '记录',
-      foreign,
-      emptyHint: '未读取到异地消费交易明细（文件不存在或记录未写入）',
-    );
-    addRecords('未解析记录', '记录', unparsed);
+    addRecords('电子钱包本地消费交易明细', local, emptyHint: '未读取到本地消费交易明细（文件不存在或记录未写入）');
+    addRecords('电子钱包充值交易明细', recharge, emptyHint: '未读取到充值交易明细（文件不存在或记录未写入）');
+    addRecords('电子钱包异地消费交易明细', foreign, emptyHint: '未读取到异地消费交易明细（文件不存在或记录未写入）');
+    addRecords('未解析记录', unparsed);
     return sections;
   }
 

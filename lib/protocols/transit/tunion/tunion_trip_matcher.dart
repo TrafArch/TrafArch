@@ -127,6 +127,7 @@ Map<int, int> matchTunionDisplayEvents<B, E>(
   required String? Function(B) basicPos,
   required DateTime? Function(E) eventTime,
   required String? Function(E) eventPos,
+  bool Function(B, E)? compatible,
 }) {
   final result = <int, int>{};
   final usedEvents = <int>{};
@@ -135,6 +136,9 @@ Map<int, int> matchTunionDisplayEvents<B, E>(
       if (usedEvents.contains(event)) continue;
       for (var basic = 0; basic < basics.length; basic++) {
         if (result.containsKey(basic)) continue;
+        if (compatible != null && !compatible(basics[basic], events[event])) {
+          continue;
+        }
         if (matchesTunionDisplay(
           basicTime: basicTime(basics[basic]),
           basicPos: exactTime ? null : basicPos(basics[basic]),

@@ -38,7 +38,7 @@ ArchiveTransactionObservation? archiveTransactionObservation(
   final occurrence = {
     'scope': event.scopeKey,
     'cardCityCode': record.cardCityCode,
-    'context': _identityContext(record.context),
+    'context': _identityContext(record),
     'rawHex': raw,
   };
   return ArchiveTransactionObservation(
@@ -146,7 +146,7 @@ String? archiveJourneyOperationKey(
       'kind': record.kind.name,
       'scope': event.scopeKey,
       'cardCityCode': record.cardCityCode,
-      'context': _identityContext(record.context),
+      'context': _identityContext(record),
       'city': event.cityCode,
       'mode': event.mode.name,
       'role': event.role.name,
@@ -155,17 +155,22 @@ String? archiveJourneyOperationKey(
   );
 }
 
-Map<String, dynamic> _identityContext(ArchiveContext context) {
+Map<String, dynamic> _identityContext(ArchiveHistoryRecord record) {
+  final context = record.context;
+  final shanghaiRecharge = record.isShanghaiWalletRecharge;
+  final system = archiveJourneySystemId(
+    context,
+    shanghaiRecharge: shanghaiRecharge,
+  );
   final identity = {
     for (final field in context.toJson().entries)
       if (!const {
-        'referencePackages',
-        'observedFields',
-        'captureDeviceOffsetMinutes',
-      }.contains(field.key))
-        field.key: field.key == 'systemId'
-            ? archiveJourneySystemId(context)
-            : field.value,
+            'referencePackages',
+            'observedFields',
+            'captureDeviceOffsetMinutes',
+          }.contains(field.key) &&
+          !(shanghaiRecharge && field.key == 'displayCardType'))
+        field.key: field.key == 'systemId' ? system : field.value,
   };
   final observation = identity['balanceInterpretation'];
   if (observation is! Map<String, dynamic>) return identity;
@@ -186,7 +191,7 @@ Map<String, dynamic> _identityContext(ArchiveContext context) {
       if (field.key != 'observedAmountMinor' &&
           field.key != 'accountBalanceMinor')
         field.key: field.key == 'parserId' && field.value == context.systemId
-            ? archiveJourneySystemId(context)
+            ? system
             : field.key == 'verifiedAccountBalance' && field.value is Map
             ? {
                 for (final verified in (field.value as Map).entries)

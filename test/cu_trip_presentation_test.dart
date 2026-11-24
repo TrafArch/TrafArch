@@ -102,6 +102,7 @@ void main() {
     expect(recharge.source, CuTripSourceFilter.recharge);
     expect(recharge.info.isConsume, isFalse);
     expect(recharge.info.amountText, '+¥3.00');
+    expect(recharge.info.title, '充值');
     expect(describeCuTrip(_view(sfi: 0x1A)).source, CuTripSourceFilter.foreign);
     expect(
       describeCuTrip(_view(sfi: 0x06)).source,
@@ -198,8 +199,8 @@ void main() {
   testWidgets(
     'CU shares TU cards, filters and detail sheet with readable original evidence',
     (tester) async {
-      final rail = _view(sequence: 11);
-      final bus = _view(sequence: 10, carrier: 1, line: '345');
+      final rail = _view(sequence: 11, minute: 7);
+      final bus = _view(sequence: 10, carrier: 1, line: '345', minute: 3);
       final recharge = _view(
         sequence: 9,
         sfi: 0x10,
@@ -222,8 +223,17 @@ void main() {
       expect(find.text('上海公共汽电车'), findsOneWidget);
       expect(find.text('2026年11月7日'), findsOneWidget);
       expect(find.text('异地用卡'), findsNWidgets(3));
-      expect(find.text('历史行程 2'), findsOneWidget);
-      expect(find.text('其他记录 1'), findsOneWidget);
+      expect(find.text('历史行程 3'), findsOneWidget);
+      expect(find.textContaining('其他记录'), findsNothing);
+      final cards = tester.widgetList<TripEntryCard>(
+        find.byType(TripEntryCard),
+      );
+      expect(cards.map((card) => card.info.rawHex), [
+        rail.record.rawHex,
+        recharge.record.rawHex,
+        bus.record.rawHex,
+      ]);
+      expect(cards.elementAt(1).info.title, '充值');
       await tester.tap(find.widgetWithText(InputDecorator, '全部方式'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(MenuItemButton, '轨道交通'));
@@ -274,7 +284,7 @@ void main() {
             .sourceLabel,
         'CU 0x06 #1',
       );
-      await tester.tap(find.widgetWithText(InputDecorator, '0x06 异地交易'));
+      await tester.tap(find.widgetWithText(InputDecorator, '0x06 交易'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(MenuItemButton, '0x18 交易'));
       await tester.pumpAndSettle();
@@ -493,6 +503,7 @@ Future<void> _show(WidgetTester tester, Widget child) async {
 CuTransactionView _view({
   int sequence = 11,
   int amount = 300,
+  int minute = 5,
   int sfi = 0x18,
   int? carrier = 2,
   String line = '2号线',
@@ -524,13 +535,13 @@ CuTransactionView _view({
       0x11,
       0x07,
       0x00,
-      0x05,
+      minute,
       0x00,
     ],
     kind: kind,
     recordNumber: 1,
   ),
-  transactionTime: DateTime.utc(2026, 11, 6, 16, 5),
+  transactionTime: DateTime.utc(2026, 11, 6, 16, minute),
   carrier: carrier,
   regionCode: '2000',
   location:

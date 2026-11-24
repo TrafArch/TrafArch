@@ -234,9 +234,23 @@ void main() {
         _trip(posType: 0x02, balanceDelta: 5000),
         currencySymbol: '¥',
       );
-      expect(recharge.info.title, '充值 · 序号 1');
+      expect(recharge.mode, TripModeFilter.other);
+      expect(recharge.info.title, '充值');
       expect(recharge.info.amountText, '+¥50.00');
       expect(recharge.info.isConsume, isFalse);
+    });
+
+    test('武汉通未知交易码保留原金额，不能仅凭正数识别为充值', () {
+      final profile = localTripProfileOf({'profile': 'wuhan'});
+      final unknown = describeLocalTrip(
+        _trip(posType: 0xFE, balanceDelta: 5000),
+        currencySymbol: '¥',
+        profile: profile,
+      );
+      expect(unknown.info.title, '交易 · 序号 1');
+      expect(unknown.info.isRecharge, isFalse);
+      expect(unknown.info.amountText, '+¥50.00');
+      expect(unknown.mode, TripModeFilter.other);
     });
 
     test('未知时间与缺失原始字节：时间未知、金额为空、不展示余额', () {

@@ -40,12 +40,12 @@ class CityUnionPanel extends StatelessWidget {
       ];
     }
     final public = files.where((f) => f.sfi == 0x15).toList();
-    final local = files.where((f) => f.sfi == 0x18).toList();
+    final local = files.whereType<CjT331WalletLocalConsumption>().toList();
     final recharge = files.whereType<CjT331WalletRecharge>().toList();
     final foreign = files.whereType<CjT331WalletOfflineTransaction>().toList();
     final unparsed = files
         .whereType<CityUnionRawFileView>()
-        .where((file) => file.sfi != 0x15 && file.sfi != 0x18)
+        .where((file) => file.sfi != 0x15)
         .toList();
     // Issuer metadata remains available for display; transaction lookup derives
     // its own accepting region from independently recognized terminal evidence.
@@ -193,9 +193,7 @@ class CityUnionPanel extends StatelessWidget {
         Row(
           children: [
             Text(
-              record is CityUnionWalletTransaction
-                  ? '0x${record.sfi.toRadixString(16).toUpperCase().padLeft(2, '0')} · 记录 ${record.recordNumber ?? index + 1}'
-                  : '记录 ${index + 1}',
+              cuRecordSource(record, index + 1),
               style: Theme.of(context).textTheme.labelLarge,
             ),
             const SizedBox(width: 8),

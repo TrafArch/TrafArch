@@ -11,8 +11,11 @@ import 'package:transit_card_analyzer/features/settings/presentation/settings_pa
 import 'package:transit_card_analyzer/features/archive/domain/card_archive_identity.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_session_snapshot.dart';
 import 'package:transit_card_analyzer/features/archive/domain/pending_card_save.dart';
+import 'package:transit_card_analyzer/features/expert/expert_page.dart';
+import 'package:transit_card_analyzer/features/home/home_page.dart';
 import 'package:transit_card_analyzer/features/recovery/recovery_state.dart';
 import 'package:transit_card_analyzer/features/recovery/recovery_result_panel.dart';
+import 'package:transit_card_analyzer/features/trips/trips_page.dart';
 import 'package:transit_card_analyzer/platform/memory/memory_platform.dart';
 import 'package:transit_card_analyzer/platform/nfc/nfc_models.dart';
 import 'package:transit_card_analyzer/platform/nfc/nfc_service.dart';
@@ -375,7 +378,66 @@ void main() {
     },
   );
 
-  testWidgets('legacy recovery exposes bank capture only as raw evidence', (
+  for (final (heading, fields) in const [
+    (
+      '逐应用探测 · 捕获时快照',
+      {
+        'applications': [
+          {
+            'appId': 'cu',
+            'displayName': '城市一卡通',
+            'state': 'readSucceeded',
+            'probed': true,
+            'confirmed': true,
+            'readSucceeded': true,
+          },
+        ],
+      },
+    ),
+    (
+      'FeliCa 8008 · 八达通',
+      {
+        'decoded': {
+          'systemResults': {
+            '8008': {'displayName': '八达通', 'idm': '0808080808080808'},
+          },
+        },
+      },
+    ),
+  ]) {
+    testWidgets('恢复现场的 $heading 只在专家页面展示', (tester) async {
+      final app = appFor(_Memory());
+      app.recoveredCapture = RecoveryCapture(
+        readAt: DateTime(2026, 11, 24),
+        summary: {'cardName': '恢复的交通卡', ...fields},
+        frames: const [],
+      );
+      for (final page in [
+        HomePage(app: app, active: false),
+        TripsPage(app: app),
+        ExpertPage(app: app),
+      ]) {
+        await tester.pumpWidget(MaterialApp(home: Scaffold(body: page)));
+        expect(find.text('恢复的交通卡'), findsOneWidget);
+        expect(
+          find.text(heading),
+          page is ExpertPage ? findsOneWidget : findsNothing,
+        );
+        expect(find.text('查看上次读取的原始数据'), findsNothing);
+        expect(find.text('读取时的完整字段'), findsNothing);
+        if (page is ExpertPage && heading.startsWith('FeliCa')) {
+          expect(find.textContaining('IDm 0808080808080808'), findsOneWidget);
+          await tester.tap(find.text(heading));
+          await tester.pumpAndSettle();
+          expect(find.text('上次读取的原始数据'), findsNothing);
+          expect(find.text(heading), findsOneWidget);
+        }
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
+
+  testWidgets('legacy recovery retains captured bytes without a JSON viewer', (
     tester,
   ) async {
     const label = '旧版测试应用';
@@ -414,10 +476,7 @@ void main() {
     expect(find.text(number), findsNothing);
     expect(find.text('读取时的完整字段'), findsNothing);
 
-    await tester.tap(find.text('查看上次读取的原始数据'));
-    await tester.pumpAndSettle();
-    final raw = tester.widget<SelectableText>(find.byType(SelectableText));
-    expect(jsonDecode(raw.data!), capture.toJson());
+    expect(find.text('查看上次读取的原始数据'), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 }

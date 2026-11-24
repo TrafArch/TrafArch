@@ -14,11 +14,13 @@ const int kWalletAnchoredBalanceParseVersion = 8;
 
 /// 行程解析口径版本：解析 / 关联规则变更时递增，随读取批次持久化，
 /// 历史数据据此识别产出批次所用的解析口径。
+/// v17 识别 CU 0x06 的充值，并按原文合并上海钱包跨文件的充值副本。
+/// v16 充值流水只与充值过程记录关联，乘车过程保留给其他交易。
 /// v15 保留跨城站点映射城市，展示与原始受理城市分离。
 /// v14 纳入城际铁路分类与绍兴限定的1A/1E同侧展示关联。
 /// v13 接入沈阳受理方限定的 0x15/0x16 进出站语义；历史捕获不重写。
 /// v12 已按受理方证据识别沈阳 EP 轨道金额的小端布局。
-const int kTripParseVersion = 15;
+const int kTripParseVersion = 17;
 
 /// 识别证据：来源、说明与权重（0 表示"出场但未命中"）。
 class Evidence {
@@ -143,6 +145,8 @@ class TransitTrip {
   final int overdraftLimitFen;
   final bool isConsume;
   final String typeName;
+
+  bool get isRecharge => typeName == '充值';
 
   /// 是否为复合消费（0x09）交易：0x18 用一条记录一次性结算进出站行程。
   /// 供行程流去重——其时间戳与某条 0x1A 进 / 出站记录完全匹配时，
@@ -483,17 +487,24 @@ List<TripEntry> buildTripStream({
   );
   final applicationKeys = [
     for (final t in trips)
-      if (t.displayApplicationKey != null)
-        (t.displayApplicationKey!, t.appTypeCode),
+      if (!t.isRecharge && t.displayApplicationKey != null)
+        (t.displayApplicationKey!, t.appTypeCode, false),
   ];
   final processKeys = [
     for (final t in trips)
-      if (t.displayProcessKey != null) (t.displayProcessKey!, t.appTypeCode),
+      if (t.displayProcessKey != null)
+        (t.displayProcessKey!, t.appTypeCode, t.isRecharge),
   ];
-  bool consume(List<(String, int?)> keys, String key, int? appTypeCode) {
+  bool consume(
+    List<(String, int?, bool)> keys,
+    String key,
+    int? appTypeCode, {
+    bool recharge = false,
+  }) {
     final index = keys.indexWhere(
       (link) =>
           link.$1 == key &&
+          link.$3 == recharge &&
           (link.$2 == null || appTypeCode == null || link.$2 == appTypeCode),
     );
     if (index < 0) return false;
@@ -517,7 +528,7 @@ List<TripEntry> buildTripStream({
   processKeys.addAll([
     for (final t in trips)
       if (t.displayProcessKey == null && t.matchedProcessTrip != null)
-        (cycleDisplayKey(t.matchedProcessTrip!), t.appTypeCode),
+        (cycleDisplayKey(t.matchedProcessTrip!), t.appTypeCode, t.isRecharge),
   ]);
   return <TripEntry>[
     for (final t in trips) TransactionTripEntry(t),
@@ -532,8 +543,14 @@ List<TripEntry> buildTripStream({
     ),
     for (final p in processTrips)
       if ((p.appTypeCode == 0x0A &&
+              !p.isRecharge &&
               !_intercityTransactionRepresents(p, trips, processTrips)) ||
-          !consume(processKeys, cycleDisplayKey(p), p.appTypeCode))
+          !consume(
+            processKeys,
+            cycleDisplayKey(p),
+            p.appTypeCode,
+            recharge: p.isRecharge,
+          ))
         ProcessTripEntry(p),
   ]..sort((a, b) => b.time.compareTo(a.time));
 }

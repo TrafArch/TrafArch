@@ -1,10 +1,7 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 
 import '../../app/app_dependencies.dart';
 import '../../protocols/felica/models/amusement_ic_data.dart';
-import '../../shared/presentation/adaptive_layout.dart';
 import '../../shared/presentation/amusement_ic_summary.dart';
 import '../../shared/presentation/application_evidence_panel.dart';
 import '../archive/application/archive_history.dart';
@@ -28,15 +25,16 @@ class RecoveryResultPanel extends StatelessWidget {
     super.key,
     required this.app,
     this.showSaveActions = true,
+    this.showProbeDetails = false,
   });
   final AppDependencies app;
   final bool showSaveActions;
+  final bool showProbeDetails;
 
   @override
   Widget build(BuildContext context) {
     final capture = app.recoveredCapture;
     if (capture == null) return const SizedBox.shrink();
-    // 旧版读卡字段只在原始证据页展示。
     final summary = switch (capture.summary['decoded']) {
       {'protocolFamily': String(), 'discoveredApplications': List()} =>
         const <String, Object?>{},
@@ -64,7 +62,6 @@ class RecoveryResultPanel extends StatelessWidget {
             batches: [batch],
             cardType: capture.pending?.identity.cardType,
             includeShanghaiOverdraft: app.includeShanghaiOverdraft,
-            onDiagnostics: (record) => _evidence(context, record.fields),
           );
     final cu = batch == null
         ? null
@@ -157,16 +154,11 @@ class RecoveryResultPanel extends StatelessWidget {
                   ),
                 ],
                 if (app.recoveryNotice case final String notice) Text(notice),
-                TextButton.icon(
-                  onPressed: () => _evidence(context, capture.toJson()),
-                  icon: const Icon(Icons.data_object),
-                  label: const Text('查看上次读取的原始数据'),
-                ),
               ],
             ),
           ),
         ),
-        if (applications.isNotEmpty) ...[
+        if (showProbeDetails && applications.isNotEmpty) ...[
           const SizedBox(height: 12),
           ApplicationEvidencePanel(
             applications: applications,
@@ -174,7 +166,7 @@ class RecoveryResultPanel extends StatelessWidget {
           ),
         ],
         if (cashLog != null) TUnionCashLogView(log: cashLog),
-        if (systems is Map)
+        if (showProbeDetails && systems is Map)
           for (final entry in systems.entries)
             if (entry.value case final Map fields)
               ListTile(
@@ -183,7 +175,6 @@ class RecoveryResultPanel extends StatelessWidget {
                   if (fields['idm'] case final String idm) 'IDm $idm',
                   if (fields['stateText'] case final String state) state,
                 ].join(' · ')),
-                onTap: () => _evidence(context, fields),
               ),
         if (suicaTrips.isNotEmpty)
           SuicaTripList(
@@ -228,40 +219,7 @@ class RecoveryResultPanel extends StatelessWidget {
           LocalCardHistoryRecords(
             records: ArchiveHistory.projectLocalCardRecords([batch]),
           ),
-        if (summary['decoded'] case final Map decoded)
-          if (decoded.isNotEmpty)
-            Card(
-              child: ExpansionTile(
-                title: const Text('读取时的完整字段'),
-                childrenPadding: const EdgeInsets.all(16),
-                children: [
-                  SelectableText(
-                    const JsonEncoder.withIndent('  ').convert(decoded),
-                  ),
-                ],
-              ),
-            ),
       ],
     );
   }
-
-  void _evidence(BuildContext context, Object value) =>
-      Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => FoldSafePage(
-            child: Scaffold(
-              appBar: AppBar(title: const Text('上次读取的原始数据')),
-              body: SafeArea(
-                top: false,
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: SelectableText(
-                    const JsonEncoder.withIndent('  ').convert(value),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
 }

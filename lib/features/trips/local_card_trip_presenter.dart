@@ -23,7 +23,7 @@ enum LocalTripSourceFilter {
 
 /// A local wallet can coexist with TU. Its SFI 0x18 alone does not prove
 /// rail travel; only the local parser's explicit mode flag can do that.
-enum LocalTripProfile { general, lingnan, shenzhen, suxin, cika, tft }
+enum LocalTripProfile { general, wuhan, lingnan, shenzhen, suxin, cika, tft }
 
 const localTripSourceLabels = <LocalTripSourceFilter, String>{
   LocalTripSourceFilter.metro: '地铁流水',
@@ -78,9 +78,16 @@ LocalTripSourceFilter localTripSourceOf(
 
 /// 地方交通卡行程按钮展示文案：消费（balanceDelta<0）/ 充值（>0）/
 /// 未知金额变化（0）——不按卡型猜测类型名。
-String localTripKindLabel(ApduRecord record) {
+String localTripKindLabel(
+  ApduRecord record, {
+  LocalTripProfile profile = LocalTripProfile.general,
+}) {
   if (record.balanceDelta < 0) return '消费';
-  if (record.balanceDelta > 0) return '充值';
+  // 武汉通也会保留未知类型的正金额。只有 0x02 证明这一笔是充值。
+  if (record.balanceDelta > 0 &&
+      (profile != LocalTripProfile.wuhan || record.posType == 0x02)) {
+    return '充值';
+  }
   return '交易';
 }
 
@@ -100,17 +107,14 @@ TripCardPresentation<LocalTripSourceFilter> describeLocalTrip(
       profile == LocalTripProfile.suxin ||
       profile == LocalTripProfile.cika ||
       profile == LocalTripProfile.tft;
+  final kindLabel = localTripKindLabel(record, profile: profile);
+  final isRecharge = kindLabel == '充值' && record.tripDelta == null;
   final mode = switch (source) {
-    LocalTripSourceFilter.metro => TripModeFilter.rail,
-    LocalTripSourceFilter.bus => TripModeFilter.bus,
-    LocalTripSourceFilter.ferry ||
-    LocalTripSourceFilter.suxinTx ||
-    LocalTripSourceFilter.lingnan ||
-    LocalTripSourceFilter.shenzhen ||
-    LocalTripSourceFilter.suxin ||
-    LocalTripSourceFilter.cika ||
-    LocalTripSourceFilter.tft ||
-    LocalTripSourceFilter.other => TripModeFilter.other,
+    LocalTripSourceFilter.metro when record.balanceDelta <= 0 =>
+      TripModeFilter.rail,
+    LocalTripSourceFilter.bus when record.balanceDelta <= 0 =>
+      TripModeFilter.bus,
+    _ => TripModeFilter.other,
   };
   final amountFen = record.balanceDelta;
   final tripDelta = record.tripDelta;
@@ -133,15 +137,18 @@ TripCardPresentation<LocalTripSourceFilter> describeLocalTrip(
   final rawHex = _recordRaw(record);
   final info = TripEntryInfo(
     sourceLabel: localTripSourceLabels[source]!,
-    title: [
-      if (titlePrefix != null && titlePrefix.isNotEmpty) titlePrefix,
-      localTripKindLabel(record),
-      ?countText,
-      '序号 ${record.recordNumber}',
-    ].join(' · '),
+    title: isRecharge
+        ? '充值'
+        : [
+            if (titlePrefix != null && titlePrefix.isNotEmpty) titlePrefix,
+            kindLabel,
+            ?countText,
+            '序号 ${record.recordNumber}',
+          ].join(' · '),
     timeText: timeLabel,
     amountText: amountText,
     isConsume: amountFen < 0,
+    isRecharge: isRecharge,
     subText: null,
     category: switch (mode) {
       TripModeFilter.rail => '轨道交通',
@@ -150,7 +157,9 @@ TripCardPresentation<LocalTripSourceFilter> describeLocalTrip(
     },
     rawHex: rawHex,
     fields: [
-      ('记录类型', localTripKindLabel(record)),
+      ('记录类型', kindLabel),
+      if (isRecharge && titlePrefix != null && titlePrefix.isNotEmpty)
+        ('钱包', titlePrefix),
       (directoryLedger ? '文件记录号' : '交易序号', '${record.recordNumber}'),
       ('交易时间', timeLabel ?? '未知'),
       if (profile == LocalTripProfile.lingnan) ('时间精度', '年份推断，秒未知'),
@@ -273,6 +282,7 @@ LocalTripProfile localTripProfileOf(
   Map<String, dynamic> fields, {
   String? cardType,
 }) => switch (fields['profile'] ?? cardType) {
+  'wuhan' => LocalTripProfile.wuhan,
   'lingnan' || 'lingnanTong' => LocalTripProfile.lingnan,
   'shenzhen' || 'shenzhenTong' => LocalTripProfile.shenzhen,
   'suzhou_suxin' => LocalTripProfile.suxin,

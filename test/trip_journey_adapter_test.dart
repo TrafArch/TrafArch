@@ -240,13 +240,33 @@ void main() {
     expect(result.endpoint.station, isNull);
   });
 
-  test('公交充值不得误作单次乘车', () {
-    final result = describeJourneyEvent(
-      TransactionTripEntry(_trip(app: '公共汽电车', consume: false)),
-      _display(),
-      _info(),
-    );
-    expect(result.role, JourneyEventRole.unknown);
+  test('钱包充值与公交行业或乘车方向冲突时保留为独立充值', () {
+    final display = _display();
+    final entries = [
+      TransactionTripEntry(
+        _trip(
+          app: '公共汽电车',
+          consume: false,
+          status: '上车',
+          process: _cycle(type: 1, app: 2),
+        ),
+      ),
+      ProcessTripEntry(_cycle(type: 9, app: 2, amount: 700)),
+      ProcessTripEntry(_cycle(type: 10, app: 1, amount: 700)),
+    ];
+    for (final entry in entries) {
+      final info = describeTripEntry(entry, display, remote: true);
+      final result = describeJourneyEvent(entry, display, info);
+      expect(tripModeOf(entry), TripModeFilter.other);
+      expect(result.mode, TripModeFilter.other);
+      expect(result.role, JourneyEventRole.unknown);
+      expect(result.endpoint.station, isNull);
+      expect(result.endpoint.line, isNull);
+      expect(info.title, '充值');
+      expect(info.isRecharge, isTrue);
+      expect(info.amountText, '+¥7.00');
+      expect(info.fields.map((pair) => pair.$1), contains('应用分类'));
+    }
   });
 
   test('站点表识别为公交时同样可保留单次方式', () {
@@ -257,6 +277,26 @@ void main() {
     );
     expect(result.mode, TripModeFilter.bus);
     expect(result.role, JourneyEventRole.single);
+  });
+
+  test('钱包充值仅可代表同笔充值过程，保留误关联的乘车过程', () {
+    for (final (type, app, expectedCount) in [
+      (1, 2, 2),
+      (9, 2, 1),
+      (9, 0x0A, 1),
+    ]) {
+      final cycle = _cycle(
+        type: type,
+        app: app,
+        amount: 700,
+        time: _trip().time,
+      );
+      final result = buildTripStream(
+        trips: [_trip(consume: false, process: cycle)],
+        processTrips: [cycle],
+      );
+      expect(result, hasLength(expectedCount));
+    }
   });
 
   test('来源证明的行业例外按公交方式展示', () {
@@ -525,6 +565,7 @@ TUnionTripRecord _cycle({
   String city = '3100',
   String lineStationCode = '0001000A000100',
   int amount = 100,
+  DateTime? time,
 }) => TUnionTripRecord(
   typeCode: type,
   appTypeCode: app,
@@ -532,7 +573,7 @@ TUnionTripRecord _cycle({
   lineStationCode: lineStationCode,
   amountFen: amount,
   balanceFen: 10000,
-  time: DateTime(2026, 10, 27, 8),
+  time: time ?? DateTime(2026, 10, 27, 8),
   cityCode: city,
 );
 

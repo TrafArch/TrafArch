@@ -56,7 +56,7 @@ class ArchiveTripProjection {
 /// Repeated presentations retain their individual captured details and sources.
 ArchiveTripProjection presentArchiveTrips(
   List<ArchiveHistoryRecord> records, {
-  required void Function(ArchiveHistoryRecord) onDiagnostics,
+  void Function(ArchiveHistoryRecord)? onDiagnostics,
   List<ArchiveBatchEvidence> batches = const [],
   bool includeShanghaiOverdraft = true,
   String? cardType,
@@ -113,7 +113,7 @@ ArchiveTripProjection presentArchiveTrips(
 
 ArchiveTripProjection _presentArchiveRecords(
   List<ArchiveHistoryRecord> records, {
-  required void Function(ArchiveHistoryRecord) onDiagnostics,
+  required void Function(ArchiveHistoryRecord)? onDiagnostics,
   required bool includeShanghaiOverdraft,
   required String? cardType,
   void Function(ArchiveJourneyEntry, List<_ArchiveEvent>)? onEvent,
@@ -152,7 +152,7 @@ ArchiveTripProjection _presentArchiveRecords(
   }
 
   // 保存时生成的关联按来源批次消费；不跨批次重新按 POS 配对。
-  final links = <String, List<(String, int?)>>{};
+  final links = <String, List<(String, int?, bool)>>{};
   for (final record in records) {
     if (record.kind != ArchiveRecordKind.transaction) continue;
     final appType = eventFor(record).railAppTypeCode;
@@ -160,13 +160,19 @@ ArchiveTripProjection _presentArchiveRecords(
       final keys = links.putIfAbsent(source.batchId, () => []);
       for (final field in ['displayProcessKey', 'displayApplicationKey']) {
         final key = record.fields[field];
-        if (key is String) keys.add((key, appType));
+        if (key is String) keys.add((key, appType, record.isTunionRecharge));
       }
       if (record.fields['displayProcessKey'] == null) {
         final matched = record.fields['matchedProcess'];
         if (matched is Map<String, dynamic>) {
           final process = _processFromFields(matched);
-          if (process != null) keys.add((cycleDisplayKey(process), appType));
+          if (process != null) {
+            keys.add((
+              cycleDisplayKey(process),
+              appType,
+              record.isTunionRecharge,
+            ));
+          }
         }
       }
     }
@@ -176,6 +182,7 @@ ArchiveTripProjection _presentArchiveRecords(
     // An intercity 1A alias may already be folded into this 1E operation.
     // Only an exact, unique transaction witness can also hide the 1E side.
     if (record.kind == ArchiveRecordKind.process &&
+        !record.isTunionRecharge &&
         record.fields['appTypeCode'] == 0x0A &&
         !batches.every(
           (batch) =>
@@ -187,8 +194,9 @@ ArchiveTripProjection _presentArchiveRecords(
       return false;
     }
     final appType = eventFor(record).railAppTypeCode;
-    bool matches((String, int?) link) =>
+    bool matches((String, int?, bool) link) =>
         link.$1 == key &&
+        link.$3 == record.isTunionRecharge &&
         (link.$2 == null || appType == null || link.$2 == appType);
     if (batches.isEmpty ||
         !batches.every((b) => links[b]?.any(matches) == true)) {
@@ -788,6 +796,7 @@ class _ArchiveEvent {
             };
 
   TripModeFilter get mode {
+    if (record.isTunionRecharge) return TripModeFilter.other;
     if (rail) return TripModeFilter.rail;
     if (record.kind == ArchiveRecordKind.bus) return TripModeFilter.bus;
     final cycle = process ?? matchedProcess;
@@ -808,7 +817,7 @@ class _ArchiveEvent {
   }
 
   TripCardPresentation<ArchiveRecordKind> present(
-    void Function(ArchiveHistoryRecord) onDiagnostics, {
+    void Function(ArchiveHistoryRecord)? onDiagnostics, {
     String? linkedApplicationId,
     Map<String, int> processPositions = const {},
   }) {
@@ -819,7 +828,7 @@ class _ArchiveEvent {
       mode: mode,
       dateText: dateText,
       remote: remote,
-      onDiagnostics: () => onDiagnostics(record),
+      onDiagnostics: onDiagnostics == null ? null : () => onDiagnostics(record),
       journeyEvent: journeyEvent(
         details,
         linkedApplicationId: linkedApplicationId,
@@ -837,7 +846,9 @@ class _ArchiveEvent {
     final application = rail || record.kind == ArchiveRecordKind.bus;
     final staleExit = rail && side == 'exit' && fields['status'] == 1;
     final JourneyEventRole role;
-    if (application) {
+    if (record.isTunionRecharge) {
+      role = JourneyEventRole.unknown;
+    } else if (application) {
       role = side == null || epoch == null || staleExit
           ? JourneyEventRole.unknown
           : entry
@@ -905,8 +916,8 @@ class _ArchiveEvent {
       mode: mode,
       role: role,
       endpoint: JourneyEndpoint(
-        line: _usefulIdentifier(line),
-        station: station,
+        line: record.isTunionRecharge ? null : _usefulIdentifier(line),
+        station: record.isTunionRecharge ? null : station,
         time: clock.time,
         timeText: clock.text,
         locationCityCode: _mappedCityCode(capturedDisplay('locationCityCode')),
@@ -915,7 +926,7 @@ class _ArchiveEvent {
             ? null
             : _cityLabel(capturedDisplay('locationCityName')),
       ),
-      scopeKey: _archiveScope(record.context, clock.scope),
+      scopeKey: _archiveScope(record, clock.scope),
       sourceIds: {
         for (final source in record.sources)
           if (source.batchId.trim().isNotEmpty) source.batchId,
@@ -975,10 +986,8 @@ class _ArchiveEvent {
         amount < 0) {
       return null;
     }
-    if (fields['consume'] == true) return -amount;
-    return fields['consume'] == false && text('typeName') == '充值'
-        ? amount
-        : null;
+    if (record.isTunionRecharge) return amount;
+    return fields['consume'] == true ? -amount : null;
   }
 
   JourneyProcessBalanceEvidence? processBalanceEvidence(
@@ -1044,7 +1053,12 @@ class _ArchiveEvent {
     final displayed = key == 'entryBalanceFen'
         ? balanceDisplay.balanceFen(value)!
         : value;
-    return '${debit && value > 0 ? '-' : ''}${record.context.formatAmount(displayed)}';
+    final sign = record.isTunionRecharge && key == 'amountFen' && value >= 0
+        ? '+'
+        : debit && value > 0
+        ? '-'
+        : '';
+    return '$sign${record.context.formatAmount(displayed)}';
   }
 
   String? get recordBalanceText {
@@ -1106,23 +1120,25 @@ class _ArchiveEvent {
     final batchCount = record.sources.map((s) => s.batchId).toSet().length;
     return TripEntryInfo(
       sourceLabel: source,
-      title: [
-        status,
-        ?station,
-        if (transaction) '序号 ${fields['sequence']}',
-      ].join(' · '),
-      line:
-          capturedDisplay('line') ??
-          text('lineLabel') ??
-          text('lineName') ??
-          (side == null ? null : text('${side}LineCode')),
+      title: record.isTunionRecharge
+          ? '充值'
+          : [
+              status,
+              ?station,
+              if (transaction) '序号 ${fields['sequence']}',
+            ].join(' · '),
+      line: record.isTunionRecharge
+          ? null
+          : capturedDisplay('line') ??
+                text('lineLabel') ??
+                text('lineName') ??
+                (side == null ? null : text('${side}LineCode')),
       timeText: timeText(timeKey),
       amountText: record.kind == ArchiveRecordKind.bus && entry
           ? null
-          : cycle != null && cycle.isRecharge
-          ? '+${record.context.formatAmount(cycle.amountFen)}'
           : amount(amountKey, debit: isConsume),
-      isConsume: isConsume,
+      isConsume: !record.isTunionRecharge && isConsume,
+      isRecharge: record.isTunionRecharge,
       subText:
           record.kind == ArchiveRecordKind.bus &&
               !entry &&
@@ -1131,17 +1147,20 @@ class _ArchiveEvent {
           : balance == null || (side != null && !entry)
           ? null
           : '$balanceLabel $balance',
-      category:
-          text('appTypeName') ??
-          cycle?.appTypeLabel ??
-          (mode == TripModeFilter.other ? null : tripModeLabels[mode]),
-      badges: [
-        if (fields['stationConfidence'] == 'ambiguous') '站名歧义',
-        if (fields['stationConfidence'] == 'unmatched' ||
-            fields['stationConfidence'] == 'probable')
-          '未匹配',
-        if (fields['stationConfidence'] == 'unavailable') '参考数据不可用',
-      ],
+      category: record.isTunionRecharge
+          ? null
+          : text('appTypeName') ??
+                cycle?.appTypeLabel ??
+                (mode == TripModeFilter.other ? null : tripModeLabels[mode]),
+      badges: record.isTunionRecharge
+          ? const []
+          : [
+              if (fields['stationConfidence'] == 'ambiguous') '站名歧义',
+              if (fields['stationConfidence'] == 'unmatched' ||
+                  fields['stationConfidence'] == 'probable')
+                '未匹配',
+              if (fields['stationConfidence'] == 'unavailable') '参考数据不可用',
+            ],
       related:
           '已保存于 $batchCount 个批次'
           '${fields['matchedProcess'] is Map ? ' · 保存时已关联 0x1E 过程记录' : ''}',
@@ -1293,8 +1312,14 @@ String? _archiveBusStation(
   return rawCode && RegExp(r'^[0-9A-Fa-f]+$').hasMatch(text) ? '站点$text' : text;
 }
 
-String? _archiveScope(ArchiveContext context, String? clockScope) {
-  final system = _text(archiveJourneySystemId(context))?.trim();
+String? _archiveScope(ArchiveHistoryRecord record, String? clockScope) {
+  final context = record.context;
+  final system = _text(
+    archiveJourneySystemId(
+      context,
+      shanghaiRecharge: record.isShanghaiWalletRecharge,
+    ),
+  )?.trim();
   final application = _text(context.applicationId)?.trim();
   final currency = _text(context.currencyCode)?.trim();
   final basis = _text(context.clockBasis)?.trim();

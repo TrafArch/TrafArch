@@ -5,8 +5,8 @@ import '../application/archive_history.dart';
 import '../application/cu_archive_projection.dart';
 import '../domain/card_session_snapshot.dart';
 
-/// Fold only observations supported by matching TU records in every original
-/// capture. The archive projection, source attribution and JSON stay unchanged.
+/// A verified recharge mirror can also explain an older observation of the
+/// exact CU row in the same Shanghai wallet after its TU row has rolled off.
 ShanghaiMirroredRecords partitionShanghaiArchiveMirroredRecords({
   required ArchiveHistoryResult history,
   required CuArchiveProjection cityUnion,
@@ -50,12 +50,35 @@ ShanghaiMirroredRecords partitionShanghaiArchiveMirroredRecords({
         in cityUnion.sources[view] ?? const <ArchiveRecordSource>[]) {
       needed.update(source.batchId, (count) => count + 1, ifAbsent: () => 1);
     }
-    final supported =
+    final supportedInEveryBatch =
         needed.isNotEmpty &&
         needed.entries.every(
           (entry) => matchedCounts[entry.key]?[view] == entry.value,
         );
-    (supported ? mirrored : independent).add(view);
+    final record = view.record;
+    final repeatedRecharge =
+        !supportedInEveryBatch &&
+        (record.sfi == 0x06 || record.sfi == 0x18) &&
+        record.transactionType == 0x02 &&
+        needed.keys.any((id) => matchedCounts[id]?[view] == 1) &&
+        needed.entries.every((entry) {
+          final id = entry.key;
+          return entry.value == 1 &&
+              !ambiguousBatches.contains(id) &&
+              batches[id]?.decoded.snapshot?.context.isShanghaiTunionWallet ==
+                  true &&
+              observations[id]!
+                      .where(
+                        (other) =>
+                            other.record.sfi == record.sfi &&
+                            other.record.rawHex == record.rawHex,
+                      )
+                      .length ==
+                  1;
+        });
+    (supportedInEveryBatch || repeatedRecharge ? mirrored : independent).add(
+      view,
+    );
   }
   return ShanghaiMirroredRecords(independent: independent, mirrored: mirrored);
 }

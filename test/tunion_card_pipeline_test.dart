@@ -13,6 +13,7 @@ import 'package:transit_card_analyzer/features/reference_data/domain/tunion_term
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_models.dart';
 import 'package:transit_card_analyzer/protocols/transit/local/apdu_exchange.dart';
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_reader.dart';
+import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_trip_matcher.dart';
 import 'package:transit_card_analyzer/protocols/transit/local/local_card_models.dart';
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_process_parser.dart';
 
@@ -1213,6 +1214,77 @@ void main() {
       expect(trip.amountText, '+¥50.00');
     });
 
+    for (final byPos in [false, true]) {
+      test('充值与乘车过程按交易类型分配，同一终端 POS 兜底=$byPos', () {
+        final time = DateTime(2024, 5, 1, 8, 30);
+        final processTime = byPos ? time.add(const Duration(minutes: 5)) : time;
+        const walletPos = '300089000340';
+        final boarding = _entryRecord(time: processTime, appTypeCode: 0x02);
+        final load = _entryRecord(
+          time: processTime,
+          typeCode: 0x0A,
+          appTypeCode: 0x02,
+          amountFen: 5000,
+        );
+        final side = _busEntryRecord(
+          time: processTime,
+          terminalId: '0000300089000340',
+        );
+        final card = ParsedCard(
+          parserName: 't',
+          info: const TUnionCardInfo(),
+          transactions: [
+            _txn(
+              seq: 2,
+              time: time,
+              amountFen: 5000,
+              rawType: 0x02,
+              terminalId: walletPos,
+            ),
+            _txn(
+              seq: 1,
+              time: time,
+              amountFen: 0,
+              rawType: 0x09,
+              terminalId: walletPos,
+            ),
+          ],
+          transitProcessRecords: [boarding, load, side],
+          selectedAidHex: 'A000000632010105',
+        );
+        final trips = AnalysisEngine(kb).analyze(card).trips;
+        final recharge = trips.first;
+        final ride = trips.last;
+        expect(recharge.displayProcessKey, cycleDisplayKey(load.trip!));
+        expect(recharge.displayApplicationKey, isNull);
+        expect(recharge.isEntry, isFalse);
+        expect(recharge.typeName, '充值');
+        expect(recharge.amountText, '+¥50.00');
+        expect(recharge.matchedProcessTrip, byPos ? isNull : same(load.trip));
+        expect(ride.displayProcessKey, cycleDisplayKey(boarding.trip!));
+        expect(ride.displayApplicationKey, isNotNull);
+        expect(ride.rideStatusName, '上车');
+      });
+    }
+
+    test('只有充值过程时，同秒消费不占用后续充值的 1E 记录', () {
+      final time = DateTime(2024, 5, 1, 8, 30);
+      final load = _entryRecord(time: time, typeCode: 0x09, amountFen: 5000);
+      final card = ParsedCard(
+        parserName: 't',
+        info: const TUnionCardInfo(),
+        transactions: [
+          _txn(seq: 2, time: time, amountFen: 5000),
+          _txn(seq: 1, time: time, amountFen: 5000, rawType: 0x02),
+        ],
+        transitProcessRecords: [load],
+        selectedAidHex: 'A000000632010105',
+      );
+      final trips = AnalysisEngine(kb).analyze(card).trips;
+      expect(trips.first.displayProcessKey, isNull);
+      expect(trips.last.displayProcessKey, cycleDisplayKey(load.trip!));
+    });
+
     test('八达通 HKD 账户元数据不改标 TU 观察、行程与合规明细', () {
       final octopusKb = KnowledgeBase.fromJsonStrings(
         cardPrefixes: jsonEncode({
@@ -1744,6 +1816,7 @@ TUnionProcessRecord _entryRecord({
   required DateTime time,
   int amountFen = 0,
   int typeCode = 0x03,
+  int appTypeCode = 0x01,
 }) => TUnionProcessRecord(
   sfi: 0x1E,
   recordNumber: 1,
@@ -1752,7 +1825,7 @@ TUnionProcessRecord _entryRecord({
   trip: TUnionTripRecord(
     typeCode: typeCode,
     terminalId: '0000300089000340',
-    appTypeCode: 0x01,
+    appTypeCode: appTypeCode,
     lineStationCode: '90020031000000',
     amountFen: amountFen,
     balanceFen: 5340,
@@ -1783,19 +1856,22 @@ TUnionProcessRecord _railEntryRecord({
 
 /// 0x1A 记录 2（公共汽电车应用信息记录）上车模型构造：上车城市 3910，
 /// 上车站点原始编码 02。
-TUnionProcessRecord _busEntryRecord({required DateTime time}) =>
-    TUnionProcessRecord(
-      sfi: 0x1A,
-      recordNumber: 2,
-      recordName: '公共汽电车应用信息记录',
-      raw: const [],
-      busTransit: BusTransitRecord(
-        statusCode: 0x02,
-        entryCityCode: '3910',
-        entryStationCode: '02',
-        entryTime: time,
-      ),
-    );
+TUnionProcessRecord _busEntryRecord({
+  required DateTime time,
+  String? terminalId,
+}) => TUnionProcessRecord(
+  sfi: 0x1A,
+  recordNumber: 2,
+  recordName: '公共汽电车应用信息记录',
+  raw: const [],
+  busTransit: BusTransitRecord(
+    statusCode: 0x02,
+    entryCityCode: '3910',
+    entryStationCode: '02',
+    entryTime: time,
+    entryTerminalId: terminalId,
+  ),
+);
 
 /// 0x1A 记录 1 示例数据（85 字节，按目标输出格式构造，仅用于验证解析偏移）：
 /// 出站；进/出闸城市码 2900；2026-08-08 09:06:02 进站 / 09:12:31 出站；

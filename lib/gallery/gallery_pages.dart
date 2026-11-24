@@ -164,7 +164,9 @@ extension _GalleryPages on _GalleryViewState {
                     children: [
                       Expanded(
                         child: _text(
-                          '最近一次行程',
+                          recent['kind'] == 'rail' || recent['kind'] == 'bus'
+                              ? '最近一次行程'
+                              : '最近一笔记录',
                           role: GalleryTypography.caption,
                           color: t.muted,
                         ),
@@ -548,6 +550,8 @@ extension _GalleryPages on _GalleryViewState {
                 _text('过程记录', role: GalleryTypography.caption, color: t.muted),
               ],
             )
+          : !rail && trip['kind'] != 'bus'
+          ? _transactionRow(trip)
           : Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -697,6 +701,49 @@ extension _GalleryPages on _GalleryViewState {
           )
         : body;
   }
+
+  Widget _transactionRow(GalleryRecord record) => Column(
+    key: const ValueKey('gallery-transaction'),
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Wrap(
+        spacing: 12,
+        runSpacing: 6,
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Icon(
+                record['kind'] == 'recharge'
+                    ? Icons.account_balance_wallet_outlined
+                    : Icons.receipt_long_outlined,
+                color: t.onTone,
+                size: 23,
+              ),
+              _text(
+                record['title'] as String,
+                role: GalleryJourneyTypography.mode,
+              ),
+            ],
+          ),
+          _text(
+            galleryDisplayAmount(record['amount'] as String),
+            role: GalleryJourneyTypography.amount,
+          ),
+        ],
+      ),
+      _gap(6),
+      _text(
+        _tripClock(record['time'] as String? ?? '时间未记录'),
+        role: GalleryJourneyTypography.time,
+        color: t.muted,
+      ),
+    ],
+  );
 
   Widget _cards() {
     final cards = c.savedCards;

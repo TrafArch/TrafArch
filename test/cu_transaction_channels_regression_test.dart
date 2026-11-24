@@ -94,6 +94,45 @@ void main() {
     );
   }
 
+  test('CU 0x06 distinguishes a type 02 wallet recharge, type 09 debit and unknown layout', () async {
+    final unit = CommonUnitCu(
+      ApduExchange(
+        transceive: (cmd) async {
+          if (cmd[1] == 0xA4) return [0x90, 0];
+          if (cmd[1] == 0xB2 && cmd[3] >> 3 == 0x06) {
+            final data = switch (cmd[2]) {
+              1 => _record('001122334455', type: 0x02),
+              2 => _record('001122334455', type: 0x09),
+              3 => _record('001122334455', type: 0x77),
+              4 => _record('001122334455', type: 0x02).sublist(0, 16),
+              5 => _record('001122334455', type: 0x02)..[20] = 0xFF,
+              6 => _record('001122334455', type: 0x02)..[8] = 0,
+              _ => null,
+            };
+            if (data != null) return [...data, 0x90, 0];
+          }
+          return [0x6A, 0x83];
+        },
+      ),
+    );
+    final info = CardInfo();
+    final records = <ApduRecord>[];
+    expect(await unit.select(info, records), isTrue);
+    final card = (await unit.read(info, records))!;
+    final money = card.cityUnionFiles.whereType<CityUnionWalletTransaction>();
+    expect(money.map((row) => (row.kind, row.interpretedAmountFen)), [
+      (CityUnionTransactionKind.recharge, 1),
+      (CityUnionTransactionKind.foreignConsumption, -1),
+    ]);
+    expect(money.map((row) => (row.sfi, row.recordNumber)), [(6, 1), (6, 2)]);
+    expect(
+      card.cityUnionFiles.whereType<CityUnionRawFileView>().map(
+        (row) => row.recordNumber,
+      ),
+      [3, 4, 5, 6],
+    );
+  });
+
   test(
     'standard 1A recharge and 19 statistics never become foreign debits',
     () async {
@@ -131,6 +170,46 @@ void main() {
       expect(records.map((row) => row.fileSelector), [0x1A]);
     },
   );
+  testWidgets(
+    'expert groups wallet credits under recharge with their actual files',
+    (tester) async {
+      final files = [
+        for (final (sfi, slot) in [(0x18, 9), (0x06, 3)])
+          CityUnionFileParser.parseWalletRecord(
+            sfi,
+            _record('001122334455', type: 2),
+            kind: CityUnionTransactionKind.recharge,
+            recordNumber: slot,
+          ),
+      ];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: CityUnionPanel(
+                files: files,
+                resolveStationName: (
+                  _, {
+                  cityCode,
+                  decodedCarrierType,
+                  transactionTime,
+                  busLookupEnabled = false,
+                }) => null,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('电子钱包本地消费交易明细（0x18）'));
+      await tester.pumpAndSettle();
+      expect(find.text('未读取到本地消费交易明细（文件不存在或记录未写入）'), findsOneWidget);
+      await tester.tap(find.text('电子钱包充值交易明细'));
+      await tester.pumpAndSettle();
+      expect(find.text('0x18 · 记录 9'), findsOneWidget);
+      expect(find.text('0x06 · 记录 3'), findsOneWidget);
+    },
+  );
+
   testWidgets(
     'CU terminal lookup preserves raw HEX even when standard BCD field is invalid',
     (tester) async {

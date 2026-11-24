@@ -263,7 +263,7 @@ List<Map<String, dynamic>> projectArchiveRecords(
       );
       result.add({
         ..._base(card),
-        'record_type': localTripKindLabel(trip),
+        'record_type': localTripKindLabel(trip, profile: profile),
         'source': presentation.info.sourceLabel,
         'time': presentation.info.timeText,
         'time_basis': profile == LocalTripProfile.lingnan
@@ -376,6 +376,7 @@ String? _suicaCode(Object? value, {bool lineOnly = false}) {
 
 Map<String, dynamic> _tuRow(SavedCard card, ArchiveHistoryRecord record) {
   final fields = record.fields;
+  final isRecharge = record.isTunionRecharge;
   final location = fields['location'];
   final process = record.kind == ArchiveRecordKind.process
       ? _process(fields)
@@ -412,10 +413,10 @@ Map<String, dynamic> _tuRow(SavedCard card, ArchiveHistoryRecord record) {
   // captured recharge label confirms credit; consume:false alone does not.
   final bool? debit = switch (record.kind) {
     ArchiveRecordKind.transaction =>
-      fields['consume'] == true
-          ? true
-          : fields['typeName'] == '充值'
+      isRecharge
           ? false
+          : fields['consume'] == true
+          ? true
           : null,
     ArchiveRecordKind.process =>
       process?.isConsume == true
@@ -428,50 +429,54 @@ Map<String, dynamic> _tuRow(SavedCard card, ArchiveHistoryRecord record) {
   final amount = displayedAmount is int && debit != null
       ? (debit && displayedAmount > 0 ? -displayedAmount : displayedAmount)
       : null;
-  final knownSide = _knownSide(record, process);
+  final knownSide = isRecharge ? null : _knownSide(record, process);
   final time = _time(fields, 'time', record.context);
   final row = <String, dynamic>{
     ..._base(card),
-    'record_type':
-        _text(fields['rideStatusName']) ??
-        _text(fields['typeName']) ??
-        process?.statusShortName ??
-        switch (record.kind) {
-          ArchiveRecordKind.transaction => '交易',
-          ArchiveRecordKind.process => '过程记录',
-          ArchiveRecordKind.rail => '轨道进出站',
-          ArchiveRecordKind.bus => '公交上下车',
-        },
+    'record_type': isRecharge
+        ? '充值'
+        : _text(fields['rideStatusName']) ??
+              _text(fields['typeName']) ??
+              process?.statusShortName ??
+              switch (record.kind) {
+                ArchiveRecordKind.transaction => '交易',
+                ArchiveRecordKind.process => '过程记录',
+                ArchiveRecordKind.rail => '轨道进出站',
+                ArchiveRecordKind.bus => '公交上下车',
+              },
     'source': record.kind == ArchiveRecordKind.transaction
         ? 'TU 0x18'
         : record.kind == ArchiveRecordKind.process
         ? 'TU 0x1E'
         : 'TU 0x1A',
     'time': time,
-    'entry_time': _time(fields, 'entryTime', record.context),
-    'exit_time': _time(fields, 'exitTime', record.context),
     'time_basis': _timeBasis(fields, record.context),
-    'entry_station': _text(fields['entryStationName']),
-    'exit_station': _text(fields['exitStationName']),
-    'entry_station_code': _identifier(
-      fields['entryStationId'] ?? fields['entryStationCode'],
-    ),
-    'exit_station_code': _identifier(
-      fields['exitStationId'] ?? fields['exitStationCode'],
-    ),
-    'entry_line': _text(fields['entryLineName']),
-    'exit_line': _text(fields['exitLineName']),
-    'entry_line_code': _identifier(fields['entryLineCode']),
-    'exit_line_code': _identifier(fields['exitLineCode']),
-    'station': _text(fields['stationLabel']),
-    'station_code':
-        (location is Map ? _identifier(location['stationCode']) : null) ??
-        codedProcess?.stationCode,
-    'line': _text(fields['lineLabel']) ?? _text(fields['lineName']),
-    'line_code':
-        (location is Map ? _identifier(location['lineCode']) : null) ??
-        codedProcess?.lineCode,
-    'amount': knownMoney && amount != null && process?.isEntry != true
+    if (!isRecharge) ...{
+      'entry_time': _time(fields, 'entryTime', record.context),
+      'exit_time': _time(fields, 'exitTime', record.context),
+      'entry_station': _text(fields['entryStationName']),
+      'exit_station': _text(fields['exitStationName']),
+      'entry_station_code': _identifier(
+        fields['entryStationId'] ?? fields['entryStationCode'],
+      ),
+      'exit_station_code': _identifier(
+        fields['exitStationId'] ?? fields['exitStationCode'],
+      ),
+      'entry_line': _text(fields['entryLineName']),
+      'exit_line': _text(fields['exitLineName']),
+      'entry_line_code': _identifier(fields['entryLineCode']),
+      'exit_line_code': _identifier(fields['exitLineCode']),
+      'station': _text(fields['stationLabel']),
+      'station_code':
+          (location is Map ? _identifier(location['stationCode']) : null) ??
+          codedProcess?.stationCode,
+      'line': _text(fields['lineLabel']) ?? _text(fields['lineName']),
+      'line_code':
+          (location is Map ? _identifier(location['lineCode']) : null) ??
+          codedProcess?.lineCode,
+    },
+    'amount':
+        knownMoney && amount != null && (isRecharge || process?.isEntry != true)
         ? _decimal(amount, scale)
         : null,
     'amount_raw': rawAmount is int ? rawAmount.toString() : null,
@@ -614,6 +619,7 @@ class _SavedLinks {
   _SavedLinks(Iterable<_TransactionRow> transactions) {
     for (final transaction in transactions) {
       final fields = transaction.record.fields;
+      final isRecharge = transaction.record.isTunionRecharge;
       final keys = <String>[
         if (fields['displayProcessKey'] is String)
           fields['displayProcessKey'] as String,
@@ -629,20 +635,23 @@ class _SavedLinks {
               .map((source) => source.batchId)
               .toSet()) {
         for (final key in keys) {
-          (_byBatch.putIfAbsent(batch, () => {}).putIfAbsent(key, () => []))
-              .add(transaction);
+          (_byBatch.putIfAbsent(batch, () => {}).putIfAbsent((
+            key,
+            isRecharge,
+          ), () => [])).add(transaction);
         }
       }
     }
   }
-  final _byBatch = <String, Map<String, List<_TransactionRow>>>{};
+  final _byBatch = <String, Map<(String, bool), List<_TransactionRow>>>{};
 
   Set<_TransactionRow>? consume(ArchiveHistoryRecord record, String key) {
+    final link = (key, record.isTunionRecharge);
     final batches = record.sources.map((source) => source.batchId).toSet();
     if (batches.isEmpty ||
-        !batches.every((batch) => _byBatch[batch]?[key]?.isNotEmpty == true)) {
+        !batches.every((batch) => _byBatch[batch]?[link]?.isNotEmpty == true)) {
       return null;
     }
-    return {for (final batch in batches) _byBatch[batch]![key]!.removeAt(0)};
+    return {for (final batch in batches) _byBatch[batch]![link]!.removeAt(0)};
   }
 }

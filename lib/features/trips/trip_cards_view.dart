@@ -119,11 +119,11 @@ class _TripCardsViewState<S extends Enum> extends State<TripCardsView<S>> {
       } else if (journey.mode != TripModeFilter.other ||
           journey.events.any(
             (event) =>
-                event.evidenceSource == JourneyEvidenceSource.transaction &&
-                event.payload.info.isConsume,
+                event.payload.info.isRecharge ||
+                (event.evidenceSource == JourneyEvidenceSource.transaction &&
+                    event.payload.info.isConsume),
           )) {
-        // A confirmed TU debit stays in date order even if it has no
-        // process evidence for mode, city, or entry/exit.
+        // Keep wallet operations in the same timeline as rides.
         history.add(journey);
       } else {
         other.add(journey);

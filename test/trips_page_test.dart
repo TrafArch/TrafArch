@@ -21,6 +21,7 @@ import 'package:transit_card_analyzer/platform/nfc/nfc_service.dart';
 import 'package:transit_card_analyzer/features/archive/data/app_database.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_archive_identity.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_types.dart';
+import 'package:transit_card_analyzer/features/archive/presentation/card_detail_page.dart';
 import 'package:transit_card_analyzer/features/home/home_page.dart';
 import 'package:transit_card_analyzer/features/cards/cards_page.dart';
 import 'package:transit_card_analyzer/features/trips/trip_entry_card.dart';
@@ -190,12 +191,12 @@ void main() {
     });
 
     for (final types in [
-      (0x02, 0x04),
-      (0x06, 0x09),
-      (0x06, 0x0B),
-      (0xFF, 0x04),
+      (0x02, 0x04, null), // 钱包充值与出站扣款
+      (0x06, 0x09, null), // 钱包消费与过程充值
+      (0x06, 0x0B, '苏洋'),
+      (0xFF, 0x04, '苏洋'),
     ]) {
-      test('余额拒绝方向错配或未知类型 ${types.$1}/${types.$2}，站点注解保留', () async {
+      test('方向错配或未知类型 ${types.$1}/${types.$2}：余额与站点分别取证', () async {
         final database = _memoryDatabase();
         final app = await _scan(
           _FakeNfcChannel()..enqueueWalletScript(
@@ -208,7 +209,8 @@ void main() {
         expect(trip.balanceAfterIsRecorded, isNot(isTrue));
         expect(trip.balanceAfterFen, isNot(5340));
         expect(trip.matchedProcessTrip, isNull);
-        expect(trip.stationLabel, '苏洋');
+        expect(trip.stationLabel, types.$3);
+        expect(trip.displayProcessKey != null, types.$3 != null);
         await app.acceptPendingSave(app.pendingCardSave!.pendingSaveId);
         final rows = await database.select(database.savedCards).get();
         final snapshot =
@@ -767,9 +769,12 @@ void main() {
       await tester.pumpAndSettle();
 
       final historyHeading = find.text('行程记录 · 1 个已保存批次');
-      final archiveScroll = find
-          .ancestor(of: find.text('读取时的应用'), matching: find.byType(Scrollable))
-          .first;
+      final archiveScroll = find.descendant(
+        of: find.byType(ArchiveDetailContent),
+        matching: find.byWidgetPredicate(
+          (w) => w is Scrollable && w.axisDirection == AxisDirection.down,
+        ),
+      ).first;
       await tester.scrollUntilVisible(
         historyHeading,
         250,

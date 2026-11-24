@@ -4,6 +4,8 @@ import 'package:crypto/crypto.dart';
 import 'package:drift/drift.dart' show Variable;
 
 import '../../../protocols/transit/card_parser.dart' show CardParserIds;
+import '../../../protocols/transit/tunion/tunion_models.dart'
+    show TUnionTripRecord;
 import '../data/app_database.dart';
 import '../domain/card_session_snapshot.dart';
 import '../data/card_repository.dart';
@@ -65,6 +67,25 @@ class ArchiveHistoryRecord {
   DateTime? get time {
     final millis = fields['time'] ?? fields['exitTime'] ?? fields['entryTime'];
     return millis is int ? DateTime.fromMillisecondsSinceEpoch(millis) : null;
+  }
+
+  bool get isTunionRecharge => switch (kind) {
+    ArchiveRecordKind.transaction => fields['typeName'] == '充值',
+    ArchiveRecordKind.process => switch (fields['typeCode']) {
+      final int code => TUnionTripRecord.isRechargeType(code),
+      _ => false,
+    },
+    _ => false,
+  };
+
+  bool get isShanghaiWalletRecharge {
+    if (kind != ArchiveRecordKind.transaction ||
+        !isTunionRecharge ||
+        !context.isShanghaiTunionWallet) {
+      return false;
+    }
+    final raw = _evidenceHex(fields['rawHex']);
+    return raw != null && raw.length == 46 && raw.substring(18, 20) == '02';
   }
 }
 
@@ -472,13 +493,14 @@ class ArchiveHistory {
         for (final row in rows) {
           if (row is! Map) continue;
           final fields = Map<String, dynamic>.from(row);
-          // Old local-card captures did not carry a profile per row. The
-          // captured card kind is sufficient to select the Shenzhen display
-          // rule; this projection leaves the saved snapshot untouched.
-          if (section == 'localCardTrips' &&
-              fields['profile'] == null &&
-              payload['cardKindLabel'] == '深圳通') {
-            fields['profile'] = 'shenzhen';
+          // Legacy captures identify the wallet once for the whole section.
+          if (section == 'localCardTrips' && fields['profile'] == null) {
+            switch (payload['cardKindLabel']) {
+              case '深圳通':
+                fields['profile'] = 'shenzhen';
+              case '武汉通':
+                fields['profile'] = 'wuhan';
+            }
           }
           add(section, fields);
         }
