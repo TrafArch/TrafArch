@@ -189,7 +189,7 @@ class GallerySchemeTokens {
 }
 
 /// OKLCH color engine shared by the six preset themes and Monet extraction
-/// (TrafArch monet design V1.0). Presets and card seeds run through the same
+/// (TrafArch Monet design). Presets and system seeds run through the same
 /// surface pipeline: seed validation → surface tokens → Material scheme.
 abstract final class GalleryColorEngine {
   static const _white = Color(0xffffffff);

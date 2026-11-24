@@ -1,5 +1,7 @@
 # TrafArch 设计偏好与长期记忆
 
+2026-11-24：恢复最早 Redesign 规范 §4.6 的系统莫奈。默认跟随 Android 壁纸调色板，不可用时回退默认靛蓝，关闭后恢复手动预设；卡片和卡面不参与取色。保留 [Monet Adoptive System](../docx/TrafArch_monet_design.md) 的 OKLCH 自适应画布、六套预设、亮暗色阶和语义角色，停用误识别的旧名称。覆盖下文历史条目中的卡面取色；全局主题仍一次性应用。
+
 2026-11-23（US-008 修复）：知识库编码（code）搜索结果并入二级城市详情页，与线路／站点结果走同一条路径（`GalleryKnowledgeCityView.fromCity` + 预展开目标线路 + `knowledgeCityReveal++`），新增 `GalleryController.knowledgeCityCode` 记录原始匹配值；城市页在命中站点行显示「匹配编码 xxxx」并高亮（编码属线路时高亮线路卡并显示原值）。移除 `GalleryPage.knowledgeStation`、`_knowledgeDetails` 的站点／编码详情渲染及相关导航分支，全仓不再出现站点详情路由（spec §2.1、§7.1、§12）。两级 IA 下「编码详情显示原始匹配值与来源字段」由城市页满足，不新增第三级页面；下文 2026-11-19 等历史条目保持原样。
 
 2026-11-23：行程页日期分组大标题改为 18sp／26 行高、600 字重，与设置页「读卡与数据」等区块标题（`GalleryTypography.section`）一致，覆盖下文 2026-11-13／2026-11-14 条目中的「日期 26／32」与「日期分组标题仍 26dp／600」。只调整 `GalleryJourneyTypography.date`，时间／站名／方式／城市／金额／线路字号与字重不变；行程页分组标题留白由 22／12dp 收紧为 18／10dp，卡片详情「最近交易」日期标题共用同一 Token 同步生效。

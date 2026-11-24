@@ -51,7 +51,7 @@ void main() {
       .data!;
 
   testWidgets(
-    'home follows search, metrics, city list and keeps search on top',
+    'full-width search takes over the title row when scrolling and restores at top',
     (tester) async {
       final controller = await open(tester);
       final data = controller.data.json;
@@ -69,10 +69,19 @@ void main() {
       });
 
       final search = find.byKey(const ValueKey('knowledge-search-entry'));
+      final title = find.text('知识库');
+      final back = find.byTooltip('返回');
       final tabs = find.text('交通联合 TU');
       final overview = find.text('数据概况');
       final cities = find.text('城市列表');
       expect(search, findsOneWidget);
+      final expanded = tester.getRect(search);
+      final entry = tester.element(search);
+      final titleLeft = tester.getTopLeft(title).dx;
+      final backCenter = tester.getCenter(back);
+      expect(expanded.left, 16);
+      expect(expanded.right, 412 - 16);
+      expect(expanded.top, greaterThan(tester.getBottomLeft(title).dy));
       expect(
         tester.getTopLeft(search).dy,
         lessThan(tester.getTopLeft(tabs).dy),
@@ -123,11 +132,39 @@ void main() {
       final list = find.byKey(
         PageStorageKey('gallery-${controller.generation}-knowledge'),
       );
-      final pinned = tester.getTopLeft(search).dy;
+      final scroll = tester.state<ScrollableState>(
+        find.descendant(of: list, matching: find.byType(Scrollable)).first,
+      );
+      scroll.position.jumpTo(10);
+      await tester.pump();
+      expect(tester.getTopLeft(search).dy, lessThan(expanded.top));
+      expect(tester.element(search), same(entry));
+
       await tester.drag(list, const Offset(0, -420));
       await tester.pumpAndSettle();
-      expect(tester.getTopLeft(search).dy, closeTo(pinned, .1));
+      final pinned = tester.getRect(search);
+      expect(tester.getCenter(back), backCenter);
+      expect(pinned.left, closeTo(titleLeft, .1));
+      expect(pinned.center.dy, closeTo(backCenter.dy, .1));
+      expect(pinned.right, expanded.right);
+      expect(title, findsNothing);
+      expect(tester.element(search), same(entry));
       expect(search.hitTestable(), findsOneWidget);
+      final browseOffset = scroll.position.pixels;
+
+      await tester.tap(search);
+      await tester.pumpAndSettle();
+      expect(controller.page, GalleryPage.knowledgeSearch);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(controller.page, GalleryPage.knowledge);
+      expect(scroll.position.pixels, browseOffset);
+      expect(tester.getRect(search), pinned);
+
+      await tester.drag(list, const Offset(0, 650));
+      await tester.pumpAndSettle();
+      expect(title, findsOneWidget);
+      expect(tester.getRect(search), expanded);
     },
   );
 

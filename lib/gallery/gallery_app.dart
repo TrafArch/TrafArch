@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'dart:ui'
     show ImageFilter, ImageByteFormat, Size, instantiateImageCodec, lerpDouble;
 
+import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -74,7 +75,6 @@ import 'gallery_data.dart';
 import 'gallery_theme.dart';
 import 'gallery_design.dart';
 import 'gallery_layout.dart';
-import 'gallery_monet.dart';
 import 'gallery_preferences.dart';
 import 'gallery_feedback.dart';
 import 'gallery_knowledge_index.dart';
@@ -128,6 +128,9 @@ class _GalleryAppState extends State<GalleryApp> {
   GalleryController? _owned;
   _GalleryLiveRead? _liveRead;
   late final GalleryPreferences _preferences;
+  late final AppLifecycleListener _systemColorLifecycle;
+  Color? _systemMonetSeed;
+  int _systemColorRequest = 0;
   final _appearance = _GalleryAppearance();
   Future<GalleryKnowledgeIndex>? _knowledgeIndex;
   KnowledgeBase? _indexedKnowledge;
@@ -180,6 +183,8 @@ class _GalleryAppState extends State<GalleryApp> {
   @override
   void initState() {
     super.initState();
+    _systemColorLifecycle = AppLifecycleListener(onResume: _refreshSystemMonet);
+    unawaited(_refreshSystemMonet());
     _preferences = widget.preferences ?? GalleryPreferences();
     if (widget.liveApp case final app?) {
       final controller = _owned = GalleryController(GalleryData.live());
@@ -219,8 +224,26 @@ class _GalleryAppState extends State<GalleryApp> {
     return controller;
   }
 
+  Future<void> _refreshSystemMonet() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    final request = ++_systemColorRequest;
+    Color? seed;
+    try {
+      final argb = (await DynamicColorPlugin.getCorePalette())?.primary.get(40);
+      if (argb != null && (argb & 0xff000000) == 0xff000000) {
+        seed = Color(argb);
+      }
+    } on PlatformException {
+      seed = null;
+    }
+    if (mounted && request == _systemColorRequest && seed != _systemMonetSeed) {
+      setState(() => _systemMonetSeed = seed);
+    }
+  }
+
   @override
   void dispose() {
+    _systemColorLifecycle.dispose();
     _liveRead?.dispose();
     _owned?.dispose();
     if (widget.preferences == null) _preferences.dispose();
@@ -246,11 +269,7 @@ class _GalleryAppState extends State<GalleryApp> {
       return AnimatedBuilder(
         animation: c,
         builder: (context, _) {
-          // Monet follows the home card. Until a newly chosen photo has been
-          // sampled, use the user's preset instead of flashing an old theme.
-          final monetSeed = _liveRead == null && c.monet && c.hasCardSeed
-              ? c.themeSeed
-              : null;
+          final monetSeed = c.monet ? _systemMonetSeed : null;
           final home = _GalleryLiveScope(
             notifier: _liveRead,
             child: _GalleryNavigator(
@@ -330,21 +349,18 @@ class _GalleryAppState extends State<GalleryApp> {
 class _GalleryAppearance {
   final _themes = <(int, bool, String, Color?), ThemeData>{};
 
-  ThemeData theme(GalleryController controller, bool dark, Color? monetSeed) =>
-      _themes.putIfAbsent(
-        (
-          identityHashCode(controller.data),
-          dark,
-          controller.palette,
-          monetSeed,
-        ),
+  ThemeData theme(GalleryController controller, bool dark, Color? monetSeed) {
+    final palette = controller.monet ? 'blue' : controller.palette;
+    return _themes.putIfAbsent(
+        (identityHashCode(controller.data), dark, palette, monetSeed),
         () => GalleryTokens.from(
           controller.data,
           dark,
-          controller.palette,
+          palette,
           monetSeed: monetSeed,
         ).theme(),
       );
+  }
 }
 
 class _GalleryView extends StatefulWidget {
@@ -415,9 +431,6 @@ class _GalleryViewState extends State<_GalleryView> {
       const GallerySpendingSelection.all();
   Future<GalleryKnowledgeIndex>? _liveKnowledgeBrowse;
   KnowledgeBase? _browsedKnowledge;
-  double _detailScrollDeficit = 0;
-  double _detailMaxExtent = 0;
-  double _detailShrinkDistance = 0;
 
   /// 城市详情页滚动：线路卡按需构建，从搜索定位到指定线路时靠它逐屏
   /// 滚动到目标卡片（滚动位置仍由 PageStorageKey 保存恢复）。
@@ -464,27 +477,18 @@ class _GalleryViewState extends State<_GalleryView> {
           final data = await frame.image.toByteData(
             format: ImageByteFormat.png,
           );
-          if (data != null) {
+          if (data != null && active()) {
             // The native picker clears its previous cache on each selection.
             // The bytes stay in a crop session until the sheet's 完成 commits
-            // them (spec 2.4 §8.2). Sample the Monet seed now, while the picker
-            // is still busy, so the committed theme switches exactly once.
-            final bytes = data.buffer.asUint8List(
-              data.offsetInBytes,
-              data.lengthInBytes,
+            // them (spec 2.4 §8.2).
+            c.beginFaceCrop(
+              card.id,
+              data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+              Size(
+                frame.image.width.toDouble(),
+                frame.image.height.toDouble(),
+              ),
             );
-            final seed = await GalleryMonet.seedFromImage(bytes);
-            if (active()) {
-              c.beginFaceCrop(
-                card.id,
-                bytes,
-                Size(
-                  frame.image.width.toDouble(),
-                  frame.image.height.toDouble(),
-                ),
-                seed: seed,
-              );
-            }
           }
         } finally {
           frame.image.dispose();
@@ -825,6 +829,7 @@ class _GalleryViewState extends State<_GalleryView> {
     String? id,
     double? bottom,
     String? positionId,
+    Widget? leadingSliver,
   }) {
     final key = PageStorageKey(
       'gallery-${c.generation}-${id ?? '${_viewPage.name}-${_entry.qrView}'}',
@@ -845,6 +850,7 @@ class _GalleryViewState extends State<_GalleryView> {
         positionId: positionId,
         padding: padding,
         children: children,
+        leadingSliver: leadingSliver,
       );
     }
     return ListView(key: key, padding: padding, children: children);

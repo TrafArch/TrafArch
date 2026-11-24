@@ -1206,11 +1206,13 @@ class _GalleryTabbedList extends StatefulWidget {
     required this.positionId,
     required this.padding,
     required this.children,
+    this.leadingSliver,
   });
   final PageStorageKey<String> listKey;
   final String positionId;
   final EdgeInsets padding;
   final List<Widget> children;
+  final Widget? leadingSliver;
 
   @override
   State<_GalleryTabbedList> createState() => _GalleryTabbedListState();
@@ -1280,12 +1282,27 @@ class _GalleryTabbedListState extends State<_GalleryTabbedList> {
   }
 
   @override
-  Widget build(BuildContext context) => ListView(
-    key: widget.listKey,
-    controller: _scroll,
-    padding: widget.padding,
-    children: widget.children,
-  );
+  Widget build(BuildContext context) {
+    if (widget.leadingSliver case final leading?) {
+      return CustomScrollView(
+        key: widget.listKey,
+        controller: _scroll,
+        slivers: [
+          leading,
+          SliverPadding(
+            padding: widget.padding,
+            sliver: SliverList.list(children: widget.children),
+          ),
+        ],
+      );
+    }
+    return ListView(
+      key: widget.listKey,
+      controller: _scroll,
+      padding: widget.padding,
+      children: widget.children,
+    );
+  }
 }
 
 String _formatFaceCardNumber(String value) {

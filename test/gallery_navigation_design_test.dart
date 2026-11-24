@@ -12,6 +12,8 @@ import 'package:transit_card_analyzer/gallery/gallery_design.dart';
 import 'package:transit_card_analyzer/gallery/gallery_layout.dart';
 import 'package:transit_card_analyzer/gallery/gallery_theme.dart';
 
+import 'support/gallery_wallpaper.dart';
+
 void main() {
   test('floating navigation blends dual light shadows into a dark border', () {
     for (final palette in GalleryPalette.values) {
@@ -345,9 +347,12 @@ void main() {
     },
   );
   testWidgets(
-    'card Monet source, brand artwork and manual overrides share the scheme',
+    'wallpaper Monet colors the unread home and preserves manual choices',
     (tester) async {
+      const seed = Color(0xff685391);
+      mockGalleryWallpaper(tester, () => seed);
       await mount(tester);
+      expect(c.hasRead, isFalse);
       GalleryTokens tokens() => Theme.of(
         tester.element(find.byKey(const ValueKey('gallery-brand-mark'))),
       ).extension<GalleryTokens>()!;
@@ -355,7 +360,7 @@ void main() {
       expect(tokens().dynamic, isTrue);
       expect(
         initial,
-        GalleryColorEngine.tokens(c.themeSeed, dark: false).primary,
+        GalleryColorEngine.tokens(seed, dark: false).primary,
       );
       final mark = tester.widget<SvgPicture>(
         find.byKey(const ValueKey('gallery-brand-mark')),
@@ -371,10 +376,14 @@ void main() {
       });
       await tester.pumpAndSettle();
       expect(tokens().dynamic, isFalse);
-      expect(tokens().action, isNot(initial));
+      final manualAction = GalleryThemeSpec.byId('teal').light.primary;
+      expect(tokens().action, manualAction);
       c.update(() => c.monet = true);
       await tester.pumpAndSettle();
       expect(tokens().action, initial);
+      c.setMonet(false);
+      await tester.pumpAndSettle();
+      expect(tokens().action, manualAction);
     },
   );
 
@@ -498,10 +507,13 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('home card seed drives independent light and dark schemes', (
+  testWidgets('wallpaper drives independent light and dark schemes, not faces', (
     tester,
   ) async {
+    Color? seed = const Color(0xff803e60);
+    mockGalleryWallpaper(tester, () => seed);
     c.themeMode = ThemeMode.light;
+    c.hasRead = true;
     await mount(tester);
     final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
     // An animated theme cross-fade rebuilds the whole 2.x tree per frame and
@@ -515,24 +527,52 @@ void main() {
     expect(tokens().dynamic, isTrue);
     expect(
       tokens().action,
-      GalleryColorEngine.tokens(c.themeSeed, dark: false).primary,
+      GalleryColorEngine.tokens(seed!, dark: false).primary,
     );
     final lightCanvas = tokens().canvas;
     c.update(() => c.themeMode = ThemeMode.dark);
     await tester.pumpAndSettle();
     expect(
       tokens().action,
-      GalleryColorEngine.tokens(c.themeSeed, dark: true).primary,
+      GalleryColorEngine.tokens(seed!, dark: true).primary,
     );
     expect(tokens().canvas, isNot(lightCanvas));
-    final blueAction = tokens().action;
+    final darkTokens = tokens();
     c.update(() => c.current.face = 'teal');
     await tester.pumpAndSettle();
-    expect(tokens().action, isNot(blueAction));
+    expect(tokens(), darkTokens);
+    final image = base64Decode(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jP1sAAAAASUVORK5CYII=',
+    );
+    c.update(() {
+      c.current.image = image;
+      c.current.imageSize = const Size(1, 1);
+    });
+    await tester.pumpAndSettle();
+    expect(tokens(), darkTokens);
+
+    Future<void> resume() async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+    }
+
+    seed = const Color(0xff397057);
+    await resume();
+    expect(tokens().action, isNot(darkTokens.action));
     expect(
       tokens().action,
-      GalleryColorEngine.tokens(c.themeSeed, dark: true).primary,
+      GalleryColorEngine.tokens(seed!, dark: true).primary,
     );
+
+    c.update(() => c.palette = 'teal');
+    seed = null;
+    await resume();
+    expect(tokens().dynamic, isFalse);
+    expect(tokens().roles, GalleryPalette.byId('blue').tokens(true));
+    c.setMonet(false);
+    await tester.pumpAndSettle();
+    expect(tokens().roles, GalleryPalette.byId('teal').tokens(true));
   });
   testWidgets(
     'all content pages and long balances fit 320dp at twice the font size',

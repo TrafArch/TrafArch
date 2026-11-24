@@ -247,6 +247,10 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
       navigation.hapticEnabled = app.hapticEnabled;
       changed = true;
     }
+    if (navigation.monet != app.monetEnabled) {
+      navigation.monet = app.monetEnabled;
+      changed = true;
+    }
     final readState = _error != null || app.nfcReleaseFailed
         ? GalleryReadState.failed
         : busy
@@ -620,6 +624,9 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
     _syncController();
     await write;
   }
+
+  @override
+  Future<void> setMonet(bool value) => app.setMonetEnabled(value);
 
   Future<bool> openQr() async {
     if (_disposed || openingQr || app.qrAcquiring) return true;

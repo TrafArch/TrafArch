@@ -69,7 +69,7 @@ const galleryContributors = <GalleryContributor>[
     name: 'DearVa',
     role: '全栈开发者，为2.0界面设计提供大量帮助',
     initial: 'D',
-    asset: 'assets/contributors/dearva.png',
+    asset: 'assets/contributors/dearva-profile.jpg',
     url: 'https://github.com/DearVa',
   ),
 ];

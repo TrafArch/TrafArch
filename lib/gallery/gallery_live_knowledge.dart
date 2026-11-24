@@ -12,8 +12,7 @@ extension _GalleryLiveKnowledge on _GalleryViewState {
       future: _liveKnowledgeBrowse ??= widget.loadKnowledge(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return _list([
-            _header('知识库', back: true),
+          return _knowledgeHomeList([
             _empty(
               '本地参考数据暂不可用',
               '无法读取当前已校验的 TU／CU 发布包。',
@@ -28,8 +27,7 @@ extension _GalleryLiveKnowledge on _GalleryViewState {
         }
         final index = snapshot.data;
         if (index == null) {
-          return _list([
-            _header('知识库', back: true),
+          return _knowledgeHomeList([
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 48),
               child: Center(child: CircularProgressIndicator()),

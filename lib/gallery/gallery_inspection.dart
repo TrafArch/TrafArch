@@ -230,7 +230,7 @@ extension _GalleryInspection on _GalleryViewState {
         : null;
     final stats = _knowledgeStats(regions);
     final cities = regions ?? const <GalleryRecord>[];
-    final body = _list(
+    return _knowledgeHomeList(
       [
         _gap(2),
         _tabs(
@@ -314,24 +314,84 @@ extension _GalleryInspection on _GalleryViewState {
           ...cities.indexed.map((item) => _knowledgeCityCard(item.$1, item.$2)),
         _gap(4),
       ],
+    );
+  }
+
+  Widget _knowledgeHomeList(List<Widget> children) {
+    const inset = 16.0;
+    const top = 18.0;
+    const bottom = 10.0;
+    const backSize = 44.0;
+    const titleInset = inset + backSize + 8;
+    final searchHeight = math.max(
+      52.0,
+      _measureDetailText(
+            context,
+            _knowledgeHint,
+            GalleryTypography.body,
+            double.infinity,
+          ).height +
+          16,
+    );
+    final rowHeight = math.max(
+      searchHeight,
+      MediaQuery.textScalerOf(context).scale(32),
+    );
+    final expandedSearchTop = top + rowHeight + 12;
+    final compactSearchTop = top + (rowHeight - searchHeight) / 2;
+    return _list(
+      children,
       id: 'knowledge',
       positionId: c.knowledgeTab,
-    );
-    // 搜索入口固定常驻，城市与概况内容独立滚动（spec §3.2）。
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
-          child: _header('知识库', back: true),
+      leadingSliver: SliverPersistentHeader(
+        pinned: true,
+        delegate: _GalleryCollapsingHeaderDelegate(
+          expandedHeight: expandedSearchTop + searchHeight + bottom,
+          compactHeight: top + rowHeight + bottom,
+          builder: (progress) {
+            final titleProgress = (progress * 4).clamp(0.0, 1.0);
+            return ColoredBox(
+              color: t.canvas,
+              child: Stack(
+                children: [
+                  Positioned(
+                    top: top + (rowHeight - backSize) / 2,
+                    left: inset,
+                    child: _icon(Icons.arrow_back_rounded, '返回', c.back),
+                  ),
+                  if (titleProgress < 1)
+                    Positioned(
+                      top: top,
+                      height: rowHeight,
+                      left: titleInset,
+                      right: inset,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Opacity(
+                          opacity: _reduceMotion ? 1 : 1 - titleProgress,
+                          child: Semantics(
+                            header: true,
+                            child: _text('知识库', role: GalleryTypography.page),
+                          ),
+                        ),
+                      ),
+                    ),
+                  Positioned(
+                    key: const ValueKey('knowledge-search-position'),
+                    top: lerpDouble(expandedSearchTop, compactSearchTop, progress),
+                    left: lerpDouble(inset, titleInset, titleProgress),
+                    right: inset,
+                    height: searchHeight,
+                    child: _GalleryKnowledgeSearchBar(
+                      onOpen: () => c.navigate(GalleryPage.knowledgeSearch),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-          child: _GalleryKnowledgeSearchBar(
-            onOpen: () => c.navigate(GalleryPage.knowledgeSearch),
-          ),
-        ),
-        Expanded(child: body),
-      ],
+      ),
     );
   }
 

@@ -45,7 +45,12 @@ class _GalleryKnowledgeSearchBar extends StatelessWidget {
             ),
           ),
       icon: Icon(Icons.search_rounded, size: 20, color: colors.inputIcon),
-      label: const Text(_knowledgeHint, style: GalleryTypography.body),
+      label: const Text(
+        _knowledgeHint,
+        style: GalleryTypography.body,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
     );
   }
 }

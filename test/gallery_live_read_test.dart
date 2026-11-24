@@ -30,6 +30,7 @@ import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
 import 'package:transit_card_analyzer/shared/domain/archive_conflict_policy.dart';
 
 import 'support/gallery_scroll.dart';
+import 'support/gallery_wallpaper.dart';
 import 'support/test_database.dart';
 
 class _MemoryFaceStore implements GalleryFaceStore {
@@ -48,6 +49,41 @@ class _MemoryFaceStore implements GalleryFaceStore {
 }
 
 void main() {
+  testWidgets('live settings use and persist wallpaper Monet before reading', (
+    tester,
+  ) async {
+    mockGalleryWallpaper(tester, () => const Color(0xff76527d));
+    final store = MemorySettingsStore();
+    final fixture = await _showGallery(
+      tester,
+      _CardKind.tu,
+      autoSave: false,
+      settingsStore: store,
+    );
+    final app = fixture.app;
+    expect(fixture.native.discoveries, 0);
+    expect(app.monetEnabled, isTrue);
+    final control = find.widgetWithText(SwitchListTile, '莫奈取色');
+    await _openSettingsControl(tester, control);
+    GalleryTokens tokens() => Theme.of(
+      tester.element(control),
+    ).extension<GalleryTokens>()!;
+    expect(tokens().dynamic, isTrue);
+
+    await tester.tap(control);
+    await tester.pumpAndSettle();
+    expect(tokens().dynamic, isFalse);
+    expect(app.monetEnabled, isFalse);
+    expect(store.values[SettingsKeys.monetEnabled], 'false');
+
+    await tester.tap(control);
+    await tester.pumpAndSettle();
+    expect(tokens().dynamic, isTrue);
+    expect(app.monetEnabled, isTrue);
+    expect(store.values[SettingsKeys.monetEnabled], 'true');
+    await _unmount(tester);
+  });
+
   for (final kind in _CardKind.values) {
     testWidgets(
       '2.x uses one ${kind.name} result across three pages and saves supported cards',

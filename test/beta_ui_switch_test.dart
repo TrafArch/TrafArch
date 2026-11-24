@@ -137,6 +137,7 @@ void main() {
       await enterPreview();
       await openSettings();
       expect(tester.widget<SwitchListTile>(toggle()).value, isTrue);
+      expect(tester.widget<SwitchListTile>(toggle()).subtitle, isNull);
       await tester.tap(toggle());
       await tester.pumpAndSettle();
       expect(store.values[SettingsKeys.galleryPredictiveBackEnabled], 'false');
