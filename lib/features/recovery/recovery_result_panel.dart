@@ -106,7 +106,10 @@ class RecoveryResultPanel extends StatelessWidget {
                           summary['parserId'] == CardParserIds.lingnanTong ||
                           summary['cardType'] == CardTypes.lingnanTong
                       ? '岭南通'
-                      : summary['cardName']?.toString() ?? '卡片信息',
+                      : officialCardDisplayName(
+                          summary['cardType']?.toString() ?? '',
+                          summary['cardName']?.toString(),
+                        ) ?? '卡片信息',
                 ),
                 if (summary['cardNumber'] case final String number)
                   SelectableText(number),

@@ -1,5 +1,6 @@
 import '../../protocols/transit/card_parser.dart';
 import '../../protocols/transit/tunion/tunion_trip_matcher.dart';
+import '../archive/domain/card_types.dart';
 import '../reference_data/data/tunion_knowledge_base.dart';
 import '../reference_data/data/city_union_lookup_rules.dart';
 import '../reference_data/domain/reference_match.dart';
@@ -12,6 +13,7 @@ import 'tunion_analysis_models.dart';
 import 'tunion_card_identifier.dart';
 import 'balance_interpretation.dart';
 import 'balance_reconstruction.dart';
+import 'cu_transaction_analysis.dart';
 import 'tunion_record_context.dart';
 
 /// 分析引擎：识别 → 行程聚合 → 符合性检查 → 异常检测。
@@ -24,11 +26,15 @@ class AnalysisEngine {
     : identifier = CardIdentifier(knowledge),
       terminalDecoder = TerminalDecoder(knowledge.terminalRules);
 
-  CardAnalysisResult analyze(ParsedCard card, {DateTime? now}) {
+  CardAnalysisResult analyze(
+    ParsedCard card, {
+    DateTime? now,
+    Map<TUnionTransaction, CuTransactionView> walletMirrors = const {},
+  }) {
     final at = now ?? DateTime.now();
     final identity = identifier.identify(card.info);
     final currency = _resolveCurrency(card.info);
-    final trips = _buildTrips(card, identity, currency);
+    final trips = _buildTrips(card, identity, currency, walletMirrors);
     return CardAnalysisResult(
       identity: identity,
       wallet: WalletSummary.of(card.info, at, currency: currency),
@@ -62,6 +68,7 @@ class AnalysisEngine {
     ParsedCard card,
     CardIdentity identity,
     Currency currency,
+    Map<TUnionTransaction, CuTransactionView> walletMirrors,
   ) {
     // 展示先关联全部秒级时间，再由有效基础 POS 包含关系补缺。
     // 1E 与 1A 各自占用基础交易；余额仍走独立的严格证据匹配。
@@ -112,6 +119,13 @@ class AnalysisEngine {
           : null,
       recordedBalanceFen: (txn) => balanceMatches[txn]?.balanceFen,
     );
+    // New scans identify the product from the selected TU wallet's 0x15.
+    final shanghaiWallet =
+        card.parserId == CardParserIds.shanghaiTunion ||
+        (card.parserId == CardParserIds.tunion &&
+            card.selectedAidHex == 'A000000632010105' &&
+            CardTypes.regionalTunionType(card.info.applicationSerial) ==
+                CardTypes.shanghaiTransitUnion);
     // TripReader L0/d.1.smali:12335: CU metro consumes the card's newest-to-
     // oldest ledger with lastIsFinished initially false. Keep this inferred
     // state local to continuous Shanghai records, separate from TU evidence.
@@ -129,7 +143,9 @@ class AnalysisEngine {
       // 上海本地设备把 CU 终端编码写入两应用的同一笔 0x18 交易。
       // 只有缺少 TU 过程关联、卡种与终端前缀均独立确认时才查 CU；
       // 原交易、金额、钱包与 TU 城市命名空间均保持原来源。
-      final localTerminal = _lookupShanghaiLocalTerminal(card, txn);
+      final localTerminal = shanghaiWallet
+          ? _lookupShanghaiLocalTerminal(txn)
+          : null;
       final shanghaiLocal = annotation == null && fallback == null
           ? localTerminal
           : null;
@@ -220,11 +236,28 @@ class AnalysisEngine {
           !isBus && (processMatch == null || processMatch.isUnmatched)
           ? _lookupBasicTerminal(txn.terminalId, knownCity, txn.time)
           : null;
-      final stationMatch =
+      final tuStationMatch =
           shanghaiLocal?.match ??
           (localTerminalMatch != null && !localTerminalMatch.isUnmatched
               ? localTerminalMatch
               : processMatch);
+      // Folded CU 0x18 rows can identify a carrier or stop that TU did not
+      // record. Their regional codes, wallet balances and roles belong to CU.
+      final mirror =
+          annotation == null &&
+              fallback == null &&
+              shanghaiLocal == null &&
+              loc == null &&
+              (tuStationMatch == null ||
+                  tuStationMatch.isUnmatched ||
+                  tuStationMatch.confidence ==
+                      StationMatchConfidence.unavailable)
+          ? walletMirrors[txn]
+          : null;
+      final mirrorTerminal = txn.isConsume && mirror?.carrier != null
+          ? _CuTerminal.fromLookup(mirror!.carrier!, mirror.location)
+          : null;
+      final stationMatch = mirrorTerminal?.match ?? tuStationMatch;
       final terminalEntry = isBus || isIntercity
           ? null
           : _lookupStationEntry(loc, identity, card);
@@ -279,7 +312,12 @@ class AnalysisEngine {
         isCompositeConsume: txn.isCompositeConsume,
         sequence: txn.sequence,
         terminalId: txn.terminalId,
-        location: loc,
+        location: mirrorTerminal == null
+            ? loc
+            : TerminalLocation(
+                ruleId: TerminalLocation.cuWalletMirrorRule,
+                ruleNote: '${mirror!.sourceLabel} · 同次 TU/CU 交易原文一致',
+              ),
         cityName:
             cityName ??
             (recordCity == null
@@ -309,7 +347,7 @@ class AnalysisEngine {
         appTypeName:
             annotation?.record.appTypeLabel ??
             (fallback == null
-                ? shanghaiLocal?.appTypeName
+                ? (shanghaiLocal ?? mirrorTerminal)?.appTypeName
                 : fallback.isBus
                 ? '公共汽电车'
                 : '城市轨道交通'),
@@ -341,12 +379,8 @@ class AnalysisEngine {
     return trips;
   }
 
-  _ShanghaiLocalTerminal? _lookupShanghaiLocalTerminal(
-    ParsedCard card,
-    TUnionTransaction transaction,
-  ) {
-    if (card.parserId != CardParserIds.shanghaiTunion ||
-        !transaction.isConsume ||
+  _CuTerminal? _lookupShanghaiLocalTerminal(TUnionTransaction transaction) {
+    if (!transaction.isConsume ||
         !RegExp(r'^[0-9A-Fa-f]{12}$').hasMatch(transaction.terminalId)) {
       return null;
     }
@@ -365,19 +399,7 @@ class AnalysisEngine {
         busLookupEnabled: true,
       ),
     );
-    final match = switch (resolved.status) {
-      ReferenceMatchStatus.matched => StationMatch.fromCandidates(
-        resolved.candidates,
-      ),
-      ReferenceMatchStatus.ambiguous => StationMatch(
-        null,
-        StationMatchConfidence.ambiguous,
-        candidates: resolved.candidates,
-      ),
-      ReferenceMatchStatus.unknown => StationMatch.unmatched,
-      ReferenceMatchStatus.unavailable => StationMatch.unavailable,
-    };
-    return _ShanghaiLocalTerminal(identity.carrier!, match);
+    return _CuTerminal.fromLookup(identity.carrier!, resolved);
   }
 
   /// 原 m761o 基础终端映射：仅 0x1E / 0x1A 未命中时调用；未知城市不猜测。
@@ -898,8 +920,20 @@ class _RideAnnotation {
   });
 }
 
-class _ShanghaiLocalTerminal {
-  const _ShanghaiLocalTerminal(this.carrier, this.match);
+class _CuTerminal {
+  _CuTerminal.fromLookup(this.carrier, ReferenceMatch<StationCodeEntry> result)
+    : match = switch (result.status) {
+        ReferenceMatchStatus.matched => StationMatch.fromCandidates(
+          result.candidates,
+        ),
+        ReferenceMatchStatus.ambiguous => StationMatch(
+          null,
+          StationMatchConfidence.ambiguous,
+          candidates: result.candidates,
+        ),
+        ReferenceMatchStatus.unknown => StationMatch.unmatched,
+        ReferenceMatchStatus.unavailable => StationMatch.unavailable,
+      };
   final int carrier;
   final StationMatch match;
 

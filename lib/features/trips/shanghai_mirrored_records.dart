@@ -10,11 +10,16 @@ class ShanghaiMirroredRecords {
   ShanghaiMirroredRecords({
     required Iterable<CuTransactionView> independent,
     required Iterable<CuTransactionView> mirrored,
+    Map<TUnionTransaction, CuTransactionView> walletMirrors = const {},
   }) : independent = List.unmodifiable(independent),
-       mirrored = List.unmodifiable(mirrored);
+       mirrored = List.unmodifiable(mirrored),
+       walletMirrors = Map.unmodifiable(walletMirrors);
 
   final List<CuTransactionView> independent;
   final List<CuTransactionView> mirrored;
+
+  /// One-to-one TU and CU 0x18 observations from the same read.
+  final Map<TUnionTransaction, CuTransactionView> walletMirrors;
 
   int get mirroredCount => mirrored.length;
 }
@@ -40,7 +45,7 @@ ShanghaiMirroredRecords partitionShanghaiMirroredRecords({
     );
   }
 
-  final tuCounts = <String, int>{};
+  final tuRows = <String, List<TUnionTransaction>>{};
   for (final transaction in tunionTransactions) {
     final time = transaction.time;
     if (time.millisecond != 0 || time.microsecond != 0) continue;
@@ -53,12 +58,14 @@ ShanghaiMirroredRecords partitionShanghaiMirroredRecords({
       transaction.terminalId,
       civil,
     );
-    if (raw != null) tuCounts.update(raw, (n) => n + 1, ifAbsent: () => 1);
+    if (raw != null) tuRows.putIfAbsent(raw, () => []).add(transaction);
   }
 
   // A Shanghai top-up can occur in all three files. Each primary row covers
   // one copy per file, even if the CU recharge file was read first.
+  final tuCounts = tuRows.map((raw, rows) => MapEntry(raw, rows.length));
   final rechargeCounts = Map.of(tuCounts);
+  final walletMirrors = <TUnionTransaction, CuTransactionView>{};
   final cu = cityUnionTransactions.toList();
   final folded = <int>{};
   for (final (index, view) in cu.indexed) {
@@ -66,11 +73,17 @@ ShanghaiMirroredRecords partitionShanghaiMirroredRecords({
     if (row.sfi != 0x18) continue;
     final raw = _cuRaw(row);
     if (raw == null) continue;
+    final uniqueTu = tuRows[raw]?.singleOrNull;
     if (_take(tuCounts, raw)) {
       folded.add(index);
-    } else if (row.kind == CityUnionTransactionKind.recharge &&
-        row.transactionType == 0x02) {
-      rechargeCounts.update(raw, (n) => n + 1, ifAbsent: () => 1);
+      if (uniqueTu != null) walletMirrors[uniqueTu] = view;
+    } else {
+      // A repeated CU row cannot establish which physical slot supplied the match.
+      if (uniqueTu != null) walletMirrors.remove(uniqueTu);
+      if (row.kind == CityUnionTransactionKind.recharge &&
+          row.transactionType == 0x02) {
+        rechargeCounts.update(raw, (n) => n + 1, ifAbsent: () => 1);
+      }
     }
   }
   final independent = <CuTransactionView>[];
@@ -85,7 +98,11 @@ ShanghaiMirroredRecords partitionShanghaiMirroredRecords({
         _take(rechargeCounts, _cuRaw(row));
     (copy || folded.contains(index) ? mirrored : independent).add(view);
   }
-  return ShanghaiMirroredRecords(independent: independent, mirrored: mirrored);
+  return ShanghaiMirroredRecords(
+    independent: independent,
+    mirrored: mirrored,
+    walletMirrors: walletMirrors,
+  );
 }
 
 bool _take(Map<String, int> counts, String? raw) {

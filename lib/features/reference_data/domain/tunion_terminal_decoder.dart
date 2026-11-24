@@ -4,6 +4,9 @@ export 'tu_lookup_service.dart' show TuLookupService, TuLookupDataSource;
 
 /// 终端编号二次解码结果。
 class TerminalLocation {
+  /// Persisted when a TU transaction receives its location from an exact CU wallet mirror.
+  static const String cuWalletMirrorRule = 'cu-0x18-mirror';
+
   final String ruleId;
   final String? ruleNote;
   final String? cityCode;

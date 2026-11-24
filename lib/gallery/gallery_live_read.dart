@@ -81,10 +81,7 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
   ArchiveHistoryResult? historyFor(String id) =>
       id == _current?.card.id ? _current?.history : _archiveById[id]?.history;
   List<ApplicationEvidence> get currentApplications =>
-      app.recoveredCapture?.applications(
-        currentHistory?.latestCapture?.snapshot,
-      ) ??
-      app.applications;
+      _current?.applications ?? const [];
 
   List<String> get sources => [
     '全部来源',
@@ -425,6 +422,7 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
       card: card,
       history: history,
       records: records,
+      applications: app.applications,
     );
   }
 
@@ -437,14 +435,20 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
         : _archive
               .where((item) => item.saved.cardFingerprint == fingerprint)
               .firstOrNull;
-    final history = capture.snapshotJson == null
-        ? _currentApplicationHistory(capture.applications(null), readAt) ??
-              saved?.history
+    final capturedHistory = capture.snapshotJson == null
+        ? null
         : _historyFromSnapshot(
             capture.snapshotJson!,
             id: capture.pending?.pendingSaveId ?? 'recovery',
             readAt: readAt,
           );
+    // Saved trips may supplement the ledger. Read status belongs to this capture.
+    final evidence = capture.applications(
+      capturedHistory?.latestCapture?.snapshot,
+    );
+    final history = capture.snapshotJson == null
+        ? _currentApplicationHistory(evidence, readAt) ?? saved?.history
+        : capturedHistory;
     final records = history == null
         ? const <GalleryRecord>[]
         : _galleryRecords(history, app.includeShanghaiOverdraft);
@@ -469,14 +473,22 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
       'amusementIc' => const <String>[],
       _ when summary['idm'] is String => const ['octopus'],
       _ => [
-        for (final a in capture.applications(history?.latestCapture?.snapshot))
+        for (final a in evidence)
           if (a.confirmed) a.appId,
       ],
     };
     final card = _liveCard(
       id: fingerprint == null ? 'live-recovery' : 'live:$fingerprint',
       saved: false,
-      name: summary['cardName']?.toString() ?? saved?.card.name ?? '上次读取的交通卡',
+      name:
+          officialCardDisplayName(
+            summary['cardType']?.toString() ??
+                capture.pending?.identity.cardType ??
+                '',
+            summary['cardName']?.toString(),
+          ) ??
+          saved?.card.name ??
+          '上次读取的交通卡',
       cardNumber: cardNumber,
       balance:
           rawBalance ??
@@ -515,6 +527,7 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
       card: card,
       history: history,
       records: records,
+      applications: evidence,
     );
   }
 
@@ -873,11 +886,13 @@ class _LiveReadCard {
     required this.card,
     required this.history,
     required this.records,
+    required this.applications,
   });
 
   final GalleryCard card;
   final ArchiveHistoryResult? history;
   final List<GalleryRecord> records;
+  final List<ApplicationEvidence> applications;
 }
 
 class _LiveArchiveCard {
@@ -1132,12 +1147,17 @@ List<GalleryRecord> _galleryRecords(
     history: history,
     cityUnion: cu,
   ).independent;
-  for (final transaction in independent) {
-    final entry = describeCuTrip(transaction);
+  final cuEntries = describeCuTrips(independent);
+  final cuJourneys = projectJourneys(
+    cuEntries.map((entry) => entry.journeyEvent!.withPayload(entry)),
+  );
+  for (final journey in cuJourneys) {
+    final entry = journey.events.first.payload;
     records.add(
       _recordFromPresentation(
         entry,
-        infos: [entry.info],
+        infos: [for (final event in journey.events) event.payload.info],
+        journey: journey.state == JourneyState.completed ? journey : null,
         event: entry.journeyEvent,
       ),
     );
@@ -1194,6 +1214,10 @@ GalleryRecord _recordFromPresentation<T extends Enum>(
   final start =
       journey?.start ?? (event == null ? null : _singleEndpoint(event));
   final end = journey?.end;
+  // A standalone observation may identify the stop without establishing a direction.
+  final observed = start == null && end == null
+      ? events.firstOrNull?.endpoint
+      : null;
   final sourceLabels = <String>{
     info.sourceLabel,
     for (final item in events) item.payload.info.sourceLabel,
@@ -1201,8 +1225,7 @@ GalleryRecord _recordFromPresentation<T extends Enum>(
   };
   // A standalone operation has an event clock even without ride endpoints.
   final clock = _clockFor(
-    start:
-        start ?? (end == null ? journey?.events.firstOrNull?.endpoint : null),
+    start: start ?? observed,
     end: end,
     info: info,
     dateText: entry.dateText,
@@ -1215,18 +1238,24 @@ GalleryRecord _recordFromPresentation<T extends Enum>(
           TripModeFilter.other => 'other',
         };
   final ride = kind == 'rail' || kind == 'bus';
-  final line = start?.line ?? info.line ?? end?.line;
+  final completed = journey?.state == JourneyState.completed;
+  final line = start?.line ?? observed?.line ?? info.line ?? end?.line;
   final title = switch (kind) {
     'recharge' => '充值',
     'rail' when line != null && line.trim().isNotEmpty => '地铁 ${line.trim()}',
     'bus' when line != null && line.trim().isNotEmpty => '公交 ${line.trim()}',
+    'rail' when completed => '地铁',
     _ => info.title,
   };
-  final entryStation = start?.station ?? info.subText?.split(' → ').firstOrNull;
+  final entryStation = start?.station;
   final exitStation = end?.station;
-  final sub = entryStation != null && exitStation != null
-      ? '$entryStation → $exitStation'
-      : info.subText ?? title;
+  final sub = completed || (entryStation != null && exitStation != null)
+      ? '${entryStation ?? '站点未记录'} → ${exitStation ?? '站点未记录'}'
+      : observed?.station ??
+            entryStation ??
+            exitStation ??
+            info.subText ??
+            title;
   final amount = journey?.amountText ?? info.amountText ?? '—';
   final balanceAfter = journey?.balanceAfterText ?? event?.balanceAfterText;
   final city =
@@ -1248,8 +1277,8 @@ GalleryRecord _recordFromPresentation<T extends Enum>(
       'exitTime': ?clock.exitTime,
       'entryStation': ?entryStation,
       'exitStation': ?exitStation,
-      if (start?.line != null) 'entryLine': start!.line,
-      if (end?.line != null) 'exitLine': end!.line,
+      if (completed || start?.line != null) 'entryLine': start?.line ?? '',
+      if (completed || end?.line != null) 'exitLine': end?.line ?? '',
       'oneWay': oneWay,
       'transferKnown': true,
     },

@@ -14,15 +14,18 @@ class ArchiveTransactionObservation {
     required this.identity,
     required this.balanceFen,
     required this.balanceIsRecorded,
+    required this.hasWalletMirror,
   });
 
   final String occurrenceIdentity;
   final String identity;
   final int? balanceFen;
   final bool balanceIsRecorded;
+  final bool hasWalletMirror;
 }
 
-/// Attach repeated evidence to an already completed capture, never pair sides.
+/// Attach repeated observations to a completed ride or a classified wallet
+/// mirror. Every presented operation must already exist within one capture.
 /// Original captures remain the authority for multiplicity and conflicts, even
 /// when an earlier presentation merge has already combined their events.
 List<JourneyPresentation<TripCardPresentation<ArchiveRecordKind>>>
@@ -117,6 +120,20 @@ attachArchivePartialCaptures(
   final completed = journeys
       .where((j) => j.state == JourneyState.completed)
       .toList();
+  final classifiedMirrors = <String, List<_Journey>>{};
+  for (final journey in journeys) {
+    if (journey.state == JourneyState.completed ||
+        journey.mode == TripModeFilter.other ||
+        !journey.events.any((e) => observation(e)?.hasWalletMirror == true)) {
+      continue;
+    }
+    final identities = journey.events
+        .map((e) => observation(e)?.occurrenceIdentity)
+        .toSet();
+    if (identities.length == 1 && identities.single != null) {
+      classifiedMirrors.putIfAbsent(identities.single!, () => []).add(journey);
+    }
+  }
   final proposals = <_Journey, List<_Journey>>{};
   for (final partial in journeys) {
     if (partial.state == JourneyState.completed || partial.events.isEmpty) {
@@ -139,6 +156,20 @@ attachArchivePartialCaptures(
       };
       return ids.every(known.contains);
     }).toList();
+    // Older captures of a standalone debit can lack both mode and location.
+    // Match only one raw operation, leaving classified or conflicting rows alone.
+    if (candidates.isEmpty &&
+        ids.toSet().length == 1 &&
+        partial.mode == TripModeFilter.other &&
+        partial.events.every(
+          (e) =>
+              e.role == JourneyEventRole.unknown &&
+              e.payload.info.category == null &&
+              e.endpoint.line == null &&
+              e.endpoint.station == null,
+        )) {
+      candidates.addAll(classifiedMirrors[ids.first] ?? const []);
+    }
     if (candidates.length != 1 || !ids.every(safe.contains)) continue;
     final target = candidates.single;
     final targetBatches = batches(target);

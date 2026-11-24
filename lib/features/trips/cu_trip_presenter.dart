@@ -23,6 +23,27 @@ const cuTripSourceLabels = {
   CuTripSourceFilter.other: '其他文件',
 };
 
+List<TripCardPresentation<CuTripSourceFilter>> describeCuTrips(
+  List<CuTransactionView> transactions, {
+  String? Function(String?)? cityNameOf,
+  bool Function(CuTransactionView)? isRemote,
+  Map<CuTransactionView, String> sourceLabels = const {},
+  String currencySymbol = '¥',
+}) {
+  final links = completeQingdaoMetroLinks(transactions);
+  return [
+    for (final transaction in transactions)
+      describeCuTrip(
+        transaction,
+        cityName: cityNameOf?.call(transaction.regionCode),
+        remote: isRemote?.call(transaction) ?? false,
+        savedSource: sourceLabels[transaction],
+        currencySymbol: currencySymbol,
+        showQingdaoMetroLink: links.contains(transaction.qingdaoMetro?.id),
+      ),
+  ];
+}
+
 /// Adapts CU's own captured observations to the shared trip UI. A terminal's
 /// carrier establishes the mode, never entry/exit direction or a fare unit.
 TripCardPresentation<CuTripSourceFilter> describeCuTrip(
