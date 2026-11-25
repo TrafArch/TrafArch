@@ -2,6 +2,8 @@
 
 ## 2026-11-25 — 修复 CNB 分架构和通用 APK 的构建环境
 
+- 修复 Flutter 插件加载时因 Maven Central 返回 HTTP 429 而中断的云构建。两个 APK 按钮在 Gradle 初始化时为应用和 Flutter SDK 的独立构建配置 Central 与插件镜像。
+- 修复 IDEA 在提交检查中无法解析 CNB 初始化脚本 Gradle API 导入的问题。脚本通过 Maven 仓库支持的 `mavenContent` 方法识别仓库。
 - 修复分架构构建在加载 Flutter 镜像时因文件属主 ID `397546` 超出 CNB 映射范围而中断的问题。两个 APK 按钮共用基于 Debian 的项目镜像，按 SHA256 核验 Flutter 和 Android 命令行工具，并在解压 Flutter 时使用容器内的属主。
 
 ## 2026-11-25 — 行程线路 SVG 与离线色号

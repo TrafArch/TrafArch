@@ -12,6 +12,7 @@
           script: |
             set -eu
             case "$APK_MODE" in split|universal) ;; *) echo 'APK_MODE must be split or universal' >&2; exit 2 ;; esac
+            install -Dm644 .cnb/gradle-repositories.init.gradle "${GRADLE_USER_HOME:-$HOME/.gradle}/init.d/trafarch-repositories.init.gradle"
             flutter --version
             "$ANDROID_HOME/build-tools/37.0.0/aapt" version
             flutter pub get --enforce-lockfile
