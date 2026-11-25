@@ -3,6 +3,7 @@
 import argparse
 from collections import Counter, defaultdict
 from contextlib import closing
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -13,9 +14,13 @@ ROOT = Path(__file__).resolve().parents[2]
 OUTPUT = ROOT / 'third_party/railmapgen_palette/tu_colors.json'
 HEX_COLOUR = re.compile(r'#[0-9a-fA-F]{6}')
 NUMBERED_LINE = re.compile(r'([0-9]{1,3})\s*[号號]\s*[线線]')
+LINE_ALIAS = re.compile(r'\s*[（(][^）)]*[）)]\s*$')
 RMG_LINE_IDS = {
     '1000': {'1号线': 'bj1', '八通线': 'bj1', '4号线': 'bj4', '大兴线': 'bj4'},
     '5810': {'APM线': 'apm'},
+    # sz8orig is a separate RMG entry. The TU label only identifies 8号线,
+    # so its active palette is selected by the explicit sz8 identity.
+    '5840': {'8号线': 'sz8', '坪山云巴1号线': 'szpsyb'},
 }
 
 
@@ -24,7 +29,7 @@ def city_name(value):
 
 
 def line_name(value):
-    text = value.strip()
+    text = LINE_ALIAS.sub('', value.strip())
     match = NUMBERED_LINE.fullmatch(text)
     return f'{int(match[1])}号线' if match else text.upper()
 
@@ -41,8 +46,9 @@ def regions(connection):
     ).fetchall()
 
 
-def read_json(path):
-    return json.loads(path.read_text(encoding='utf-8'))
+def read_source(path):
+    raw = path.read_bytes()
+    return json.loads(raw), hashlib.sha256(raw).hexdigest()
 
 
 def simplified_name(row):
@@ -73,10 +79,42 @@ def matching_colours(tu, code, table, rows):
 
 def build_palette(resources, revision):
     city_ids = defaultdict(list)
-    for city in read_json(resources / 'city-config.json'):
+    city_config, _ = read_source(resources / 'city-config.json')
+    city_rows = {}
+    rmg_cities = {}
+    for city in city_config:
+        if city.get('country') != 'CN':
+            continue
         label = city_name(simplified_name(city))
         if label:
             city_ids[label].append(city['id'])
+        colour_file = resources / 'palettes' / f'{city["id"]}.json'
+        rows, source_sha256 = read_source(colour_file)
+        city_rows[city['id']] = rows
+        lines = []
+        for row in rows:
+            names = _line_names(row)
+            colour = row.get('colour')
+            if not row.get('id') or not names or not isinstance(colour, str):
+                continue
+            if not HEX_COLOUR.fullmatch(colour):
+                continue
+            foreground = row.get('fg')
+            lines.append({
+                'id': row['id'],
+                'names': names,
+                'colour': colour.upper(),
+                'foreground': foreground.upper()
+                if isinstance(foreground, str)
+                and HEX_COLOUR.fullmatch(foreground)
+                else None,
+            })
+        rmg_cities[city['id']] = {
+            'names': city.get('name', {}),
+            'country': city.get('country'),
+            'sourceSha256': source_sha256,
+            'lines': lines,
+        }
 
     with closing(read_asset_db('TU')) as tu, closing(read_asset_db('CU')) as cu:
         tu_regions = regions(tu)
@@ -95,17 +133,32 @@ def build_palette(resources, revision):
             info = cities[code] = {'name': label}
             if label in tu_codes and len(hits) == 1:
                 city_id = hits[0]
-                colour_file = resources / 'palettes' / f'{city_id}.json'
-                colours = matching_colours(tu, code, table, read_json(colour_file))
+                rows = city_rows[city_id]
+                info['rmg'] = city_id
+                info['sourceSha256'] = rmg_cities[city_id]['sourceSha256']
+                colours = matching_colours(tu, code, table, rows)
                 if colours:
-                    info.update(rmg=city_id, colors=colours)
+                    info['colors'] = colours
         cu_to_tu = {
             code: tu_codes[label]
             for code, name, _ in cu_regions
             if (label := city_name(name)) in tu_codes and cu_counts[label] == 1
         }
 
-    return {'revision': revision, 'cities': cities, 'cuToTu': cu_to_tu}
+    return {
+        'revision': revision,
+        'cities': cities,
+        'cuToTu': cu_to_tu,
+        'rmgCities': rmg_cities,
+    }
+
+
+def _line_names(row):
+    return {
+        language: value.strip()
+        for language, value in row.get('name', {}).items()
+        if isinstance(value, str) and value.strip()
+    }
 
 
 def main():
@@ -126,7 +179,13 @@ def main():
     else:
         OUTPUT.write_text(content, encoding='utf-8', newline='\n')
     covered = [item['colors'] for item in palette['cities'].values() if 'colors' in item]
-    print(f'{sum(map(len, covered))} line colours across {len(covered)} cities')
+    rmg_lines = sum(
+        len(city['lines']) for city in palette['rmgCities'].values()
+    )
+    print(
+        f'{rmg_lines} RMG line colours across {len(palette["rmgCities"])} cities; '
+        f'{sum(map(len, covered))} selected for {len(covered)} TU cities'
+    )
 
 
 if __name__ == '__main__':
