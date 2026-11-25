@@ -9,6 +9,8 @@
 
 按钮对应手动事件。普通 push 只在 `main` 更新知识库。按钮触发权限及提交附件的规则见 [CNB 手动触发文档](https://docs.cnb.cool/zh/build/web-trigger.html) 与 [CNB 附件插件](https://cnb.cool/cnb/plugins/cnbcool/attachments)。
 
+两个 APK 按钮共用仓库中的 Android 构建环境。CNB 首次使用该 Dockerfile 时会下载 Flutter 和 Android SDK 并构建镜像，之后可复用缓存。升级工具链时，应选用所有文件 UID 和 GID 均在 0–65535 范围内的基础镜像，并在解压 Flutter 时保留 `--no-same-owner`。超出范围会导致 CNB 在签名步骤开始前就无法加载镜像。[Android 构建镜像](../.cnb/android.Dockerfile) · [CNB 构建环境](https://docs.cnb.cool/zh/build/build-env.html) · [CNB 常见问题](https://docs.cnb.cool/zh/faq.html)
+
 ## 开发者签名从哪里读取
 
 「签名并核验 APK」步骤通过 `.cnb.yml` 的 `imports` 直接引用密钥仓库 `TrafArch/taKeystore` 的 `main/androidSigning.yml`。CNB 将以下两个字段注入该步骤。[构建配置](../.cnb.yml) · [签名文件](https://cnb.cool/TrafArch/taKeystore/-/blob/main/androidSigning.yml) · [CNB 密钥仓库说明](https://docs.cnb.cool/zh/repo/secret.html)
