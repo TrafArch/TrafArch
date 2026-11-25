@@ -1,7 +1,7 @@
 workspace:
   launch:
     button:
-      name: 一键启动 1000 万以内最好的云原生平台
+      name: 1000万以内最好的云原生
       description: 啊这个这个这个
 
 npc:
