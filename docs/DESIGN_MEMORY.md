@@ -1,5 +1,7 @@
 # TrafArch 设计偏好与长期记忆
 
+2026-11-25 行程线路标识：用户确认线路标识 SVG 优先，SVG 缺失时才使用线路色号。线路图从 `assets/Line_Icon/<TU城市编码>/` 选择，文件名按 `icons.json` 明确登记；SVG 常规高 24dp，窄屏先让标识换行，大字号最多宽 60dp。SVG 不得依赖 `<style>` 类选择器着色，新增素材须运行 `dev/gallery/normalize_rail_line_svgs.py` 转为内联属性，否则 Flutter 会把未识别的填充色画成黑色。色号使用固定版本离线 RMG Palette 数据并保留 GPL 署名，明确配置色号优先于 RMG 色号。两端分别按已确认的消费城市和线路匹配，因此可同时显示 4 号线与滨海快线；城市或线路证据不足时保留通用徽章。
+
 2026-11-24：恢复最早 Redesign 规范 §4.6 的系统莫奈。默认跟随 Android 壁纸调色板，不可用时回退默认靛蓝，关闭后恢复手动预设；卡片和卡面不参与取色。保留 [Monet Adoptive System](../docx/TrafArch_monet_design.md) 的 OKLCH 自适应画布、六套预设、亮暗色阶和语义角色，停用误识别的旧名称。覆盖下文历史条目中的卡面取色；全局主题仍一次性应用。
 
 2026-11-23（US-008 修复）：知识库编码（code）搜索结果并入二级城市详情页，与线路／站点结果走同一条路径（`GalleryKnowledgeCityView.fromCity` + 预展开目标线路 + `knowledgeCityReveal++`），新增 `GalleryController.knowledgeCityCode` 记录原始匹配值；城市页在命中站点行显示「匹配编码 xxxx」并高亮（编码属线路时高亮线路卡并显示原值）。移除 `GalleryPage.knowledgeStation`、`_knowledgeDetails` 的站点／编码详情渲染及相关导航分支，全仓不再出现站点详情路由（spec §2.1、§7.1、§12）。两级 IA 下「编码详情显示原始匹配值与来源字段」由城市页满足，不新增第三级页面；下文 2026-11-19 等历史条目保持原样。

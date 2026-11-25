@@ -9,6 +9,7 @@ import 'package:transit_card_analyzer/gallery/gallery_app.dart';
 import 'package:transit_card_analyzer/gallery/gallery_controller.dart';
 import 'package:transit_card_analyzer/gallery/gallery_data.dart';
 import 'package:transit_card_analyzer/gallery/gallery_design.dart';
+import 'package:transit_card_analyzer/gallery/gallery_rail_line_catalog.dart';
 import 'package:transit_card_analyzer/gallery/gallery_theme.dart';
 
 import 'support/gallery_scroll.dart';
@@ -28,12 +29,17 @@ void main() {
   });
   tearDown(() => controller.dispose());
 
-  Future<void> mount(WidgetTester tester) async {
+  Future<void> mount(
+    WidgetTester tester, {
+    GalleryRailLineCatalog? railLineCatalog,
+  }) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(412, 892);
     addTearDown(tester.view.reset);
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-    await tester.pumpWidget(GalleryApp(controller: controller));
+    await tester.pumpWidget(
+      GalleryApp(controller: controller, railLineCatalog: railLineCatalog),
+    );
     await tester.pumpAndSettle();
   }
 
@@ -196,6 +202,116 @@ void main() {
     // The card issuer remains Shanghai while the ticket uses Beijing's logo.
     expect(controller.current.city, '上海');
   });
+
+  testWidgets(
+    'rail endpoints use local SVG art and fall back to the pinned line colour',
+    (tester) async {
+      final base = controller.trips.first;
+      controller.trips
+        ..clear()
+        ..add({
+          ...base,
+          'kind': 'rail',
+          'city': '福州',
+          'isCrossCity': false,
+          'entryLine': '4号线',
+          'exitLine': '滨海快线',
+          'entryLineCity': {'system': 'tu', 'code': '3910', 'name': '福州'},
+          'exitLineCity': {'system': 'tu', 'code': '3910', 'name': '福州'},
+        });
+      await mount(
+        tester,
+        railLineCatalog: GalleryRailLineCatalog.fromJson(
+          jsonDecode(File('assets/Line_Icon/icons.json').readAsStringSync())
+              as Map<String, dynamic>,
+          jsonDecode(
+            File('third_party/railmapgen_palette/tu_colors.json')
+                .readAsStringSync(),
+          ) as Map<String, dynamic>,
+        ),
+      );
+
+      for (final (key, asset) in [
+        ('trip-entry-line-badge', 'assets/Line_Icon/3910/3910_Line_4.svg'),
+        ('trip-exit-line-badge', 'assets/Line_Icon/3910/3910_Line_F1.svg'),
+      ]) {
+        final badge = find.byKey(ValueKey(key));
+        final picture = find.descendant(
+          of: badge,
+          matching: find.byType(SvgPicture),
+        );
+        for (
+          var attempt = 0;
+          attempt < 20 && picture.evaluate().isEmpty;
+          attempt++
+        ) {
+          await tester.pump(const Duration(milliseconds: 50));
+        }
+        expect(picture, findsOneWidget);
+        expect(
+          (tester.widget<SvgPicture>(picture).bytesLoader as SvgAssetLoader)
+              .assetName,
+          asset,
+        );
+        final size = tester.getSize(picture);
+        expect(size.height, closeTo(24, .1));
+        expect(size.width / size.height, closeTo(157.6 / 94.2, .01));
+      }
+
+      controller.update(
+        () => controller.trips[0] = {
+          ...controller.trips[0],
+          'city': '上海',
+          'entryLine': '4号线',
+          'exitLine': '4号线',
+          'entryLineCity': {'system': 'tu', 'code': '2900', 'name': '上海'},
+          'exitLineCity': {'system': 'tu', 'code': '2900', 'name': '上海'},
+        },
+      );
+      await tester.pumpAndSettle();
+      final colour = const Color(0xff461d84);
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is DecoratedBox &&
+              (widget.decoration as BoxDecoration).color == colour,
+        ),
+        findsNWidgets(2),
+      );
+      for (final text in tester.widgetList<Text>(find.text('4号线'))) {
+        expect(text.style!.color, Colors.white);
+      }
+
+      controller.update(
+        () => controller.trips[0] = {
+          ...controller.trips[0],
+          'city': '福州',
+          'entryLine': '4号线',
+          'exitLine': '滨海快线',
+          'entryLineCity': {'system': 'tu', 'code': '3910', 'name': '福州'},
+          'exitLineCity': {'system': 'tu', 'code': '3910', 'name': '福州'},
+        },
+      );
+      tester.view.physicalSize = const Size(240, 1000);
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('trip-entry-line-badge')),
+          matching: find.byType(SvgPicture),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('trip-exit-line-badge')),
+          matching: find.byType(SvgPicture),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets(
     'unknown, multi-city and cross-city rail keep the themed fallback and bus stays unchanged',

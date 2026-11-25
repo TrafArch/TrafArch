@@ -1140,7 +1140,14 @@ List<GalleryRecord> _galleryRecords(
   for (final journey in tu.journeys) {
     final first = journey.events.first.payload;
     final infos = [for (final event in journey.events) event.payload.info];
-    records.add(_recordFromPresentation(first, infos: infos, journey: journey));
+    records.add(
+      _recordFromPresentation(
+        first,
+        infos: infos,
+        journey: journey,
+        railCitySystem: 'tu',
+      ),
+    );
   }
   final suica = projectSuicaArchive(history);
   final suicaRecords = <GalleryRecord>[];
@@ -1173,6 +1180,7 @@ List<GalleryRecord> _galleryRecords(
         infos: [for (final event in journey.events) event.payload.info],
         journey: journey.state == JourneyState.completed ? journey : null,
         event: entry.journeyEvent,
+        railCitySystem: 'cu',
       ),
     );
   }
@@ -1222,6 +1230,7 @@ GalleryRecord _recordFromPresentation<T extends Enum>(
   required List<TripEntryInfo> infos,
   JourneyPresentation<TripCardPresentation<T>>? journey,
   JourneyEvent<TripEntryInfo>? event,
+  String? railCitySystem,
 }) {
   final info = entry.info;
   final events = journey?.events ?? const [];
@@ -1281,6 +1290,20 @@ GalleryRecord _recordFromPresentation<T extends Enum>(
           .firstOrNull ??
       '';
   final oneWay = start == null || end == null;
+  final firstEndpoint = start ?? end ?? observed;
+  Map<String, String>? lineCity(JourneyEndpoint? endpoint) {
+    if (railCitySystem == null || endpoint?.line == null) return null;
+    final evidence = journey == null
+        ? event
+        : events
+              .where((side) => identical(side.endpoint, endpoint))
+              .firstOrNull;
+    final code = evidence?.displayCityCode;
+    final name = evidence?.displayCityLabel;
+    if (code == null && name == null) return null;
+    return {'system': railCitySystem, 'code': ?code, 'name': ?name};
+  }
+
   return <String, dynamic>{
     'kind': kind,
     'date': clock.date,
@@ -1291,8 +1314,13 @@ GalleryRecord _recordFromPresentation<T extends Enum>(
       'exitTime': ?clock.exitTime,
       'entryStation': ?entryStation,
       'exitStation': ?exitStation,
-      if (completed || start?.line != null) 'entryLine': start?.line ?? '',
+      if (completed || (kind == 'rail' ? firstEndpoint : start)?.line != null)
+        'entryLine': (kind == 'rail' ? firstEndpoint : start)?.line ?? '',
       if (completed || end?.line != null) 'exitLine': end?.line ?? '',
+      if (kind == 'rail') ...{
+        'entryLineCity': lineCity(firstEndpoint),
+        'exitLineCity': lineCity(end),
+      },
       'oneWay': oneWay,
       'transferKnown': true,
     },

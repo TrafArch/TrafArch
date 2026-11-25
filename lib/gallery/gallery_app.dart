@@ -79,11 +79,13 @@ import 'gallery_preferences.dart';
 import 'gallery_feedback.dart';
 import 'gallery_knowledge_index.dart';
 import 'gallery_motion.dart';
+import 'gallery_rail_line_catalog.dart';
 import 'gallery_spending.dart';
 import 'gallery_archive_spending.dart';
 
 part 'gallery_components.dart';
 part 'gallery_pages.dart';
+part 'gallery_rail_line_badge.dart';
 part 'gallery_inspection.dart';
 part 'gallery_knowledge_search.dart';
 part 'gallery_overlays.dart';
@@ -108,6 +110,7 @@ class GalleryApp extends StatefulWidget {
     this.openWebLink,
     this.openEmail,
     this.preferences,
+    this.railLineCatalog,
     this.loadKnowledgeIndex = GalleryKnowledgeIndex.load,
   }) : assert(liveApp == null || controller == null);
   final GalleryController? controller;
@@ -117,6 +120,7 @@ class GalleryApp extends StatefulWidget {
   final Future<void> Function(Uri)? openWebLink;
   final Future<bool> Function(String)? openEmail;
   final GalleryPreferences? preferences;
+  final GalleryRailLineCatalog? railLineCatalog;
   final Future<GalleryKnowledgeIndex> Function() loadKnowledgeIndex;
 
   @override
@@ -125,6 +129,7 @@ class GalleryApp extends StatefulWidget {
 
 class _GalleryAppState extends State<GalleryApp> {
   late final Future<GalleryController> _ready;
+  late final Future<GalleryRailLineCatalog> _railLineCatalog;
   GalleryController? _owned;
   _GalleryLiveRead? _liveRead;
   late final GalleryPreferences _preferences;
@@ -183,6 +188,9 @@ class _GalleryAppState extends State<GalleryApp> {
   @override
   void initState() {
     super.initState();
+    _railLineCatalog = widget.railLineCatalog == null
+        ? GalleryRailLineCatalog.load(rootBundle)
+        : Future.value(widget.railLineCatalog);
     _systemColorLifecycle = AppLifecycleListener(onResume: _refreshSystemMonet);
     unawaited(_refreshSystemMonet());
     _preferences = widget.preferences ?? GalleryPreferences();
@@ -266,75 +274,87 @@ class _GalleryAppState extends State<GalleryApp> {
           ),
         );
       }
-      return AnimatedBuilder(
-        animation: c,
-        builder: (context, _) {
-          final monetSeed = c.monet ? _systemMonetSeed : null;
-          final home = _GalleryLiveScope(
-            notifier: _liveRead,
-            child: _GalleryNavigator(
-              key: ValueKey(c.generation),
-              controller: c,
-              preferences: _preferences,
-              loadKnowledge: _loadKnowledge,
-              onDisableBeta: widget.onDisableBeta,
-              openWebLink: widget.openWebLink,
-              openEmail: widget.openEmail,
-            ),
-          );
-          final updates = widget.liveApp?.updates;
-          final claimStartupUpdate = widget.claimStartupUpdatePrompt;
-          return MaterialApp(
-            title: 'TrafArch',
-            debugShowCheckedModeBanner: false,
-            locale: const Locale('zh', 'CN'),
-            supportedLocales: const [Locale('zh', 'CN'), Locale('en')],
-            localizationsDelegates: GlobalMaterialLocalizations.delegates,
-            themeMode: c.themeMode,
-            // Switching brightness repaints the whole 2.x tree. Material's
-            // animated theme cross-fade rebuilds every themed widget on each
-            // frame, which is what dropped frames in settings; apply the new
-            // semantic colours in one frame instead. Layout, state, scroll
-            // offsets and inputs are untouched, and reduce-motion users see
-            // the same instant result.
-            themeAnimationDuration: Duration.zero,
-            themeAnimationCurve: GalleryMotion.standard,
-            theme: _appearance.theme(c, false, monetSeed),
-            darkTheme: _appearance.theme(c, true, monetSeed),
-            builder: (context, child) {
-              final tokens = Theme.of(context).extension<GalleryTokens>()!;
-              return AnnotatedRegion<SystemUiOverlayStyle>(
-                value:
-                    (tokens.dark
-                            ? SystemUiOverlayStyle.light
-                            : SystemUiOverlayStyle.dark)
-                        .copyWith(
-                          statusBarColor: Colors.transparent,
-                          systemNavigationBarColor: c.docked && c.isMainPage
-                              ? tokens.dockedNavigationSurface
-                              : tokens.canvas,
-                          systemNavigationBarDividerColor: Colors.transparent,
-                        ),
-                child: ColoredBox(
-                  color: tokens.canvas,
-                  child: GalleryWindow(
-                    child: GalleryFeedbackHost(
-                      key: ValueKey(c.generation),
-                      mainPage: c.isMainPage,
-                      docked: c.docked,
-                      child: child!,
-                    ),
+      return FutureBuilder<GalleryRailLineCatalog>(
+        future: _railLineCatalog,
+        builder: (context, railSnapshot) {
+          final railCatalog = railSnapshot.data;
+          return _GalleryRailLineCatalogScope(
+            catalog: railCatalog ?? GalleryRailLineCatalog.empty(),
+            child: AnimatedBuilder(
+              animation: c,
+              builder: (context, _) {
+                final monetSeed = c.monet ? _systemMonetSeed : null;
+                final home = _GalleryLiveScope(
+                  notifier: _liveRead,
+                  child: _GalleryNavigator(
+                    key: ValueKey(c.generation),
+                    controller: c,
+                    preferences: _preferences,
+                    loadKnowledge: _loadKnowledge,
+                    onDisableBeta: widget.onDisableBeta,
+                    openWebLink: widget.openWebLink,
+                    openEmail: widget.openEmail,
                   ),
-                ),
-              );
-            },
-            home: updates != null && claimStartupUpdate != null
-                ? UpdatePrompt(
-                    service: updates,
-                    shouldShow: claimStartupUpdate,
-                    child: home,
-                  )
-                : home,
+                );
+                final updates = widget.liveApp?.updates;
+                final claimStartupUpdate = widget.claimStartupUpdatePrompt;
+                return MaterialApp(
+                  title: 'TrafArch',
+                  debugShowCheckedModeBanner: false,
+                  locale: const Locale('zh', 'CN'),
+                  supportedLocales: const [Locale('zh', 'CN'), Locale('en')],
+                  localizationsDelegates: GlobalMaterialLocalizations.delegates,
+                  themeMode: c.themeMode,
+                  // Switching brightness repaints the whole 2.x tree. Material's
+                  // animated theme cross-fade rebuilds every themed widget on each
+                  // frame, which is what dropped frames in settings; apply the new
+                  // semantic colours in one frame instead. Layout, state, scroll
+                  // offsets and inputs are untouched, and reduce-motion users see
+                  // the same instant result.
+                  themeAnimationDuration: Duration.zero,
+                  themeAnimationCurve: GalleryMotion.standard,
+                  theme: _appearance.theme(c, false, monetSeed),
+                  darkTheme: _appearance.theme(c, true, monetSeed),
+                  builder: (context, child) {
+                    final tokens = Theme.of(context)
+                        .extension<GalleryTokens>()!;
+                    return AnnotatedRegion<SystemUiOverlayStyle>(
+                      value:
+                          (tokens.dark
+                                  ? SystemUiOverlayStyle.light
+                                  : SystemUiOverlayStyle.dark)
+                              .copyWith(
+                                statusBarColor: Colors.transparent,
+                                systemNavigationBarColor:
+                                    c.docked && c.isMainPage
+                                    ? tokens.dockedNavigationSurface
+                                    : tokens.canvas,
+                                systemNavigationBarDividerColor:
+                                    Colors.transparent,
+                              ),
+                      child: ColoredBox(
+                        color: tokens.canvas,
+                        child: GalleryWindow(
+                          child: GalleryFeedbackHost(
+                            key: ValueKey(c.generation),
+                            mainPage: c.isMainPage,
+                            docked: c.docked,
+                            child: child!,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                  home: updates != null && claimStartupUpdate != null
+                      ? UpdatePrompt(
+                          service: updates,
+                          shouldShow: claimStartupUpdate,
+                          child: home,
+                        )
+                      : home,
+                );
+              },
+            ),
           );
         },
       );
@@ -849,8 +869,8 @@ class _GalleryViewState extends State<_GalleryView> {
         listKey: key,
         positionId: positionId,
         padding: padding,
-        children: children,
         leadingSliver: leadingSliver,
+        children: children,
       );
     }
     return ListView(key: key, padding: padding, children: children);
