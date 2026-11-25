@@ -168,9 +168,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(c.overlay, isNull);
     await openSettingsRow(tester, '导入卡片记录');
-    expect(find.text('选择导入来源'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('import-source-archive')));
     await tester.pumpAndSettle();
+    expect(find.text('选择导入来源'), findsNothing);
+    expect(find.textContaining('读卡识途'), findsNothing);
     expect(c.overlay, GalleryOverlay.importPreview);
     expect(find.text('导入预览'), findsOneWidget);
     expect(find.textContaining('识别到 1 张卡片记录'), findsOneWidget);

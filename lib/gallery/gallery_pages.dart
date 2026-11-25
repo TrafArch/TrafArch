@@ -1321,7 +1321,9 @@ extension _GalleryPages on _GalleryViewState {
             const Divider(),
             _settingRow(
               '导入卡片记录',
-              () => unawaited(_selectImportSource(live)),
+              () => unawaited(
+                live == null ? _importCardRecords() : _importLiveArchive(live),
+              ),
               subtitle: live == null
                   ? '选择备份文件预览内容，不修改当前样例'
                   : '先预览字段或备份，确认后写入本机档案',
@@ -1600,53 +1602,6 @@ extension _GalleryPages on _GalleryViewState {
     ]);
   }
 
-  /// 先选择导入来源，再走各来源自己的流程；取消或遮罩关闭不产生任何副作用。
-  Future<void> _selectImportSource(_GalleryLiveRead? live) async {
-    final source = await showDialog<_ImportSource>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('选择导入来源'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              key: const ValueKey('import-source-archive'),
-              contentPadding: EdgeInsets.zero,
-              title: const Text('TrafArch 数据'),
-              subtitle: Text(
-                live == null ? '选择备份文件预览内容，不修改当前样例' : '先预览字段或备份，确认后写入本机档案',
-              ),
-              onTap: () => Navigator.pop(context, _ImportSource.archive),
-            ),
-            ListTile(
-              key: const ValueKey('import-source-trip-reader'),
-              contentPadding: EdgeInsets.zero,
-              title: const Text('从读卡识途数据导入'),
-              subtitle: const Text('正在开发中，敬请期待'),
-              onTap: () => Navigator.pop(context, _ImportSource.tripReader),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-        ],
-      ),
-    );
-    if (!mounted || source == null) return;
-    if (source == _ImportSource.tripReader) {
-      _toast('正在开发中，敬请期待', type: GalleryFeedbackType.info);
-      return;
-    }
-    if (live == null) {
-      await _importCardRecords();
-    } else {
-      await _importLiveArchive(live);
-    }
-  }
-
   Future<void> _importLiveArchive(_GalleryLiveRead live) async {
     try {
       final preview = await live.app.archiveTransfer.pickImport();
@@ -1905,6 +1860,3 @@ String _tripClock(String value) => value.replaceFirstMapped(
   RegExp(r'(\d{1,2}:\d{2}):\d{2}(?:\.\d+)?'),
   (match) => match[1]!,
 );
-
-/// 「导入卡片记录」的来源选项。读卡识途来源目前只提示开发中，不触发导入。
-enum _ImportSource { archive, tripReader }

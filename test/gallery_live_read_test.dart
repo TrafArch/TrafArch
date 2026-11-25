@@ -1171,17 +1171,11 @@ void main() {
       scrollable: galleryVerticalScroll(),
     );
 
-    /// 「导入卡片记录」先弹来源选择：选 TrafArch 数据才进入文件预览。
-    Future<void> openImportSource() async {
+    Future<void> preview() async {
       await tester.tap(importRow);
       await _settleIo(tester);
-      expect(find.text('选择导入来源'), findsOneWidget);
-    }
-
-    Future<void> preview() async {
-      await openImportSource();
-      await tester.tap(find.byKey(const ValueKey('import-source-archive')));
-      await _settleIo(tester);
+      expect(find.text('选择导入来源'), findsNothing);
+      expect(find.textContaining('读卡识途'), findsNothing);
       expect(find.text('导入卡片 JSON'), findsOneWidget);
     }
 
@@ -1189,19 +1183,6 @@ void main() {
     expect(fixture.documents.opens, 1);
     await tester.tap(find.widgetWithText(TextButton, '取消'));
     await _settleIo(tester);
-    expect(await tester.runAsync(app.cardRepository.getAllCards), isEmpty);
-    // 读卡识途来源在 live 模式下只提示开发中，不得触发任何文件选择。
-    await openImportSource();
-    final opensBeforeTripReader = fixture.documents.opens;
-    await tester.tap(find.byKey(const ValueKey('import-source-trip-reader')));
-    await _settleIo(tester);
-    expect(find.text('选择导入来源'), findsNothing);
-    expect(find.text('正在开发中，敬请期待'), findsOneWidget);
-    expect(
-      fixture.documents.opens,
-      opensBeforeTripReader,
-      reason: '读卡识途来源不得调用 pickImport',
-    );
     expect(await tester.runAsync(app.cardRepository.getAllCards), isEmpty);
     await preview();
     await tester.tap(find.widgetWithText(FilledButton, '导入'));

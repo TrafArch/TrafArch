@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/features/archive/application/trip_reader_import.dart';
 import 'package:transit_card_analyzer/gallery/gallery_app.dart';
 import 'package:transit_card_analyzer/gallery/gallery_controller.dart';
 import 'package:transit_card_analyzer/gallery/gallery_data.dart';
@@ -79,13 +78,6 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  Future<void> openImportSourceDialog(WidgetTester tester) async {
-    await reveal(tester, '导入卡片记录');
-    await tester.tap(find.text('导入卡片记录'));
-    await tester.pumpAndSettle();
-    expect(find.text('选择导入来源'), findsOneWidget);
-  }
-
   testWidgets('外观区标题为界面与外观并包含受控的震动开关', (tester) async {
     final haptics = interceptHaptics(tester);
     await mount(tester, page: GalleryPage.settings);
@@ -146,110 +138,7 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('导入弹窗展示两个来源，读卡识途只提示开发中且不导入', (tester) async {
-    interceptHaptics(tester);
-    var archiveCalls = 0;
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-      _archiveChannel,
-      (call) async {
-        archiveCalls++;
-        return null;
-      },
-    );
-    addTearDown(
-      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-        _archiveChannel,
-        null,
-      ),
-    );
-    await mount(tester, page: GalleryPage.settings);
-    await openImportSourceDialog(tester);
-
-    expect(find.text('TrafArch 数据'), findsOneWidget);
-    expect(find.text('从读卡识途数据导入'), findsOneWidget);
-    expect(find.text('正在开发中，敬请期待'), findsOneWidget);
-    expect(find.text('取消'), findsOneWidget);
-
-    await tester.tap(find.byKey(const ValueKey('import-source-trip-reader')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('选择导入来源'), findsNothing);
-    expect(c.overlay, isNull);
-    expect(archiveCalls, 0, reason: '读卡识途选项不得触发任何真实导入');
-    expect(find.text('正在开发中，敬请期待'), findsOneWidget);
-
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
-
-  testWidgets('取消导入来源弹窗不产生副作用', (tester) async {
-    interceptHaptics(tester);
-    var archiveCalls = 0;
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-      _archiveChannel,
-      (call) async {
-        archiveCalls++;
-        return null;
-      },
-    );
-    addTearDown(
-      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-        _archiveChannel,
-        null,
-      ),
-    );
-    await mount(tester, page: GalleryPage.settings);
-    await openImportSourceDialog(tester);
-
-    await tester.tap(find.text('取消'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('选择导入来源'), findsNothing);
-    expect(c.overlay, isNull);
-    expect(c.page, GalleryPage.settings);
-    expect(archiveCalls, 0);
-    expect(find.text('正在开发中，敬请期待'), findsNothing);
-    expect(tester.takeException(), isNull);
-
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
-
-  testWidgets('点遮罩关闭导入来源弹窗不产生副作用', (tester) async {
-    interceptHaptics(tester);
-    var archiveCalls = 0;
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-      _archiveChannel,
-      (call) async {
-        archiveCalls++;
-        return null;
-      },
-    );
-    addTearDown(
-      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-        _archiveChannel,
-        null,
-      ),
-    );
-    await mount(tester, page: GalleryPage.settings);
-    await openImportSourceDialog(tester);
-    final overlayBefore = c.overlay;
-
-    // 弹窗是 showDialog 的 barrierDismissible 默认值，点弹窗外的遮罩即取消。
-    await tester.tapAt(const Offset(8, 8));
-    await tester.pumpAndSettle();
-
-    expect(find.text('选择导入来源'), findsNothing);
-    expect(c.overlay, overlayBefore);
-    expect(c.overlay, isNull);
-    expect(c.page, GalleryPage.settings);
-    expect(archiveCalls, 0, reason: '遮罩关闭不得触发导入');
-    expect(find.text('正在开发中，敬请期待'), findsNothing);
-    expect(find.text('导入卡片 JSON'), findsNothing);
-    expect(tester.takeException(), isNull);
-
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
-
-  testWidgets('样例导入预览只显示文件信息，不回显 NFC 帧 JSON', (tester) async {
+  testWidgets('样例导入直接预览文件信息，不回显 NFC 帧 JSON', (tester) async {
     final backup = jsonEncode({
       'cards': [
         {
@@ -277,11 +166,12 @@ void main() {
       ),
     );
     await mount(tester, page: GalleryPage.settings);
-    await openImportSourceDialog(tester);
-
-    await tester.tap(find.byKey(const ValueKey('import-source-archive')));
+    await reveal(tester, '导入卡片记录');
+    await tester.tap(find.text('导入卡片记录'));
     await tester.pumpAndSettle();
 
+    expect(find.text('选择导入来源'), findsNothing);
+    expect(find.textContaining('读卡识途'), findsNothing);
     expect(c.overlay, GalleryOverlay.importPreview);
     expect(find.text('导入预览'), findsOneWidget);
     expect(find.textContaining('识别到 1 张卡片记录'), findsOneWidget);
@@ -290,25 +180,5 @@ void main() {
     expect(find.textContaining('imported-session'), findsNothing);
 
     await tester.pumpWidget(const SizedBox.shrink());
-  });
-
-  test('读卡识途导入占位实现明确返回开发中', () async {
-    const service = UnavailableTripReaderImportService();
-    await expectLater(
-      service.pickImport(),
-      throwsA(isA<TripReaderImportUnavailable>()),
-    );
-    await expectLater(
-      service.confirmImport(
-        const TripReaderImportPreview(name: 'demo', summary: 'demo'),
-      ),
-      throwsA(
-        isA<TripReaderImportUnavailable>().having(
-          (error) => '$error',
-          'toString',
-          contains('正在开发中，敬请期待'),
-        ),
-      ),
-    );
   });
 }
