@@ -6,7 +6,6 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/material.dart';
 
 import 'gallery_data.dart';
-import 'gallery_design.dart';
 import 'gallery_knowledge_index.dart';
 
 abstract interface class GalleryLiveAdapter {
@@ -18,6 +17,7 @@ abstract interface class GalleryLiveAdapter {
   Future<void> setIncludeOverdraft(bool value);
   Future<void> setLogs(bool value);
   Future<void> setHaptic(bool value);
+  Future<void> setMonet(bool value);
 }
 
 enum GalleryPage {
@@ -114,7 +114,6 @@ class GalleryFaceCropSession {
     required this.cardId,
     required this.image,
     required this.sourceSize,
-    this.seed,
     this.detail = const GalleryFaceCrop(),
     this.list = const GalleryFaceCrop(),
     this.editing = true,
@@ -124,9 +123,6 @@ class GalleryFaceCropSession {
   final Uint8List image;
   final Size sourceSize;
 
-  /// Seed sampled when the photo was chosen; the crop rectangle does not change
-  /// it, so the theme can switch once when 完成 commits the image.
-  final Color? seed;
   GalleryFaceCrop detail;
   GalleryFaceCrop list;
   bool editing;
@@ -226,12 +222,6 @@ class GalleryController extends ChangeNotifier {
   GalleryCard get selectedCard =>
       cards.firstWhere((c) => c.id == selectedCardId, orElse: () => current);
 
-  /// Monet follows the card currently shown on the home page (spec §5.2).
-  /// Preset gradient faces derive a seed immediately; a custom photo uses the
-  /// seed extracted when the crop is committed.
-  Color get themeSeed =>
-      current.monetSeed ?? GalleryCardFace.byId(current.face).seed;
-  bool get hasCardSeed => current.image == null || current.monetSeed != null;
   List<GalleryCard> get savedCards => cards.where((c) => c.saved).toList();
   List<GalleryScene> get visibleScenes => data.scenes
       .where((scene) => scene.query['screen'] != 'footprints')
@@ -341,14 +331,12 @@ class GalleryController extends ChangeNotifier {
   void beginFaceCrop(
     String cardId,
     Uint8List image,
-    Size sourceSize, {
-    Color? seed,
-  }) {
+    Size sourceSize,
+  ) {
     faceCrop = GalleryFaceCropSession(
       cardId: cardId,
       image: image,
       sourceSize: sourceSize,
-      seed: seed,
     );
     record('选择卡面图片');
     notifyListeners();
@@ -706,6 +694,14 @@ class GalleryController extends ChangeNotifier {
       return;
     }
     update(() => hapticEnabled = value, '修改触感反馈');
+  }
+
+  void setMonet(bool value) {
+    if (live != null) {
+      unawaited(live!.setMonet(value));
+      return;
+    }
+    update(() => monet = value);
   }
 
   void export({bool all = false, bool log = false}) {

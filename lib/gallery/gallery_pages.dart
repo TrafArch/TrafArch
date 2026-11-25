@@ -55,6 +55,7 @@ extension _GalleryPages on _GalleryViewState {
                   compact: _compactHeight,
                   nfcMessage: nfcMessage,
                   failureMessage: live?.error,
+                  progress: live?.readProgress,
                 )
               : _face(card),
         ),
@@ -269,7 +270,7 @@ extension _GalleryPages on _GalleryViewState {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 sliver: SliverPersistentHeader(
                   pinned: true,
-                  delegate: _TripsSummaryDelegate(
+                  delegate: _GalleryCollapsingHeaderDelegate(
                     expandedHeight: _reduceMotion
                         ? compactHeight
                         : math.max(expandedHeight, compactHeight),
@@ -500,62 +501,90 @@ extension _GalleryPages on _GalleryViewState {
         (rail
             ? (trip['title'] as String).replaceFirst('地铁 ', '')
             : (trip['title'] as String).replaceFirst('公交 ', ''));
-    final exitLine = trip['exitLine'] as String? ?? entryLine;
+    final exitLine =
+        trip['exitLine'] as String? ??
+        (rail && trip['isCrossCity'] == true ? '' : entryLine);
     final city = trip['city'] as String? ?? '';
-    Widget lineBadge(String line) {
-      final redLine =
-          rail && city == '上海' && RegExp(r'^1\s*号线$').hasMatch(line);
+    Widget lineBadge(String line, {required bool isEntry}) {
+      if (rail) {
+        final key = isEntry ? 'entryLineCity' : 'exitLineCity';
+        final location = trip[key];
+        return _GalleryRailLineBadge(
+          key: ValueKey(
+            isEntry ? 'trip-entry-line-badge' : 'trip-exit-line-badge',
+          ),
+          line: line,
+          cityCode: location is Map ? location['code'] as String? : null,
+          citySystem: location is Map ? location['system'] as String? : null,
+          cityName: location is Map
+              ? location['name'] as String?
+              : !trip.containsKey(key) && trip['isCrossCity'] != true
+              ? city
+              : null,
+        );
+      }
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         decoration: BoxDecoration(
-          color: redLine
-              ? t.shanghaiLineOne
-              : rail
-              ? t.tripBadgeRail
-              : t.tripBadgeBus,
+          color: t.tripBadgeBus,
           borderRadius: BorderRadius.circular(8),
         ),
         child: _text(
           line,
           role: GalleryJourneyTypography.line,
-          color: redLine
-              ? t.onShanghaiLineOne
-              : rail
-              ? t.tripBadgeOnRail
-              : t.tripBadgeOnBus,
+          color: t.tripBadgeOnBus,
         ),
       );
     }
 
-    Widget endpoint(String phase, String line, String time, String station) =>
-        Semantics(
-          label: phase,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+    Widget endpoint(
+      String line,
+      String time,
+      String station, {
+      required bool isEntry,
+    }) {
+      final clock = _text(
+        _tripClock(time),
+        role: GalleryJourneyTypography.time,
+        lines: 1,
+      );
+      final badge = line.trim().isEmpty
+          ? null
+          : lineBadge(line, isEntry: isEntry);
+      return Semantics(
+        label: rail ? (isEntry ? '进站' : '出站') : (isEntry ? '上车' : '下车'),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (rail)
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  FittedBox(fit: BoxFit.scaleDown, child: clock),
+                  ?badge,
+                ],
+              )
+            else
               FittedBox(
                 fit: BoxFit.scaleDown,
                 alignment: Alignment.centerLeft,
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _text(
-                      _tripClock(time),
-                      role: GalleryJourneyTypography.time,
-                      lines: 1,
-                    ),
-                    if (line.isNotEmpty) ...[
-                      const SizedBox(width: 8),
-                      lineBadge(line),
-                    ],
+                    clock,
+                    if (badge != null) ...[const SizedBox(width: 8), badge],
                   ],
                 ),
               ),
-              _gap(6),
-              _text(station, role: GalleryJourneyTypography.station),
-            ],
-          ),
-        );
+            _gap(6),
+            _text(station, role: GalleryJourneyTypography.station),
+          ],
+        ),
+      );
+    }
+
     final body = Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: event
@@ -653,7 +682,7 @@ extension _GalleryPages on _GalleryViewState {
                 oneWay
                     ? Wrap(
                         key: const ValueKey('trip-one-way'),
-                        spacing: 10,
+                        spacing: rail ? 8 : 10,
                         runSpacing: 6,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
@@ -665,7 +694,8 @@ extension _GalleryPages on _GalleryViewState {
                               lines: 1,
                             ),
                           ),
-                          if (entryLine.isNotEmpty) lineBadge(entryLine),
+                          if (entryLine.trim().isNotEmpty)
+                            lineBadge(entryLine, isEntry: true),
                           _text(entry, role: GalleryJourneyTypography.station),
                         ],
                       )
@@ -675,10 +705,10 @@ extension _GalleryPages on _GalleryViewState {
                         children: [
                           Expanded(
                             child: endpoint(
-                              rail ? '进站' : '上车',
                               entryLine,
                               boarding,
                               entry,
+                              isEntry: true,
                             ),
                           ),
                           Padding(
@@ -701,10 +731,10 @@ extension _GalleryPages on _GalleryViewState {
                           ),
                           Expanded(
                             child: endpoint(
-                              rail ? '出站' : '下车',
                               exitLine,
                               trip['time'] as String? ?? '未记录',
                               exit,
+                              isEntry: false,
                             ),
                           ),
                         ],
@@ -897,7 +927,7 @@ extension _GalleryPages on _GalleryViewState {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 sliver: SliverPersistentHeader(
                   pinned: true,
-                  delegate: _TripsSummaryDelegate(
+                  delegate: _GalleryCollapsingHeaderDelegate(
                     expandedHeight: _reduceMotion
                         ? compactHeight
                         : math.max(expandedHeight, compactHeight),
@@ -1335,11 +1365,11 @@ extension _GalleryPages on _GalleryViewState {
             _switch(
               '莫奈取色',
               c.monet,
-              (value) => c.update(() => c.monet = value),
+              c.setMonet,
               subtitle: c.monet
                   ? (t.dynamic
-                        ? '跟随当前首页卡片的取色生成界面，更换卡面后自动更新'
-                        : '当前卡片暂无有效取色，使用${GalleryPalette.byId(c.palette).name}配色')
+                        ? '跟随 Android 系统动态配色'
+                        : '系统动态配色不可用，使用默认靛蓝')
                   : '使用手动选择的主题配色',
             ),
             _collapse(
@@ -1413,9 +1443,6 @@ extension _GalleryPages on _GalleryViewState {
               '预测性返回手势',
               _preferences.enabled,
               _preferences.setEnabled,
-              subtitle: _preferences.loading
-                  ? '正在读取偏好…'
-                  : '手势返回时预览上一页，松手返回或取消；支持的 Android 系统生效',
             ),
             _collapse(
               _preferences.error != null,
@@ -1841,8 +1868,8 @@ extension _GalleryPages on _GalleryViewState {
   }
 }
 
-class _TripsSummaryDelegate extends SliverPersistentHeaderDelegate {
-  _TripsSummaryDelegate({
+class _GalleryCollapsingHeaderDelegate extends SliverPersistentHeaderDelegate {
+  _GalleryCollapsingHeaderDelegate({
     required this.expandedHeight,
     required this.compactHeight,
     required this.builder,
@@ -1870,7 +1897,7 @@ class _TripsSummaryDelegate extends SliverPersistentHeaderDelegate {
   }
 
   @override
-  bool shouldRebuild(_TripsSummaryDelegate oldDelegate) => true;
+  bool shouldRebuild(_GalleryCollapsingHeaderDelegate oldDelegate) => true;
 }
 
 /// Journey rows read as clock times; seconds only widen the row and add noise.

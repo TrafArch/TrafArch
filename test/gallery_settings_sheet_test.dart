@@ -267,6 +267,16 @@ void main() {
       scrollable: scrollable,
     );
     expect(find.text('DearVa'), findsOneWidget);
+    final dearVaRow = find
+        .ancestor(of: find.text('DearVa'), matching: find.byType(Row))
+        .first;
+    final dearVaAvatar = tester.widget<Image>(
+      find.descendant(of: dearVaRow, matching: find.byType(Image)),
+    );
+    expect(
+      (dearVaAvatar.image as AssetImage).assetName,
+      'assets/contributors/dearva-profile.jpg',
+    );
     expect(find.text('全栈开发者，为2.0界面设计提供大量帮助'), findsOneWidget);
     await tester.tap(find.byTooltip('关闭'));
     await tester.pumpAndSettle();

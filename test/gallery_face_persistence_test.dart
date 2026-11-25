@@ -21,7 +21,7 @@ class _MemoryFaceStore implements GalleryFaceStore {
 }
 
 void main() {
-  test('restores a card image with crop geometry and Monet seed', () async {
+  test('restores, replaces and clears card images with crop geometry', () async {
     final store = _MemoryFaceStore();
     final first = GalleryPreferences(faceStore: store);
     final card = GalleryCard.live(
@@ -53,7 +53,6 @@ void main() {
       offsetX: -.3,
       offsetY: .2,
     );
-    card.monetSeed = const Color(0xff123456);
     await first.saveFaceImage(card);
     first.dispose();
 
@@ -101,14 +100,22 @@ void main() {
     expect(restored.listCrop.scale, 2.1);
     expect(restored.listCrop.offsetX, -.3);
     expect(restored.listCrop.offsetY, .2);
-    expect(restored.monetSeed, const Color(0xff123456));
     expect(
       other.image,
       isNull,
       reason: 'image must remain associated by card id',
     );
 
+    restored.image = Uint8List.fromList([5, 6, 7, 8]);
+    await nextLaunch.saveFaceImage(restored);
+    final projected = GalleryCard.preview(restored)..image = null;
+    await nextLaunch.restoreFaceImages([projected]);
+    expect(projected.image, [5, 6, 7, 8]);
+
     await nextLaunch.clearFaceImage('card-a');
+    projected.image = null;
+    await nextLaunch.restoreFaceImages([projected]);
+    expect(projected.image, isNull);
     expect(await store.read('card-a'), isNull);
     expect(await store.read('card-b'), isNull);
     nextLaunch.dispose();

@@ -302,11 +302,38 @@ void main() {
     final city = controller.selectedKnowledgeCity!;
     final lineIndex = city.lines.indexWhere((line) => line.name == '1号线');
     expect(lineIndex, greaterThanOrEqualTo(0));
-    expect(find.text(city.name), findsWidgets);
+    // 定位滚动后吸顶头已收合（与首页一致）：城市名淡出，搜索条顶进标题栏
+    // 且仍可点。
+    expect(
+      find.byKey(const ValueKey('knowledge-city-search-position')),
+      findsOneWidget,
+    );
+    expect(find.text(city.name), findsNothing);
+    expect(
+      find.byKey(const ValueKey('knowledge-search-entry')).hitTestable(),
+      findsOneWidget,
+    );
     expect(stationRowOf(city.system, lineIndex, 0), findsOneWidget);
     expect(
       stationRowOf(city.system, lineIndex, 0).hitTestable(),
       findsOneWidget,
+    );
+    // 定位让出了吸顶头的收合高度：目标线路卡不被标题栏压住。
+    expect(
+      tester
+          .getTopLeft(
+            find.byKey(
+              ValueKey('knowledge-city-line-${city.system}:$lineIndex'),
+            ),
+          )
+          .dy,
+      greaterThan(
+        tester
+            .getRect(
+              find.byKey(const ValueKey('knowledge-city-search-position')),
+            )
+            .bottom,
+      ),
     );
     // 其它线路保持收起：搜索定位不应把所有卡片一起展开。
     final other = lineIndex == 0 ? 1 : 0;

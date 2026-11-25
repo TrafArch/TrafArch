@@ -237,19 +237,12 @@ class _FaceCropRegionState extends State<_FaceCropRegion> {
           ),
         ),
         const SizedBox(height: 4),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                '拖动图片 · 双指缩放',
-                style: GalleryTypography.caption.copyWith(color: t.muted),
-              ),
-            ),
-            TextButton(
-              onPressed: () => widget.onChanged(const GalleryFaceCrop()),
-              child: const Text('恢复默认'),
-            ),
-          ],
+        Align(
+          alignment: AlignmentDirectional.centerEnd,
+          child: TextButton(
+            onPressed: () => widget.onChanged(const GalleryFaceCrop()),
+            child: const Text('恢复默认'),
+          ),
         ),
       ],
     );
@@ -329,6 +322,9 @@ extension _GalleryFaceCropper on _GalleryViewState {
           alignment: Alignment.bottomCenter,
           child: SafeArea(
             top: true,
+            // 半模态表面直达屏幕物理底部，系统导航栏区域由表面自身填充；
+            // 手势区由 Material 内层的 SafeArea 让给内容，同通用弹层路径。
+            bottom: false,
             child: Padding(
               padding: EdgeInsets.fromLTRB(0, gap, 0, 0),
               child: ConstrainedBox(
@@ -368,6 +364,7 @@ extension _GalleryFaceCropper on _GalleryViewState {
                             boxShadow: t.shadows(GalleryElevation.modal),
                           ),
                           child: Material(
+                            key: const ValueKey('gallery-face-surface'),
                             color: t.raised,
                             shape: RoundedRectangleBorder(
                               side: BorderSide(color: t.line),
@@ -376,13 +373,18 @@ extension _GalleryFaceCropper on _GalleryViewState {
                               ),
                             ),
                             clipBehavior: Clip.antiAlias,
-                            child: AnimatedSize(
-                              duration: _reduceMotion
-                                  ? Duration.zero
-                                  : _GalleryMotion.sheet,
-                              curve: _GalleryMotion.curve,
-                              alignment: Alignment.topCenter,
-                              child: content,
+                            child: SafeArea(
+                              top: false,
+                              left: false,
+                              right: false,
+                              child: AnimatedSize(
+                                duration: _reduceMotion
+                                    ? Duration.zero
+                                    : _GalleryMotion.sheet,
+                                curve: _GalleryMotion.curve,
+                                alignment: Alignment.topCenter,
+                                child: content,
+                              ),
                             ),
                           ),
                         ),
@@ -443,20 +445,6 @@ extension _GalleryFaceCropper on _GalleryViewState {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _text(
-                  '分别调整图片在两个页面中的显示范围',
-                  role: GalleryTypography.caption,
-                  color: t.muted,
-                ),
-                if (session.sourceSize.width < 600) ...[
-                  _gap(6),
-                  _text(
-                    '图片分辨率较低，放大后可能不够清晰',
-                    role: GalleryTypography.caption,
-                    color: t.warn,
-                  ),
-                ],
-                _gap(16),
                 LayoutBuilder(
                   builder: (context, box) {
                     final layout = _DetailCardLayout(
@@ -520,8 +508,7 @@ extension _GalleryFaceCropper on _GalleryViewState {
   }
 
   /// The outer sheet's 完成 is the only place that commits the image and both
-  /// crop parameter sets onto the card (spec 2.4 §8.2). The Monet seed was
-  /// sampled when the photo was chosen, so the theme switches once, here.
+  /// crop parameter sets onto the card (spec 2.4 §8.2).
   void _commitFaceSheet(GalleryFaceCropSession? session) {
     if (session != null) {
       final card = c.cards.firstWhere(
@@ -533,7 +520,6 @@ extension _GalleryFaceCropper on _GalleryViewState {
         card.imageSize = session.sourceSize;
         card.detailCrop = session.detail;
         card.listCrop = session.list;
-        if (session.seed != null) card.monetSeed = session.seed;
         c.faceCrop = null;
       }, '保存卡面图片');
       unawaited(
@@ -672,11 +658,11 @@ extension _GalleryFaceCropper on _GalleryViewState {
                           children: [
                             _text(
                               card.name,
-                              // 与首页 face-title 一致（spec 2.x 卡包卡名对齐）：
-                              // 20sp / 26 行高，w600 与颜色逻辑沿用 card 角色。
+                              // 卡包列表卡名 18sp / 24 行高：比首页 face-title（24sp）
+                              // 和旧版 20sp 更克制，w600 与颜色逻辑沿用 card 角色。
                               role: GalleryTypography.card,
-                              size: 20,
-                              height: 26 / 20,
+                              size: 18,
+                              height: 24 / 18,
                               color: _walletForeground(card),
                             ),
                             _gap(4),

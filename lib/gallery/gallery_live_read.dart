@@ -126,6 +126,13 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
 
   bool get busy => _attempt != null || (app.scanning && !app.nfcReleaseFailed);
   bool get closing => _closing;
+
+  /// Reader percentage (0–100) of the attempt in flight, or null while the tag
+  /// is still being discovered. A progress-only notification ends in
+  /// [notifyListeners] without touching the projection: [_appChanged] rebuilds
+  /// the read stage through [_syncController], which returns [_current]
+  /// unchanged while [busy], so the prompt repaints without a card reprojection.
+  int? get readProgress => app.readProgress;
   bool get hasCurrent => _current != null && !app.nfcReleaseFailed;
   bool get hasFreshCurrent =>
       _freshCurrent && _current != null && !app.nfcReleaseFailed;
@@ -242,6 +249,10 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
     }
     if (navigation.hapticEnabled != app.hapticEnabled) {
       navigation.hapticEnabled = app.hapticEnabled;
+      changed = true;
+    }
+    if (navigation.monet != app.monetEnabled) {
+      navigation.monet = app.monetEnabled;
       changed = true;
     }
     final readState = _error != null || app.nfcReleaseFailed
@@ -633,6 +644,9 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
     _syncController();
     await write;
   }
+
+  @override
+  Future<void> setMonet(bool value) => app.setMonetEnabled(value);
 
   Future<bool> openQr() async {
     if (_disposed || openingQr || app.qrAcquiring) return true;
@@ -1126,7 +1140,14 @@ List<GalleryRecord> _galleryRecords(
   for (final journey in tu.journeys) {
     final first = journey.events.first.payload;
     final infos = [for (final event in journey.events) event.payload.info];
-    records.add(_recordFromPresentation(first, infos: infos, journey: journey));
+    records.add(
+      _recordFromPresentation(
+        first,
+        infos: infos,
+        journey: journey,
+        railCitySystem: 'tu',
+      ),
+    );
   }
   final suica = projectSuicaArchive(history);
   final suicaRecords = <GalleryRecord>[];
@@ -1159,6 +1180,7 @@ List<GalleryRecord> _galleryRecords(
         infos: [for (final event in journey.events) event.payload.info],
         journey: journey.state == JourneyState.completed ? journey : null,
         event: entry.journeyEvent,
+        railCitySystem: 'cu',
       ),
     );
   }
@@ -1208,6 +1230,7 @@ GalleryRecord _recordFromPresentation<T extends Enum>(
   required List<TripEntryInfo> infos,
   JourneyPresentation<TripCardPresentation<T>>? journey,
   JourneyEvent<TripEntryInfo>? event,
+  String? railCitySystem,
 }) {
   final info = entry.info;
   final events = journey?.events ?? const [];
@@ -1267,6 +1290,20 @@ GalleryRecord _recordFromPresentation<T extends Enum>(
           .firstOrNull ??
       '';
   final oneWay = start == null || end == null;
+  final firstEndpoint = start ?? end ?? observed;
+  Map<String, String>? lineCity(JourneyEndpoint? endpoint) {
+    if (railCitySystem == null || endpoint?.line == null) return null;
+    final evidence = journey == null
+        ? event
+        : events
+              .where((side) => identical(side.endpoint, endpoint))
+              .firstOrNull;
+    final code = evidence?.displayCityCode;
+    final name = evidence?.displayCityLabel;
+    if (code == null && name == null) return null;
+    return {'system': railCitySystem, 'code': ?code, 'name': ?name};
+  }
+
   return <String, dynamic>{
     'kind': kind,
     'date': clock.date,
@@ -1277,8 +1314,13 @@ GalleryRecord _recordFromPresentation<T extends Enum>(
       'exitTime': ?clock.exitTime,
       'entryStation': ?entryStation,
       'exitStation': ?exitStation,
-      if (completed || start?.line != null) 'entryLine': start?.line ?? '',
+      if (completed || (kind == 'rail' ? firstEndpoint : start)?.line != null)
+        'entryLine': (kind == 'rail' ? firstEndpoint : start)?.line ?? '',
       if (completed || end?.line != null) 'exitLine': end?.line ?? '',
+      if (kind == 'rail') ...{
+        'entryLineCity': lineCity(firstEndpoint),
+        'exitLineCity': lineCity(end),
+      },
       'oneWay': oneWay,
       'transferKnown': true,
     },

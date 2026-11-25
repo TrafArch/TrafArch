@@ -174,3 +174,5 @@ TrafArch 是一款 Android 交通卡读取工具。将卡片贴近手机，即�
 感谢 TrafArch 原作者 kajolno 及项目贡献者。城市和站点参考数据的来源包括[读卡识途（Trip Reader）公开数据集](https://github.com/domosekai/tripreader-data)，感谢原作者和数据贡献者的整理与维护。相关数据的署名与许可信息保留在应用内“关于 → 致谢”及数据来源记录中。
 
 线路与站点资料的来源还包括 [HaoTian22 维护的社区数据](https://github.com/HaoTian22/tripreader-data)，沿用 CC BY 4.0（知识共享署名 4.0 国际）许可；感谢 domosekai、HaoTian22 及其他数据贡献者。应用使用开发者按城市整理的数据库，并保留数据来源信息。
+
+行程卡片的部分线路色号来自 [Rail Map Generator Palette](https://github.com/railmapgen/rmg-palette)，其数据以 GNU General Public License v3 提供；感谢 RMG Palette 贡献者维护各城市线路标志色。项目内离线数据来源版本、生成方式和许可文本列在 `third_party/railmapgen_palette/`，应用许可页面同步登记。

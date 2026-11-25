@@ -44,146 +44,94 @@ extension _GalleryDetail on _GalleryViewState {
       ],
     };
     const navHeight = 56.0;
-    final renderedScrollDeficit = _detailScrollDeficit;
-    return NotificationListener<ScrollMetricsNotification>(
-      onNotification: (notification) {
-        // Short ledgers still collapse the face fully: pad the scroll range up
-        // to the shrink distance so the content can ride up. Tie the correction
-        // to the padding that produced these metrics: a deferred callback must
-        // not apply the same shortfall again to a newer, unrendered deficit.
-        _detailMaxExtent = notification.metrics.maxScrollExtent;
-        final target = math.max(
-          0.0,
-          renderedScrollDeficit + (_detailShrinkDistance - _detailMaxExtent),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = math.max(1.0, constraints.maxWidth - 32);
+        final layout = _DetailCardLayout(
+          context,
+          card,
+          _balancePresentation(card),
+          width,
         );
-        if ((target - _detailScrollDeficit).abs() > .5) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            if ((target - _detailScrollDeficit).abs() > .5) {
-              _updateDetail(() => _detailScrollDeficit = target);
-            }
-          });
-        }
-        return false;
-      },
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final width = math.max(1.0, constraints.maxWidth - 32);
-          final layout = _DetailCardLayout(
-            context,
-            card,
-            _balancePresentation(card),
-            width,
-          );
-          final tabsHeight = math.max(
-            54.0,
-            MediaQuery.textScalerOf(context).scale(18) + 26,
-          );
-          final metadata = '${card.city} · 尾号 ${card.tail}   上次读取 ${card.when}';
-          final metadataHeight =
-              _measureDetailText(
-                context,
-                metadata,
-                GalleryTypography.caption,
-                width,
-              ).height +
-              16;
-          _detailShrinkDistance = layout.expandedHeight + metadataHeight;
-          return CustomScrollView(
-            key: PageStorageKey('gallery-${c.generation}-detail-${card.id}'),
-            slivers: [
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                sliver: SliverPersistentHeader(
-                  pinned: true,
-                  delegate: _TripsSummaryDelegate(
-                    expandedHeight:
-                        navHeight +
-                        layout.expandedHeight +
-                        metadataHeight +
-                        tabsHeight +
-                        24,
-                    compactHeight: navHeight + tabsHeight + 24,
-                    builder: (progress) => ColoredBox(
-                      key: const ValueKey('detail-pinned-header'),
-                      color: t.bg,
-                      child: Column(
-                        children: [
-                          _detailNav(progress, card, navHeight),
-                          SizedBox(
-                            height: _detailLerp(
-                              layout.expandedHeight,
-                              0,
-                              progress,
-                            ),
-                            child: ClipRect(
-                              child: Opacity(
-                                opacity: (1 - progress).clamp(0.0, 1.0),
-                                child: _GalleryDetailFace(
-                                  key: ValueKey('detail-face-${card.id}'),
-                                  card: card,
-                                  balance: _balancePresentation(card),
-                                  layout: layout,
-                                ),
+        final tabsHeight = math.max(
+          54.0,
+          MediaQuery.textScalerOf(context).scale(18) + 26,
+        );
+        return CustomScrollView(
+          key: PageStorageKey('gallery-${c.generation}-detail-${card.id}'),
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              sliver: SliverPersistentHeader(
+                pinned: true,
+                delegate: _GalleryCollapsingHeaderDelegate(
+                  expandedHeight:
+                      navHeight + layout.expandedHeight + tabsHeight + 24,
+                  compactHeight: navHeight + tabsHeight + 24,
+                  builder: (progress) => ColoredBox(
+                    key: const ValueKey('detail-pinned-header'),
+                    color: t.bg,
+                    child: Column(
+                      children: [
+                        _detailNav(progress, card, navHeight),
+                        SizedBox(
+                          height: _detailLerp(layout.expandedHeight, 0, progress),
+                          child: ClipRect(
+                            child: Opacity(
+                              opacity: (1 - progress).clamp(0.0, 1.0),
+                              child: _GalleryDetailFace(
+                                key: ValueKey('detail-face-${card.id}'),
+                                card: card,
+                                balance: _balancePresentation(card),
+                                layout: layout,
                               ),
                             ),
                           ),
-                          ClipRect(
-                            child: SizedBox(
-                              height: metadataHeight * (1 - progress),
-                              child: OverflowBox(
-                                alignment: Alignment.topLeft,
-                                minHeight: metadataHeight,
-                                maxHeight: metadataHeight,
-                                child: Opacity(
-                                  opacity: (1 - progress * 3).clamp(0.0, 1.0),
-                                  child: Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: _text(
-                                      metadata,
-                                      role: GalleryTypography.caption,
-                                      color: t.muted,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
+                        ),
+                        _gap(12),
+                        SizedBox(
+                          height: tabsHeight,
+                          child: _tabs(
+                            ['最近交易', '消费统计', '卡片信息'],
+                            c.detailTab,
+                            (index) => c.update(() => c.detailTab = index),
+                            id: 'detail-tabs',
                           ),
-                          _gap(12),
-                          SizedBox(
-                            height: tabsHeight,
-                            child: _tabs(
-                              ['最近交易', '消费统计', '卡片信息'],
-                              c.detailTab,
-                              (index) => c.update(() => c.detailTab = index),
-                              id: 'detail-tabs',
-                            ),
-                          ),
-                          _gap(12),
-                        ],
-                      ),
+                        ),
+                        _gap(12),
+                      ],
                     ),
                   ),
                 ),
               ),
-              SliverPadding(
-                padding: EdgeInsets.fromLTRB(
-                  16,
-                  4,
-                  16,
-                  30 +
-                      MediaQuery.paddingOf(context).bottom +
-                      _detailScrollDeficit,
-                ),
-                sliver: SliverList.builder(
-                  itemCount: body.length,
-                  itemBuilder: (_, index) => _detailSwipe(body[index]),
+            ),
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                16,
+                4,
+                16,
+                30 + MediaQuery.paddingOf(context).bottom,
+              ),
+              sliver: SliverList.builder(
+                itemCount: body.length,
+                itemBuilder: (_, index) => _detailSwipe(body[index]),
+              ),
+            ),
+            SliverLayoutBuilder(
+              builder: (context, constraints) => SliverToBoxAdapter(
+                child: SizedBox(
+                  height: math.max(
+                    0.0,
+                    constraints.viewportMainAxisExtent +
+                        layout.expandedHeight -
+                        constraints.precedingScrollExtent,
+                  ),
                 ),
               ),
-            ],
-          );
-        },
-      ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -909,8 +857,8 @@ class _DetailCardLayout {
   ) {
     final brands = _faceBrands(card);
     final titleStyle = GalleryTypography.card.copyWith(
-      fontSize: 16,
-      height: 23 / 16,
+      fontSize: 24,
+      height: 30 / 24,
     );
     final amountStyle = GalleryTypography.amount.copyWith(
       fontSize: 23,
@@ -996,8 +944,8 @@ class _GalleryDetailFace extends StatelessWidget {
         ? face.foreground
         : GalleryCardFace.imageForeground;
     final nameStyle = GalleryTypography.card.copyWith(
-      fontSize: 16,
-      height: 23 / 16,
+      fontSize: 24,
+      height: 30 / 24,
       color: foreground,
     );
     final amountStyle = GalleryTypography.amount.copyWith(

@@ -501,14 +501,6 @@ extension _GalleryOverlays on _GalleryViewState {
         _kv('交易金额', trip['amount'] as String?),
         if (trip['kind'] != 'event')
           _kv('交易后余额', trip['balanceAfter'] as String?),
-        if (_GalleryLiveScope.of(context) == null) ...[
-          _gap(16),
-          _text(
-            '本行程为内置样例摘要。未保留各侧原始字段，不据此补造记录。',
-            role: GalleryTypography.caption,
-            color: t.muted,
-          ),
-        ],
       ],
     );
   }
@@ -557,7 +549,6 @@ extension _GalleryOverlays on _GalleryViewState {
                               card.imageSize = null;
                               card.detailCrop = const GalleryFaceCrop();
                               card.listCrop = const GalleryFaceCrop();
-                              card.monetSeed = null;
                               c.faceCrop = null;
                             });
                             unawaited(

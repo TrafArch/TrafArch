@@ -1,11 +1,8 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/gallery/gallery_color_engine.dart';
 import 'package:transit_card_analyzer/gallery/gallery_data.dart';
 import 'package:transit_card_analyzer/gallery/gallery_design.dart';
-import 'package:transit_card_analyzer/gallery/gallery_monet.dart';
 import 'package:transit_card_analyzer/gallery/gallery_theme.dart';
 
 void main() {
@@ -191,56 +188,6 @@ void main() {
         }
       }
     }
-  });
-
-  test('image sampling finds a hue and rejects blank images', () {
-    Uint8List pixels(int count, int r, int g, int b, [int a = 255]) {
-      final data = Uint8List(count * 4);
-      for (var i = 0; i < count; i++) {
-        data[i * 4] = r;
-        data[i * 4 + 1] = g;
-        data[i * 4 + 2] = b;
-        data[i * 4 + 3] = a;
-      }
-      return data;
-    }
-
-    final red = GalleryMonet.seedFromRgba(
-      pixels(16, 220, 40, 40),
-      width: 4,
-      height: 4,
-    );
-    expect(red, isNotNull);
-    final redHue = GalleryColorEngine.oklch(red!).h;
-    expect(redHue, inInclusiveRange(15, 45));
-
-    expect(
-      GalleryMonet.seedFromRgba(pixels(16, 255, 255, 255), width: 4, height: 4),
-      isNull,
-    );
-    expect(
-      GalleryMonet.seedFromRgba(pixels(16, 0, 0, 0, 0), width: 4, height: 4),
-      isNull,
-    );
-
-    final gray = GalleryMonet.seedFromRgba(
-      pixels(16, 128, 128, 128),
-      width: 4,
-      height: 4,
-    );
-    expect(gray, isNotNull);
-    expect(GalleryColorEngine.oklch(gray!).c, lessThan(.01));
-
-    // A white field with a red subject must not average to pink/neutral.
-    final mixed = pixels(32, 255, 255, 255);
-    for (var i = 0; i < 6; i++) {
-      mixed[i * 4] = 210;
-      mixed[i * 4 + 1] = 35;
-      mixed[i * 4 + 2] = 35;
-    }
-    final subject = GalleryMonet.seedFromRgba(mixed, width: 8, height: 4);
-    expect(subject, isNotNull);
-    expect(GalleryColorEngine.oklch(subject!).h, inInclusiveRange(10, 50));
   });
 
   test('monet seed selects generated tokens; null falls back to preset', () {
