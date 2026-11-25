@@ -1,0 +1,27 @@
+def centralMirror = 'https://maven-central.storage-download.googleapis.com/maven2'
+def mirrorCentral = { repositories ->
+    repositories.configureEach { repo ->
+        // Only Maven repositories expose mavenContent. Ivy repositories also have a URL.
+        if (repo.respondsTo('mavenContent') && repo.url?.host == 'repo.maven.apache.org') {
+            repo.setUrl(centralMirror)
+        }
+    }
+}
+
+gradle.beforeSettings { settings ->
+    // Flutter's included build resolves its plugins independently of android/settings.gradle.kts.
+    settings.pluginManagement.repositories {
+        maven { url = centralMirror }
+        maven { url = 'https://maven.aliyun.com/repository/gradle-plugin' }
+        google()
+        gradlePluginPortal()
+    }
+    mirrorCentral(settings.pluginManagement.repositories)
+    mirrorCentral(settings.buildscript.repositories)
+    mirrorCentral(settings.dependencyResolutionManagement.repositories)
+}
+
+gradle.beforeProject { project ->
+    mirrorCentral(project.buildscript.repositories)
+    mirrorCentral(project.repositories)
+}
