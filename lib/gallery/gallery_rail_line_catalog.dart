@@ -6,7 +6,8 @@ import 'package:flutter/services.dart';
 class GalleryRailLineCatalog {
   GalleryRailLineCatalog._(this._local, Map<String, dynamic> palette)
     : _cities = _jsonObject(palette['cities']),
-      _cuToTu = _jsonObject(palette['cuToTu']) {
+      _cuToTu = _jsonObject(palette['cuToTu']),
+      _rmgCities = _jsonObject(palette['rmgCities']) {
     for (final code in {..._cities.keys, ..._local.keys}) {
       final name =
           _jsonObject(_local[code])['name'] ??
@@ -26,10 +27,11 @@ class GalleryRailLineCatalog {
   ) => GalleryRailLineCatalog._(local, palette);
 
   static final _numberedLine = RegExp(r'^([0-9]{1,3})\s*[号號]\s*[线線]$');
-  static final _hexColor = RegExp(r'^#[0-9a-fA-F]{6}$');
+  static final _hexColorPattern = RegExp(r'^#[0-9a-fA-F]{6}$');
   final Map<String, dynamic> _local;
   final Map<String, dynamic> _cities;
   final Map<String, dynamic> _cuToTu;
+  final Map<String, dynamic> _rmgCities;
   final _names = <String, String?>{};
 
   static Future<GalleryRailLineCatalog> load(AssetBundle bundle) async {
@@ -87,15 +89,49 @@ class GalleryRailLineCatalog {
   Color? approvedColor(String code, String line) =>
       _color(_jsonObject(_local[code]), line);
 
-  Color? paletteColor(String code, String line) =>
-      _color(_jsonObject(_cities[code]), line);
+  Color? paletteColor(String code, String line) {
+    final city = _jsonObject(_cities[code]);
+    final selected = _color(city, line);
+    if (selected != null) return selected;
+    final rmg = city['rmg'];
+    if (rmg is! String) return null;
+    return _rmgLineColor(rmg, line);
+  }
+
+  Color? _rmgLineColor(String city, String line) {
+    final rows = _jsonObject(_rmgCities[city])['lines'];
+    if (rows is! List) return null;
+    final exact = <Map<String, dynamic>>[];
+    final aliases = <Map<String, dynamic>>[];
+    final label = line.trim().toUpperCase();
+    final alias = _baseLineName(label);
+    for (final value in rows) {
+      final row = _jsonObject(value);
+      final names = _jsonObject(row['names']).values
+          .whereType<String>()
+          .map((name) => name.trim().toUpperCase())
+          .toList(growable: false);
+      if (names.contains(label)) {
+        exact.add(row);
+      } else if (names.any((name) => _baseLineName(name) == alias)) {
+        aliases.add(row);
+      }
+    }
+    final matches = exact.isNotEmpty ? exact : aliases;
+    return matches.length == 1 ? _hexColor(matches.single['colour']) : null;
+  }
 
   static Color? _color(Map<String, dynamic> city, String line) {
-    final hex = _jsonObject(city['colors'])[line];
-    return hex is String && _hexColor.hasMatch(hex)
-        ? Color(0xff000000 | int.parse(hex.substring(1), radix: 16))
-        : null;
+    return _hexColor(_jsonObject(city['colors'])[line]);
   }
+
+  static Color? _hexColor(Object? value) =>
+      value is String && _hexColorPattern.hasMatch(value)
+      ? Color(0xff000000 | int.parse(value.substring(1), radix: 16))
+      : null;
+
+  static String _baseLineName(String value) =>
+      value.replaceFirst(RegExp(r'\s*[（(][^）)]*[）)]\s*$'), '').trim();
 
   static String _cityKey(String value) {
     final trimmed = value.trim();

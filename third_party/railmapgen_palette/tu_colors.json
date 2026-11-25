@@ -31,7 +31,8 @@
         "首都机场线": "#A29BBB"
       },
       "name": "北京",
-      "rmg": "beijing"
+      "rmg": "beijing",
+      "sourceSha256": "9e133f972c925db98c1cf1d777e8b8f3ff3d447a43e88fcd11b0790e3f39644e"
     },
     "1121": {
       "colors": {
@@ -49,10 +50,13 @@
         "津静线": "#F8B5C4"
       },
       "name": "天津",
-      "rmg": "tianjin"
+      "rmg": "tianjin",
+      "sourceSha256": "88e32c2b581e6bc0ca456541f6ecc0fe0fe47d1fbf338115a073ab8d2157452c"
     },
     "1610": {
-      "name": "太原"
+      "name": "太原",
+      "rmg": "taiyuan",
+      "sourceSha256": "7eed4785e4e0263c78f3b132621e55b000dbf612d43bca960d7ad947873ab346"
     },
     "2210": {
       "colors": {
@@ -64,7 +68,8 @@
         "9号线": "#017CBF"
       },
       "name": "沈阳",
-      "rmg": "shenyang"
+      "rmg": "shenyang",
+      "sourceSha256": "cd10165e528f7276025f9d8aa1ac85800f46bc71fe6e669732a93bca83edd075"
     },
     "2220": {
       "colors": {
@@ -76,7 +81,8 @@
         "5号线": "#E50309"
       },
       "name": "大连",
-      "rmg": "dalian"
+      "rmg": "dalian",
+      "sourceSha256": "c6828cba90cdda342e17e3b3396ab8f10758403e22d16b35d98b95c8392f50c2"
     },
     "2610": {
       "colors": {
@@ -85,7 +91,8 @@
         "3号线": "#FFC72C"
       },
       "name": "哈尔滨",
-      "rmg": "harbin"
+      "rmg": "harbin",
+      "sourceSha256": "e3e84b8b576442aeaaa43fa810de3efae85ca28bf89e0aa5a11f3fa9e27b8d50"
     },
     "2900": {
       "colors": {
@@ -112,7 +119,8 @@
         "金山铁路": "#000000"
       },
       "name": "上海",
-      "rmg": "shanghai"
+      "rmg": "shanghai",
+      "sourceSha256": "dc62f9f6b6565a412721aaa278784b545c73588de50bcea5cfb82eed23d29021"
     },
     "3010": {
       "colors": {
@@ -126,7 +134,8 @@
         "7号线": "#4A7729"
       },
       "name": "南京",
-      "rmg": "nanjing"
+      "rmg": "nanjing",
+      "sourceSha256": "f7ea81a3598143a8e92c787372c6cca46135276486ec19a5cffce72caef9f623"
     },
     "3020": {
       "colors": {
@@ -135,7 +144,8 @@
         "4号线": "#93328E"
       },
       "name": "无锡",
-      "rmg": "wuxi"
+      "rmg": "wuxi",
+      "sourceSha256": "034a2602f0401be8535246476807942a9153157e6e0c3cffa354cd3ffa52128a"
     },
     "3030": {
       "colors": {
@@ -145,7 +155,8 @@
         "6号线": "#552375"
       },
       "name": "徐州",
-      "rmg": "xuzhou"
+      "rmg": "xuzhou",
+      "sourceSha256": "3b5951facae43fd412bf071828b0e10a6724750dffe3ffbdd3ed3a7101899631"
     },
     "3040": {
       "colors": {
@@ -153,7 +164,8 @@
         "2号线": "#529FC9"
       },
       "name": "常州",
-      "rmg": "changzhou"
+      "rmg": "changzhou",
+      "sourceSha256": "f20e1b2a79dd784cd1b82a8533252fe9e98efbf0ca52a72a8171aeafa5a43302"
     },
     "3050": {
       "colors": {
@@ -168,7 +180,8 @@
         "8号线": "#A09200"
       },
       "name": "苏州",
-      "rmg": "suzhou"
+      "rmg": "suzhou",
+      "sourceSha256": "61ebc036f225827b22dc148a6abb1d9c2aed54f26f9b4b9147cd9cd331784b4d"
     },
     "3060": {
       "colors": {
@@ -176,7 +189,8 @@
         "2号线": "#0072C8"
       },
       "name": "南通",
-      "rmg": "nantong"
+      "rmg": "nantong",
+      "sourceSha256": "0116f65d568a94ba5ab0fb1a4b6c8df6ec1d7aed6209c9e1d5ac95c2f58a12bb"
     },
     "3310": {
       "colors": {
@@ -194,7 +208,8 @@
         "9号线": "#C45B03"
       },
       "name": "杭州",
-      "rmg": "hangzhou"
+      "rmg": "hangzhou",
+      "sourceSha256": "798491d30418141774ad3e5054cf1783e3ba7b35e8d42ac65106ff3f1f12ad62"
     },
     "3320": {
       "colors": {
@@ -208,7 +223,8 @@
         "8号线": "#D33A94"
       },
       "name": "宁波",
-      "rmg": "ningbo"
+      "rmg": "ningbo",
+      "sourceSha256": "96c9839ed57cf3fec0591a1e008e5ac38ac6c4aadba6b0b879bbabbac8266ba9"
     },
     "3330": {
       "colors": {
@@ -216,7 +232,8 @@
         "S2线": "#E4002B"
       },
       "name": "温州",
-      "rmg": "wenzhou"
+      "rmg": "wenzhou",
+      "sourceSha256": "b9797033ab5b2740a73db05cb11df76f6ef160cd3f6668b6db8fef9f9a1002e9"
     },
     "3350": {
       "name": "嘉兴"
@@ -227,21 +244,24 @@
         "2号线": "#307FE2"
       },
       "name": "绍兴",
-      "rmg": "shaoxing"
+      "rmg": "shaoxing",
+      "sourceSha256": "0c4392ceef1b50001739bf44df771872b3c021b6af189918df4871b9b29471b9"
     },
     "3380": {
       "colors": {
         "金义东线": "#DA1934"
       },
       "name": "金华",
-      "rmg": "jinhua"
+      "rmg": "jinhua",
+      "sourceSha256": "3c84f41e379779477a127fe16206b24b4b0b4e2b4d404f209582366c6a91247d"
     },
     "3450": {
       "colors": {
         "S1线": "#0C9CDC"
       },
       "name": "台州",
-      "rmg": "taizhou"
+      "rmg": "taizhou",
+      "sourceSha256": "77905692ba590bdab3cd0b003f1286d76c798d9a9ece28f69909e44573540346"
     },
     "3610": {
       "colors": {
@@ -250,7 +270,8 @@
         "3号线": "#00843D"
       },
       "name": "合肥",
-      "rmg": "hefei"
+      "rmg": "hefei",
+      "sourceSha256": "03723184c58035ccc9defff61278f96c525f1488f84333bc6a4f4fa0fc6b19f0"
     },
     "3620": {
       "colors": {
@@ -258,14 +279,16 @@
         "2号线": "#4A86E8"
       },
       "name": "芜湖",
-      "rmg": "wuhu"
+      "rmg": "wuhu",
+      "sourceSha256": "2562fa85c9c061e18fddcd0151478141e0a1eb86a44aeba954857e8aa59c4e28"
     },
     "3750": {
       "colors": {
         "宁滁线": "#FF631B"
       },
       "name": "滁州",
-      "rmg": "chuzhou"
+      "rmg": "chuzhou",
+      "sourceSha256": "c670152bd34bf6124ad90bb46f84ee8b540bd88d73c4869da67dc52236c2763b"
     },
     "3910": {
       "colors": {
@@ -277,7 +300,8 @@
         "滨海快线": "#00ADBB"
       },
       "name": "福州",
-      "rmg": "fuzhou"
+      "rmg": "fuzhou",
+      "sourceSha256": "53ef076dfd9bf82a34a62b96d408e35d2aeac3bd889dec3953f1bf11ef1c553c"
     },
     "3930": {
       "colors": {
@@ -287,7 +311,8 @@
         "6号线": "#8A205F"
       },
       "name": "厦门",
-      "rmg": "xiamen"
+      "rmg": "xiamen",
+      "sourceSha256": "eac3608c058c82a5139384f4daf0e85928e83bc9a89c2fd78d8a75d426027f93"
     },
     "4210": {
       "colors": {
@@ -295,7 +320,8 @@
         "4号线": "#00A560"
       },
       "name": "南昌",
-      "rmg": "nanchang"
+      "rmg": "nanchang",
+      "sourceSha256": "d57d57ec6f6abeb7838918ea88f5e10d8e591c7eea9906682b92f45f6c902327"
     },
     "4510": {
       "colors": {
@@ -307,10 +333,12 @@
         "8号线": "#62449C"
       },
       "name": "济南",
-      "rmg": "jinan"
+      "rmg": "jinan",
+      "sourceSha256": "eae6c8b2bc78c06cc40a1f782381a4aec4e30fadc8f37c182331c12b5066a0d3"
     },
     "4520": {
       "colors": {
+        "11号线": "#304299",
         "1号线": "#F7B000",
         "2号线": "#C32A05",
         "3号线": "#006DBB",
@@ -319,14 +347,16 @@
         "8号线": "#E74893"
       },
       "name": "青岛",
-      "rmg": "qingdao"
+      "rmg": "qingdao",
+      "sourceSha256": "bcc43ad4e66bb83d3d42c97b0b7e448aa863b709462dec885217efc092bd5b71"
     },
     "4930": {
       "colors": {
         "1号线": "#C4608C"
       },
       "name": "洛阳",
-      "rmg": "luoyang"
+      "rmg": "luoyang",
+      "sourceSha256": "5e759c72b9de94e022b8595228d01d19bbeb8156fca526ff7eeb1403c78190ca"
     },
     "5210": {
       "colors": {
@@ -342,7 +372,8 @@
         "8号线": "#98ACAB"
       },
       "name": "武汉",
-      "rmg": "wuhan"
+      "rmg": "wuhan",
+      "sourceSha256": "7c3c97bf436ee9576efb11a05e0df45fe2731a78fddbf09deb00b6748ea88707"
     },
     "5510": {
       "colors": {
@@ -355,7 +386,8 @@
         "西环线": "#DB7093"
       },
       "name": "长沙",
-      "rmg": "changsha"
+      "rmg": "changsha",
+      "sourceSha256": "6a6ecc27a8a3155d7d97fd33cd8b1bf809425475ed9923d08d03a9674fbd2710"
     },
     "5810": {
       "colors": {
@@ -380,10 +412,27 @@
         "广佛线": "#C4D600"
       },
       "name": "广州",
-      "rmg": "guangzhou"
+      "rmg": "guangzhou",
+      "sourceSha256": "1caecc562db2def170d0b88854402f3a8f5289e4b77c509a80d5cca87dbba7be"
     },
     "5840": {
-      "name": "深圳"
+      "colors": {
+        "10号线": "#F8779E",
+        "11号线": "#672146",
+        "1号线": "#00B140",
+        "2号线": "#B94700",
+        "3号线": "#00A9E0",
+        "4号线": "#DA291C",
+        "5号线": "#A05EB5",
+        "6号线": "#00C7B1",
+        "7号线": "#0033A0",
+        "8号线": "#B94700",
+        "9号线": "#7B6469",
+        "坪山云巴1号线": "#1974D2"
+      },
+      "name": "深圳",
+      "rmg": "shenzhen",
+      "sourceSha256": "ef616414fc0c78ea9ae4c38e06f33b9cb819132ebf195381ff387bff25da18b5"
     },
     "5880": {
       "colors": {
@@ -391,7 +440,8 @@
         "3号线": "#002DA0"
       },
       "name": "佛山",
-      "rmg": "foshan"
+      "rmg": "foshan",
+      "sourceSha256": "ddfa5f541606be40375e878944a31cdd3621e926d59e3ebb640c88d48cafe569"
     },
     "6020": {
       "colors": {
@@ -399,7 +449,8 @@
         "2号线": "#ED1C24"
       },
       "name": "东莞",
-      "rmg": "dongguan"
+      "rmg": "dongguan",
+      "sourceSha256": "bef79dc7995248d08118434d389f5b118c2128d09809a0b4c9e2fbbbe932b960"
     },
     "6510": {
       "colors": {
@@ -421,7 +472,8 @@
         "9号线": "#F1AD17"
       },
       "name": "成都",
-      "rmg": "chengdu"
+      "rmg": "chengdu",
+      "sourceSha256": "edae47bac3eedf13161c9a586bc8930468ee9d609019e84edf4b7c2605e04f1c"
     },
     "6900": {
       "colors": {
@@ -438,7 +490,8 @@
         "璧铜线": "#0057B7"
       },
       "name": "重庆",
-      "rmg": "chongqing"
+      "rmg": "chongqing",
+      "sourceSha256": "05ea7da80f1011743ac54625a7e0fad5ebd4f5ce65007aa68cbefa6897b6d8d3"
     },
     "7010": {
       "colors": {
@@ -447,7 +500,8 @@
         "3号线": "#F32628"
       },
       "name": "贵阳",
-      "rmg": "guiyang"
+      "rmg": "guiyang",
+      "sourceSha256": "626757d1d733715e3792a6a0b2aed51907b7a9a65de2f7a1e5b8b7dbdb280ca7"
     },
     "7310": {
       "colors": {
@@ -459,7 +513,8 @@
         "6号线": "#048F92"
       },
       "name": "昆明",
-      "rmg": "kunming"
+      "rmg": "kunming",
+      "sourceSha256": "d27adb2fb6d1c72cbe38510a6bc7e5d9c4438ef47e3d602a4665bd94df14f211"
     },
     "7910": {
       "colors": {
@@ -476,7 +531,8 @@
         "西户线": "#720160"
       },
       "name": "西安",
-      "rmg": "xian"
+      "rmg": "xian",
+      "sourceSha256": "ac81509920a917e354c67e74922de488d29d3754b354598f2b4e3773006d2248"
     },
     "8210": {
       "name": "兰州 / 兰州新区"
@@ -486,7 +542,8 @@
         "1号线": "#10069F"
       },
       "name": "乌鲁木齐",
-      "rmg": "urumqi"
+      "rmg": "urumqi",
+      "sourceSha256": "6cc8121e21ffb17d0bf2d21c0a99fe190b33fbbfdcefef263e7b023bcc326ca2"
     }
   },
   "cuToTu": {
@@ -499,5 +556,5987 @@
     "5180": "5840",
     "6100": "6510"
   },
-  "revision": "993a7d4dfa9277740f7a8952ed2b502309c45390"
+  "revision": "993a7d4dfa9277740f7a8952ed2b502309c45390",
+  "rmgCities": {
+    "beijing": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#C23A30",
+          "foreground": null,
+          "id": "bj1",
+          "names": {
+            "en": "Line 1/Batong Line",
+            "zh-Hans": "1号线/八通线",
+            "zh-Hant": "1號線/八通線"
+          }
+        },
+        {
+          "colour": "#006098",
+          "foreground": null,
+          "id": "bj2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#CE093D",
+          "foreground": null,
+          "id": "bj3",
+          "names": {
+            "en": "Line 3",
+            "zh-Hans": "3号线",
+            "zh-Hant": "3號線"
+          }
+        },
+        {
+          "colour": "#008E9C",
+          "foreground": null,
+          "id": "bj4",
+          "names": {
+            "en": "Line 4/Daxing Line",
+            "zh-Hans": "4号线/大兴线",
+            "zh-Hant": "4號線/大興線"
+          }
+        },
+        {
+          "colour": "#A6217F",
+          "foreground": null,
+          "id": "bj5",
+          "names": {
+            "en": "Line 5",
+            "zh-Hans": "5号线",
+            "zh-Hant": "5號線"
+          }
+        },
+        {
+          "colour": "#D29700",
+          "foreground": null,
+          "id": "bj6",
+          "names": {
+            "en": "Line 6",
+            "zh-Hans": "6号线",
+            "zh-Hant": "6號線"
+          }
+        },
+        {
+          "colour": "#F6C582",
+          "foreground": null,
+          "id": "bj7",
+          "names": {
+            "en": "Line 7",
+            "zh-Hans": "7号线",
+            "zh-Hant": "7號線"
+          }
+        },
+        {
+          "colour": "#009B6B",
+          "foreground": null,
+          "id": "bj8",
+          "names": {
+            "en": "Line 8",
+            "zh-Hans": "8号线",
+            "zh-Hant": "8號線"
+          }
+        },
+        {
+          "colour": "#8FC31F",
+          "foreground": null,
+          "id": "bj9",
+          "names": {
+            "en": "Line 9",
+            "zh-Hans": "9号线",
+            "zh-Hant": "9號線"
+          }
+        },
+        {
+          "colour": "#009BC0",
+          "foreground": null,
+          "id": "bj10",
+          "names": {
+            "en": "Line 10",
+            "zh-Hans": "10号线",
+            "zh-Hant": "10號線"
+          }
+        },
+        {
+          "colour": "#ED796B",
+          "foreground": null,
+          "id": "bj11",
+          "names": {
+            "en": "Line 11",
+            "zh-Hans": "11号线",
+            "zh-Hant": "11號線"
+          }
+        },
+        {
+          "colour": "#BD6F16",
+          "foreground": null,
+          "id": "bj12",
+          "names": {
+            "en": "Line 12",
+            "zh-Hans": "12号线",
+            "zh-Hant": "12號線"
+          }
+        },
+        {
+          "colour": "#F9E700",
+          "foreground": null,
+          "id": "bj13",
+          "names": {
+            "en": "Line 13",
+            "zh-Hans": "13号线",
+            "zh-Hant": "13號線"
+          }
+        },
+        {
+          "colour": "#D5A7A1",
+          "foreground": null,
+          "id": "bj14",
+          "names": {
+            "en": "Line 14",
+            "zh-Hans": "14号线",
+            "zh-Hant": "14號線"
+          }
+        },
+        {
+          "colour": "#5B2C68",
+          "foreground": null,
+          "id": "bj15",
+          "names": {
+            "en": "Line 15",
+            "zh-Hans": "15号线",
+            "zh-Hant": "15號線"
+          }
+        },
+        {
+          "colour": "#76A32E",
+          "foreground": null,
+          "id": "bj16",
+          "names": {
+            "en": "Line 16",
+            "zh-Hans": "16号线",
+            "zh-Hant": "16號線"
+          }
+        },
+        {
+          "colour": "#00A9A9",
+          "foreground": null,
+          "id": "bj17",
+          "names": {
+            "en": "Line 17",
+            "zh-Hans": "17号线",
+            "zh-Hant": "17號線"
+          }
+        },
+        {
+          "colour": "#776CB1",
+          "foreground": null,
+          "id": "bj18",
+          "names": {
+            "en": "Line 18",
+            "zh-Hans": "18号线",
+            "zh-Hant": "18號線"
+          }
+        },
+        {
+          "colour": "#D6ABC1",
+          "foreground": null,
+          "id": "bj19",
+          "names": {
+            "en": "Line 19",
+            "zh-Hans": "19号线",
+            "zh-Hant": "19號線"
+          }
+        },
+        {
+          "colour": "#F4C1CA",
+          "foreground": null,
+          "id": "bj22",
+          "names": {
+            "en": "Line 22 (Pinggu Line)",
+            "zh-Hans": "22号线（平谷线）",
+            "zh-Hant": "22號線（平谷線）"
+          }
+        },
+        {
+          "colour": "#E40077",
+          "foreground": null,
+          "id": "bj24yz",
+          "names": {
+            "en": "Yizhuang Line",
+            "zh-Hans": "亦庄线",
+            "zh-Hant": "亦莊線"
+          }
+        },
+        {
+          "colour": "#E46022",
+          "foreground": null,
+          "id": "bj25fs",
+          "names": {
+            "en": "Fangshan Line/Yanfang Line",
+            "zh-Hans": "房山线/燕房线",
+            "zh-Hant": "房山線/燕房線"
+          }
+        },
+        {
+          "colour": "#B35A20",
+          "foreground": null,
+          "id": "bj26s1",
+          "names": {
+            "en": "Line S1",
+            "zh-Hans": "S1线",
+            "zh-Hant": "S1線"
+          }
+        },
+        {
+          "colour": "#DE82B2",
+          "foreground": null,
+          "id": "bj27cp",
+          "names": {
+            "en": "Changping Line",
+            "zh-Hans": "昌平线",
+            "zh-Hant": "昌平線"
+          }
+        },
+        {
+          "colour": "#476205",
+          "foreground": null,
+          "id": "bj28",
+          "names": {
+            "en": "Line 28",
+            "zh-Hans": "28号线",
+            "zh-Hant": "28號線"
+          }
+        },
+        {
+          "colour": "#E50619",
+          "foreground": null,
+          "id": "btxj",
+          "names": {
+            "en": "Xijiao Line",
+            "zh-Hans": "西郊线",
+            "zh-Hant": "西郊線"
+          }
+        },
+        {
+          "colour": "#E5061B",
+          "foreground": null,
+          "id": "btt1",
+          "names": {
+            "en": "Yizhuang T1 Line",
+            "zh-Hans": "亦庄T1线",
+            "zh-Hant": "亦莊T1線"
+          }
+        },
+        {
+          "colour": "#A29BBB",
+          "foreground": null,
+          "id": "bj34sj",
+          "names": {
+            "en": "Capital Airport Express",
+            "zh-Hans": "首都机场线",
+            "zh-Hant": "首都機場線"
+          }
+        },
+        {
+          "colour": "#004A9F",
+          "foreground": null,
+          "id": "bj35dj",
+          "names": {
+            "en": "Daxing Airport Express",
+            "zh-Hans": "大兴机场线",
+            "zh-Hant": "大興機場線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Beijing",
+        "zh-Hans": "北京",
+        "zh-Hant": "北京"
+      },
+      "sourceSha256": "9e133f972c925db98c1cf1d777e8b8f3ff3d447a43e88fcd11b0790e3f39644e"
+    },
+    "changchun": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#E30010",
+          "foreground": null,
+          "id": "cc1",
+          "names": {
+            "en": "Line 1",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#396994",
+          "foreground": null,
+          "id": "cc2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#009942",
+          "foreground": null,
+          "id": "cc3",
+          "names": {
+            "en": "Line 3",
+            "zh-Hans": "3号线",
+            "zh-Hant": "3號線"
+          }
+        },
+        {
+          "colour": "#7D4797",
+          "foreground": null,
+          "id": "cc4",
+          "names": {
+            "en": "Line 4",
+            "zh-Hans": "4号线",
+            "zh-Hant": "4號線"
+          }
+        },
+        {
+          "colour": "#A67822",
+          "foreground": null,
+          "id": "cc5",
+          "names": {
+            "en": "Line 5",
+            "zh-Hans": "5号线",
+            "zh-Hant": "5號線"
+          }
+        },
+        {
+          "colour": "#E98F99",
+          "foreground": null,
+          "id": "cc6",
+          "names": {
+            "en": "Line 6",
+            "zh-Hans": "6号线",
+            "zh-Hant": "6號線"
+          }
+        },
+        {
+          "colour": "#A4308A",
+          "foreground": null,
+          "id": "cc7",
+          "names": {
+            "en": "Line 7",
+            "zh-Hans": "7号线",
+            "zh-Hant": "7號線"
+          }
+        },
+        {
+          "colour": "#25B6BB",
+          "foreground": null,
+          "id": "cc8",
+          "names": {
+            "en": "Line 8",
+            "zh-Hans": "8号线",
+            "zh-Hant": "8號線"
+          }
+        },
+        {
+          "colour": "#2878C0",
+          "foreground": null,
+          "id": "cc9",
+          "names": {
+            "en": "Line 9",
+            "zh-Hans": "9号线",
+            "zh-Hant": "9號線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Changchun",
+        "zh-Hans": "长春",
+        "zh-Hant": "長春"
+      },
+      "sourceSha256": "31ef17481e3585c14cafd083599467a9812fe39088a7f88f621bd0e2ebbe7c06"
+    },
+    "changsha": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#E70014",
+          "foreground": null,
+          "id": "cs1",
+          "names": {
+            "en": "Line 1",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#00B0EC",
+          "foreground": null,
+          "id": "cs2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#ABCD05",
+          "foreground": null,
+          "id": "cs3",
+          "names": {
+            "en": "Line 3",
+            "zh-Hans": "3号线",
+            "zh-Hant": "3號線"
+          }
+        },
+        {
+          "colour": "#920882",
+          "foreground": null,
+          "id": "cs4",
+          "names": {
+            "en": "Line 4",
+            "zh-Hans": "4号线",
+            "zh-Hant": "4號線"
+          }
+        },
+        {
+          "colour": "#FFE114",
+          "foreground": null,
+          "id": "cs5",
+          "names": {
+            "en": "Line 5",
+            "zh-Hans": "5号线",
+            "zh-Hant": "5號線"
+          }
+        },
+        {
+          "colour": "#005BAC",
+          "foreground": null,
+          "id": "cs6",
+          "names": {
+            "en": "Line 6",
+            "zh-Hans": "6号线",
+            "zh-Hant": "6號線"
+          }
+        },
+        {
+          "colour": "#009739",
+          "foreground": null,
+          "id": "cs7",
+          "names": {
+            "en": "Line 7",
+            "zh-Hans": "7号线",
+            "zh-Hant": "7號線"
+          }
+        },
+        {
+          "colour": "#D9027D",
+          "foreground": null,
+          "id": "cs8",
+          "names": {
+            "en": "Line 8",
+            "zh-Hans": "8号线",
+            "zh-Hant": "8號線"
+          }
+        },
+        {
+          "colour": "#00BFB2",
+          "foreground": null,
+          "id": "cs9",
+          "names": {
+            "en": "Line 9",
+            "zh-Hans": "9号线",
+            "zh-Hant": "9號線"
+          }
+        },
+        {
+          "colour": "#81312F",
+          "foreground": null,
+          "id": "cs10",
+          "names": {
+            "en": "Line 10",
+            "zh-Hans": "10号线",
+            "zh-Hant": "10號線"
+          }
+        },
+        {
+          "colour": "#DE7C00",
+          "foreground": null,
+          "id": "cs11",
+          "names": {
+            "en": "Line 11",
+            "zh-Hans": "11号线",
+            "zh-Hant": "11號線"
+          }
+        },
+        {
+          "colour": "#9063CD",
+          "foreground": null,
+          "id": "cs12",
+          "names": {
+            "en": "Line 12",
+            "zh-Hans": "12号线",
+            "zh-Hant": "12號線"
+          }
+        },
+        {
+          "colour": "#083D21",
+          "foreground": null,
+          "id": "s1",
+          "names": {
+            "en": "Changsha-Zhuzhou-Xiangtan Inter-city Train",
+            "zh-Hans": "长株潭城际(S1)",
+            "zh-Hant": "長株潭城際(S1)"
+          }
+        },
+        {
+          "colour": "#EF91A1",
+          "foreground": null,
+          "id": "s2",
+          "names": {
+            "en": "Line S2",
+            "zh-Hans": "S2线",
+            "zh-Hant": "S2線"
+          }
+        },
+        {
+          "colour": "#1DA692",
+          "foreground": null,
+          "id": "y1",
+          "names": {
+            "en": "Dawangshan Tourist Y1",
+            "zh-Hans": "Y1大王山旅游线",
+            "zh-Hant": "Y1大王山旅游線"
+          }
+        },
+        {
+          "colour": "#DB7093",
+          "foreground": null,
+          "id": "csxl",
+          "names": {
+            "en": "Xihuan Line",
+            "zh-Hans": "西环线",
+            "zh-Hant": "西環線"
+          }
+        },
+        {
+          "colour": "#EC931F",
+          "foreground": null,
+          "id": "bus",
+          "names": {
+            "en": "Mango Bus",
+            "zh-Hans": "芒果巴士",
+            "zh-Hant": "芒果巴士"
+          }
+        }
+      ],
+      "names": {
+        "en": "Changsha",
+        "zh-Hans": "长沙",
+        "zh-Hant": "長沙"
+      },
+      "sourceSha256": "6a6ecc27a8a3155d7d97fd33cd8b1bf809425475ed9923d08d03a9674fbd2710"
+    },
+    "changzhou": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#CD5C5C",
+          "foreground": null,
+          "id": "cz1",
+          "names": {
+            "en": "Line 1",
+            "ko": "1호선",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#529FC9",
+          "foreground": null,
+          "id": "cz2",
+          "names": {
+            "en": "Line 2",
+            "ko": "2호선",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Changzhou",
+        "ko": "창저우",
+        "zh-Hans": "常州",
+        "zh-Hant": "常州"
+      },
+      "sourceSha256": "f20e1b2a79dd784cd1b82a8533252fe9e98efbf0ca52a72a8171aeafa5a43302"
+    },
+    "chengdu": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#222A8C",
+          "foreground": null,
+          "id": "cd1",
+          "names": {
+            "en": "Line 1",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#EB5A35",
+          "foreground": null,
+          "id": "cd2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#D5006A",
+          "foreground": null,
+          "id": "cd3",
+          "names": {
+            "en": "Line 3",
+            "zh-Hans": "3号线",
+            "zh-Hant": "3號線"
+          }
+        },
+        {
+          "colour": "#00AA58",
+          "foreground": null,
+          "id": "cd4",
+          "names": {
+            "en": "Line 4",
+            "zh-Hans": "4号线",
+            "zh-Hant": "4號線"
+          }
+        },
+        {
+          "colour": "#A23E92",
+          "foreground": null,
+          "id": "cd5",
+          "names": {
+            "en": "Line 5",
+            "zh-Hans": "5号线",
+            "zh-Hant": "5號線"
+          }
+        },
+        {
+          "colour": "#BE7331",
+          "foreground": null,
+          "id": "cd6",
+          "names": {
+            "en": "Line 6",
+            "zh-Hans": "6号线",
+            "zh-Hant": "6號線"
+          }
+        },
+        {
+          "colour": "#6DC6D6",
+          "foreground": null,
+          "id": "cd7",
+          "names": {
+            "en": "Line 7",
+            "zh-Hans": "7号线",
+            "zh-Hant": "7號線"
+          }
+        },
+        {
+          "colour": "#A6C214",
+          "foreground": null,
+          "id": "cd8",
+          "names": {
+            "en": "Line 8",
+            "zh-Hans": "8号线",
+            "zh-Hant": "8號線"
+          }
+        },
+        {
+          "colour": "#F1AD17",
+          "foreground": null,
+          "id": "cd9",
+          "names": {
+            "en": "Line 9",
+            "zh-Hans": "9号线",
+            "zh-Hant": "9號線"
+          }
+        },
+        {
+          "colour": "#0050A3",
+          "foreground": null,
+          "id": "cd10",
+          "names": {
+            "en": "Line 10",
+            "zh-Hans": "10号线",
+            "zh-Hant": "10號線"
+          }
+        },
+        {
+          "colour": "#8C7732",
+          "foreground": null,
+          "id": "cd11",
+          "names": {
+            "en": "Line 11",
+            "zh-Hans": "11号线",
+            "zh-Hant": "11號線"
+          }
+        },
+        {
+          "colour": "#772583",
+          "foreground": null,
+          "id": "cd12",
+          "names": {
+            "en": "Line 12",
+            "zh-Hans": "12号线",
+            "zh-Hant": "12號線"
+          }
+        },
+        {
+          "colour": "#C5A900",
+          "foreground": null,
+          "id": "cd13",
+          "names": {
+            "en": "Line 13",
+            "zh-Hans": "13号线",
+            "zh-Hant": "13號線"
+          }
+        },
+        {
+          "colour": "#6F263D",
+          "foreground": null,
+          "id": "cd14",
+          "names": {
+            "en": "Line 14",
+            "zh-Hans": "14号线",
+            "zh-Hant": "14號線"
+          }
+        },
+        {
+          "colour": "#D958A0",
+          "foreground": null,
+          "id": "cd15",
+          "names": {
+            "en": "Line 15",
+            "zh-Hans": "15号线",
+            "zh-Hant": "15號線"
+          }
+        },
+        {
+          "colour": "#0085CA",
+          "foreground": null,
+          "id": "cd16",
+          "names": {
+            "en": "Line 16",
+            "zh-Hans": "16号线",
+            "zh-Hant": "16號線"
+          }
+        },
+        {
+          "colour": "#80E0AA",
+          "foreground": null,
+          "id": "cd17",
+          "names": {
+            "en": "Line 17",
+            "zh-Hans": "17号线",
+            "zh-Hant": "17號線"
+          }
+        },
+        {
+          "colour": "#006268",
+          "foreground": null,
+          "id": "cd18",
+          "names": {
+            "en": "Line 18",
+            "zh-Hans": "18号线",
+            "zh-Hant": "18號線"
+          }
+        },
+        {
+          "colour": "#89ABE3",
+          "foreground": null,
+          "id": "cd19",
+          "names": {
+            "en": "Line 19",
+            "zh-Hans": "19号线",
+            "zh-Hant": "19號線"
+          }
+        },
+        {
+          "colour": "#B86125",
+          "foreground": null,
+          "id": "cd20",
+          "names": {
+            "en": "Line 20",
+            "zh-Hans": "20号线",
+            "zh-Hant": "20號線"
+          }
+        },
+        {
+          "colour": "#FFC27B",
+          "foreground": null,
+          "id": "cd21",
+          "names": {
+            "en": "Line 21",
+            "zh-Hans": "21号线",
+            "zh-Hant": "21號線"
+          }
+        },
+        {
+          "colour": "#6AD1E3",
+          "foreground": null,
+          "id": "cd22",
+          "names": {
+            "en": "Line 22",
+            "zh-Hans": "22号线",
+            "zh-Hant": "22號線"
+          }
+        },
+        {
+          "colour": "#DFA0C9",
+          "foreground": null,
+          "id": "cd23",
+          "names": {
+            "en": "Line 23",
+            "zh-Hans": "23号线",
+            "zh-Hant": "23號線"
+          }
+        },
+        {
+          "colour": "#43B02A",
+          "foreground": null,
+          "id": "cd26",
+          "names": {
+            "en": "Line 26",
+            "zh-Hans": "26号线",
+            "zh-Hant": "26號線"
+          }
+        },
+        {
+          "colour": "#00A3E0",
+          "foreground": null,
+          "id": "cd27",
+          "names": {
+            "en": "Line 27",
+            "zh-Hans": "27号线",
+            "zh-Hant": "27號線"
+          }
+        },
+        {
+          "colour": "#9678D3",
+          "foreground": null,
+          "id": "cd28",
+          "names": {
+            "en": "Line 28",
+            "zh-Hans": "28号线",
+            "zh-Hant": "28號線"
+          }
+        },
+        {
+          "colour": "#7C78FF",
+          "foreground": null,
+          "id": "cd29",
+          "names": {
+            "en": "Line 29",
+            "zh-Hans": "29号线",
+            "zh-Hant": "29號線"
+          }
+        },
+        {
+          "colour": "#F67599",
+          "foreground": null,
+          "id": "cd30",
+          "names": {
+            "en": "Line 30",
+            "zh-Hans": "30号线",
+            "zh-Hant": "30號線"
+          }
+        },
+        {
+          "colour": "#003DA5",
+          "foreground": null,
+          "id": "cd32",
+          "names": {
+            "en": "Line 32",
+            "zh-Hans": "32号线",
+            "zh-Hant": "32號線"
+          }
+        },
+        {
+          "colour": "#8EDD65",
+          "foreground": null,
+          "id": "cd33",
+          "names": {
+            "en": "Line 33",
+            "zh-Hans": "33号线",
+            "zh-Hant": "33號線"
+          }
+        },
+        {
+          "colour": "#A4D65E",
+          "foreground": null,
+          "id": "cds1",
+          "names": {
+            "en": "Line S1/Xindu-Jintang Line",
+            "zh-Hans": "S1线/新都金堂线",
+            "zh-Hant": "S1線/新都金堂線"
+          }
+        },
+        {
+          "colour": "#C98BDB",
+          "foreground": null,
+          "id": "cds2",
+          "names": {
+            "en": "Line S2/Jintang-Airport Line",
+            "zh-Hans": "S2线/金堂空港线",
+            "zh-Hant": "S2線/金堂空港線"
+          }
+        },
+        {
+          "colour": "#75787B",
+          "foreground": null,
+          "id": "cds3",
+          "names": {
+            "en": "Line S3/East Ziyang Line",
+            "zh-Hans": "S3线/资阳东线",
+            "zh-Hant": "S3線/資陽東線"
+          }
+        },
+        {
+          "colour": "#97D700",
+          "foreground": null,
+          "id": "cds4",
+          "names": {
+            "en": "Line S4/Longquanyi-Huaizhou Line",
+            "zh-Hans": "S4线/龙泉驿淮州线",
+            "zh-Hant": "S4線/龍泉驛淮州線"
+          }
+        },
+        {
+          "colour": "#5C88DA",
+          "foreground": null,
+          "id": "cds5",
+          "names": {
+            "en": "Line S5/Meishan Renshou Line",
+            "zh-Hans": "S5线/眉山仁寿线",
+            "zh-Hant": "S5線/眉山仁壽線"
+          }
+        },
+        {
+          "colour": "#A05088",
+          "foreground": null,
+          "id": "cds6",
+          "names": {
+            "en": "Line S6/Xinjin-Pujiang Line",
+            "zh-Hans": "S6线/新津蒲江线",
+            "zh-Hant": "S6線/新津蒲江線"
+          }
+        },
+        {
+          "colour": "#00CC78",
+          "foreground": null,
+          "id": "cds7",
+          "names": {
+            "en": "Line S7/South Xinjin Line",
+            "zh-Hans": "S7线/新津南线",
+            "zh-Hant": "S7線/新津南線"
+          }
+        },
+        {
+          "colour": "#007CCC",
+          "foreground": null,
+          "id": "cds8",
+          "names": {
+            "en": "Line S8/Xinjin-Anren Line",
+            "zh-Hans": "S8线/新津安仁线",
+            "zh-Hant": "S8線/新津安仁線"
+          }
+        },
+        {
+          "colour": "#539A58",
+          "foreground": null,
+          "id": "cds9",
+          "names": {
+            "en": "Line S9/Wenjiang-Dujiangyan Line",
+            "zh-Hans": "S9线/温江都江堰线",
+            "zh-Hant": "S9線/溫江都江堰線"
+          }
+        },
+        {
+          "colour": "#C0FA08",
+          "foreground": null,
+          "id": "cds10",
+          "names": {
+            "en": "Line S10/Xindu-Guanghan Line",
+            "zh-Hans": "S10线/新都广汉线",
+            "zh-Hant": "S10線/新都廣漢線"
+          }
+        },
+        {
+          "colour": "#737B4C",
+          "foreground": null,
+          "id": "cds11",
+          "names": {
+            "en": "Line S11/Deyang Luojiang Line",
+            "zh-Hans": "S11线/德阳罗江线",
+            "zh-Hant": "S11線/德陽羅江線"
+          }
+        },
+        {
+          "colour": "#0050A0",
+          "foreground": null,
+          "id": "cds12",
+          "names": {
+            "en": "Line S12/Chenghua-Jingyang Line",
+            "zh-Hans": "S12线/成华旌阳线",
+            "zh-Hant": "S12線/成華旌陽線"
+          }
+        },
+        {
+          "colour": "#C55C64",
+          "foreground": null,
+          "id": "cds13",
+          "names": {
+            "en": "Line S13/Longquan-Tianfu Airport Line",
+            "zh-Hans": "S13线/龙泉天府机场线",
+            "zh-Hant": "S13線/龍泉天府機場線"
+          }
+        },
+        {
+          "colour": "#B8B800",
+          "foreground": null,
+          "id": "cds14",
+          "names": {
+            "en": "Line S14/Tianfu-Jianyang Line",
+            "zh-Hans": "S14线/天府简阳线",
+            "zh-Hant": "S14線/天府簡陽線"
+          }
+        },
+        {
+          "colour": "#0080FF",
+          "foreground": null,
+          "id": "cds15",
+          "names": {
+            "en": "Line S15/Southeast Ring Line",
+            "zh-Hans": "S15线/东南环线",
+            "zh-Hant": "S15線/東南環線"
+          }
+        },
+        {
+          "colour": "#FF8800",
+          "foreground": null,
+          "id": "cds16",
+          "names": {
+            "en": "Line S16/Meishan Qingshen Line",
+            "zh-Hans": "S16线/眉山青神线",
+            "zh-Hant": "S16線/眉山青神線"
+          }
+        },
+        {
+          "colour": "#059370",
+          "foreground": null,
+          "id": "cds17",
+          "names": {
+            "en": "Line S17/West Ziyang Line",
+            "zh-Hans": "S17线/资阳西线",
+            "zh-Hant": "S17線/資陽西線"
+          }
+        },
+        {
+          "colour": "#00BAF8",
+          "foreground": null,
+          "id": "cds18",
+          "names": {
+            "en": "Line S18/North Xinjin Line",
+            "zh-Hans": "S18线/新津北线",
+            "zh-Hant": "S18線/新津北線"
+          }
+        },
+        {
+          "colour": "#7F9F3A",
+          "foreground": null,
+          "id": "t2",
+          "names": {
+            "en": "Tram T2",
+            "zh-Hans": "蓉2号线",
+            "zh-Hant": "蓉2號線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Chengdu",
+        "zh-Hans": "成都",
+        "zh-Hant": "成都"
+      },
+      "sourceSha256": "edae47bac3eedf13161c9a586bc8930468ee9d609019e84edf4b7c2605e04f1c"
+    },
+    "chongqing": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#F2A900",
+          "foreground": null,
+          "id": "loop",
+          "names": {
+            "en": "Loop Line",
+            "zh-Hans": "环线",
+            "zh-Hant": "環線"
+          }
+        },
+        {
+          "colour": "#E4002B",
+          "foreground": null,
+          "id": "cq1",
+          "names": {
+            "en": "Line 1",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#007A33",
+          "foreground": null,
+          "id": "cq2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#003DA5",
+          "foreground": null,
+          "id": "cq3",
+          "names": {
+            "en": "Line 3/Konggang Line",
+            "zh-Hans": "3号线/空港线",
+            "zh-Hant": "3號線/空港線"
+          }
+        },
+        {
+          "colour": "#DC8633",
+          "foreground": null,
+          "id": "cq4",
+          "names": {
+            "en": "Line 4",
+            "zh-Hans": "4号线",
+            "zh-Hant": "4號線"
+          }
+        },
+        {
+          "colour": "#00A3E0",
+          "foreground": null,
+          "id": "cq5",
+          "names": {
+            "en": "Line 5",
+            "zh-Hans": "5号线",
+            "zh-Hant": "5號線"
+          }
+        },
+        {
+          "colour": "#F67599",
+          "foreground": null,
+          "id": "cq6",
+          "names": {
+            "en": "Line 6/International Expo Line",
+            "zh-Hans": "6号线/国博线",
+            "zh-Hant": "6號線/國博線"
+          }
+        },
+        {
+          "colour": "#008C95",
+          "foreground": null,
+          "id": "cq7",
+          "names": {
+            "en": "Line 7",
+            "zh-Hans": "7号线",
+            "zh-Hant": "7號線"
+          }
+        },
+        {
+          "colour": "#7A9A01",
+          "foreground": null,
+          "id": "cq8",
+          "names": {
+            "en": "Line 8",
+            "zh-Hans": "8号线",
+            "zh-Hant": "8號線"
+          }
+        },
+        {
+          "colour": "#862041",
+          "foreground": null,
+          "id": "cq9",
+          "names": {
+            "en": "Line 9",
+            "zh-Hans": "9号线",
+            "zh-Hant": "9號線"
+          }
+        },
+        {
+          "colour": "#5F249F",
+          "foreground": null,
+          "id": "cq10",
+          "names": {
+            "en": "Line 10",
+            "zh-Hans": "10号线",
+            "zh-Hant": "10號線"
+          }
+        },
+        {
+          "colour": "#D986BA",
+          "foreground": null,
+          "id": "cq11",
+          "names": {
+            "en": "Line 11",
+            "zh-Hans": "11号线",
+            "zh-Hant": "11號線"
+          }
+        },
+        {
+          "colour": "#D2D755",
+          "foreground": null,
+          "id": "cq12",
+          "names": {
+            "en": "Line 12",
+            "zh-Hans": "12号线",
+            "zh-Hant": "12號線"
+          }
+        },
+        {
+          "colour": "#B89D18",
+          "foreground": null,
+          "id": "cq13",
+          "names": {
+            "en": "Line 13",
+            "zh-Hans": "13号线",
+            "zh-Hant": "13號線"
+          }
+        },
+        {
+          "colour": "#B94700",
+          "foreground": null,
+          "id": "cq14",
+          "names": {
+            "en": "Line 14",
+            "zh-Hans": "14号线",
+            "zh-Hant": "14號線"
+          }
+        },
+        {
+          "colour": "#0057B7",
+          "foreground": null,
+          "id": "cq15",
+          "names": {
+            "en": "Line 15",
+            "zh-Hans": "15号线",
+            "zh-Hant": "15號線"
+          }
+        },
+        {
+          "colour": "#B04A5A",
+          "foreground": null,
+          "id": "cq16",
+          "names": {
+            "en": "Line 16",
+            "zh-Hans": "16号线",
+            "zh-Hant": "16號線"
+          }
+        },
+        {
+          "colour": "#9F5CC0",
+          "foreground": null,
+          "id": "cq17",
+          "names": {
+            "en": "Line 17",
+            "zh-Hans": "17号线",
+            "zh-Hant": "17號線"
+          }
+        },
+        {
+          "colour": "#2CD5C4",
+          "foreground": null,
+          "id": "cq18",
+          "names": {
+            "en": "Line 18",
+            "zh-Hans": "18号线",
+            "zh-Hant": "18號線"
+          }
+        },
+        {
+          "colour": "#0057B7",
+          "foreground": null,
+          "id": "cq19",
+          "names": {
+            "en": "Line 19",
+            "zh-Hans": "19号线",
+            "zh-Hant": "19號線"
+          }
+        },
+        {
+          "colour": "#0057B7",
+          "foreground": null,
+          "id": "cq20",
+          "names": {
+            "en": "Line 20",
+            "zh-Hans": "20号线",
+            "zh-Hant": "20號線"
+          }
+        },
+        {
+          "colour": "#309B42",
+          "foreground": null,
+          "id": "cq21",
+          "names": {
+            "en": "Line 21",
+            "zh-Hans": "21号线",
+            "zh-Hant": "21號線"
+          }
+        },
+        {
+          "colour": "#2F6F7A",
+          "foreground": null,
+          "id": "cq22",
+          "names": {
+            "en": "Line 22",
+            "zh-Hans": "22号线",
+            "zh-Hant": "22號線"
+          }
+        },
+        {
+          "colour": "#93C90F",
+          "foreground": null,
+          "id": "cq23",
+          "names": {
+            "en": "Line 23",
+            "zh-Hans": "23号线",
+            "zh-Hant": "23號線"
+          }
+        },
+        {
+          "colour": "#D7A048",
+          "foreground": null,
+          "id": "cq24",
+          "names": {
+            "en": "Line 24",
+            "zh-Hans": "24号线",
+            "zh-Hant": "24號線"
+          }
+        },
+        {
+          "colour": "#8A75D1",
+          "foreground": null,
+          "id": "cq25",
+          "names": {
+            "en": "Line 25",
+            "zh-Hans": "25号线",
+            "zh-Hant": "25號線"
+          }
+        },
+        {
+          "colour": "#0057B7",
+          "foreground": null,
+          "id": "cq26",
+          "names": {
+            "en": "Line 26",
+            "zh-Hans": "26号线",
+            "zh-Hant": "26號線"
+          }
+        },
+        {
+          "colour": "#0057B7",
+          "foreground": null,
+          "id": "cq27",
+          "names": {
+            "en": "Line 27",
+            "zh-Hans": "27号线",
+            "zh-Hant": "27號線"
+          }
+        },
+        {
+          "colour": "#0057B7",
+          "foreground": null,
+          "id": "cq28",
+          "names": {
+            "en": "Line 28",
+            "zh-Hans": "28号线",
+            "zh-Hant": "28號線"
+          }
+        },
+        {
+          "colour": "#FF585D",
+          "foreground": null,
+          "id": "cq29",
+          "names": {
+            "en": "Line 29",
+            "zh-Hans": "29号线",
+            "zh-Hant": "29號線"
+          }
+        },
+        {
+          "colour": "#0057B7",
+          "foreground": null,
+          "id": "jiangtiao",
+          "names": {
+            "en": "Jiangtiao Line",
+            "zh-Hans": "江跳线",
+            "zh-Hant": "江跳線"
+          }
+        },
+        {
+          "colour": "#0057B7",
+          "foreground": null,
+          "id": "bitong",
+          "names": {
+            "en": "Bitong Line",
+            "zh-Hans": "璧铜线",
+            "zh-Hant": "璧銅線"
+          }
+        },
+        {
+          "colour": "#0057B7",
+          "foreground": null,
+          "id": "yongchuan",
+          "names": {
+            "en": "Yongchuan Line",
+            "zh-Hans": "永川线",
+            "zh-Hant": "永川線"
+          }
+        },
+        {
+          "colour": "#0057B7",
+          "foreground": null,
+          "id": "nanchuan",
+          "names": {
+            "en": "Nanchuan Line",
+            "zh-Hans": "南川线",
+            "zh-Hant": "南川線"
+          }
+        },
+        {
+          "colour": "#0057B7",
+          "foreground": null,
+          "id": "qiwan",
+          "names": {
+            "en": "Qiwan Line",
+            "zh-Hans": "綦万线",
+            "zh-Hant": "綦萬線"
+          }
+        },
+        {
+          "colour": "#0057B7",
+          "foreground": null,
+          "id": "dazu",
+          "names": {
+            "en": "Dazu Line",
+            "zh-Hans": "大足线",
+            "zh-Hant": "大足線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Chongqing",
+        "zh-Hans": "重庆",
+        "zh-Hant": "重慶"
+      },
+      "sourceSha256": "05ea7da80f1011743ac54625a7e0fad5ebd4f5ce65007aa68cbefa6897b6d8d3"
+    },
+    "chuzhou": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#FF631B",
+          "foreground": null,
+          "id": "ningchu",
+          "names": {
+            "en": "Nanjing-Chuzhou Line",
+            "zh-Hans": "宁滁线",
+            "zh-Hant": "寧滁線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Chuzhou",
+        "zh-Hans": "滁州",
+        "zh-Hant": "滁州"
+      },
+      "sourceSha256": "c670152bd34bf6124ad90bb46f84ee8b540bd88d73c4869da67dc52236c2763b"
+    },
+    "dalian": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#43B02A",
+          "foreground": null,
+          "id": "dl1",
+          "names": {
+            "en": "Line 1",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#009CDD",
+          "foreground": null,
+          "id": "dl2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#EC008C",
+          "foreground": null,
+          "id": "dl3",
+          "names": {
+            "en": "Line 3",
+            "zh-Hans": "3号线",
+            "zh-Hant": "3號線"
+          }
+        },
+        {
+          "colour": "#5D2D29",
+          "foreground": null,
+          "id": "dl4",
+          "names": {
+            "en": "Line 4",
+            "zh-Hans": "4号线",
+            "zh-Hant": "4號線"
+          }
+        },
+        {
+          "colour": "#E50309",
+          "foreground": null,
+          "id": "dl5",
+          "names": {
+            "en": "Line 5",
+            "zh-Hans": "5号线",
+            "zh-Hant": "5號線"
+          }
+        },
+        {
+          "colour": "#1D1F8A",
+          "foreground": null,
+          "id": "dl6",
+          "names": {
+            "en": "Line 6",
+            "zh-Hans": "6号线",
+            "zh-Hant": "6號線"
+          }
+        },
+        {
+          "colour": "#F58427",
+          "foreground": null,
+          "id": "dl7",
+          "names": {
+            "en": "Line 7",
+            "zh-Hans": "7号线",
+            "zh-Hant": "7號線"
+          }
+        },
+        {
+          "colour": "#00601E",
+          "foreground": null,
+          "id": "dl8",
+          "names": {
+            "en": "Line 8",
+            "zh-Hans": "8号线",
+            "zh-Hant": "8號線"
+          }
+        },
+        {
+          "colour": "#63C1C0",
+          "foreground": null,
+          "id": "dl9",
+          "names": {
+            "en": "Line 9",
+            "zh-Hans": "9号线",
+            "zh-Hant": "9號線"
+          }
+        },
+        {
+          "colour": "#53C2F9",
+          "foreground": null,
+          "id": "dl10",
+          "names": {
+            "en": "Line 10",
+            "zh-Hans": "10号线",
+            "zh-Hant": "10號線"
+          }
+        },
+        {
+          "colour": "#DE83A6",
+          "foreground": null,
+          "id": "dl11",
+          "names": {
+            "en": "Line 11",
+            "zh-Hans": "11号线",
+            "zh-Hant": "11號線"
+          }
+        },
+        {
+          "colour": "#554B9B",
+          "foreground": null,
+          "id": "dl12",
+          "names": {
+            "en": "Line 12",
+            "zh-Hans": "12号线",
+            "zh-Hant": "12號線"
+          }
+        },
+        {
+          "colour": "#F0C701",
+          "foreground": null,
+          "id": "dl13",
+          "names": {
+            "en": "Line 13",
+            "zh-Hans": "13号线",
+            "zh-Hant": "13號線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Dalian",
+        "zh-Hans": "大连",
+        "zh-Hant": "大連"
+      },
+      "sourceSha256": "c6828cba90cdda342e17e3b3396ab8f10758403e22d16b35d98b95c8392f50c2"
+    },
+    "dongguan": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#4F8EC5",
+          "foreground": null,
+          "id": "r1",
+          "names": {
+            "en": "Line 1",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#ED1C24",
+          "foreground": null,
+          "id": "r2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#FAA61A",
+          "foreground": null,
+          "id": "r3",
+          "names": {
+            "en": "Line 3",
+            "zh-Hans": "3号线",
+            "zh-Hant": "3號線"
+          }
+        },
+        {
+          "colour": "#00AB4E",
+          "foreground": null,
+          "id": "r4",
+          "names": {
+            "en": "Line 4",
+            "zh-Hans": "4号线",
+            "zh-Hant": "4號線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Dongguan",
+        "zh-Hans": "东莞",
+        "zh-Hant": "東莞"
+      },
+      "sourceSha256": "bef79dc7995248d08118434d389f5b118c2128d09809a0b4c9e2fbbbe932b960"
+    },
+    "foshan": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#BBD501",
+          "foreground": null,
+          "id": "fs1",
+          "names": {
+            "en": "Guangfo Line",
+            "zh-Hans": "广佛线",
+            "zh-Hant": "廣佛線"
+          }
+        },
+        {
+          "colour": "#F6112E",
+          "foreground": null,
+          "id": "fs2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#002DA0",
+          "foreground": null,
+          "id": "fs3",
+          "names": {
+            "en": "Line 3",
+            "zh-Hans": "3号线",
+            "zh-Hant": "3號線"
+          }
+        },
+        {
+          "colour": "#923A7F",
+          "foreground": null,
+          "id": "fs4",
+          "names": {
+            "en": "Line 4",
+            "zh-Hans": "4号线",
+            "zh-Hant": "4號線"
+          }
+        },
+        {
+          "colour": "#FFB81D",
+          "foreground": null,
+          "id": "fs6",
+          "names": {
+            "en": "Line 6",
+            "zh-Hans": "6号线",
+            "zh-Hant": "6號線"
+          }
+        },
+        {
+          "colour": "#A25EB5",
+          "foreground": null,
+          "id": "fs9",
+          "names": {
+            "en": "Line 9",
+            "zh-Hans": "9号线",
+            "zh-Hant": "9號線"
+          }
+        },
+        {
+          "colour": "#2A3976",
+          "foreground": null,
+          "id": "fs11",
+          "names": {
+            "en": "Line 11",
+            "zh-Hans": "11号线",
+            "zh-Hant": "11號線"
+          }
+        },
+        {
+          "colour": "#32B7EA",
+          "foreground": null,
+          "id": "fs13",
+          "names": {
+            "en": "Line 13",
+            "zh-Hans": "13号线",
+            "zh-Hant": "13號線"
+          }
+        },
+        {
+          "colour": "#60B5E5",
+          "foreground": null,
+          "id": "tnh1",
+          "names": {
+            "en": "Nanhai Tram Line 1",
+            "zh-Hans": "南海有轨1号线",
+            "zh-Hant": "南海有軌1號線"
+          }
+        },
+        {
+          "colour": "#4CA585",
+          "foreground": null,
+          "id": "tgm1",
+          "names": {
+            "en": "Gaoming Tram Line 1",
+            "zh-Hans": "高明有轨1号线",
+            "zh-Hant": "高明有軌1號線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Foshan",
+        "zh-Hans": "佛山",
+        "zh-Hant": "佛山"
+      },
+      "sourceSha256": "ddfa5f541606be40375e878944a31cdd3621e926d59e3ebb640c88d48cafe569"
+    },
+    "fuzhou": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#BB1E10",
+          "foreground": null,
+          "id": "fz1",
+          "names": {
+            "en": "Line 1",
+            "ko": "1호선",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號缐"
+          }
+        },
+        {
+          "colour": "#325928",
+          "foreground": null,
+          "id": "fz2",
+          "names": {
+            "en": "Line 2",
+            "ko": "2호선",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號缐"
+          }
+        },
+        {
+          "colour": "#FF7F41",
+          "foreground": null,
+          "id": "fz4",
+          "names": {
+            "en": "Line 4",
+            "ko": "4호선",
+            "zh-Hans": "4号线",
+            "zh-Hant": "4號缐"
+          }
+        },
+        {
+          "colour": "#893B67",
+          "foreground": null,
+          "id": "fz5",
+          "names": {
+            "en": "Line 5",
+            "ko": "5호선",
+            "zh-Hans": "5号线",
+            "zh-Hant": "5號缐"
+          }
+        },
+        {
+          "colour": "#005EB8",
+          "foreground": null,
+          "id": "fz6",
+          "names": {
+            "en": "Line 6",
+            "ko": "6호선",
+            "zh-Hans": "6号线",
+            "zh-Hant": "6號缐"
+          }
+        },
+        {
+          "colour": "#00ADBB",
+          "foreground": null,
+          "id": "fzbh",
+          "names": {
+            "en": "Binhai Express",
+            "ko": "빈해 익스프레스",
+            "zh-Hans": "滨海快线",
+            "zh-Hant": "濱海快缐"
+          }
+        }
+      ],
+      "names": {
+        "en": "Fuzhou",
+        "ko": "푸저우",
+        "zh-Hans": "福州",
+        "zh-Hant": "福州"
+      },
+      "sourceSha256": "53ef076dfd9bf82a34a62b96d408e35d2aeac3bd889dec3953f1bf11ef1c553c"
+    },
+    "guangzhou": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#F3D03E",
+          "foreground": null,
+          "id": "gz1",
+          "names": {
+            "en": "Line 1",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#00629B",
+          "foreground": null,
+          "id": "gz2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#ECA154",
+          "foreground": null,
+          "id": "gz3",
+          "names": {
+            "en": "Line 3",
+            "zh-Hans": "3号线",
+            "zh-Hant": "3號線"
+          }
+        },
+        {
+          "colour": "#00843D",
+          "foreground": null,
+          "id": "gz4",
+          "names": {
+            "en": "Line 4",
+            "zh-Hans": "4号线",
+            "zh-Hant": "4號線"
+          }
+        },
+        {
+          "colour": "#C5003E",
+          "foreground": null,
+          "id": "gz5",
+          "names": {
+            "en": "Line 5",
+            "zh-Hans": "5号线",
+            "zh-Hant": "5號線"
+          }
+        },
+        {
+          "colour": "#80225F",
+          "foreground": null,
+          "id": "gz6",
+          "names": {
+            "en": "Line 6",
+            "zh-Hans": "6号线",
+            "zh-Hant": "6號線"
+          }
+        },
+        {
+          "colour": "#97D700",
+          "foreground": null,
+          "id": "gz7",
+          "names": {
+            "en": "Line 7",
+            "zh-Hans": "7号线",
+            "zh-Hant": "7號線"
+          }
+        },
+        {
+          "colour": "#008C95",
+          "foreground": null,
+          "id": "gz8",
+          "names": {
+            "en": "Line 8",
+            "zh-Hans": "8号线",
+            "zh-Hant": "8號線"
+          }
+        },
+        {
+          "colour": "#71CC98",
+          "foreground": null,
+          "id": "gz9",
+          "names": {
+            "en": "Line 9",
+            "zh-Hans": "9号线",
+            "zh-Hant": "9號線"
+          }
+        },
+        {
+          "colour": "#7D9CC0",
+          "foreground": null,
+          "id": "gz10",
+          "names": {
+            "en": "Line 10",
+            "zh-Hans": "10号线",
+            "zh-Hant": "10號線"
+          }
+        },
+        {
+          "colour": "#FFB00A",
+          "foreground": null,
+          "id": "gz11",
+          "names": {
+            "en": "Line 11",
+            "zh-Hans": "11号线",
+            "zh-Hant": "11號線"
+          }
+        },
+        {
+          "colour": "#59621D",
+          "foreground": null,
+          "id": "gz12",
+          "names": {
+            "en": "Line 12",
+            "zh-Hans": "12号线",
+            "zh-Hant": "12號線"
+          }
+        },
+        {
+          "colour": "#8E8C13",
+          "foreground": null,
+          "id": "gz13",
+          "names": {
+            "en": "Line 13",
+            "zh-Hans": "13号线",
+            "zh-Hant": "13號線"
+          }
+        },
+        {
+          "colour": "#81312F",
+          "foreground": null,
+          "id": "gz14",
+          "names": {
+            "en": "Line 14",
+            "zh-Hans": "14号线",
+            "zh-Hant": "14號線"
+          }
+        },
+        {
+          "colour": "#AE8A79",
+          "foreground": null,
+          "id": "gz15",
+          "names": {
+            "en": "Line 15",
+            "zh-Hans": "15号线",
+            "zh-Hant": "15號線"
+          }
+        },
+        {
+          "colour": "#9E652E",
+          "foreground": null,
+          "id": "gz16",
+          "names": {
+            "en": "Line 16",
+            "zh-Hans": "16号线",
+            "zh-Hant": "16號線"
+          }
+        },
+        {
+          "colour": "#8B84D7",
+          "foreground": null,
+          "id": "gz17",
+          "names": {
+            "en": "Line 17",
+            "zh-Hans": "17号线",
+            "zh-Hant": "17號線"
+          }
+        },
+        {
+          "colour": "#3040B6",
+          "foreground": null,
+          "id": "gz18",
+          "names": {
+            "en": "Line 18",
+            "zh-Hans": "18号线",
+            "zh-Hant": "18號線"
+          }
+        },
+        {
+          "colour": "#BB29BB",
+          "foreground": null,
+          "id": "gz19",
+          "names": {
+            "en": "Line 19",
+            "zh-Hans": "19号线",
+            "zh-Hant": "19號線"
+          }
+        },
+        {
+          "colour": "#D60078",
+          "foreground": null,
+          "id": "gz20",
+          "names": {
+            "en": "Line 20",
+            "zh-Hans": "20号线",
+            "zh-Hant": "20號線"
+          }
+        },
+        {
+          "colour": "#211747",
+          "foreground": null,
+          "id": "gz21",
+          "names": {
+            "en": "Line 21",
+            "zh-Hans": "21号线",
+            "zh-Hant": "21號線"
+          }
+        },
+        {
+          "colour": "#D24C1E",
+          "foreground": null,
+          "id": "gz22",
+          "names": {
+            "en": "Line 22",
+            "zh-Hans": "22号线",
+            "zh-Hant": "22號線"
+          }
+        },
+        {
+          "colour": "#1FADA9",
+          "foreground": null,
+          "id": "gz24",
+          "names": {
+            "en": "Line 24",
+            "zh-Hans": "24号线",
+            "zh-Hant": "24號線"
+          }
+        },
+        {
+          "colour": "#C4D600",
+          "foreground": null,
+          "id": "gfl",
+          "names": {
+            "en": "Guangfo Line",
+            "zh-Hans": "广佛线",
+            "zh-Hant": "廣佛線"
+          }
+        },
+        {
+          "colour": "#00B5E2",
+          "foreground": null,
+          "id": "apm",
+          "names": {
+            "en": "APM Line",
+            "zh-Hans": "珠江新城旅客自动输送系统（APM线）",
+            "zh-Hant": "珠江新城旅客自動輸送系統（APM線）"
+          }
+        },
+        {
+          "colour": "#61C013",
+          "foreground": null,
+          "id": "thz1",
+          "names": {
+            "en": "THZ1 (Haizhu Tram Line 1)",
+            "zh-Hans": "海珠有轨1号线",
+            "zh-Hant": "海珠有軌1號線"
+          }
+        },
+        {
+          "colour": "#C11B20",
+          "foreground": null,
+          "id": "thp1",
+          "names": {
+            "en": "THP1 (Huangpu Tram Line 1)",
+            "zh-Hans": "黄埔有轨1号线",
+            "zh-Hant": "黃埔有軌1號線"
+          }
+        },
+        {
+          "colour": "#E50083",
+          "foreground": null,
+          "id": "thp2",
+          "names": {
+            "en": "THP2 (Huangpu Tram Line 2)",
+            "zh-Hans": "黄埔有轨2号线",
+            "zh-Hant": "黃埔有軌2號線"
+          }
+        },
+        {
+          "colour": "#565656",
+          "foreground": null,
+          "id": "fsmtr",
+          "names": {
+            "en": "Foshan Metro",
+            "zh-Hans": "佛山地铁",
+            "zh-Hant": "佛山地鐵"
+          }
+        },
+        {
+          "colour": "#255AA8",
+          "foreground": null,
+          "id": "gdcj",
+          "names": {
+            "en": "Guangdong Intercity",
+            "zh-Hans": "广东城际",
+            "zh-Hant": "廣東城際"
+          }
+        }
+      ],
+      "names": {
+        "en": "Guangzhou",
+        "zh-Hans": "广州",
+        "zh-Hant": "廣州"
+      },
+      "sourceSha256": "1caecc562db2def170d0b88854402f3a8f5289e4b77c509a80d5cca87dbba7be"
+    },
+    "guiyang": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#61B32E",
+          "foreground": null,
+          "id": "gy1",
+          "names": {
+            "en": "Line 1",
+            "ko": "1호선",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#091869",
+          "foreground": null,
+          "id": "gy2",
+          "names": {
+            "en": "Line 2",
+            "ko": "2호선",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#F32628",
+          "foreground": null,
+          "id": "gy3",
+          "names": {
+            "en": "Line 3",
+            "ko": "3호선",
+            "zh-Hans": "3号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#972284",
+          "foreground": null,
+          "id": "gys1",
+          "names": {
+            "en": "Line S1",
+            "ko": "S1호선",
+            "zh-Hans": "S1号线",
+            "zh-Hant": "S1號線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Guiyang",
+        "ko": "구이양",
+        "zh-Hans": "贵阳",
+        "zh-Hant": "貴陽"
+      },
+      "sourceSha256": "626757d1d733715e3792a6a0b2aed51907b7a9a65de2f7a1e5b8b7dbdb280ca7"
+    },
+    "hangzhou": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#E8384A",
+          "foreground": null,
+          "id": "hz1",
+          "names": {
+            "en": "Line 1",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#E17901",
+          "foreground": null,
+          "id": "hz2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#FFCF23",
+          "foreground": null,
+          "id": "hz3",
+          "names": {
+            "en": "Line 3",
+            "zh-Hans": "3号线",
+            "zh-Hant": "3號線"
+          }
+        },
+        {
+          "colour": "#60C04B",
+          "foreground": null,
+          "id": "hz4",
+          "names": {
+            "en": "Line 4",
+            "zh-Hans": "4号线",
+            "zh-Hant": "4號線"
+          }
+        },
+        {
+          "colour": "#00AFC8",
+          "foreground": null,
+          "id": "hz5",
+          "names": {
+            "en": "Line 5",
+            "zh-Hans": "5号线",
+            "zh-Hant": "5號線"
+          }
+        },
+        {
+          "colour": "#0077CF",
+          "foreground": null,
+          "id": "hz6",
+          "names": {
+            "en": "Line 6",
+            "zh-Hans": "6号线",
+            "zh-Hant": "6號線"
+          }
+        },
+        {
+          "colour": "#790F8E",
+          "foreground": null,
+          "id": "hz7",
+          "names": {
+            "en": "Line 7",
+            "zh-Hans": "7号线",
+            "zh-Hant": "7號線"
+          }
+        },
+        {
+          "colour": "#A80D4D",
+          "foreground": null,
+          "id": "hz8",
+          "names": {
+            "en": "Line 8",
+            "zh-Hans": "8号线",
+            "zh-Hant": "8號線"
+          }
+        },
+        {
+          "colour": "#C45B03",
+          "foreground": null,
+          "id": "hz9",
+          "names": {
+            "en": "Line 9",
+            "zh-Hans": "9号线",
+            "zh-Hant": "9號線"
+          }
+        },
+        {
+          "colour": "#DAAA00",
+          "foreground": null,
+          "id": "hz10",
+          "names": {
+            "en": "Line 10",
+            "zh-Hans": "10号线",
+            "zh-Hant": "10號線"
+          }
+        },
+        {
+          "colour": "#047DA4",
+          "foreground": null,
+          "id": "hz12",
+          "names": {
+            "en": "Line 12",
+            "zh-Hans": "12号线",
+            "zh-Hant": "12號線"
+          }
+        },
+        {
+          "colour": "#FA8BA3",
+          "foreground": null,
+          "id": "hz15",
+          "names": {
+            "en": "Line 15",
+            "zh-Hans": "15号线",
+            "zh-Hant": "15號線"
+          }
+        },
+        {
+          "colour": "#FFAA52",
+          "foreground": null,
+          "id": "hz16",
+          "names": {
+            "en": "Line 16",
+            "zh-Hans": "16号线",
+            "zh-Hant": "16號線"
+          }
+        },
+        {
+          "colour": "#98FB98",
+          "foreground": null,
+          "id": "hz18",
+          "names": {
+            "en": "Line 18",
+            "zh-Hans": "18号线",
+            "zh-Hant": "18號線"
+          }
+        },
+        {
+          "colour": "#4ACBE5",
+          "foreground": null,
+          "id": "hz19",
+          "names": {
+            "en": "Line 19",
+            "zh-Hans": "19号线",
+            "zh-Hant": "19號線"
+          }
+        },
+        {
+          "colour": "#0077C8",
+          "foreground": null,
+          "id": "hangzhouhainingintercityrail",
+          "names": {
+            "en": "Hangzhou-Haining Intercity Rail",
+            "zh-Hans": "杭海城际",
+            "zh-Hant": "杭海城際"
+          }
+        },
+        {
+          "colour": "#DAAA00",
+          "foreground": null,
+          "id": "hangzhoudeqingintercityrail",
+          "names": {
+            "en": "Hangzhou-Deqing Intercity Rail",
+            "zh-Hans": "杭德城际",
+            "zh-Hant": "杭德城際"
+          }
+        }
+      ],
+      "names": {
+        "en": "Hangzhou",
+        "zh-Hans": "杭州",
+        "zh-Hant": "杭州"
+      },
+      "sourceSha256": "798491d30418141774ad3e5054cf1783e3ba7b35e8d42ac65106ff3f1f12ad62"
+    },
+    "harbin": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#C8102E",
+          "foreground": null,
+          "id": "hrb1",
+          "names": {
+            "en": "Line 1",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#44AF52",
+          "foreground": null,
+          "id": "hrb2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#FFC72C",
+          "foreground": null,
+          "id": "hrb3",
+          "names": {
+            "en": "Line 3",
+            "zh-Hans": "3号线",
+            "zh-Hant": "3號線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Harbin",
+        "zh-Hans": "哈尔滨",
+        "zh-Hant": "哈爾濱"
+      },
+      "sourceSha256": "e3e84b8b576442aeaaa43fa810de3efae85ca28bf89e0aa5a11f3fa9e27b8d50"
+    },
+    "hefei": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#E61E25",
+          "foreground": null,
+          "id": "hf1",
+          "names": {
+            "en": "Line 1",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#0168B3",
+          "foreground": null,
+          "id": "hf2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#00843D",
+          "foreground": null,
+          "id": "hf3",
+          "names": {
+            "en": "Line 3",
+            "zh-Hans": "3号线",
+            "zh-Hant": "3號線"
+          }
+        },
+        {
+          "colour": "#F79727",
+          "foreground": null,
+          "id": "hf4",
+          "names": {
+            "en": "Line 4",
+            "zh-Hans": "4号线",
+            "zh-Hant": "4號線"
+          }
+        },
+        {
+          "colour": "#C1D72F",
+          "foreground": null,
+          "id": "hf5",
+          "names": {
+            "en": "Line 5",
+            "zh-Hans": "5号线",
+            "zh-Hant": "5號線"
+          }
+        },
+        {
+          "colour": "#C99FCD",
+          "foreground": null,
+          "id": "hf6",
+          "names": {
+            "en": "Line 6",
+            "zh-Hans": "6号线",
+            "zh-Hant": "6號線"
+          }
+        },
+        {
+          "colour": "#F1CC40",
+          "foreground": null,
+          "id": "hf7",
+          "names": {
+            "en": "Line 7",
+            "zh-Hans": "7号线",
+            "zh-Hant": "7號線"
+          }
+        },
+        {
+          "colour": "#65AEE3",
+          "foreground": null,
+          "id": "hf8",
+          "names": {
+            "en": "Line 8",
+            "zh-Hans": "8号线",
+            "zh-Hant": "8號線"
+          }
+        },
+        {
+          "colour": "#BCA488",
+          "foreground": null,
+          "id": "hfs1",
+          "names": {
+            "en": "Line S1",
+            "zh-Hans": "S1号线",
+            "zh-Hant": "S1號線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Hefei",
+        "zh-Hans": "合肥",
+        "zh-Hant": "合肥"
+      },
+      "sourceSha256": "03723184c58035ccc9defff61278f96c525f1488f84333bc6a4f4fa0fc6b19f0"
+    },
+    "hohhot": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#E82311",
+          "foreground": null,
+          "id": "hhht1",
+          "names": {
+            "en": "Line 1",
+            "ko": "1호선",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#005BAC",
+          "foreground": null,
+          "id": "hhht2",
+          "names": {
+            "en": "Line 2",
+            "ko": "2호선",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Hohhot",
+        "ko": "후허하오터",
+        "zh-Hans": "呼和浩特",
+        "zh-Hant": "呼和浩特"
+      },
+      "sourceSha256": "c522cfa41ed93230a7e69a87fa7e7bacdf228c924aba88f5310f86b05ba3d774"
+    },
+    "jinan": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#BE1FA1",
+          "foreground": null,
+          "id": "jnr01",
+          "names": {
+            "en": "Line 1",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#FFB620",
+          "foreground": null,
+          "id": "jnr02",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#0073CE",
+          "foreground": null,
+          "id": "jnr03",
+          "names": {
+            "en": "Line 3",
+            "zh-Hans": "3号线",
+            "zh-Hant": "3號線"
+          }
+        },
+        {
+          "colour": "#229719",
+          "foreground": null,
+          "id": "jnr04",
+          "names": {
+            "en": "Line 4",
+            "zh-Hans": "4号线",
+            "zh-Hant": "4號線"
+          }
+        },
+        {
+          "colour": "#27BFF0",
+          "foreground": null,
+          "id": "jnr06",
+          "names": {
+            "en": "Line 6",
+            "zh-Hans": "6号线",
+            "zh-Hant": "6號線"
+          }
+        },
+        {
+          "colour": "#62449C",
+          "foreground": null,
+          "id": "jnr08",
+          "names": {
+            "en": "Line 8",
+            "zh-Hans": "8号线",
+            "zh-Hant": "8號線"
+          }
+        },
+        {
+          "colour": "#5AC5BD",
+          "foreground": null,
+          "id": "jnt01",
+          "names": {
+            "en": "JIYANG Line",
+            "zh-Hans": "济阳线",
+            "zh-Hant": "濟陽線"
+          }
+        },
+        {
+          "colour": "#277AA3",
+          "foreground": null,
+          "id": "jny01",
+          "names": {
+            "en": "Sky Shuttle Line 1",
+            "zh-Hans": "云巴1号线",
+            "zh-Hant": "雲巴1號線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Jinan",
+        "zh-Hans": "济南",
+        "zh-Hant": "濟南"
+      },
+      "sourceSha256": "eae6c8b2bc78c06cc40a1f782381a4aec4e30fadc8f37c182331c12b5066a0d3"
+    },
+    "jinhua": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#DA1934",
+          "foreground": null,
+          "id": "jydline",
+          "names": {
+            "en": "Jinhua-Yiwu-Dongyang Line",
+            "zh-Hans": "金义东线",
+            "zh-Hant": "金義東線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Jinhua",
+        "zh-Hans": "金华",
+        "zh-Hant": "金華"
+      },
+      "sourceSha256": "3c84f41e379779477a127fe16206b24b4b0b4e2b4d404f209582366c6a91247d"
+    },
+    "kunming": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#EA3222",
+          "foreground": null,
+          "id": "km1",
+          "names": {
+            "en": "Line 1",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#03619E",
+          "foreground": null,
+          "id": "km2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#A13187",
+          "foreground": null,
+          "id": "km3",
+          "names": {
+            "en": "Line 3",
+            "zh-Hans": "3号线",
+            "zh-Hant": "3號線"
+          }
+        },
+        {
+          "colour": "#F09C22",
+          "foreground": null,
+          "id": "km4",
+          "names": {
+            "en": "Line 4",
+            "zh-Hans": "4号线",
+            "zh-Hant": "4號線"
+          }
+        },
+        {
+          "colour": "#4EA547",
+          "foreground": null,
+          "id": "km5",
+          "names": {
+            "en": "Line 5",
+            "zh-Hans": "5号线",
+            "zh-Hant": "5號線"
+          }
+        },
+        {
+          "colour": "#048F92",
+          "foreground": null,
+          "id": "km6",
+          "names": {
+            "en": "Line 6",
+            "zh-Hans": "6号线",
+            "zh-Hant": "6號線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Kunming",
+        "zh-Hans": "昆明",
+        "zh-Hant": "昆明"
+      },
+      "sourceSha256": "d27adb2fb6d1c72cbe38510a6bc7e5d9c4438ef47e3d602a4665bd94df14f211"
+    },
+    "lanzhou": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#0080BC",
+          "foreground": null,
+          "id": "lz1",
+          "names": {
+            "en": "Line 1",
+            "ko": "1호선",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#FF0000",
+          "foreground": null,
+          "id": "lz2",
+          "names": {
+            "en": "Line 2",
+            "ko": "2호선",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#8B4513",
+          "foreground": null,
+          "id": "lz3",
+          "names": {
+            "en": "Line 3",
+            "ko": "3호선",
+            "zh-Hans": "3号线",
+            "zh-Hant": "3號線"
+          }
+        },
+        {
+          "colour": "#008000",
+          "foreground": null,
+          "id": "lz4",
+          "names": {
+            "en": "Line 4",
+            "ko": "4호선",
+            "zh-Hans": "4号线",
+            "zh-Hant": "4號線"
+          }
+        },
+        {
+          "colour": "#C71585",
+          "foreground": null,
+          "id": "lz5",
+          "names": {
+            "en": "Line 5",
+            "ko": "5호선",
+            "zh-Hans": "5号线",
+            "zh-Hant": "5號線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Lanzhou",
+        "ko": "란저우",
+        "zh-Hans": "兰州",
+        "zh-Hant": "蘭州"
+      },
+      "sourceSha256": "71610467ac2385e720198586a47b8610690d6fa1d81a610837391a55e34c1856"
+    },
+    "luoyang": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#C4608C",
+          "foreground": null,
+          "id": "ly1",
+          "names": {
+            "en": "Line 1",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#6FBA2C",
+          "foreground": null,
+          "id": "ly2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Luoyang",
+        "zh-Hans": "洛阳",
+        "zh-Hant": "洛陽"
+      },
+      "sourceSha256": "5e759c72b9de94e022b8595228d01d19bbeb8156fca526ff7eeb1403c78190ca"
+    },
+    "nanchang": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#E60039",
+          "foreground": null,
+          "id": "nc1",
+          "names": {
+            "en": "Line 1",
+            "ko": "1호선",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#FFDA01",
+          "foreground": null,
+          "id": "nc2",
+          "names": {
+            "en": "Line 2",
+            "ko": "2호선",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#0079C3",
+          "foreground": null,
+          "id": "nc3",
+          "names": {
+            "en": "Line 3",
+            "ko": "3호선",
+            "zh-Hans": "3号线",
+            "zh-Hant": "3號線"
+          }
+        },
+        {
+          "colour": "#00A560",
+          "foreground": null,
+          "id": "nc4",
+          "names": {
+            "en": "Line 4",
+            "ko": "4호선",
+            "zh-Hans": "4号线",
+            "zh-Hant": "4號線"
+          }
+        },
+        {
+          "colour": "#F0831E",
+          "foreground": null,
+          "id": "nc5",
+          "names": {
+            "en": "Line 5",
+            "ko": "5호선",
+            "zh-Hans": "5号线",
+            "zh-Hant": "5號線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Nanchang",
+        "ko": "난창",
+        "zh-Hans": "南昌",
+        "zh-Hant": "南昌"
+      },
+      "sourceSha256": "d57d57ec6f6abeb7838918ea88f5e10d8e591c7eea9906682b92f45f6c902327"
+    },
+    "nanjing": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#009ACE",
+          "foreground": null,
+          "id": "nj1",
+          "names": {
+            "en": "Line 1",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#A6093D",
+          "foreground": null,
+          "id": "nj2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#009A44",
+          "foreground": null,
+          "id": "nj3",
+          "names": {
+            "en": "Line 3",
+            "zh-Hans": "3号线",
+            "zh-Hant": "3號線"
+          }
+        },
+        {
+          "colour": "#7D55C7",
+          "foreground": null,
+          "id": "nj4",
+          "names": {
+            "en": "Line 4",
+            "zh-Hans": "4号线",
+            "zh-Hant": "4號線"
+          }
+        },
+        {
+          "colour": "#F2DA51",
+          "foreground": null,
+          "id": "nj5",
+          "names": {
+            "en": "Line 5",
+            "zh-Hans": "5号线",
+            "zh-Hant": "5號線"
+          }
+        },
+        {
+          "colour": "#4BBBB4",
+          "foreground": null,
+          "id": "nj6",
+          "names": {
+            "en": "Line 6",
+            "zh-Hans": "6号线",
+            "zh-Hant": "6號線"
+          }
+        },
+        {
+          "colour": "#4A7729",
+          "foreground": null,
+          "id": "nj7",
+          "names": {
+            "en": "Line 7",
+            "zh-Hans": "7号线",
+            "zh-Hant": "7號線"
+          }
+        },
+        {
+          "colour": "#FA4616",
+          "foreground": null,
+          "id": "nj9",
+          "names": {
+            "en": "Line 9",
+            "zh-Hans": "9号线",
+            "zh-Hant": "9號線"
+          }
+        },
+        {
+          "colour": "#B9975B",
+          "foreground": null,
+          "id": "nj10",
+          "names": {
+            "en": "Line 10",
+            "zh-Hans": "10号线",
+            "zh-Hant": "10號線"
+          }
+        },
+        {
+          "colour": "#EF426F",
+          "foreground": null,
+          "id": "nj11",
+          "names": {
+            "en": "Line 11",
+            "zh-Hans": "11号线",
+            "zh-Hant": "11號線"
+          }
+        },
+        {
+          "colour": "#4BBBB4",
+          "foreground": null,
+          "id": "s1",
+          "names": {
+            "en": "Line S1/Airport Line",
+            "zh-Hans": "S1号线/机场线",
+            "zh-Hant": "S1號線/機場線"
+          }
+        },
+        {
+          "colour": "#93282C",
+          "foreground": null,
+          "id": "s2",
+          "names": {
+            "en": "Line S2/Ningma Line",
+            "zh-Hans": "S2号线/宁马线",
+            "zh-Hant": "S2號線/寧馬線"
+          }
+        },
+        {
+          "colour": "#BA84AC",
+          "foreground": null,
+          "id": "s3",
+          "names": {
+            "en": "Line S3/Ninghe Line",
+            "zh-Hans": "S3号线/宁和线",
+            "zh-Hant": "S3號線/寧和線"
+          }
+        },
+        {
+          "colour": "#FF6314",
+          "foreground": null,
+          "id": "s4",
+          "names": {
+            "en": "Line S4/Ningchu Line",
+            "zh-Hans": "S4号线/宁滁线",
+            "zh-Hant": "S4號線/寧滁線"
+          }
+        },
+        {
+          "colour": "#F5DF4D",
+          "foreground": null,
+          "id": "s5",
+          "names": {
+            "en": "Line S5/Ningyang Line",
+            "zh-Hans": "S5号线/宁扬线",
+            "zh-Hant": "S5號線/寧揚線"
+          }
+        },
+        {
+          "colour": "#C98BDB",
+          "foreground": null,
+          "id": "s6",
+          "names": {
+            "en": "Line S6/Ningju Line",
+            "zh-Hans": "S6号线/宁句线",
+            "zh-Hant": "S6號線/寧句線"
+          }
+        },
+        {
+          "colour": "#B46B7A",
+          "foreground": null,
+          "id": "s7",
+          "names": {
+            "en": "Line S7/Ningli Line",
+            "zh-Hans": "S7号线/宁溧线",
+            "zh-Hant": "S7號線/寧溧線"
+          }
+        },
+        {
+          "colour": "#FF8000",
+          "foreground": null,
+          "id": "s8",
+          "names": {
+            "en": "Line S8/Ningtian Line",
+            "zh-Hans": "S8号线/宁天线",
+            "zh-Hant": "S8號線/寧天線"
+          }
+        },
+        {
+          "colour": "#FFC600",
+          "foreground": null,
+          "id": "s9",
+          "names": {
+            "en": "Line S9/Ninggao Line",
+            "zh-Hans": "S9号线/宁高线",
+            "zh-Hant": "S9號線/寧高線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Nanjing",
+        "zh-Hans": "南京",
+        "zh-Hant": "南京"
+      },
+      "sourceSha256": "f7ea81a3598143a8e92c787372c6cca46135276486ec19a5cffce72caef9f623"
+    },
+    "nanning": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#62BD6B",
+          "foreground": null,
+          "id": "nn1",
+          "names": {
+            "en": "Line 1",
+            "zh-Hans": "1号线"
+          }
+        },
+        {
+          "colour": "#EE3D2D",
+          "foreground": null,
+          "id": "nn2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线"
+          }
+        },
+        {
+          "colour": "#A81BA7",
+          "foreground": null,
+          "id": "nn3",
+          "names": {
+            "en": "Line 3",
+            "zh-Hans": "3号线"
+          }
+        },
+        {
+          "colour": "#CDD718",
+          "foreground": null,
+          "id": "nn4",
+          "names": {
+            "en": "Line 4",
+            "zh-Hans": "4号线"
+          }
+        },
+        {
+          "colour": "#3A61A8",
+          "foreground": null,
+          "id": "nn5",
+          "names": {
+            "en": "Line 5",
+            "zh-Hans": "5号线"
+          }
+        },
+        {
+          "colour": "#F27D00",
+          "foreground": null,
+          "id": "nn6",
+          "names": {
+            "en": "Line 6",
+            "zh-Hans": "6号线"
+          }
+        },
+        {
+          "colour": "#945A41",
+          "foreground": null,
+          "id": "nn7",
+          "names": {
+            "en": "Line 7",
+            "zh-Hans": "7号线"
+          }
+        },
+        {
+          "colour": "#10B3B0",
+          "foreground": null,
+          "id": "nn8",
+          "names": {
+            "en": "Line 8",
+            "zh-Hans": "8号线"
+          }
+        }
+      ],
+      "names": {
+        "en": "Nanning",
+        "zh-Hans": "南宁",
+        "zh-Hant": "南寧"
+      },
+      "sourceSha256": "b78d8fb87b25b039d38dfcefb0108334f91bfc8021a52778eab416370917c128"
+    },
+    "nantong": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#E60012",
+          "foreground": null,
+          "id": "nt1",
+          "names": {
+            "en": "Line 1",
+            "ko": "1호선",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#0072C8",
+          "foreground": null,
+          "id": "nt2",
+          "names": {
+            "en": "Line 2",
+            "ko": "2호선",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Nantong",
+        "ko": "난퉁",
+        "zh-Hans": "南通",
+        "zh-Hant": "南通"
+      },
+      "sourceSha256": "0116f65d568a94ba5ab0fb1a4b6c8df6ec1d7aed6209c9e1d5ac95c2f58a12bb"
+    },
+    "ningbo": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#1590CA",
+          "foreground": null,
+          "id": "nb1",
+          "names": {
+            "en": "Line 1",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#D60E19",
+          "foreground": null,
+          "id": "nb2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#F39800",
+          "foreground": null,
+          "id": "nb3",
+          "names": {
+            "en": "Line 3",
+            "zh-Hans": "3号线",
+            "zh-Hant": "3號線"
+          }
+        },
+        {
+          "colour": "#ABCD03",
+          "foreground": null,
+          "id": "nb4",
+          "names": {
+            "en": "Line 4",
+            "zh-Hans": "4号线",
+            "zh-Hant": "4號線"
+          }
+        },
+        {
+          "colour": "#1D2088",
+          "foreground": null,
+          "id": "nb5",
+          "names": {
+            "en": "Line 5",
+            "zh-Hans": "5号线",
+            "zh-Hant": "5號線"
+          }
+        },
+        {
+          "colour": "#167F3D",
+          "foreground": null,
+          "id": "nb6",
+          "names": {
+            "en": "Line 6",
+            "zh-Hans": "6号线",
+            "zh-Hant": "6號缐"
+          }
+        },
+        {
+          "colour": "#7C572D",
+          "foreground": null,
+          "id": "nb7",
+          "names": {
+            "en": "Line 7",
+            "zh-Hans": "7号线",
+            "zh-Hant": "7號缐"
+          }
+        },
+        {
+          "colour": "#D33A94",
+          "foreground": null,
+          "id": "nb8",
+          "names": {
+            "en": "Line 8",
+            "zh-Hans": "8号线",
+            "zh-Hant": "8號缐"
+          }
+        },
+        {
+          "colour": "#D16D57",
+          "foreground": null,
+          "id": "nb9",
+          "names": {
+            "en": "Line 9",
+            "zh-Hans": "9号线",
+            "zh-Hant": "9號線"
+          }
+        },
+        {
+          "colour": "#9A8DC3",
+          "foreground": null,
+          "id": "nb10",
+          "names": {
+            "en": "Line 10",
+            "zh-Hans": "10号线",
+            "zh-Hant": "10號缐"
+          }
+        },
+        {
+          "colour": "#C8BF40",
+          "foreground": null,
+          "id": "nb11",
+          "names": {
+            "en": "Line 11",
+            "zh-Hans": "11号线",
+            "zh-Hant": "11號線"
+          }
+        },
+        {
+          "colour": "#42BDCA",
+          "foreground": null,
+          "id": "nb12",
+          "names": {
+            "en": "Line 12",
+            "zh-Hans": "12号线",
+            "zh-Hant": "12號缐"
+          }
+        }
+      ],
+      "names": {
+        "en": "Ningbo",
+        "zh-Hans": "宁波",
+        "zh-Hant": "寧波"
+      },
+      "sourceSha256": "96c9839ed57cf3fec0591a1e008e5ac38ac6c4aadba6b0b879bbabbac8266ba9"
+    },
+    "qingdao": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#F7B000",
+          "foreground": null,
+          "id": "qd1",
+          "names": {
+            "en": "Line 1",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#C32A05",
+          "foreground": null,
+          "id": "qd2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#006DBB",
+          "foreground": null,
+          "id": "qd3",
+          "names": {
+            "en": "Line 3",
+            "zh-Hans": "3号线",
+            "zh-Hant": "3號線"
+          }
+        },
+        {
+          "colour": "#00763C",
+          "foreground": null,
+          "id": "qd4",
+          "names": {
+            "en": "Line 4",
+            "zh-Hans": "4号线",
+            "zh-Hant": "4號線"
+          }
+        },
+        {
+          "colour": "#9E1A96",
+          "foreground": null,
+          "id": "qd5",
+          "names": {
+            "en": "Line 5",
+            "zh-Hans": "5号线",
+            "zh-Hant": "5號線"
+          }
+        },
+        {
+          "colour": "#6CA3D8",
+          "foreground": null,
+          "id": "qd6",
+          "names": {
+            "en": "Line 6",
+            "zh-Hans": "6号线",
+            "zh-Hant": "6號線"
+          }
+        },
+        {
+          "colour": "#AD96DC",
+          "foreground": null,
+          "id": "qd7",
+          "names": {
+            "en": "Line 7",
+            "zh-Hans": "7号线",
+            "zh-Hant": "7號線"
+          }
+        },
+        {
+          "colour": "#E74893",
+          "foreground": null,
+          "id": "qd8",
+          "names": {
+            "en": "Line 8",
+            "zh-Hans": "8号线",
+            "zh-Hant": "8號線"
+          }
+        },
+        {
+          "colour": "#62A60A",
+          "foreground": null,
+          "id": "qd9",
+          "names": {
+            "en": "Line 9",
+            "zh-Hans": "9号线",
+            "zh-Hant": "9號線"
+          }
+        },
+        {
+          "colour": "#B46E00",
+          "foreground": null,
+          "id": "qd10",
+          "names": {
+            "en": "Line 10",
+            "zh-Hans": "10号线",
+            "zh-Hant": "10號線"
+          }
+        },
+        {
+          "colour": "#304299",
+          "foreground": null,
+          "id": "qd11",
+          "names": {
+            "en": "Line 11 (Oceantec Valley Line)",
+            "zh-Hans": "11号线（蓝谷快线）",
+            "zh-Hant": "11號線（藍穀快線）"
+          }
+        },
+        {
+          "colour": "#8246AC",
+          "foreground": null,
+          "id": "qd12",
+          "names": {
+            "en": "Line 12",
+            "zh-Hans": "12号线",
+            "zh-Hant": "12號線"
+          }
+        },
+        {
+          "colour": "#009C86",
+          "foreground": null,
+          "id": "qd13",
+          "names": {
+            "en": "Line 13 (The West Coast Line)",
+            "zh-Hans": "13号线（西海岸快线）",
+            "zh-Hant": "13號線（西海岸快線）"
+          }
+        },
+        {
+          "colour": "#FF5859",
+          "foreground": null,
+          "id": "qd14",
+          "names": {
+            "en": "Line 14",
+            "zh-Hans": "14号线",
+            "zh-Hant": "14號線"
+          }
+        },
+        {
+          "colour": "#F3A9B3",
+          "foreground": null,
+          "id": "qd15",
+          "names": {
+            "en": "Line 15",
+            "zh-Hans": "15号线",
+            "zh-Hant": "15號線"
+          }
+        },
+        {
+          "colour": "#71DBD5",
+          "foreground": null,
+          "id": "qd16",
+          "names": {
+            "en": "Line 16",
+            "zh-Hans": "16号线",
+            "zh-Hant": "16號線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Qingdao",
+        "zh-Hans": "青岛",
+        "zh-Hant": "青島"
+      },
+      "sourceSha256": "bcc43ad4e66bb83d3d42c97b0b7e448aa863b709462dec885217efc092bd5b71"
+    },
+    "shanghai": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#E3002B",
+          "foreground": null,
+          "id": "sh1",
+          "names": {
+            "en": "Line 1",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#82BF25",
+          "foreground": null,
+          "id": "sh2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#FCD600",
+          "foreground": null,
+          "id": "sh3",
+          "names": {
+            "en": "Line 3",
+            "zh-Hans": "3号线",
+            "zh-Hant": "3號線"
+          }
+        },
+        {
+          "colour": "#461D84",
+          "foreground": null,
+          "id": "sh4",
+          "names": {
+            "en": "Line 4",
+            "zh-Hans": "4号线",
+            "zh-Hant": "4號線"
+          }
+        },
+        {
+          "colour": "#944D9A",
+          "foreground": null,
+          "id": "sh5",
+          "names": {
+            "en": "Line 5",
+            "zh-Hans": "5号线",
+            "zh-Hant": "5號線"
+          }
+        },
+        {
+          "colour": "#E30067",
+          "foreground": null,
+          "id": "sh6",
+          "names": {
+            "en": "Line 6",
+            "zh-Hans": "6号线",
+            "zh-Hant": "6號線"
+          }
+        },
+        {
+          "colour": "#ED6F00",
+          "foreground": null,
+          "id": "sh7",
+          "names": {
+            "en": "Line 7",
+            "zh-Hans": "7号线",
+            "zh-Hant": "7號線"
+          }
+        },
+        {
+          "colour": "#0094D8",
+          "foreground": null,
+          "id": "sh8",
+          "names": {
+            "en": "Line 8",
+            "zh-Hans": "8号线",
+            "zh-Hant": "8號線"
+          }
+        },
+        {
+          "colour": "#87CAED",
+          "foreground": null,
+          "id": "sh9",
+          "names": {
+            "en": "Line 9",
+            "zh-Hans": "9号线",
+            "zh-Hant": "9號線"
+          }
+        },
+        {
+          "colour": "#C6AFD4",
+          "foreground": null,
+          "id": "sh10",
+          "names": {
+            "en": "Line 10",
+            "zh-Hans": "10号线",
+            "zh-Hant": "10號線"
+          }
+        },
+        {
+          "colour": "#871C2B",
+          "foreground": null,
+          "id": "sh11",
+          "names": {
+            "en": "Line 11",
+            "zh-Hans": "11号线",
+            "zh-Hant": "11號線"
+          }
+        },
+        {
+          "colour": "#007B61",
+          "foreground": null,
+          "id": "sh12",
+          "names": {
+            "en": "Line 12",
+            "zh-Hans": "12号线",
+            "zh-Hant": "12號線"
+          }
+        },
+        {
+          "colour": "#E999C0",
+          "foreground": null,
+          "id": "sh13",
+          "names": {
+            "en": "Line 13",
+            "zh-Hans": "13号线",
+            "zh-Hant": "13號線"
+          }
+        },
+        {
+          "colour": "#626020",
+          "foreground": null,
+          "id": "sh14",
+          "names": {
+            "en": "Line 14",
+            "zh-Hans": "14号线",
+            "zh-Hant": "14號線"
+          }
+        },
+        {
+          "colour": "#BCA886",
+          "foreground": null,
+          "id": "sh15",
+          "names": {
+            "en": "Line 15",
+            "zh-Hans": "15号线",
+            "zh-Hant": "15號線"
+          }
+        },
+        {
+          "colour": "#98D1C0",
+          "foreground": null,
+          "id": "sh16",
+          "names": {
+            "en": "Line 16",
+            "zh-Hans": "16号线",
+            "zh-Hant": "16號線"
+          }
+        },
+        {
+          "colour": "#BC796F",
+          "foreground": null,
+          "id": "sh17",
+          "names": {
+            "en": "Line 17",
+            "zh-Hans": "17号线",
+            "zh-Hant": "17號線"
+          }
+        },
+        {
+          "colour": "#C4984F",
+          "foreground": null,
+          "id": "sh18",
+          "names": {
+            "en": "Line 18",
+            "zh-Hans": "18号线",
+            "zh-Hant": "18號線"
+          }
+        },
+        {
+          "colour": "#F5AB78",
+          "foreground": null,
+          "id": "sh19",
+          "names": {
+            "en": "Line 19",
+            "zh-Hans": "19号线",
+            "zh-Hant": "19號線"
+          }
+        },
+        {
+          "colour": "#009F65",
+          "foreground": null,
+          "id": "sh20",
+          "names": {
+            "en": "Line 20",
+            "zh-Hans": "20号线",
+            "zh-Hant": "20號線"
+          }
+        },
+        {
+          "colour": "#F7AF00",
+          "foreground": null,
+          "id": "sh21",
+          "names": {
+            "en": "Line 21",
+            "zh-Hans": "21号线",
+            "zh-Hant": "21號線"
+          }
+        },
+        {
+          "colour": "#5F376F",
+          "foreground": null,
+          "id": "sh22",
+          "names": {
+            "en": "Line 22",
+            "zh-Hans": "22号线",
+            "zh-Hant": "22號線"
+          }
+        },
+        {
+          "colour": "#B0D478",
+          "foreground": null,
+          "id": "sh23",
+          "names": {
+            "en": "Line 23",
+            "zh-Hans": "23号线",
+            "zh-Hant": "23號線"
+          }
+        },
+        {
+          "colour": "#5F67A9",
+          "foreground": null,
+          "id": "sh26",
+          "names": {
+            "en": "Line 26",
+            "zh-Hans": "26号线",
+            "zh-Hant": "26號線"
+          }
+        },
+        {
+          "colour": "#43A5A0",
+          "foreground": null,
+          "id": "sh27",
+          "names": {
+            "en": "Line 27",
+            "zh-Hans": "27号线",
+            "zh-Hant": "27號線"
+          }
+        },
+        {
+          "colour": "#B5B5B6",
+          "foreground": null,
+          "id": "pjl",
+          "names": {
+            "en": "Pujiang Line",
+            "zh-Hans": "浦江线",
+            "zh-Hant": "浦江線"
+          }
+        },
+        {
+          "colour": "#000000",
+          "foreground": null,
+          "id": "jsr",
+          "names": {
+            "en": "Jinshan Railway",
+            "zh-Hans": "金山铁路",
+            "zh-Hant": "金山鐵路"
+          }
+        },
+        {
+          "colour": "#1C5F5B",
+          "foreground": null,
+          "id": "maglev",
+          "names": {
+            "en": "Shanghai Maglev Train",
+            "zh-Hans": "磁浮线",
+            "zh-Hant": "磁浮線"
+          }
+        },
+        {
+          "colour": "#FF0000",
+          "foreground": null,
+          "id": "t1",
+          "names": {
+            "en": "Songjiang Tram T1",
+            "zh-Hans": "松江有轨电车1号线",
+            "zh-Hant": "松江有軌電車1號線"
+          }
+        },
+        {
+          "colour": "#46837B",
+          "foreground": null,
+          "id": "t2",
+          "names": {
+            "en": "Songjiang Tram T2",
+            "zh-Hans": "松江有轨电车2号线",
+            "zh-Hant": "松江有軌電車2號線"
+          }
+        },
+        {
+          "colour": "#009400",
+          "foreground": null,
+          "id": "t3",
+          "names": {
+            "en": "Songjiang Tram T3",
+            "zh-Hans": "松江有轨电车3号线",
+            "zh-Hant": "松江有軌電車3號線"
+          }
+        },
+        {
+          "colour": "#FF00FF",
+          "foreground": null,
+          "id": "t4",
+          "names": {
+            "en": "Songjiang Tram T4",
+            "zh-Hans": "松江有轨电车4号线",
+            "zh-Hant": "松江有軌電車4號線"
+          }
+        },
+        {
+          "colour": "#00FD00",
+          "foreground": null,
+          "id": "t5",
+          "names": {
+            "en": "Songjiang Tram T5",
+            "zh-Hans": "松江有轨电车5号线",
+            "zh-Hant": "松江有軌電車5號線"
+          }
+        },
+        {
+          "colour": "#6E00DD",
+          "foreground": null,
+          "id": "t6",
+          "names": {
+            "en": "Songjiang Tram T6",
+            "zh-Hans": "松江有轨电车6号线",
+            "zh-Hant": "松江有軌電車6號線"
+          }
+        },
+        {
+          "colour": "#898989",
+          "foreground": null,
+          "id": "sy",
+          "names": {
+            "en": "Suburban Railway",
+            "zh-Hans": "市域铁",
+            "zh-Hant": "市域鐵"
+          }
+        },
+        {
+          "colour": "#236890",
+          "foreground": null,
+          "id": "airport",
+          "names": {
+            "en": "Airport Link Line",
+            "zh-Hans": "市域机场线",
+            "zh-Hant": "市域機場線"
+          }
+        },
+        {
+          "colour": "#724A57",
+          "foreground": null,
+          "id": "jiamin",
+          "names": {
+            "en": "Jiamin Line",
+            "zh-Hans": "嘉闵线",
+            "zh-Hant": "嘉閔線"
+          }
+        },
+        {
+          "colour": "#93ABBB",
+          "foreground": null,
+          "id": "nanhui",
+          "names": {
+            "en": "Nanhui Line",
+            "zh-Hans": "南汇线",
+            "zh-Hant": "南匯線"
+          }
+        },
+        {
+          "colour": "#6FB16B",
+          "foreground": null,
+          "id": "shifanqu",
+          "names": {
+            "en": "Shifanqu Line",
+            "zh-Hans": "示范区线",
+            "zh-Hant": "示範區線"
+          }
+        },
+        {
+          "colour": "#4C6DA9",
+          "foreground": null,
+          "id": "nanfeng",
+          "names": {
+            "en": "Nanfeng Line",
+            "zh-Hans": "南枫线",
+            "zh-Hant": "南楓線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Shanghai",
+        "zh-Hans": "上海",
+        "zh-Hant": "上海"
+      },
+      "sourceSha256": "dc62f9f6b6565a412721aaa278784b545c73588de50bcea5cfb82eed23d29021"
+    },
+    "shaoxing": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#C5003E",
+          "foreground": null,
+          "id": "sx1",
+          "names": {
+            "en": "Line 1",
+            "ja": "1号線",
+            "ko": "1호선",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#307FE2",
+          "foreground": null,
+          "id": "sx2",
+          "names": {
+            "en": "Line 2",
+            "ja": "2号線",
+            "ko": "2호선",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#FFD100",
+          "foreground": null,
+          "id": "sx4",
+          "names": {
+            "en": "Line 4",
+            "ja": "4号線",
+            "ko": "4호선",
+            "zh-Hans": "4号线",
+            "zh-Hant": "4號線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Shaoxing",
+        "zh-Hans": "绍兴",
+        "zh-Hant": "紹興"
+      },
+      "sourceSha256": "0c4392ceef1b50001739bf44df771872b3c021b6af189918df4871b9b29471b9"
+    },
+    "shenyang": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#B63F1F",
+          "foreground": null,
+          "id": "sy1",
+          "names": {
+            "en": "Line 1",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#E5703A",
+          "foreground": null,
+          "id": "sy2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#E6669F",
+          "foreground": null,
+          "id": "sy3",
+          "names": {
+            "en": "Line 3",
+            "zh-Hans": "3号线",
+            "zh-Hant": "3號線"
+          }
+        },
+        {
+          "colour": "#6E3E94",
+          "foreground": null,
+          "id": "sy4",
+          "names": {
+            "en": "Line 4",
+            "zh-Hans": "4号线",
+            "zh-Hant": "4號線"
+          }
+        },
+        {
+          "colour": "#FEDC00",
+          "foreground": null,
+          "id": "sy6",
+          "names": {
+            "en": "Line 6",
+            "zh-Hans": "6号线",
+            "zh-Hant": "6號線"
+          }
+        },
+        {
+          "colour": "#017CBF",
+          "foreground": null,
+          "id": "sy9",
+          "names": {
+            "en": "Line 9",
+            "zh-Hans": "9号线",
+            "zh-Hant": "9號線"
+          }
+        },
+        {
+          "colour": "#62AA3C",
+          "foreground": null,
+          "id": "sy10",
+          "names": {
+            "en": "Line 10",
+            "zh-Hans": "10号线",
+            "zh-Hant": "10號線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Shenyang",
+        "zh-Hans": "沈阳",
+        "zh-Hant": "瀋陽"
+      },
+      "sourceSha256": "cd10165e528f7276025f9d8aa1ac85800f46bc71fe6e669732a93bca83edd075"
+    },
+    "shenzhen": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#00B140",
+          "foreground": null,
+          "id": "sz1",
+          "names": {
+            "en": "Line 1 (Luobao Line)",
+            "zh-Hans": "1号线（罗宝线）",
+            "zh-Hant": "1號線（羅寶線）"
+          }
+        },
+        {
+          "colour": "#B94700",
+          "foreground": null,
+          "id": "sz2",
+          "names": {
+            "en": "Line 2 (Shekou Line)",
+            "zh-Hans": "2号线（蛇口线）",
+            "zh-Hant": "2號線（蛇口線）"
+          }
+        },
+        {
+          "colour": "#00A9E0",
+          "foreground": null,
+          "id": "sz3",
+          "names": {
+            "en": "Line 3 (Longgang Line)",
+            "zh-Hans": "3号线（龙岗线）",
+            "zh-Hant": "3號線（龍崗線）"
+          }
+        },
+        {
+          "colour": "#DA291C",
+          "foreground": null,
+          "id": "sz4",
+          "names": {
+            "en": "Line 4 (Longhua Line)",
+            "zh-Hans": "4号线（龙华线）",
+            "zh-Hant": "4號線（龍華線）"
+          }
+        },
+        {
+          "colour": "#A05EB5",
+          "foreground": null,
+          "id": "sz5",
+          "names": {
+            "en": "Line 5 (Huanzhong Line)",
+            "zh-Hans": "5号线（环中线）",
+            "zh-Hant": "5號線（環中線）"
+          }
+        },
+        {
+          "colour": "#00C7B1",
+          "foreground": null,
+          "id": "sz6",
+          "names": {
+            "en": "Line 6（Guangming Line)",
+            "zh-Hans": "6号线（光明线）",
+            "zh-Hant": "6號線（光明線）"
+          }
+        },
+        {
+          "colour": "#168773",
+          "foreground": null,
+          "id": "sz6b",
+          "names": {
+            "en": "Branch Line 6",
+            "zh-Hans": "6号线支线",
+            "zh-Hant": "6號線支線"
+          }
+        },
+        {
+          "colour": "#0033A0",
+          "foreground": null,
+          "id": "sz7",
+          "names": {
+            "en": "Line 7 (Xili Line)",
+            "zh-Hans": "7号线（西丽线）",
+            "zh-Hant": "7號線（西麗線）"
+          }
+        },
+        {
+          "colour": "#B94700",
+          "foreground": null,
+          "id": "sz8",
+          "names": {
+            "en": "Line 8 (Yantian Line)",
+            "zh-Hans": "8号线（盐田线）",
+            "zh-Hant": "8號線（鹽田線）"
+          }
+        },
+        {
+          "colour": "#E45DBF",
+          "foreground": null,
+          "id": "sz8orig",
+          "names": {
+            "en": "Line 8 (Original)",
+            "zh-Hans": "8号线（原）",
+            "zh-Hant": "8號線（原）"
+          }
+        },
+        {
+          "colour": "#7B6469",
+          "foreground": null,
+          "id": "sz9",
+          "names": {
+            "en": "Line 9 (Meilin Line)",
+            "zh-Hans": "9号线（梅林线）",
+            "zh-Hant": "9號線（梅林線）"
+          }
+        },
+        {
+          "colour": "#F8779E",
+          "foreground": null,
+          "id": "sz10",
+          "names": {
+            "en": "Line 10 (Bantian Line)",
+            "zh-Hans": "10号线（坂田线）",
+            "zh-Hant": "10號線（坂田線）"
+          }
+        },
+        {
+          "colour": "#672146",
+          "foreground": null,
+          "id": "sz11",
+          "names": {
+            "en": "Line 11 (Airport Line)",
+            "zh-Hans": "11号线（机场线）",
+            "zh-Hant": "11號線（機場線）"
+          }
+        },
+        {
+          "colour": "#A192B2",
+          "foreground": null,
+          "id": "sz12",
+          "names": {
+            "en": "Line 12 (Nanbao Line)",
+            "zh-Hans": "12号线（南宝线）",
+            "zh-Hant": "12號線（南寶線）"
+          }
+        },
+        {
+          "colour": "#DE7C00",
+          "foreground": null,
+          "id": "sz13",
+          "names": {
+            "en": "Line 13 (Shiyan Line)",
+            "zh-Hans": "13号线（石岩线）",
+            "zh-Hant": "13號線（石岩線）"
+          }
+        },
+        {
+          "colour": "#F2C75C",
+          "foreground": null,
+          "id": "sz14",
+          "names": {
+            "en": "Line 14 (Eastern Express)",
+            "zh-Hans": "14号线（东部快线）",
+            "zh-Hant": "14號線（東部快線）"
+          }
+        },
+        {
+          "colour": "#84BD00",
+          "foreground": null,
+          "id": "sz15",
+          "names": {
+            "en": "Line 15 (Qiannan Loop Line)",
+            "zh-Hans": "15号线（前南环线）",
+            "zh-Hant": "15號線（前南環線）"
+          }
+        },
+        {
+          "colour": "#1E22AA",
+          "foreground": null,
+          "id": "sz16",
+          "names": {
+            "en": "Line 16 (Longping Line)",
+            "zh-Hans": "16号线（龙坪线）",
+            "zh-Hant": "16號線（龍坪線）"
+          }
+        },
+        {
+          "colour": "#D3C0CD",
+          "foreground": null,
+          "id": "sz17",
+          "names": {
+            "en": "Line 17 (Pinghu Line)",
+            "zh-Hans": "17号线（平湖线）",
+            "zh-Hant": "17號線（平湖線）"
+          }
+        },
+        {
+          "colour": "#00558C",
+          "foreground": null,
+          "id": "sz18",
+          "names": {
+            "en": "Line 18 (Outer Loop Line)",
+            "zh-Hans": "18号线（外环线）",
+            "zh-Hant": "18號線（外環線）"
+          }
+        },
+        {
+          "colour": "#BB16A3",
+          "foreground": null,
+          "id": "sz19",
+          "names": {
+            "en": "Line 19 (Pingshan Line)",
+            "zh-Hans": "19号线（坪山线）",
+            "zh-Hant": "19號線（坪山線）"
+          }
+        },
+        {
+          "colour": "#88DBDF",
+          "foreground": null,
+          "id": "sz20",
+          "names": {
+            "en": "Line 20 (Exibition Express)",
+            "zh-Hans": "20号线（会展快线）",
+            "zh-Hant": "20號線（會展快線）"
+          }
+        },
+        {
+          "colour": "#F5E425",
+          "foreground": null,
+          "id": "sz22",
+          "names": {
+            "en": "Line 22 (Central Axis Line)",
+            "zh-Hans": "22号线（中轴线）",
+            "zh-Hant": "22号線（中軸線）"
+          }
+        },
+        {
+          "colour": "#FFA970",
+          "foreground": null,
+          "id": "sz25",
+          "names": {
+            "en": "Line 25 (Baolang Line)",
+            "zh-Hans": "25号线（宝浪线）",
+            "zh-Hant": "25号線（寶浪線）"
+          }
+        },
+        {
+          "colour": "#598E94",
+          "foreground": null,
+          "id": "sz27",
+          "names": {
+            "en": "Line 27 (NanLong Line)",
+            "zh-Hans": "27号线（南龙线）",
+            "zh-Hant": "27号線（南龍線）"
+          }
+        },
+        {
+          "colour": "#91D6AC",
+          "foreground": null,
+          "id": "sz29",
+          "names": {
+            "en": "Line 29 (Nanguang Line)",
+            "zh-Hans": "29号线（南光线）",
+            "zh-Hant": "32号線（南光線）"
+          }
+        },
+        {
+          "colour": "#744F28",
+          "foreground": null,
+          "id": "sz32",
+          "names": {
+            "en": "Line 32 (Dapeng Line)",
+            "zh-Hans": "32号线（大鹏线）",
+            "zh-Hant": "32号線"
+          }
+        },
+        {
+          "colour": "#B8B8B8",
+          "foreground": null,
+          "id": "tram",
+          "names": {
+            "en": "Tram",
+            "zh-Hans": "有轨电车",
+            "zh-Hant": "有軌電車"
+          }
+        },
+        {
+          "colour": "#1974D2",
+          "foreground": null,
+          "id": "szpsyb",
+          "names": {
+            "en": "Pingshan SkyShuttle",
+            "zh-Hans": "坪山云巴",
+            "zh-Hant": "坪山雲巴"
+          }
+        }
+      ],
+      "names": {
+        "en": "Shenzhen",
+        "zh-Hans": "深圳",
+        "zh-Hant": "深圳"
+      },
+      "sourceSha256": "ef616414fc0c78ea9ae4c38e06f33b9cb819132ebf195381ff387bff25da18b5"
+    },
+    "shijiazhuang": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#FF0D33",
+          "foreground": null,
+          "id": "sjz1",
+          "names": {
+            "en": "Line 1",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#F2BF19",
+          "foreground": null,
+          "id": "sjz2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#33BCE7",
+          "foreground": null,
+          "id": "sjz3",
+          "names": {
+            "en": "Line 3",
+            "zh-Hans": "3号线",
+            "zh-Hant": "3號線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Shijiazhuang",
+        "zh-Hans": "石家庄"
+      },
+      "sourceSha256": "61b12c87239201f5d7f03144e5cb02b322fc9c47bb32c3378cd8d42715f41bf0"
+    },
+    "suzhou": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#78BA25",
+          "foreground": null,
+          "id": "sz1",
+          "names": {
+            "en": "Line 1",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#ED3240",
+          "foreground": null,
+          "id": "sz2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#F88211",
+          "foreground": null,
+          "id": "sz3",
+          "names": {
+            "en": "Line 3",
+            "zh-Hans": "3号线",
+            "zh-Hant": "3號線"
+          }
+        },
+        {
+          "colour": "#196EAE",
+          "foreground": null,
+          "id": "sz4",
+          "names": {
+            "en": "Line 4",
+            "zh-Hans": "4号线",
+            "zh-Hant": "4號線"
+          }
+        },
+        {
+          "colour": "#E63A9A",
+          "foreground": null,
+          "id": "sz5",
+          "names": {
+            "en": "Line 5",
+            "zh-Hans": "5号线",
+            "zh-Hant": "5號線"
+          }
+        },
+        {
+          "colour": "#41B6E6",
+          "foreground": null,
+          "id": "sz6",
+          "names": {
+            "en": "Line 6",
+            "zh-Hans": "6号线",
+            "zh-Hant": "6號線"
+          }
+        },
+        {
+          "colour": "#A77BCA",
+          "foreground": null,
+          "id": "sz7",
+          "names": {
+            "en": "Line 7",
+            "zh-Hans": "7号线",
+            "zh-Hant": "7號線"
+          }
+        },
+        {
+          "colour": "#A09200",
+          "foreground": null,
+          "id": "sz8",
+          "names": {
+            "en": "Line 8",
+            "zh-Hans": "8号线",
+            "zh-Hant": "8號線"
+          }
+        },
+        {
+          "colour": "#CA9A8E",
+          "foreground": null,
+          "id": "sz10",
+          "names": {
+            "en": "Line 10",
+            "zh-Hans": "10号线",
+            "zh-Hant": "10號線"
+          }
+        },
+        {
+          "colour": "#F1C6A6",
+          "foreground": null,
+          "id": "sz11",
+          "names": {
+            "en": "Line 11",
+            "zh-Hans": "11号线",
+            "zh-Hant": "11號線"
+          }
+        },
+        {
+          "colour": "#D8E4C0",
+          "foreground": null,
+          "id": "tram",
+          "names": {
+            "en": "Tram",
+            "zh-Hans": "有轨电车",
+            "zh-Hant": "有軌電車"
+          }
+        },
+        {
+          "colour": "#DDDDDD",
+          "foreground": null,
+          "id": "wkt",
+          "names": {
+            "en": "Lines under construction",
+            "zh-Hans": "未开通线路",
+            "zh-Hant": "未開通線路"
+          }
+        }
+      ],
+      "names": {
+        "en": "Suzhou",
+        "zh-Hans": "苏州",
+        "zh-Hant": "蘇州"
+      },
+      "sourceSha256": "61ebc036f225827b22dc148a6abb1d9c2aed54f26f9b4b9147cd9cd331784b4d"
+    },
+    "taiyuan": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#1B5EAB",
+          "foreground": null,
+          "id": "ty1",
+          "names": {
+            "en": "Line 1",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#B31C21",
+          "foreground": null,
+          "id": "ty2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Taiyuan",
+        "zh-Hans": "太原"
+      },
+      "sourceSha256": "7eed4785e4e0263c78f3b132621e55b000dbf612d43bca960d7ad947873ab346"
+    },
+    "taizhou": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#0C9CDC",
+          "foreground": null,
+          "id": "tzs1",
+          "names": {
+            "en": "Line S1",
+            "zh-Hans": "S1线",
+            "zh-Hant": "S1綫"
+          }
+        }
+      ],
+      "names": {
+        "en": "Taizhou",
+        "zh-Hans": "台州",
+        "zh-Hant": "台州"
+      },
+      "sourceSha256": "77905692ba590bdab3cd0b003f1286d76c798d9a9ece28f69909e44573540346"
+    },
+    "tianjin": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#CB333B",
+          "foreground": null,
+          "id": "tj1",
+          "names": {
+            "en": "Line 1",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#E1E000",
+          "foreground": null,
+          "id": "tj2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#0081A6",
+          "foreground": null,
+          "id": "tj3",
+          "names": {
+            "en": "Line 3",
+            "zh-Hans": "3号线",
+            "zh-Hant": "3號線"
+          }
+        },
+        {
+          "colour": "#007A33",
+          "foreground": null,
+          "id": "tj4",
+          "names": {
+            "en": "Line 4",
+            "zh-Hans": "4号线",
+            "zh-Hant": "4號線"
+          }
+        },
+        {
+          "colour": "#E35205",
+          "foreground": null,
+          "id": "tj5",
+          "names": {
+            "en": "Line 5",
+            "zh-Hans": "5号线",
+            "zh-Hant": "5號線"
+          }
+        },
+        {
+          "colour": "#994878",
+          "foreground": null,
+          "id": "tj6",
+          "names": {
+            "en": "Line 6",
+            "zh-Hans": "6号线",
+            "zh-Hant": "6號線"
+          }
+        },
+        {
+          "colour": "#C6893F",
+          "foreground": null,
+          "id": "tj7",
+          "names": {
+            "en": "Line 7",
+            "zh-Hans": "7号线",
+            "zh-Hant": "7號線"
+          }
+        },
+        {
+          "colour": "#84329B",
+          "foreground": null,
+          "id": "tj8",
+          "names": {
+            "en": "Line 8",
+            "zh-Hans": "8号线",
+            "zh-Hant": "8號線"
+          }
+        },
+        {
+          "colour": "#0047BB",
+          "foreground": null,
+          "id": "tj9",
+          "names": {
+            "en": "Line 9",
+            "zh-Hans": "9号线",
+            "zh-Hant": "9號線"
+          }
+        },
+        {
+          "colour": "#C4D600",
+          "foreground": null,
+          "id": "tj10",
+          "names": {
+            "en": "Line 10",
+            "zh-Hans": "10号线",
+            "zh-Hant": "10號線"
+          }
+        },
+        {
+          "colour": "#002D72",
+          "foreground": null,
+          "id": "tj11",
+          "names": {
+            "en": "Line 11",
+            "zh-Hans": "11号线",
+            "zh-Hant": "11號線"
+          }
+        },
+        {
+          "colour": "#F99FC9",
+          "foreground": null,
+          "id": "tj12",
+          "names": {
+            "en": "Line 12",
+            "zh-Hans": "12号线",
+            "zh-Hant": "12號線"
+          }
+        },
+        {
+          "colour": "#FFC845",
+          "foreground": null,
+          "id": "tj13",
+          "names": {
+            "en": "Line 13",
+            "zh-Hans": "13号线",
+            "zh-Hant": "13號線"
+          }
+        },
+        {
+          "colour": "#99D6EA",
+          "foreground": null,
+          "id": "tj14",
+          "names": {
+            "en": "Line 14",
+            "zh-Hans": "14号线",
+            "zh-Hant": "14號線"
+          }
+        },
+        {
+          "colour": "#6ECEB2",
+          "foreground": null,
+          "id": "tj15",
+          "names": {
+            "en": "Line 15",
+            "zh-Hans": "15号线",
+            "zh-Hant": "15號線"
+          }
+        },
+        {
+          "colour": "#E03E52",
+          "foreground": null,
+          "id": "b1",
+          "names": {
+            "en": "Line B1",
+            "zh-Hans": "B1线",
+            "zh-Hant": "B1線"
+          }
+        },
+        {
+          "colour": "#F3EA5D",
+          "foreground": null,
+          "id": "b2",
+          "names": {
+            "en": "Line B2",
+            "zh-Hans": "B2线",
+            "zh-Hant": "B2線"
+          }
+        },
+        {
+          "colour": "#2CCCD3",
+          "foreground": null,
+          "id": "b3",
+          "names": {
+            "en": "Line B3",
+            "zh-Hans": "B3线",
+            "zh-Hant": "B3線"
+          }
+        },
+        {
+          "colour": "#6CC24A",
+          "foreground": null,
+          "id": "b4",
+          "names": {
+            "en": "Line B4",
+            "zh-Hans": "B4线",
+            "zh-Hant": "B4線"
+          }
+        },
+        {
+          "colour": "#FEAD77",
+          "foreground": null,
+          "id": "b5",
+          "names": {
+            "en": "Line B5",
+            "zh-Hans": "B5线",
+            "zh-Hant": "B5線"
+          }
+        },
+        {
+          "colour": "#B06C95",
+          "foreground": null,
+          "id": "b6",
+          "names": {
+            "en": "Line B6",
+            "zh-Hans": "B6线",
+            "zh-Hant": "B6線"
+          }
+        },
+        {
+          "colour": "#B9975B",
+          "foreground": null,
+          "id": "b7",
+          "names": {
+            "en": "Line B7",
+            "zh-Hans": "B7线",
+            "zh-Hant": "B7線"
+          }
+        },
+        {
+          "colour": "#D1CE69",
+          "foreground": null,
+          "id": "c1",
+          "names": {
+            "en": "Line C1",
+            "zh-Hans": "C1线",
+            "zh-Hant": "C1線"
+          }
+        },
+        {
+          "colour": "#DD8DAE",
+          "foreground": null,
+          "id": "c2",
+          "names": {
+            "en": "Line C2",
+            "zh-Hans": "C2线",
+            "zh-Hant": "C2線"
+          }
+        },
+        {
+          "colour": "#769C62",
+          "foreground": null,
+          "id": "c3",
+          "names": {
+            "en": "Line C3",
+            "zh-Hans": "C3线",
+            "zh-Hant": "C3線"
+          }
+        },
+        {
+          "colour": "#5C480F",
+          "foreground": null,
+          "id": "c4",
+          "names": {
+            "en": "Line C4",
+            "zh-Hans": "C4线",
+            "zh-Hant": "C4線"
+          }
+        },
+        {
+          "colour": "#626DA7",
+          "foreground": null,
+          "id": "z1",
+          "names": {
+            "en": "Line Z1",
+            "zh-Hans": "Z1线",
+            "zh-Hant": "Z1線"
+          }
+        },
+        {
+          "colour": "#006BA6",
+          "foreground": null,
+          "id": "z2",
+          "names": {
+            "en": "Line Z2",
+            "zh-Hans": "Z2线",
+            "zh-Hant": "Z2線"
+          }
+        },
+        {
+          "colour": "#BD5832",
+          "foreground": null,
+          "id": "z3",
+          "names": {
+            "en": "Line Z3",
+            "zh-Hans": "Z3线",
+            "zh-Hant": "Z3線"
+          }
+        },
+        {
+          "colour": "#A57FB2",
+          "foreground": null,
+          "id": "z4",
+          "names": {
+            "en": "Line Z4",
+            "zh-Hans": "Z4线",
+            "zh-Hant": "Z4線"
+          }
+        },
+        {
+          "colour": "#8FC31F",
+          "foreground": null,
+          "id": "t1",
+          "names": {
+            "en": "TEDA Modern Guided Rail Tram",
+            "zh-Hans": "导轨1号线",
+            "zh-Hant": "導軌1號線"
+          }
+        },
+        {
+          "colour": "#F8B5C4",
+          "foreground": null,
+          "id": "jinjing",
+          "names": {
+            "en": "Jinjing Line",
+            "zh-Hans": "津静线",
+            "zh-Hant": "津靜線"
+          }
+        },
+        {
+          "colour": "#FFC72C",
+          "foreground": null,
+          "id": "jinwu",
+          "names": {
+            "en": "Jinwu Line",
+            "zh-Hans": "津武线",
+            "zh-Hant": "津武線"
+          }
+        },
+        {
+          "colour": "#DECD63",
+          "foreground": null,
+          "id": "jinning",
+          "names": {
+            "en": "Jinning Line",
+            "zh-Hans": "津宁线",
+            "zh-Hant": "津寧線"
+          }
+        },
+        {
+          "colour": "#8B84D7",
+          "foreground": null,
+          "id": "jinbin",
+          "names": {
+            "en": "Jinbin Line",
+            "zh-Hans": "津滨线",
+            "zh-Hant": "津濱線"
+          }
+        },
+        {
+          "colour": "#4A412A",
+          "foreground": null,
+          "id": "jingang",
+          "names": {
+            "en": "Jingang Line",
+            "zh-Hans": "津港线",
+            "zh-Hant": "津港線"
+          }
+        },
+        {
+          "colour": "#FDAA63",
+          "foreground": null,
+          "id": "ningwu",
+          "names": {
+            "en": "Ningwu Connection Line",
+            "zh-Hans": "宁武联络线",
+            "zh-Hant": "甯武聯絡線"
+          }
+        },
+        {
+          "colour": "#C66E4E",
+          "foreground": null,
+          "id": "shuanghu",
+          "names": {
+            "en": "Shuanghu Connection Line",
+            "zh-Hans": "双湖联络线",
+            "zh-Hant": "雙湖聯絡線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Tianjin",
+        "zh-Hans": "天津",
+        "zh-Hant": "天津"
+      },
+      "sourceSha256": "88e32c2b581e6bc0ca456541f6ecc0fe0fe47d1fbf338115a073ab8d2157452c"
+    },
+    "urumqi": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#10069F",
+          "foreground": null,
+          "id": "urumqi1",
+          "names": {
+            "en": "Line 1",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#5FE864",
+          "foreground": null,
+          "id": "urumqi2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#FFC110",
+          "foreground": null,
+          "id": "urumqi3",
+          "names": {
+            "en": "Line 3",
+            "zh-Hans": "3号线",
+            "zh-Hant": "3號線"
+          }
+        },
+        {
+          "colour": "#FF4152",
+          "foreground": null,
+          "id": "urumqi4",
+          "names": {
+            "en": "Line 4",
+            "zh-Hans": "4号线",
+            "zh-Hant": "4號線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Urumqi",
+        "zh-Hans": "乌鲁木齐",
+        "zh-Hant": "烏魯木齊"
+      },
+      "sourceSha256": "6cc8121e21ffb17d0bf2d21c0a99fe190b33fbbfdcefef263e7b023bcc326ca2"
+    },
+    "wenzhou": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#0061AE",
+          "foreground": null,
+          "id": "wzs1",
+          "names": {
+            "en": "Line S1",
+            "ko": "S1호선",
+            "zh-Hans": "S1线",
+            "zh-Hant": "S1線"
+          }
+        },
+        {
+          "colour": "#E4002B",
+          "foreground": null,
+          "id": "wzs2",
+          "names": {
+            "en": "Line S2",
+            "ko": "S2호선",
+            "zh-Hans": "S2线",
+            "zh-Hant": "S2線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Wenzhou",
+        "ko": "원저우",
+        "zh-Hans": "温州",
+        "zh-Hant": "溫州"
+      },
+      "sourceSha256": "b9797033ab5b2740a73db05cb11df76f6ef160cd3f6668b6db8fef9f9a1002e9"
+    },
+    "wuhan": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#0067A1",
+          "foreground": null,
+          "id": "wh1",
+          "names": {
+            "en": "Line 1",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#EC9CBB",
+          "foreground": null,
+          "id": "wh2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#D9B966",
+          "foreground": null,
+          "id": "wh3",
+          "names": {
+            "en": "Line 3",
+            "zh-Hans": "3号线",
+            "zh-Hant": "3號線"
+          }
+        },
+        {
+          "colour": "#A6D30B",
+          "foreground": null,
+          "id": "wh4",
+          "names": {
+            "en": "Line 4",
+            "zh-Hans": "4号线",
+            "zh-Hant": "4號線"
+          }
+        },
+        {
+          "colour": "#A62E37",
+          "foreground": null,
+          "id": "wh5",
+          "names": {
+            "en": "Line 5",
+            "zh-Hans": "5号线",
+            "zh-Hant": "5號線"
+          }
+        },
+        {
+          "colour": "#008536",
+          "foreground": null,
+          "id": "wh6",
+          "names": {
+            "en": "Line 6",
+            "zh-Hans": "6号线",
+            "zh-Hant": "6號線"
+          }
+        },
+        {
+          "colour": "#EB7900",
+          "foreground": null,
+          "id": "wh7",
+          "names": {
+            "en": "Line 7",
+            "zh-Hans": "7号线",
+            "zh-Hant": "7號線"
+          }
+        },
+        {
+          "colour": "#98ACAB",
+          "foreground": null,
+          "id": "wh8",
+          "names": {
+            "en": "Line 8",
+            "zh-Hans": "8号线",
+            "zh-Hant": "8號線"
+          }
+        },
+        {
+          "colour": "#A5D4AD",
+          "foreground": null,
+          "id": "wh9ghz",
+          "names": {
+            "en": "Line 9 (Proposed)",
+            "zh-Hans": "9号线（规划中）",
+            "zh-Hant": "9號線（規劃中）"
+          }
+        },
+        {
+          "colour": "#7F74AC",
+          "foreground": null,
+          "id": "wh10",
+          "names": {
+            "en": "Line 10",
+            "zh-Hans": "10号线",
+            "zh-Hant": "10號線"
+          }
+        },
+        {
+          "colour": "#F2CF01",
+          "foreground": null,
+          "id": "wh11",
+          "names": {
+            "en": "Line 11",
+            "zh-Hans": "11号线",
+            "zh-Hant": "11號線"
+          }
+        },
+        {
+          "colour": "#00A3E9",
+          "foreground": null,
+          "id": "wh12",
+          "names": {
+            "en": "Line 12",
+            "zh-Hans": "12号线",
+            "zh-Hant": "12號線"
+          }
+        },
+        {
+          "colour": "#25CAD0",
+          "foreground": null,
+          "id": "wh13ghz",
+          "names": {
+            "en": "Line 13 (Proposed)",
+            "zh-Hans": "13号线（规划中）",
+            "zh-Hant": "13號線（規劃中）"
+          }
+        },
+        {
+          "colour": "#7D55A3",
+          "foreground": null,
+          "id": "wh14ghz",
+          "names": {
+            "en": "Line 14 (Proposed)",
+            "zh-Hans": "14号线（规划中）",
+            "zh-Hant": "14号线（规划中）"
+          }
+        },
+        {
+          "colour": "#C34C6D",
+          "foreground": null,
+          "id": "wh16",
+          "names": {
+            "en": "Line 16",
+            "zh-Hans": "16号线",
+            "zh-Hant": "16號線"
+          }
+        },
+        {
+          "colour": "#18A079",
+          "foreground": null,
+          "id": "wh19",
+          "names": {
+            "en": "Line 19",
+            "zh-Hans": "19号线",
+            "zh-Hant": "19號線"
+          }
+        },
+        {
+          "colour": "#B2007B",
+          "foreground": null,
+          "id": "whyl",
+          "names": {
+            "en": "Yangluo Line",
+            "zh-Hans": "阳逻线",
+            "zh-Hant": "陽邏線"
+          }
+        },
+        {
+          "colour": "#F29742",
+          "foreground": null,
+          "id": "whxg",
+          "names": {
+            "en": "Xin'gang Line",
+            "zh-Hans": "新港线",
+            "zh-Hant": "新港線"
+          }
+        },
+        {
+          "colour": "#05AFF1",
+          "foreground": null,
+          "id": "whggkg",
+          "names": {
+            "en": "Suspended Monorail Line",
+            "zh-Hans": "空轨旅游线",
+            "zh-Hant": "空軌旅遊線"
+          }
+        },
+        {
+          "colour": "#FFFFFF",
+          "foreground": null,
+          "id": "whggxdygdcl1",
+          "names": {
+            "en": "Wuhan Optics Valley Modern Tram Line L1",
+            "zh-Hans": "武汉光谷现代有轨电车L1线",
+            "zh-Hant": "武漢光谷現代電車L1線"
+          }
+        },
+        {
+          "colour": "#A0D4BD",
+          "foreground": null,
+          "id": "whggxdygdcl2",
+          "names": {
+            "en": "Wuhan Optics Valley Modern Tram Line L2",
+            "zh-Hans": "武汉光谷现代有轨电车L2线",
+            "zh-Hant": "武漢光谷現代電車L2線"
+          }
+        },
+        {
+          "colour": "#3B98D6",
+          "foreground": null,
+          "id": "whggxdygdcl3",
+          "names": {
+            "en": "Wuhan Optics Valley Modern Tram Line L3",
+            "zh-Hans": "武汉光谷现代有轨电车L3线",
+            "zh-Hant": "武漢光谷現代有軌電車L3線"
+          }
+        },
+        {
+          "colour": "#818181",
+          "foreground": null,
+          "id": "whggxdygdcl5",
+          "names": {
+            "en": "Wuhan Optics Valley Modern Tram Line 5 (Event Time Only)",
+            "zh-Hans": "武汉光谷现代有轨电车5号线（大型活动开行）",
+            "zh-Hant": "武漢光谷現代電車5號線（大型活動開行）"
+          }
+        }
+      ],
+      "names": {
+        "en": "Wuhan",
+        "zh-Hans": "武汉",
+        "zh-Hant": "武漢"
+      },
+      "sourceSha256": "7c3c97bf436ee9576efb11a05e0df45fe2731a78fddbf09deb00b6748ea88707"
+    },
+    "wuhu": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#E3002B",
+          "foreground": null,
+          "id": "wh1",
+          "names": {
+            "en": "Line 1",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#4A86E8",
+          "foreground": null,
+          "id": "wh2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Wuhu",
+        "zh-Hans": "芜湖",
+        "zh-Hant": "蕪湖"
+      },
+      "sourceSha256": "2562fa85c9c061e18fddcd0151478141e0a1eb86a44aeba954857e8aa59c4e28"
+    },
+    "wuxi": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#EE2737",
+          "foreground": null,
+          "id": "wx1",
+          "names": {
+            "en": "Line 1/Line S1",
+            "zh-Hans": "1号线/S1线（锡澄线）",
+            "zh-Hant": "1號綫/S1綫（錫澄綫）"
+          }
+        },
+        {
+          "colour": "#00B140",
+          "foreground": null,
+          "id": "wx2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號綫"
+          }
+        },
+        {
+          "colour": "#00A9E0",
+          "foreground": null,
+          "id": "wx3",
+          "names": {
+            "en": "Line 3",
+            "zh-Hans": "3号线",
+            "zh-Hant": "3號綫"
+          }
+        },
+        {
+          "colour": "#93328E",
+          "foreground": null,
+          "id": "wx4",
+          "names": {
+            "en": "Line 4",
+            "zh-Hans": "4号线",
+            "zh-Hant": "4號綫"
+          }
+        },
+        {
+          "colour": "#FFB81C",
+          "foreground": null,
+          "id": "wx5",
+          "names": {
+            "en": "Line 5",
+            "zh-Hans": "5号线",
+            "zh-Hant": "5號綫"
+          }
+        }
+      ],
+      "names": {
+        "en": "Wuxi",
+        "zh-Hans": "无锡",
+        "zh-Hant": "無錫"
+      },
+      "sourceSha256": "034a2602f0401be8535246476807942a9153157e6e0c3cffa354cd3ffa52128a"
+    },
+    "xiamen": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#E27326",
+          "foreground": null,
+          "id": "xm1",
+          "names": {
+            "en": "Line 1",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#52AB43",
+          "foreground": null,
+          "id": "xm2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#2EC6D6",
+          "foreground": null,
+          "id": "xm3",
+          "names": {
+            "en": "Line 3",
+            "zh-Hans": "3号线",
+            "zh-Hant": "3號線"
+          }
+        },
+        {
+          "colour": "#E71419",
+          "foreground": null,
+          "id": "xm4",
+          "names": {
+            "en": "Line 4",
+            "zh-Hans": "4号线",
+            "zh-Hant": "4號線"
+          }
+        },
+        {
+          "colour": "#8A205F",
+          "foreground": null,
+          "id": "xm6",
+          "names": {
+            "en": "Line 6",
+            "zh-Hans": "6号线",
+            "zh-Hant": "6號線"
+          }
+        },
+        {
+          "colour": "#00A5A6",
+          "foreground": null,
+          "id": "xmb",
+          "names": {
+            "en": "BRT",
+            "zh-Hans": "快速公交",
+            "zh-Hant": "快速公交"
+          }
+        }
+      ],
+      "names": {
+        "en": "Xiamen",
+        "zh-Hans": "厦门",
+        "zh-Hant": "廈門"
+      },
+      "sourceSha256": "eac3608c058c82a5139384f4daf0e85928e83bc9a89c2fd78d8a75d426027f93"
+    },
+    "xian": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#0077C8",
+          "foreground": null,
+          "id": "xa1",
+          "names": {
+            "en": "Line 1",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#EF3340",
+          "foreground": null,
+          "id": "xa2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#CE70CC",
+          "foreground": null,
+          "id": "xa3",
+          "names": {
+            "en": "Line 3",
+            "zh-Hans": "3号线",
+            "zh-Hant": "3號線"
+          }
+        },
+        {
+          "colour": "#39B09E",
+          "foreground": null,
+          "id": "xa4",
+          "names": {
+            "en": "Line 4",
+            "zh-Hans": "4号线",
+            "zh-Hant": "4號線"
+          }
+        },
+        {
+          "colour": "#A6E35F",
+          "foreground": null,
+          "id": "xa5",
+          "names": {
+            "en": "Line 5",
+            "zh-Hans": "5号线",
+            "zh-Hant": "5號線"
+          }
+        },
+        {
+          "colour": "#485CC7",
+          "foreground": null,
+          "id": "xa6",
+          "names": {
+            "en": "Line 6",
+            "zh-Hans": "6号线",
+            "zh-Hant": "6號線"
+          }
+        },
+        {
+          "colour": "#E6B10E",
+          "foreground": null,
+          "id": "xa8",
+          "names": {
+            "en": "Line 8",
+            "zh-Hans": "8号线",
+            "zh-Hant": "8號線"
+          }
+        },
+        {
+          "colour": "#FF9E1B",
+          "foreground": null,
+          "id": "xa9",
+          "names": {
+            "en": "Line 9",
+            "zh-Hans": "9号线",
+            "zh-Hant": "9號線"
+          }
+        },
+        {
+          "colour": "#00A353",
+          "foreground": null,
+          "id": "xa10",
+          "names": {
+            "en": "Line 10",
+            "zh-Hans": "10号线",
+            "zh-Hant": "10號線"
+          }
+        },
+        {
+          "colour": "#00C1D4",
+          "foreground": null,
+          "id": "xa14",
+          "names": {
+            "en": "Airport Intercity Railway/Line 14",
+            "zh-Hans": "机场城际/14号线",
+            "zh-Hant": "機場城際/14號線"
+          }
+        },
+        {
+          "colour": "#E06287",
+          "foreground": null,
+          "id": "xa15",
+          "names": {
+            "en": "Line 15",
+            "zh-Hans": "15号线",
+            "zh-Hant": "15號線"
+          }
+        },
+        {
+          "colour": "#EE805F",
+          "foreground": null,
+          "id": "xa16",
+          "names": {
+            "en": "Line 16",
+            "zh-Hans": "16号线",
+            "zh-Hant": "16號線"
+          }
+        },
+        {
+          "colour": "#720160",
+          "foreground": null,
+          "id": "xaxh",
+          "names": {
+            "en": "Xihu Line",
+            "zh-Hans": "西户线",
+            "zh-Hant": "西戶線"
+          }
+        },
+        {
+          "colour": "#BB0601",
+          "foreground": null,
+          "id": "xxzg",
+          "names": {
+            "en": "Xixian ART Line 1",
+            "zh-Hans": "西咸智轨1号线",
+            "zh-Hant": "西咸智軌1號線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Xi'an",
+        "zh-Hans": "西安",
+        "zh-Hant": "西安"
+      },
+      "sourceSha256": "ac81509920a917e354c67e74922de488d29d3754b354598f2b4e3773006d2248"
+    },
+    "xuzhou": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#A33438",
+          "foreground": null,
+          "id": "xz1",
+          "names": {
+            "en": "Line 1",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#F08300",
+          "foreground": null,
+          "id": "xz2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#008CD6",
+          "foreground": null,
+          "id": "xz3",
+          "names": {
+            "en": "Line 3",
+            "zh-Hans": "3号线",
+            "zh-Hant": "3號線"
+          }
+        },
+        {
+          "colour": "#6FBA2C",
+          "foreground": null,
+          "id": "xz4",
+          "names": {
+            "en": "Line 4",
+            "zh-Hans": "4号线",
+            "zh-Hant": "4號線"
+          }
+        },
+        {
+          "colour": "#AF4284",
+          "foreground": null,
+          "id": "xz5",
+          "names": {
+            "en": "Line 5",
+            "zh-Hans": "5号线",
+            "zh-Hant": "5號線"
+          }
+        },
+        {
+          "colour": "#552375",
+          "foreground": null,
+          "id": "xz6",
+          "names": {
+            "en": "Line 6",
+            "zh-Hans": "6号线",
+            "zh-Hant": "6號線"
+          }
+        },
+        {
+          "colour": "#B44C21",
+          "foreground": null,
+          "id": "xz7",
+          "names": {
+            "en": "Line 7",
+            "zh-Hans": "7号线",
+            "zh-Hant": "7號線"
+          }
+        },
+        {
+          "colour": "#A5D4AD",
+          "foreground": null,
+          "id": "xzs1",
+          "names": {
+            "en": "Line S1",
+            "zh-Hans": "S1号线",
+            "zh-Hant": "S1號線"
+          }
+        },
+        {
+          "colour": "#BAE3F9",
+          "foreground": null,
+          "id": "xzs2",
+          "names": {
+            "en": "Line S2",
+            "zh-Hans": "S2号线",
+            "zh-Hant": "S2號線"
+          }
+        },
+        {
+          "colour": "#F4B4D0",
+          "foreground": null,
+          "id": "xzs3",
+          "names": {
+            "en": "Line S3",
+            "zh-Hans": "S3号线",
+            "zh-Hant": "S3號線"
+          }
+        },
+        {
+          "colour": "#CFD500",
+          "foreground": null,
+          "id": "xzs4",
+          "names": {
+            "en": "Line S4",
+            "zh-Hans": "S4号线",
+            "zh-Hant": "S4號線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Xuzhou",
+        "zh-Hans": "徐州",
+        "zh-Hant": "徐州"
+      },
+      "sourceSha256": "3b5951facae43fd412bf071828b0e10a6724750dffe3ffbdd3ed3a7101899631"
+    },
+    "zhengzhou": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#D20200",
+          "foreground": null,
+          "id": "zz1",
+          "names": {
+            "en": "Line 1",
+            "zh-Hans": "1号线",
+            "zh-Hant": "1號線"
+          }
+        },
+        {
+          "colour": "#D28F00",
+          "foreground": null,
+          "id": "zz2",
+          "names": {
+            "en": "Line 2",
+            "zh-Hans": "2号线",
+            "zh-Hant": "2號線"
+          }
+        },
+        {
+          "colour": "#CB5100",
+          "foreground": null,
+          "id": "zz3",
+          "names": {
+            "en": "Line 3",
+            "zh-Hans": "3号线",
+            "zh-Hant": "3號線"
+          }
+        },
+        {
+          "colour": "#3792D6",
+          "foreground": null,
+          "id": "zz4",
+          "names": {
+            "en": "Line 4",
+            "zh-Hans": "4号线",
+            "zh-Hant": "4號線"
+          }
+        },
+        {
+          "colour": "#25AC74",
+          "foreground": null,
+          "id": "zz5",
+          "names": {
+            "en": "Line 5",
+            "zh-Hans": "5号线",
+            "zh-Hant": "5號線"
+          }
+        },
+        {
+          "colour": "#852081",
+          "foreground": null,
+          "id": "zz6",
+          "names": {
+            "en": "Line 6",
+            "zh-Hans": "6号线",
+            "zh-Hant": "6號線"
+          }
+        },
+        {
+          "colour": "#C0955A",
+          "foreground": null,
+          "id": "zz7",
+          "names": {
+            "en": "Line 7",
+            "zh-Hans": "7号线",
+            "zh-Hant": "7號線"
+          }
+        },
+        {
+          "colour": "#E6E394",
+          "foreground": null,
+          "id": "zz8",
+          "names": {
+            "en": "Line 8",
+            "zh-Hans": "8号线",
+            "zh-Hant": "8號線"
+          }
+        },
+        {
+          "colour": "#828C47",
+          "foreground": null,
+          "id": "zz9",
+          "names": {
+            "en": "Suburban Line",
+            "zh-Hans": "城郊线",
+            "zh-Hant": "城郊線"
+          }
+        },
+        {
+          "colour": "#B15F56",
+          "foreground": null,
+          "id": "zz10",
+          "names": {
+            "en": "Line 10",
+            "zh-Hans": "10号线",
+            "zh-Hant": "10號線"
+          }
+        },
+        {
+          "colour": "#225E9E",
+          "foreground": null,
+          "id": "zz12",
+          "names": {
+            "en": "Line 12",
+            "zh-Hans": "12号线",
+            "zh-Hant": "12號線"
+          }
+        },
+        {
+          "colour": "#844F7C",
+          "foreground": null,
+          "id": "zz14",
+          "names": {
+            "en": "Line 14",
+            "zh-Hans": "14号线",
+            "zh-Hant": "14號線"
+          }
+        },
+        {
+          "colour": "#1D4155",
+          "foreground": null,
+          "id": "zz17",
+          "names": {
+            "en": "Line 17 (Zhengxu Line)",
+            "zh-Hans": "17号线（郑许市域铁路）",
+            "zh-Hant": "17號線（鄭許市域鐵路）"
+          }
+        }
+      ],
+      "names": {
+        "en": "Zhengzhou",
+        "zh-Hans": "郑州",
+        "zh-Hant": "鄭州"
+      },
+      "sourceSha256": "b1d92fd0dfe683b78b9906fd5729c97f6b13e58d00f77e5f2dcb3654e37098a7"
+    },
+    "zhenjiang": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#C98BDB",
+          "foreground": null,
+          "id": "ningju",
+          "names": {
+            "en": "Nanjing-Jurong Line",
+            "zh-Hans": "宁句线",
+            "zh-Hant": "寧句綫"
+          }
+        }
+      ],
+      "names": {
+        "en": "Zhenjiang",
+        "zh-Hans": "镇江",
+        "zh-Hant": "鎮江"
+      },
+      "sourceSha256": "c0f797b72143b92feb311de8a93c56c1def9d87ecc0ebb64853df6a0059ae0f7"
+    },
+    "zhongshan": {
+      "country": "CN",
+      "lines": [
+        {
+          "colour": "#3040B6",
+          "foreground": null,
+          "id": "gz18",
+          "names": {
+            "en": "Guangzhou Line 18",
+            "zh-Hans": "广州18号线",
+            "zh-Hant": "廣州18號線"
+          }
+        }
+      ],
+      "names": {
+        "en": "Zhongshan",
+        "zh-Hans": "中山",
+        "zh-Hant": "中山"
+      },
+      "sourceSha256": "220a80965a0e06109dcb9d9d764d7ded21f572c593a9dbd99d6ff1156b09725c"
+    }
+  }
 }
