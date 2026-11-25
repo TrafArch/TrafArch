@@ -1,17 +1,20 @@
 import 'dart:convert';
 
 import 'package:transit_card_analyzer/features/archive/application/archive_history.dart';
+import 'package:transit_card_analyzer/features/archive/domain/card_types.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_session_snapshot.dart';
 import 'package:transit_card_analyzer/features/archive/presentation/archive_trip_presenter.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/tunion_bus_location.dart';
+import 'package:transit_card_analyzer/features/scan/application/local_card_reader.dart';
+import 'package:transit_card_analyzer/features/scan/domain/card_read_outcome.dart';
+import 'package:transit_card_analyzer/features/scan/domain/scan_presentation.dart';
 import 'package:transit_card_analyzer/features/transit_analysis/tunion_analysis_models.dart';
 import 'package:transit_card_analyzer/features/trips/journey_presentation.dart';
+import 'package:transit_card_analyzer/features/trips/shanghai_mirrored_records.dart';
 import 'package:transit_card_analyzer/features/trips/trip_entry_presenter.dart';
 import 'package:transit_card_analyzer/features/trips/trip_journey_adapter.dart';
 import 'package:transit_card_analyzer/features/trips/trip_presentation_context.dart';
-import 'package:transit_card_analyzer/protocols/transit/local/apdu_exchange.dart';
-import 'package:transit_card_analyzer/protocols/transit/local/local_card_models.dart';
-import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_reader.dart';
+import 'package:transit_card_analyzer/protocols/transit/local/local_hex.dart';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/city_union_region_database.dart';
@@ -21,75 +24,42 @@ import 'package:transit_card_analyzer/features/transit_analysis/tunion_analysis_
 import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_models.dart';
 
-// Transaction fields from the 2026-10-27 Shanghai report; no card identifier.
+// The 2026-10-27 and 2026-11-24 reports share these ten ledger rows.
 // TU and CU 0x18 contained the same rows, while TU 1E was all zero and 1A
 // contained headers only. Literal station expectations are from CU M0.B.b.
 void main() {
-  test('上海样本原始APDU经读取分析及JSON往返仍呈现四段行程与独立余额', () async {
-    final rows = _sampleRows.map(_hex).toList();
-    final public = List.filled(30, 0)
-      ..setRange(10, 20, [
-        0x03,
-        0x10,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        1,
-      ]); // Synthetic identity.
-    final unit = CommonUnitTu(
-      ApduExchange(
-        transceive: (command) async {
-          if (command[1] == 0xA4) return [0x90, 0];
-          if (command[1] == 0xB0 && command[2] == 0x95) {
-            return [...public, 0x90, 0];
-          }
-          if (command[1] == 0x5C) return [0, 0, 0x22, 0xC4, 0x90, 0];
-          if (command[1] == 0xB2 &&
-              command[3] == 0xC4 &&
-              command[2] <= rows.length) {
-            return [...rows[command[2] - 1], 0x90, 0];
-          }
-          if (command[1] == 0xB2 && command[3] == 0xD4 && command[2] <= 2) {
-            return [0x27, command[2], 0x7D, ...List.filled(125, 0), 0x90, 0];
-          }
-          if (command[1] == 0xB2 && command[3] == 0xF5) {
-            return [...List.filled(48 * 30, 0), 0x90, 0];
-          }
-          return [0x6A, 0x83];
-        },
-      ),
+  test('上海双应用逐应用探测后，实时和归档均呈现四段地铁行程', () async {
+    final presentation = await _scanLedger(
+      '03104770000000000001',
+      identifiedCu: true,
     );
-    final info = CardInfo();
-    final apdus = <ApduRecord>[];
-    expect(await unit.select(info, apdus), isTrue);
-    final read = (await unit.read(info, apdus))!;
-    expect(read.transactions, hasLength(10));
+    final card = presentation.parsedCard!;
+    expect(card.parserId, CardParserIds.tunion);
     expect(
-      read.transactions.map((t) => t.recordNumber),
+      presentation.applications.where((a) => a.confirmed).map((a) => a.appId),
+      ['tu', 'cu'],
+    );
+    expect(card.transactions.map((t) => t.rawHex), _sampleRows);
+    expect(
+      presentation.cityUnionTransactions
+          .where((view) => view.record.sfi == 0x18)
+          .map((view) => view.record.rawHex.replaceAll(' ', '')),
+      _sampleRows,
+    );
+    expect(
+      card.transactions.map((t) => t.recordNumber),
       List.generate(10, (i) => i + 1),
     );
     expect(
-      read.transitProcessRecords.every(
+      card.transitProcessRecords.every(
         (r) => r.railTransit == null && r.busTransit == null && r.trip == null,
       ),
       isTrue,
     );
-    final dual = ParsedCard(
-      parserId: CardParserIds.shanghaiTunion,
-      parserName: 'Shanghai dual sample',
-      info: read.info,
-      transactions: read.transactions,
-      transitProcessRecords: read.transitProcessRecords,
-      cityUnionBalanceFen: 8100,
-    );
-    final trips = AnalysisEngine(_knowledge()).analyze(dual).trips;
-    const context = ArchiveContext(
-      systemId: CardParserIds.shanghaiTunion,
-      applicationId: 'A000000632010105',
+    final trips = presentation.analysis!.trips;
+    final context = ArchiveContext(
+      systemId: card.parserId,
+      applicationId: card.selectedAidHex,
       currencyCode: 'CNY',
       minorUnitDigits: 2,
       clockBasis: 'device-local-card-time-unverified',
@@ -102,12 +72,9 @@ void main() {
     );
     final encoded = snapshot.encode();
     final restored = CardSessionSnapshot.decode(encoded)!;
-    expect(
-      restored.trips.map((t) => t.rawHex),
-      read.transactions.map((t) => t.rawHex),
-    );
+    expect(restored.trips.map((t) => t.rawHex), _sampleRows);
     expect(restored.trips.first.balanceAfterFen, 8900);
-    expect(dual.cityUnionBalanceFen, 8100);
+    expect(card.cityUnionBalanceFen, 8100);
     final display = TripPresentationContext(
       currency: Currency.cny,
       cityNameOf: (_) => '上海',
@@ -144,8 +111,17 @@ void main() {
           .toList();
       expect(completed, hasLength(4));
       expect(journeys.expand((j) => j.events), hasLength(10));
-      expect(completed.first.start!.station, '龙华中路');
-      expect(completed.first.end!.station, '上海火车站');
+      expect(
+        completed.map(
+          (j) => (j.start!.line, j.start!.station, j.end!.line, j.end!.station),
+        ),
+        [
+          ('7号线', '龙华中路', '1号线', '上海火车站'),
+          ('9号线', '漕河泾开发区', '7号线', '龙华中路'),
+          ('1号线', '上海火车站', '12号线', '虹梅路'),
+          ('2号线', '浦东1号2号航站楼', '1号线', '上海火车站'),
+        ],
+      );
       expect(
         completed.first.duration,
         const Duration(minutes: 27, seconds: 18),
@@ -162,6 +138,140 @@ void main() {
       ]);
     }
     expect(restored.encode(), encoded);
+  });
+  test('哈尔滨卡仅观察到相同原文、CU 身份未经独立核实时不套用上海地铁匹配', () async {
+    final presentation = await _scanLedger(
+      '03104970200000000001',
+      identifiedCu: false,
+    );
+    expect(presentation.dualApplicationDetected, isTrue);
+    expect(presentation.cityUnionTransactions, isEmpty);
+    final trips = presentation.analysis!.trips;
+    expect(trips, hasLength(10));
+    expect(trips.every((trip) => trip.rideStatusSource == null), isTrue);
+    expect(trips.every((trip) => trip.stationLabel == null), isTrue);
+  });
+  test('哈尔滨双应用折叠同笔 CU 异地地铁流水时保留站名，不推断进出站', () async {
+    final view = await scanHarbinMirrorLedger();
+    final card = view.parsedCard!;
+    final mirrors = partitionShanghaiMirroredRecords(
+      parserId: card.parserId,
+      displayCardType: CardTypes.regionalTunionType(
+        card.info.applicationSerial,
+      ),
+      tunionTransactions: card.transactions,
+      cityUnionTransactions: view.cityUnionTransactions,
+    );
+    final cu = mirrors.mirrored.singleWhere((v) => v.record.sequence == 14);
+    expect(cu.location.value?.station, '上海火车站');
+    expect(cu.carrier, 2);
+    expect(mirrors.independent, isEmpty);
+    final trip = view.analysis!.trips.singleWhere((t) => t.sequence == 14);
+    expect(trip.stationLabel, '上海火车站');
+    expect(trip.lineLabel, '1号线');
+    expect(trip.appTypeName, '城市轨道交通');
+    expect(trip.rideStatusName, isNull);
+    expect(trip.rideStatusSource, isNull);
+    expect(trip.cityCode, isNull);
+    expect(trip.location?.ruleNote, contains('CU 0x18 #1'));
+    expect(trip.rawHex, _sampleRows.first);
+    expect(trip.balanceAfterFen, 8900);
+  });
+  test('哈尔滨双钱包的流水仅有一字节不同时，站名仍属于 CU', () async {
+    // Same sequence, fare, transaction type, terminal and clock as TU slot 1.
+    // The last byte of the overdraft field is A5 in CU and A4 in TU.
+    final view = await _scanLedger(
+      '03104970200000000001',
+      identifiedCu: true,
+      cuRows: [
+        '000E001FA5000001900920001101261820261024230404',
+        ..._sampleRows.skip(1),
+      ],
+    );
+    final cu = view.cityUnionTransactions.singleWhere(
+      (v) => v.record.sequence == 14,
+    );
+    expect(cu.location.value?.station, '上海火车站');
+    final trip = view.analysis!.trips.singleWhere((t) => t.sequence == 14);
+    expect(trip.rawHex, _sampleRows.first);
+    expect(trip.stationLabel, isNull);
+    expect(trip.appTypeName, isNull);
+    expect(trip.rideStatusName, isNull);
+  });
+  test('上海卡重读后，旧批次的复合消费并入四段地铁行程，两笔充值各保留一次', () async {
+    final view = await _scanLedger('03104770000000000001', identifiedCu: true);
+    final snapshot = CardSessionSnapshot(
+      parseVersion: kTripParseVersion,
+      context: ArchiveContext(
+        systemId: view.parsedCard!.parserId,
+        applicationId: view.parsedCard!.selectedAidHex,
+        currencyCode: 'CNY',
+        minorUnitDigits: 2,
+        clockBasis: 'device-local-card-time-unverified',
+        extensions: const {'displayCardType': 'shanghai_transit_union'},
+      ),
+      cardCityCode: '2900',
+      trips: view.analysis!.trips,
+    );
+    final current = snapshot.encode();
+    final old = jsonDecode(current) as Map<String, dynamic>;
+    old['parseVersion'] = 17;
+    // The old generic TU reader captured the whole ledger without identifying
+    // the accepting city, terminal or direction of these composite debits.
+    for (final row in (old['trips'] as List).cast<Map<String, dynamic>>()) {
+      if (row['composite'] != true) continue;
+      for (final key in [
+        'cityCode',
+        'cityName',
+        'lineLabel',
+        'stationLabel',
+        'stationType',
+        'appTypeName',
+        'rideStatusName',
+        'rideStatusSource',
+        'stationConfidence',
+      ]) {
+        row[key] = null;
+      }
+      row.remove('capturedDisplay');
+      row['isEntry'] = false;
+    }
+    final oldJson = jsonEncode(old);
+    final batches = [
+      for (final (id, version, json) in [
+        ('reread', kTripParseVersion, current),
+        ('original', 17, oldJson),
+      ])
+        ArchiveBatchEvidence(
+          id: id,
+          readAt: id == 'reread' ? 2 : 1,
+          storedParseVersion: version,
+          origin: 'nfc',
+          timeSource: 'capture',
+          decoded: CardSessionSnapshot.decodeResult(json),
+          issues: const [],
+        ),
+    ];
+    final journeys = presentArchiveTrips(
+      ArchiveHistory.projectRecords(batches),
+      batches: batches,
+    ).journeys;
+    expect(journeys, hasLength(6));
+    expect(
+      journeys.where((j) => j.state == JourneyState.completed),
+      hasLength(4),
+    );
+    expect(
+      journeys.where((j) => j.events.first.payload.info.title == '充值'),
+      hasLength(2),
+    );
+    for (final journey in journeys) {
+      expect(journey.events.expand((event) => event.sourceIds).toSet(), {
+        'original',
+        'reread',
+      });
+    }
+    expect(batches.last.decoded.snapshot!.encode(), oldJson);
   });
   test('Shanghai CU metro direction follows the source ledger state rule', () {
     final trips = AnalysisEngine(_knowledge()).analyze(_card()).trips;
@@ -458,10 +568,65 @@ const _sampleRows = [
   '0006002710000007D00220009507000120261015120628',
   '0005001F40000013880220009507000120261014211824',
 ];
-List<int> _hex(String value) => [
-  for (var i = 0; i < value.length; i += 2)
-    int.parse(value.substring(i, i + 2), radix: 16),
-];
+
+Future<ScanPresentation> scanHarbinMirrorLedger() =>
+    _scanLedger('03104970200000000001', identifiedCu: true);
+
+Future<ScanPresentation> _scanLedger(
+  String serial, {
+  required bool identifiedCu,
+  List<String> cuRows = _sampleRows,
+}) async {
+  final tuPublic = '02002900FFFFFFFF0201${serial}2024010120291231AABB';
+  const cuPublic =
+      '869820007590FFFF82052000112233445566778820240101203012310000';
+  String? selected;
+  final scan = await LocalCardReader((apdu) async {
+    final command = LocalHex.bytesToHex(apdu);
+    if (apdu[1] == 0xA4) {
+      selected = switch (command) {
+        '00A4040008A00000063201010500' => 'tu',
+        '00A4040009A0000000038698070100' => 'cu',
+        _ => null,
+      };
+      if (identifiedCu && selected == 'cu') {
+        return LocalHex.hexToBytes('6F0B8409A000000003869807019000');
+      }
+      return selected != null || command == '00A40000023F0000'
+          ? [0x90, 0]
+          : [0x6A, 0x82];
+    }
+    if (selected == null) return [0x6A, 0x82];
+    final hex = switch ((selected, command)) {
+      ('tu', '00B0950000') => tuPublic,
+      ('cu', '00B095001E') => cuPublic,
+      ('tu', '805C000204') => '000022C4',
+      ('cu', '805C000204') => '00001FA4',
+      _ => null,
+    };
+    if (hex != null) return [...LocalHex.hexToBytes(hex), 0x90, 0];
+    if (apdu[1] == 0xB2) {
+      final slot = apdu[2];
+      final ledger = selected == 'cu' ? cuRows : _sampleRows;
+      if (apdu[3] == 0xC4 && slot <= ledger.length) {
+        return [...LocalHex.hexToBytes(ledger[slot - 1]), 0x90, 0];
+      }
+      if (selected == 'tu' && apdu[3] == 0xD4 && slot <= 2) {
+        return [0x27, slot, 0x7D, ...List.filled(125, 0), 0x90, 0];
+      }
+      if (selected == 'tu' && apdu[3] == 0xF4 && slot <= 30) {
+        return [...List.filled(48, 0), 0x90, 0];
+      }
+      return [0x6A, 0x83];
+    }
+    return [0x6A, 0x82];
+  }).scan();
+  final result = scan.result!;
+  return ScanPresentation(
+    TransitReadOutcome(result.parsedCard, applications: result.applications),
+    _knowledge(),
+  );
+}
 
 ParsedCard _card({
   String parserId = CardParserIds.shanghaiTunion,

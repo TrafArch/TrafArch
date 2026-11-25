@@ -1,4 +1,5 @@
 import '../../tunion/tunion_codec.dart';
+import '../../tunion/tunion_apdu.dart';
 import '../../../transport/transport_failure.dart';
 import '../apdu_exchange.dart';
 import '../card_aid.dart';
@@ -54,7 +55,12 @@ class LocalWalletSession {
       if (error.stopsSession) throw error;
       // Missing optional directory/file/record is an ordinary end condition.
       if (!optional || !const {0x6A82, 0x6A83}.contains(error.details)) {
-        issues.add('$directory / $description · $error');
+        final status = error.details;
+        final reason =
+            error.kind == TransportFailureKind.rejectedStatus && status is int
+            ? '${status.toRadixString(16).toUpperCase()} ${ApduSw.describe(status)}'
+            : error.toString();
+        issues.add('$directory / $description · $reason');
         failure ??= error;
       }
       return null;
@@ -78,6 +84,7 @@ class LocalWalletSession {
           : info.cardNumber;
       if (suxin) {
         info.cityCode = 2150;
+        info.issueDate = TUnionCodec.parseBcdDate(raw.sublist(20, 24));
       } else if (raw.sublist(2, 4).every(TUnionCodec.isBcdByte)) {
         info.cityCode = TUnionCodec.bcdToInt(raw.sublist(2, 4));
       }

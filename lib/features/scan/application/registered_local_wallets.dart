@@ -15,7 +15,7 @@ Future<List<ApplicationEvidence>> readRegisteredLocalWallets(
 }) async {
   final applications = <ApplicationEvidence>[];
   for (final (id, name, directory, readerFor) in const [
-    ('suzhou_suxin', '苏州·苏薪卡', 'SUXIN.DDF01', SuzhouCard.new),
+    ('suzhou_suxin', suzhouCitizenCardName, 'SUXIN.DDF01', SuzhouCard.new),
     ('suzhou_cika', '苏州·计次卡', 'SZPK_ZYY', SuzhouCika.new),
     ('tft', TftLocalCard.moduleName, 'TFT', TftLocalCard.new),
   ]) {

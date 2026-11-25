@@ -41,7 +41,7 @@ void main() {
       expect(kb.cities.lookup('1210')!.name, contains('石家庄'));
       expect(kb.cuCities!.lookup('1210')!.name, contains('锦州'));
       expect(kb.cuRepository!.busRouteCount, 13852);
-      expect(kb.tuStations!.stationCount, 8069);
+      expect(kb.tuStations!.stationCount, 8119);
       expect(kb.cities.lookup('5210')!.name, '武汉');
       expect(kb.cities.lookup('5840')!.name, '深圳');
       final package = await ReferencePackage.open('CU', bundle: rootBundle);
@@ -209,13 +209,13 @@ void main() {
       try {
         expect(
           package.hash,
-          '517c59f3596c06a6ccff40752e7cf39db1bc2b2a76bd74d13d2381ab7ada6c53',
+          'c5fabb5524e8d64aa815b24e0868d4de1fbe54c488a778915d06616d3829b151',
         );
         expect(
           package.db
               .select('SELECT COUNT(*) AS c FROM all_records')
               .single['c'],
-          8069,
+          8119,
         );
         expect(
           File('${cache.path}/tu-${package.hash}.sqlite').existsSync(),

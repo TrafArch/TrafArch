@@ -479,12 +479,17 @@ ArchiveBatchEvidence _batch(String id, List<CuTransactionView> views) =>
       ),
     );
 
+Future<List<int>> Function(List<int>) qingdaoMetroReplay({
+  required bool withExitClock,
+}) => _Chip(metroPair: true, withExitClock: withExitClock).call;
+
 class _Chip {
   _Chip({
     this.city = '4520',
     this.validPublic = true,
     this.interruptAt,
     this.metroPair = false,
+    this.withExitClock = true,
     this.cuFci = '',
     this.processTail = false,
     this.rejectTuRestore = false,
@@ -495,6 +500,7 @@ class _Chip {
   final bool validPublic;
   final String? interruptAt;
   final bool metroPair;
+  final bool withExitClock;
   final String cuFci;
   final bool processTail;
   final bool rejectTuRestore;
@@ -571,7 +577,7 @@ class _Chip {
       '00B209C417' => '${_recharge}9000',
       '00B20AC417' => '6A83',
       '00B203CC20' => '${'00' * 9}20261114164713${'00' * 16}9000',
-      '00B207CC20' =>
+      '00B207CC20' when withExitClock =>
         '${'00' * 7}20261114165240${'00' * 8}00002710${'00' * 6}9000',
       _ => '6A82',
     };

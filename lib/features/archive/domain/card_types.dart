@@ -1,3 +1,6 @@
+import '../../../protocols/transit/local/local_card_models.dart'
+    show currentLocalCardLabel;
+
 /// 卡片档案卡型取值（写入数据库的稳定标识，已启用取值勿修改；
 /// 新增卡型在此登记，并由 CardIdentificationService 负责识别产出）。
 abstract final class CardTypes {
@@ -66,3 +69,11 @@ String cardTypeLabel(String cardType) => switch (cardType) {
   CardTypes.amusementIc => 'Amusement IC',
   _ => '未识别交通卡',
 };
+
+/// Present historical automatically identified names without changing captured evidence.
+String? officialCardDisplayName(String cardType, String? name) =>
+    switch (cardType) {
+      CardTypes.lingnanTong => '岭南通',
+      CardTypes.localCard => currentLocalCardLabel(name),
+      _ => name,
+    };

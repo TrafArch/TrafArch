@@ -4,6 +4,8 @@ import 'package:crypto/crypto.dart';
 import 'package:drift/drift.dart' show Variable;
 
 import '../../../protocols/transit/card_parser.dart' show CardParserIds;
+import '../../../protocols/transit/local/local_card_models.dart'
+    show currentLocalCardLabel, suzhouCitizenCardName;
 import '../../../protocols/transit/tunion/tunion_models.dart'
     show TUnionTripRecord;
 import '../data/app_database.dart';
@@ -429,7 +431,7 @@ class ArchiveHistory {
       final projected = <String>{};
       final legacyPrimary = snapshot.extensions['localCardTrips'];
       final primaryLabel = legacyPrimary is Map
-          ? legacyPrimary['cardKindLabel']
+          ? currentLocalCardLabel(legacyPrimary['cardKindLabel'])
           : null;
       if (evidence is List) {
         for (final app in evidence.whereType<Map>()) {
@@ -480,8 +482,8 @@ class ArchiveHistory {
         // Captures from before per-application records use only this section.
         // New captures keep directory/file provenance in applicationEvidence.
         if (section == 'localCardTrips' &&
-            projected.contains(switch (payload['cardKindLabel']) {
-              '苏州·苏薪卡' => 'suzhou_suxin',
+            projected.contains(switch (primaryLabel) {
+              suzhouCitizenCardName => 'suzhou_suxin',
               '苏州·计次卡' => 'suzhou_cika',
               '天府通' => 'tft',
               _ => null,
@@ -495,7 +497,9 @@ class ArchiveHistory {
           final fields = Map<String, dynamic>.from(row);
           // Legacy captures identify the wallet once for the whole section.
           if (section == 'localCardTrips' && fields['profile'] == null) {
-            switch (payload['cardKindLabel']) {
+            switch (primaryLabel) {
+              case suzhouCitizenCardName:
+                fields['profile'] = 'suzhou_suxin';
               case '深圳通':
                 fields['profile'] = 'shenzhen';
               case '武汉通':

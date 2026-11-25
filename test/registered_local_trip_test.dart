@@ -31,16 +31,41 @@ void main() {
       expect(trip.balanceDelta, -120);
     },
   );
-  test('SUXIN selection never verifies a PIN', () async {
+  test('SUXIN selection verifies the default 123456 PIN', () async {
     final commands = <List<int>>[];
     final exchange = ApduExchange(
       transceive: (command) async {
         commands.add(command);
-        return command[1] == 0xA4 ? [0x90, 0] : [0x69, 0x82];
+        return [0x90, 0];
       },
     );
     expect(await SuzhouCard(exchange).select(CardInfo(), []), isTrue);
-    expect(commands, [CardAid.suxin]);
+    expect(commands, [CardAid.suxin, CardAid.suzhouPinVerify]);
+    expect(CardAid.suzhouPinVerify, [
+      0x00,
+      0x20,
+      0x00,
+      0x00,
+      0x03,
+      0x12,
+      0x34,
+      0x56,
+    ]);
+  });
+
+  test('SUXIN rejected PIN leaves the application unconfirmed', () async {
+    final commands = <List<int>>[];
+    final info = CardInfo();
+    final exchange = ApduExchange(
+      transceive: (command) async {
+        commands.add(command);
+        return command[1] == 0xA4 ? [0x90, 0] : [0x63, 0xC2];
+      },
+    );
+    expect(await SuzhouCard(exchange).select(info, []), isFalse);
+    expect(commands, [CardAid.suxin, CardAid.suzhouPinVerify]);
+    expect(info.isSuzhou, isFalse);
+    expect(info.isSuxin, isFalse);
   });
 
   for (final entry in {

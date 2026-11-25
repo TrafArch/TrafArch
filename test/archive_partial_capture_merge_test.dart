@@ -8,6 +8,51 @@ import 'package:transit_card_analyzer/features/archive/presentation/archive_trip
 import 'package:transit_card_analyzer/features/trips/journey_presentation.dart';
 
 void main() {
+  test('哈尔滨重读补足同笔异地地铁的站名，旧流水与新批次共用一个展示条目', () {
+    final old = _harbinRecord();
+    final current = _harbinRecord(mirror: true);
+    for (final payloads in [
+      [old, current],
+      [current, old],
+    ]) {
+      final history = _history(payloads);
+      final journeys = presentArchiveTrips(
+        history.records,
+        batches: history.batches,
+      ).journeys;
+      expect(journeys, hasLength(1));
+      final ride = journeys.single;
+      expect(ride.state, JourneyState.incomplete);
+      expect(ride.events.first.endpoint.station, '上海火车站');
+      expect(ride.amountText, '-¥ 4.00');
+      expect(ride.events.expand((event) => event.sourceIds).toSet(), {
+        'read-0',
+        'read-1',
+      });
+      expect(
+        history.batches.map((b) => b.decoded.rawJson),
+        unorderedEquals(payloads),
+      );
+    }
+  });
+
+  test('哈尔滨站名、分类、余额冲突或同批重复时保留各笔观察', () {
+    final current = _harbinRecord(mirror: true);
+    for (final old in [
+      _harbinRecord(station: '其他站'),
+      _harbinRecord(category: '轮渡'),
+      _harbinRecord(balance: 8800),
+    ]) {
+      _expectSeparate([old, current], count: 2, events: 2, completed: 0);
+    }
+    _expectSeparate(
+      [_harbinRecord(duplicate: true), current],
+      count: 3,
+      events: 3,
+      completed: 0,
+    );
+  });
+
   test('分类缺失的重复交易由唯一完整行程吸收且保留原事件来源及快照', () {
     final payloads = [_snapshot(partial: true), _snapshot()];
     final history = _history(payloads);
@@ -124,6 +169,43 @@ void main() {
       completed: 0,
     );
   });
+}
+
+String _harbinRecord({
+  bool mirror = false,
+  bool duplicate = false,
+  String? station,
+  String? category,
+  int balance = 8900,
+}) {
+  final doc = jsonDecode(_snapshot(partial: true)) as Map<String, dynamic>;
+  final row = {
+    'time': DateTime.utc(2026, 10, 24, 23, 4, 4).millisecondsSinceEpoch,
+    'sequence': 14,
+    'consume': true,
+    'composite': true,
+    'typeName': '复合消费',
+    'rawHex': '000E001FA4000001900920001101261820261024230404',
+    'terminalId': '200011012618',
+    'amountFen': 400,
+    'balanceAfterFen': balance,
+    'balanceAfterIsRecorded': false,
+    'isEntry': false,
+    'stationLabel': mirror ? '上海火车站' : station,
+    'appTypeName': mirror ? '城市轨道交通' : category,
+    if (mirror) ...{
+      'location': {'ruleId': 'cu-0x18-mirror'},
+      'lineLabel': '1号线',
+      'stationConfidence': 'exact',
+    },
+  };
+  doc['context']['systemId'] = 'tunion';
+  doc['context']['applicationId'] = 'A000000632010105';
+  doc['context']['displayCardType'] = 'harbin_transit_union';
+  doc['cityCode'] = '2610';
+  doc['parseVersion'] = mirror ? 18 : 17;
+  doc['trips'] = [row, if (duplicate) row];
+  return jsonEncode(doc);
 }
 
 void _expectSeparate(

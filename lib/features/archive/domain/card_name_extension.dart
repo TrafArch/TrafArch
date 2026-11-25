@@ -13,11 +13,7 @@ extension SavedCardDisplayName on SavedCard {
     final custom = customName?.trim();
     if (custom != null && custom.isNotEmpty) return custom;
 
-    // Legacy single-application Lingnan captures used the narrower YCT label.
-    // Resolve it for display without rewriting any saved profile record.
-    if (cardType == CardTypes.lingnanTong) return '岭南通';
-
-    final official = officialName?.trim();
+    final official = officialCardDisplayName(cardType, officialName?.trim());
     if (official != null && official.isNotEmpty) return official;
 
     return cardTypeLabel(cardType);
@@ -28,13 +24,12 @@ extension SavedCardDisplayName on SavedCard {
   String get subtitle {
     final parts = <String>[];
     final custom = customName?.trim();
-    final official = officialName?.trim();
-    if (custom != null && custom.isNotEmpty) {
-      if (cardType == CardTypes.lingnanTong) {
-        parts.add('岭南通');
-      } else if (official != null && official.isNotEmpty) {
-        parts.add(official);
-      }
+    final official = officialCardDisplayName(cardType, officialName?.trim());
+    if (custom != null &&
+        custom.isNotEmpty &&
+        official != null &&
+        official.isNotEmpty) {
+      parts.add(official);
     }
 
     final issuer = issuerName?.trim();

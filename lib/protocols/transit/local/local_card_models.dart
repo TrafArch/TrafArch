@@ -4,6 +4,15 @@ import 'dart:typed_data';
 
 import '../../transport/transport_failure.dart';
 
+const suzhouCitizenCardName = '苏州市民卡';
+
+/// Earlier captures used the local application name as the product name.
+String? currentLocalCardLabel(Object? label) => switch (label) {
+  '苏薪卡' || '苏州·苏薪卡' || '地方交通卡 · 苏州·苏薪卡' => suzhouCitizenCardName,
+  final String name => name,
+  _ => null,
+};
+
 /// 单次 APDU 请求/响应记录（含行程记录字段）
 class ApduRecord {
   String? commandHex;
@@ -148,7 +157,7 @@ class CardInfo {
     if (isLNT) return '岭南通';
     if (isYCT) return '羊城通';
     if (isSZT) return '深圳通';
-    if (isSuzhou) return isCika ? '苏州·计次卡' : '苏州·苏薪卡';
+    if (isSuzhou) return isCika ? '苏州·计次卡' : suzhouCitizenCardName;
     if (isTFT) return '天府通';
     if (isMacauPass) return '澳门通';
     if (isTU && isCU) return '交通联合 + 城市一卡通（双应用）';

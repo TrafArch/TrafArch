@@ -46,6 +46,18 @@ class CardAid {
     0x02,
   ];
 
+  /// Suzhou citizen card default PIN 123456, encoded as BCD.
+  static final List<int> suzhouPinVerify = const [
+    0x00,
+    0x20,
+    0x00,
+    0x00,
+    0x03,
+    0x12,
+    0x34,
+    0x56,
+  ];
+
   static final Uint8List selectCU = _select('A00000000386980701');
   static final Uint8List selectTU = _select('A000000632010105');
   static final Uint8List motBmac = _select('91560000144D4F542E424D4143303031');
