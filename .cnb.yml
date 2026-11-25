@@ -31,7 +31,7 @@
         - name: 签名并核验 APK
           timeout: 2h
           imports:
-            - https://cnb.cool/TrafArch/secrets/-/blob/main/android-signing.yml
+            - https://cnb.cool/TrafArch/taKeystore/-/blob/main/androidSigning.yml
           script: bash .cnb/build_apk.sh "$APK_MODE"
         - name: 上传 APK 和 SHA256 校验清单
           image: cnbcool/attachments@sha256:c959fe4db313ee35d801bfbb3d042b394c7dc80ed4b94e3cfca4685619f549e1

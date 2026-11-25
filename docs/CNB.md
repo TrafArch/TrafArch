@@ -3,46 +3,22 @@
 ## 构建与下载
 
 1. 将本次提交推到 GitHub，等仓库已有的「Sync to CNB」工作流完成；直接推到 CNB 的分支也可以。GitHub 镜像同步使用已有的 `CNB_GIT_TOKEN`。
-2. 在 CNB 打开要打包的**分支详情页**，展开自定义按钮，进入「Android 安装包」。首次使用前按下一节配置开发者签名。
+2. 在 CNB 打开要打包的**分支详情页**，展开自定义按钮，进入「Android 安装包」。两个按钮共用现有开发者签名。
 3. 点击「构建分架构 APK」获得 `armeabi-v7a`、`arm64-v8a`、`x86_64` 三个可独立安装的 APK。点击「构建 Universal APK」获得一份同时包含这三种 ABI 的 APK。两种模式均为 Release，使用正式入口 `lib/main.dart`。
 4. 打开本次构建对应的 **Commit → 附件**。安装包名称含版本名、实际版本码和架构，可用同页的 `SHA256SUMS-<版本码>-<模式>.txt` 核对下载。Windows 可以执行 `Get-FileHash -Algorithm SHA256 -LiteralPath '.\下载的文件.apk'`。
 
 按钮对应手动事件。普通 push 只在 `main` 更新知识库。按钮触发权限及提交附件的规则见 [CNB 手动触发文档](https://docs.cnb.cool/zh/build/web-trigger.html) 与 [CNB 附件插件](https://cnb.cool/cnb/plugins/cnbcool/attachments)。
 
-## 首次配置开发者原签名
+## 开发者签名从哪里读取
 
-在 CNB 的 `TrafArch` 组织创建或使用已有的**密钥仓库**。配置默认读取 `TrafArch/secrets` 的 `main` 分支、文件 `android-signing.yml`。使用其他密钥仓库时，修改构建配置里「签名并核验 APK」步骤的 `imports` 地址。[构建配置](../.cnb.yml) · [CNB 密钥仓库说明](https://docs.cnb.cool/zh/repo/secret.html)
+「签名并核验 APK」步骤通过 `.cnb.yml` 的 `imports` 直接引用密钥仓库 `TrafArch/taKeystore` 的 `main/androidSigning.yml`。CNB 将以下两个字段注入该步骤。[构建配置](../.cnb.yml) · [签名文件](https://cnb.cool/TrafArch/taKeystore/-/blob/main/androidSigning.yml) · [CNB 密钥仓库说明](https://docs.cnb.cool/zh/repo/secret.html)
 
-在**密钥仓库**的网页编辑器填写以下内容。示例允许当前开发分支和主分支使用原签名，可按实际签名授权调整分支列表。
+| 导入的环境变量 | 解码后的文件 |
+| --- | --- |
+| `KEYSTORE_JKS_BASE64` | `upload-keystore.jks` |
+| `KEY_PROPERTIES_BASE64` | `key.properties` |
 
-```yaml
-allow_slugs:
-  - TrafArch/TrafArch
-allow_branches:
-  - main
-  - dev/harumakigohan
-allow_events:
-  - web_trigger_apk
-TRAFARCH_KEYSTORE_BASE64: "填入开发者原 keystore 的单行 Base64"
-TRAFARCH_SIGNING_PROPERTIES_BASE64: "填入下方 key.properties 的单行 Base64"
-```
-
-在源码目录外准备一份用于云构建的 Java `key.properties`。沿用原签名文件里的别名和密码，令 `storeFile` 指向构建容器里还原的文件名。
-
-```properties
-storeFile=release.keystore
-keyAlias=原有别名
-storePassword=原有密钥库密码
-keyPassword=原有密钥密码
-```
-
-Windows PowerShell 可用下面两行分别复制 Base64。将两个路径换成自己的仓库外文件路径，每执行一行就粘贴到对应字段，保存后清空剪贴板。Base64 内容应与密钥同等保管。
-
-```powershell
-[Convert]::ToBase64String([IO.File]::ReadAllBytes('D:\签名目录\原签名.jks')) | Set-Clipboard
-[Convert]::ToBase64String([IO.File]::ReadAllBytes('D:\签名目录\云端-key.properties')) | Set-Clipboard
-Set-Clipboard -Value ''
-```
+云端解码后把临时 `key.properties` 的 `storeFile` 指向同目录的 `upload-keystore.jks`，其余签名属性沿用原文件。若 CNB 报密钥引用权限不足，可核对密钥仓库对 `TrafArch/TrafArch`、目标分支和 `web_trigger_apk` 事件的授权。
 
 签名材料仅由签名步骤在临时目录还原。附件上传前，每个 APK 都要通过 Android 工具对实际应用名 `TrafArch`、包名 `com.kajolno.TrafArch`、版本名与版本码、开发者原证书、ABI、ZIP 完整性和对齐的检查。云端从 Git 跟踪的源码构建，Firebase 配置沿用项目的公开检出行为。
 
