@@ -857,8 +857,8 @@ class _DetailCardLayout {
   ) {
     final brands = _faceBrands(card);
     final titleStyle = GalleryTypography.card.copyWith(
-      fontSize: 16,
-      height: 23 / 16,
+      fontSize: 24,
+      height: 30 / 24,
     );
     final amountStyle = GalleryTypography.amount.copyWith(
       fontSize: 23,
@@ -944,8 +944,8 @@ class _GalleryDetailFace extends StatelessWidget {
         ? face.foreground
         : GalleryCardFace.imageForeground;
     final nameStyle = GalleryTypography.card.copyWith(
-      fontSize: 16,
-      height: 23 / 16,
+      fontSize: 24,
+      height: 30 / 24,
       color: foreground,
     );
     final amountStyle = GalleryTypography.amount.copyWith(

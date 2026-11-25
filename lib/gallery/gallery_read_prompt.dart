@@ -128,11 +128,17 @@ class _GalleryReadPrompt extends StatefulWidget {
     required this.compact,
     required this.nfcMessage,
     required this.failureMessage,
+    this.progress,
   });
   final bool reading, failed;
   final bool compact;
   final String? nfcMessage;
   final String? failureMessage;
+
+  /// Reader percentage (0–100) of the attempt in flight. Null keeps the loop
+  /// animation: the card has not been discovered yet, so there is no honest
+  /// percentage to show.
+  final int? progress;
 
   @override
   State<_GalleryReadPrompt> createState() => _GalleryReadPromptState();
@@ -206,6 +212,8 @@ class _GalleryReadPromptState extends State<_GalleryReadPrompt>
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).extension<GalleryTokens>()!;
+    final percent = widget.progress?.clamp(0, 100).toInt();
+    final fraction = percent == null ? null : percent / 100;
     final title =
         widget.nfcMessage ??
         (widget.reading
@@ -388,17 +396,44 @@ class _GalleryReadPromptState extends State<_GalleryReadPrompt>
         if (widget.reading)
           Padding(
             padding: const EdgeInsets.fromLTRB(40, 12, 40, 0),
-            child: TickerMode(
-              enabled: !_reduceMotion,
-              child: LinearProgressIndicator(
-                key: const ValueKey('home-read-progress'),
-                minHeight: 4,
-                borderRadius: BorderRadius.circular(2),
-                color: t.action,
-                backgroundColor: t.tone,
-                semanticsLabel: '正在读取卡片',
-                semanticsValue: '读取中',
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // The caption row is reserved even before the first real
+                // percentage, so null → value does not move the bar.
+                SizedBox(
+                  height: 18,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    // The bar announces the same percentage; this caption is
+                    // the visual copy only.
+                    child: ExcludeSemantics(
+                      child: Text(
+                        percent == null ? '' : '$percent%',
+                        key: const ValueKey('home-read-percent'),
+                        style: GalleryTypography.caption.copyWith(
+                          color: t.muted,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                TickerMode(
+                  enabled: !_reduceMotion,
+                  child: LinearProgressIndicator(
+                    key: const ValueKey('home-read-progress'),
+                    // A reported percentage is real progress; until the card is
+                    // discovered the bar keeps its indeterminate loop.
+                    value: fraction,
+                    minHeight: 4,
+                    borderRadius: BorderRadius.circular(2),
+                    color: t.action,
+                    backgroundColor: t.tone,
+                    semanticsLabel: '正在读取卡片',
+                    semanticsValue: percent == null ? '读取中' : '$percent%',
+                  ),
+                ),
+              ],
             ),
           )
         else

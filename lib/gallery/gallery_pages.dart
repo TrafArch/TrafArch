@@ -55,6 +55,7 @@ extension _GalleryPages on _GalleryViewState {
                   compact: _compactHeight,
                   nfcMessage: nfcMessage,
                   failureMessage: live?.error,
+                  progress: live?.readProgress,
                 )
               : _face(card),
         ),

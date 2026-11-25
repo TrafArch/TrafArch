@@ -527,14 +527,14 @@ void main() {
     expect(tokens().dynamic, isTrue);
     expect(
       tokens().action,
-      GalleryColorEngine.tokens(seed!, dark: false).primary,
+      GalleryColorEngine.tokens(seed, dark: false).primary,
     );
     final lightCanvas = tokens().canvas;
     c.update(() => c.themeMode = ThemeMode.dark);
     await tester.pumpAndSettle();
     expect(
       tokens().action,
-      GalleryColorEngine.tokens(seed!, dark: true).primary,
+      GalleryColorEngine.tokens(seed, dark: true).primary,
     );
     expect(tokens().canvas, isNot(lightCanvas));
     final darkTokens = tokens();
@@ -562,7 +562,7 @@ void main() {
     expect(tokens().action, isNot(darkTokens.action));
     expect(
       tokens().action,
-      GalleryColorEngine.tokens(seed!, dark: true).primary,
+      GalleryColorEngine.tokens(seed, dark: true).primary,
     );
 
     c.update(() => c.palette = 'teal');

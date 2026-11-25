@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-25 — 2.x 半模态沉浸、读卡百分比反馈、明细卡名 24sp 与知识库二级搜索吸顶
+
+- 半模态表面覆盖系统导航栏（手势小黑条）区域：修复更换卡面弹窗（含图片裁切器）外层 SafeArea 缺省 bottom:true 把表面顶起导航栏 inset、露出底色的问题；表面直达屏幕物理底部，内容仍由内层 SafeArea 保护。通用弹层与贡献者/许可证拖动弹层核验本就正确，用测试锁定。新增 gallery_sheet_immersion_test：inset 24/48 下覆盖更换卡面/裁切器/贡献者/trip/删除弹窗，断言表面底边、导航栏颜色同步与底部按钮安全区。
+- 首页读卡进度条显示真实百分比：接通 ScanController.progress → AppDependencies.readProgress → _GalleryLiveRead.readProgress → _GalleryReadPrompt；有百分比时渲染 determinate 进度条与右对齐百分比说明（固定预留行高，null↔有值布局不跳动），semanticsValue 同步播报；等待贴卡（无百分比）保持原循环动画。进度通知走既有记忆化链路，不触发卡片重投影。新增 reduceMotion 双态断言与真实链路 55% 门控测试。
+- 卡片详情页大卡名 16→24sp（行高 30/24），卡面高度随测量自适应；首页卡面与卡包列表/换卡面预览/裁切预览维持 20sp（20sp/26）不变；余额 20sp/23sp 与其他版式不变。更新导航设计与卡包交互断言。
+- 知识库二级页（城市详情页）搜索框与首页一致：改为吸顶收合头，向下浏览时搜索条滑入标题栏、城市名淡出，回到顶部恢复；空态同样保留返回与搜索条；首页与二级页共用同一套几何实现（spec §3.2/§3.4），搜索定位的滚动避让收合头，城市页保留线路卡按需构建。
+- 清理 gallery_navigation_design_test 3 条既有 unnecessary_non_null_assertion warning。
+- 已生成开发者原签名的 ARM64 release 包 `2.0.0-beta2`，清单版本码 `2246`（证书 SHA-256 与历次正式包一致，可覆盖安装），下一次构建预留 `2247`。回归：flutter analyze 0 error/0 warning，全量测试 3422/3422 通过。
+
 ## 2026-11-25 — CNB 云构建与 transit 知识库
 
 - 将云原生开发启动按钮名称改为「一键启动 1000 万以内最好的云原生平台」，说明改为「啊这个这个这个」。

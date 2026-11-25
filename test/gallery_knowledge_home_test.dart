@@ -286,6 +286,176 @@ void main() {
     expect(find.text('城市编码'), findsOneWidget);
   });
 
+  testWidgets('city page header matches the home search geometry', (
+    tester,
+  ) async {
+    final controller = await open(tester);
+    final entry = find.byKey(const ValueKey('knowledge-search-entry'));
+    final homeRect = tester.getRect(entry);
+    final homeTitleLeft = tester.getTopLeft(find.text('知识库')).dx;
+    expect(homeRect.left, 16);
+    expect(homeRect.right, 412 - 16);
+
+    final card = find.byKey(const ValueKey('knowledge-city-tu:0'));
+    await tester.ensureVisible(card);
+    await tester.pumpAndSettle();
+    await tester.tap(card);
+    await tester.pumpAndSettle();
+    expect(controller.page, GalleryPage.knowledgeCity);
+    final city = controller.selectedKnowledgeCity!;
+
+    // 静止态：同一搜索条、同一 inset、同一标题缩进（16 + 44 + 8）。
+    final rest = tester.getRect(entry);
+    expect(tester.getSize(entry), homeRect.size);
+    expect(rest.left, homeRect.left);
+    expect(rest.right, homeRect.right);
+    expect(tester.getTopLeft(find.text(city.name)).dx, homeTitleLeft);
+    expect(rest.top, greaterThan(tester.getTopLeft(find.text(city.name)).dy));
+    expect(tester.getCenter(find.byTooltip('返回')).dx, 16 + 22);
+
+    // 向下滚动：搜索条收进标题栏，城市名淡出，返回按钮留在可视区。
+    final list = find.byKey(
+      PageStorageKey(
+        'gallery-${controller.generation}-knowledge-city-'
+        '${city.system}-${city.code}',
+      ),
+    );
+    await tester.drag(list, const Offset(0, -420));
+    await tester.pumpAndSettle();
+    final pinned = tester.getRect(entry);
+    expect(pinned.left, homeTitleLeft);
+    expect(pinned.top, lessThan(rest.top));
+    expect(
+      tester.getCenter(entry).dy,
+      closeTo(tester.getCenter(find.byTooltip('返回')).dy, .1),
+    );
+    expect(tester.getSize(entry).height, homeRect.height);
+    expect(pinned.right, rest.right);
+    expect(pinned.width, 412 - homeTitleLeft - 16);
+    expect(find.text(city.name), findsNothing);
+    expect(find.byTooltip('返回').hitTestable(), findsOneWidget);
+
+    // 收合态下搜索条仍可点，返回后保持收合位置。
+    final offset = tester
+        .state<ScrollableState>(
+          find.descendant(of: list, matching: find.byType(Scrollable)).first,
+        )
+        .position
+        .pixels;
+    await tester.tap(entry);
+    await tester.pumpAndSettle();
+    expect(controller.page, GalleryPage.knowledgeSearch);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(controller.page, GalleryPage.knowledgeCity);
+    expect(tester.getRect(entry), pinned);
+    expect(
+      tester
+          .state<ScrollableState>(
+            find.descendant(of: list, matching: find.byType(Scrollable)).first,
+          )
+          .position
+          .pixels,
+      closeTo(offset, .1),
+    );
+
+    // 滚回顶部恢复完整展开态。
+    await tester.drag(list, const Offset(0, 650));
+    await tester.pumpAndSettle();
+    expect(tester.getRect(entry), rest);
+    expect(find.text(city.name), findsOneWidget);
+  });
+
+  testWidgets('city page without a selected city keeps header and search', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(412, 892);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final controller = GalleryController(GalleryData(fixture()))
+      ..navigate(GalleryPage.knowledgeCity);
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(GalleryApp(controller: controller));
+    await tester.pumpAndSettle();
+    expect(controller.page, GalleryPage.knowledgeCity);
+
+    expect(find.text('未选择城市'), findsOneWidget);
+    expect(find.text('城市详情'), findsOneWidget);
+    expect(find.byTooltip('返回').hitTestable(), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('knowledge-city-search-position')),
+      findsOneWidget,
+    );
+    final entry = find.byKey(const ValueKey('knowledge-search-entry'));
+    expect(tester.getRect(entry).left, 16);
+    expect(tester.getRect(entry).right, 412 - 16);
+    expect(tester.getSize(entry).height, 52);
+
+    await tester.tap(entry);
+    await tester.pumpAndSettle();
+    expect(controller.page, GalleryPage.knowledgeSearch);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(controller.page, GalleryPage.knowledgeCity);
+
+    await tester.tap(find.byTooltip('返回'));
+    await tester.pumpAndSettle();
+    expect(controller.page, GalleryPage.home);
+  });
+
+  testWidgets('each city keeps its own scroll offset', (tester) async {
+    final controller = await open(tester);
+    final first = find.byKey(const ValueKey('knowledge-city-tu:0'));
+    await tester.ensureVisible(first);
+    await tester.pumpAndSettle();
+    await tester.tap(first);
+    await tester.pumpAndSettle();
+    final city = controller.selectedKnowledgeCity!;
+    final list = find.byKey(
+      PageStorageKey(
+        'gallery-${controller.generation}-knowledge-city-'
+        '${city.system}-${city.code}',
+      ),
+    );
+    double offset() => tester
+        .state<ScrollableState>(
+          find.descendant(of: list, matching: find.byType(Scrollable)).first,
+        )
+        .position
+        .pixels;
+    await tester.drag(list, const Offset(0, -300));
+    await tester.pumpAndSettle();
+    expect(offset(), greaterThan(0));
+
+    await tester.tap(find.byTooltip('返回'));
+    await tester.pumpAndSettle();
+    expect(controller.page, GalleryPage.knowledge);
+    final second = find.byKey(const ValueKey('knowledge-city-tu:1'));
+    await tester.ensureVisible(second);
+    await tester.pumpAndSettle();
+    await tester.tap(second);
+    await tester.pumpAndSettle();
+    final other = controller.selectedKnowledgeCity!;
+    expect(other.code, isNot(city.code));
+    final otherList = find.byKey(
+      PageStorageKey(
+        'gallery-${controller.generation}-knowledge-city-'
+        '${other.system}-${other.code}',
+      ),
+    );
+    expect(
+      tester
+          .state<ScrollableState>(
+            find
+                .descendant(of: otherList, matching: find.byType(Scrollable))
+                .first,
+          )
+          .position
+          .pixels,
+      closeTo(0, .1),
+    );
+  });
+
   testWidgets('a city with lines but no stations shows unknown', (
     tester,
   ) async {

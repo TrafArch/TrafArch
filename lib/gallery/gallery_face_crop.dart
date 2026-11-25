@@ -322,6 +322,9 @@ extension _GalleryFaceCropper on _GalleryViewState {
           alignment: Alignment.bottomCenter,
           child: SafeArea(
             top: true,
+            // 半模态表面直达屏幕物理底部，系统导航栏区域由表面自身填充；
+            // 手势区由 Material 内层的 SafeArea 让给内容，同通用弹层路径。
+            bottom: false,
             child: Padding(
               padding: EdgeInsets.fromLTRB(0, gap, 0, 0),
               child: ConstrainedBox(
@@ -361,6 +364,7 @@ extension _GalleryFaceCropper on _GalleryViewState {
                             boxShadow: t.shadows(GalleryElevation.modal),
                           ),
                           child: Material(
+                            key: const ValueKey('gallery-face-surface'),
                             color: t.raised,
                             shape: RoundedRectangleBorder(
                               side: BorderSide(color: t.line),
@@ -369,13 +373,18 @@ extension _GalleryFaceCropper on _GalleryViewState {
                               ),
                             ),
                             clipBehavior: Clip.antiAlias,
-                            child: AnimatedSize(
-                              duration: _reduceMotion
-                                  ? Duration.zero
-                                  : _GalleryMotion.sheet,
-                              curve: _GalleryMotion.curve,
-                              alignment: Alignment.topCenter,
-                              child: content,
+                            child: SafeArea(
+                              top: false,
+                              left: false,
+                              right: false,
+                              child: AnimatedSize(
+                                duration: _reduceMotion
+                                    ? Duration.zero
+                                    : _GalleryMotion.sheet,
+                                curve: _GalleryMotion.curve,
+                                alignment: Alignment.topCenter,
+                                child: content,
+                              ),
                             ),
                           ),
                         ),
