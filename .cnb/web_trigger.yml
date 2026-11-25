@@ -1,13 +1,13 @@
 branch:
   - buttons:
       - name: 构建分架构 APK
-        description: 分别生成 ARMv7、ARM64、x86_64 安装包
+        description: 应用与你的手机不兼容->应用与你的手机不兼容->安装成功
         groupName: Android 安装包
         event: web_trigger_apk
         env:
           APK_MODE: split
       - name: 构建 Universal APK
-        description: 生成一个包含三种架构的通用安装包
+        description: 你空间大! 奢侈! 会享受! 
         groupName: Android 安装包
         event: web_trigger_apk
         env:

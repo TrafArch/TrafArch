@@ -18,5 +18,5 @@ npc:
   defaultRepo: TrafArch/TrafArch
   defaultRole: transit
   button:
-    name: 问 transit
+    name: 为什么不问问神奇的 transit 呢
     description: 查询交通卡参考资料与 TrafArch 技术实现
