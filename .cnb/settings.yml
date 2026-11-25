@@ -1,3 +1,9 @@
+workspace:
+  launch:
+    button:
+      name: 一键启动 1000 万以内最好的云原生平台
+      description: 啊这个这个这个
+
 npc:
   roles:
     - name: transit

@@ -55,6 +55,8 @@ Get-Content -Encoding utf8 .cnb/settings.yml
 
 | 显示位置 | 字段 | 当前文案 |
 | --- | --- | --- |
+| 云原生开发按钮名称 | `workspace.launch.button.name` | 一键启动 1000 万以内最好的云原生平台 |
+| 云原生开发按钮说明 | `workspace.launch.button.description` | 啊这个这个这个 |
 | 构建按钮分组 | 两个按钮的 `groupName` | Android 安装包 |
 | 分架构按钮 | 第一个按钮的 `name` | 构建分架构 APK |
 | 分架构按钮说明及构建标题 | 第一个按钮的 `description` | 分别生成 ARMv7、ARM64、x86_64 安装包 |

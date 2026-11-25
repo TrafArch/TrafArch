@@ -2,6 +2,7 @@
 
 ## 2026-11-25 — CNB 云构建与 transit 知识库
 
+- 将云原生开发启动按钮名称改为「一键启动 1000 万以内最好的云原生平台」，说明改为「啊这个这个这个」。
 - 在 CNB 分支详情页加入分架构和 Universal APK 两个手动按钮。云端分配版本码、使用开发者原签名，并在核验成品后把安装包和 SHA256 清单放入对应提交的附件。
 - 两个按钮的签名步骤均通过 CNB `imports` 引用 `TrafArch/taKeystore` 的 `androidSigning.yml`，使用现有的 `upload-keystore.jks` 和 `key.properties`。
 - 新增交通卡问答角色 transit，将 TU、CU 发布库的公开业务记录与项目技术文档编入知识库。签名接入方法和可改文案见 [CNB 使用说明](docs/CNB.md)。
