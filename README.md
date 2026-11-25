@@ -165,6 +165,10 @@ TrafArch 是一款 Android 交通卡读取工具。将卡片贴近手机，即�
 
 `flutter run -t lib/main_gallery.dart` 可启动同一套 2.x 实卡界面进行测试。`lib/app/internal_preview_app.dart` 与内置场景用于组件测试和设计回归。详细运行、数据来源与构建说明见 [界面 Gallery](docs/GALLERY.md)。
 
+## CNB 构建与交通卡问答
+
+在 CNB 分支详情页可手动构建分架构或 Universal APK，并从对应提交的附件下载。在仓库主页点「问 transit」可查询交通卡公开参考数据和项目实现。[首次配置与文案清单](docs/CNB.md)
+
 ## 致谢
 
 感谢 TrafArch 原作者 kajolno 及项目贡献者。城市和站点参考数据的来源包括[读卡识途（Trip Reader）公开数据集](https://github.com/domosekai/tripreader-data)，感谢原作者和数据贡献者的整理与维护。相关数据的署名与许可信息保留在应用内“关于 → 致谢”及数据来源记录中。

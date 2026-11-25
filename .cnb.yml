@@ -1,0 +1,66 @@
+"**":
+  web_trigger_apk:
+    - name: 构建 Android 安装包
+      runner:
+        tags: cnb:arch:amd64
+        cpus: 8
+      docker:
+        image: plugfox/flutter:3.47.6-android@sha256:a60d49be9ffea916dc7f530f467f6210a43688e0fda602bcf5ea22afcadb88e4
+      stages:
+        - name: 准备 Flutter 和 Android 工具链
+          timeout: 1h
+          script: |
+            set -eu
+            case "$APK_MODE" in split|universal) ;; *) echo 'APK_MODE must be split or universal' >&2; exit 2 ;; esac
+            if ! command -v python3 >/dev/null; then
+              apt-get update
+              apt-get install -y --no-install-recommends python3
+            fi
+            sdkmanager --sdk_root="$ANDROID_HOME" 'cmdline-tools;19.0'
+            manager="$ANDROID_HOME/cmdline-tools/19.0/bin/sdkmanager"
+            (yes || :) | "$manager" --sdk_root="$ANDROID_HOME" --licenses >/dev/null
+            "$manager" --sdk_root="$ANDROID_HOME" 'platforms;android-36' 'platforms;android-37.0' 'build-tools;36.0.0' 'build-tools;37.0.0' 'ndk;30.0.16248370'
+            flutter pub get --enforce-lockfile
+        - name: 分配 Android 版本码
+          lock:
+            key: trafarch-android-version-code
+            wait: true
+            expires: 300
+            timeout: 600
+          script: python3 .cnb/reserve_version.py
+        - name: 签名并核验 APK
+          timeout: 2h
+          imports:
+            - https://cnb.cool/TrafArch/secrets/-/blob/main/android-signing.yml
+          script: bash .cnb/build_apk.sh "$APK_MODE"
+        - name: 上传 APK 和 SHA256 校验清单
+          image: cnbcool/attachments@sha256:c959fe4db313ee35d801bfbb3d042b394c7dc80ed4b94e3cfca4685619f549e1
+          settings:
+            commit: ${CNB_COMMIT}
+            attachments:
+              - build/cnb-apk/*.apk
+              - build/cnb-apk/*.txt
+
+main:
+  push:
+    - name: 更新 transit 知识库
+      docker:
+        image: python:3.12-slim
+      stages:
+        - name: 核对 TU 和 CU 知识库资料
+          script: python3 -X utf8 .cnb/transit_knowledge.py --check
+        - name: 索引交通卡资料和项目技术文档
+          type: knowledge:update
+          options:
+            issueSyncEnabled: false
+            include:
+              - docs/transit-data/README.md
+              - docs/transit-data/tu/*.md
+              - docs/transit-data/cu/*.md
+              - README.md
+              - docs/ARCHITECTURE.md
+              - docs/NATIVE_SESSION_CONTRACT.md
+              - docs/REFERENCE_DATA_TOOLING.md
+              - docs/CITY_DATABASE_UPDATE.md
+              - docs/MIGRATION.md
+              - docs/GALLERY.md
