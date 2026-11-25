@@ -658,11 +658,11 @@ extension _GalleryFaceCropper on _GalleryViewState {
                           children: [
                             _text(
                               card.name,
-                              // 与首页 face-title 一致（spec 2.x 卡包卡名对齐）：
-                              // 20sp / 26 行高，w600 与颜色逻辑沿用 card 角色。
+                              // 卡包列表卡名 18sp / 24 行高：比首页 face-title（24sp）
+                              // 和旧版 20sp 更克制，w600 与颜色逻辑沿用 card 角色。
                               role: GalleryTypography.card,
-                              size: 20,
-                              height: 26 / 20,
+                              size: 18,
+                              height: 24 / 18,
                               color: _walletForeground(card),
                             ),
                             _gap(4),
