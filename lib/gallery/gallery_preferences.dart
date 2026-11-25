@@ -8,7 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'gallery_data.dart';
 
 /// Persistence for user-selected card faces. Image bytes are kept in separate
-/// app-private files; only small crop/size/seed metadata is serialized inline.
+/// app-private files; only small crop and size metadata is serialized inline.
 abstract interface class GalleryFaceStore {
   Future<GalleryFaceSnapshot?> read(String cardId);
   Future<void> write(String cardId, GalleryFaceSnapshot snapshot);
@@ -23,7 +23,6 @@ class GalleryFaceSnapshot {
     required this.height,
     required this.detail,
     required this.list,
-    required this.seed,
   });
 
   final Uint8List image;
@@ -31,7 +30,6 @@ class GalleryFaceSnapshot {
   final double height;
   final GalleryFaceCrop detail;
   final GalleryFaceCrop list;
-  final int? seed;
 }
 
 /// Files live in the application documents directory and are associated with
@@ -75,7 +73,6 @@ class FileGalleryFaceStore implements GalleryFaceStore {
       height: (data['height'] as num).toDouble(),
       detail: crop('detail'),
       list: crop('list'),
-      seed: data['seed'] as int?,
     );
   }
 
@@ -95,7 +92,6 @@ class FileGalleryFaceStore implements GalleryFaceStore {
       'height': snapshot.height,
       'detail': encodedCrop(snapshot.detail),
       'list': encodedCrop(snapshot.list),
-      'seed': snapshot.seed,
     });
     final temp = File('${image.path}.tmp');
     await temp.writeAsBytes(snapshot.image, flush: true);
@@ -185,13 +181,17 @@ class GalleryPreferences extends ChangeNotifier {
     try {
       for (final card in cards) {
         if (card.image != null) continue;
-        final saved = await (_faceReads[card.id] ??= faceStore.read(card.id));
-        if (saved == null || card.image != null) continue;
+        final read = _faceReads[card.id] ??= faceStore.read(card.id);
+        final saved = await read;
+        if (saved == null ||
+            card.image != null ||
+            !identical(_faceReads[card.id], read)) {
+          continue;
+        }
         card.image = saved.image;
         card.imageSize = Size(saved.width, saved.height);
         card.detailCrop = saved.detail;
         card.listCrop = saved.list;
-        card.monetSeed = saved.seed == null ? null : Color(saved.seed!);
       }
       faceError = null;
     } catch (_) {
@@ -207,18 +207,16 @@ class GalleryPreferences extends ChangeNotifier {
       await clearFaceImage(card.id);
       return faceError == null;
     }
+    final snapshot = GalleryFaceSnapshot(
+      image: bytes,
+      width: size.width,
+      height: size.height,
+      detail: card.detailCrop,
+      list: card.listCrop,
+    );
+    _faceReads[card.id] = Future.value(snapshot);
     try {
-      await faceStore.write(
-        card.id,
-        GalleryFaceSnapshot(
-          image: bytes,
-          width: size.width,
-          height: size.height,
-          detail: card.detailCrop,
-          list: card.listCrop,
-          seed: card.monetSeed?.toARGB32(),
-        ),
-      );
+      await faceStore.write(card.id, snapshot);
       faceError = null;
     } catch (_) {
       faceError = '卡面图片未能保存到本机。';
@@ -228,6 +226,7 @@ class GalleryPreferences extends ChangeNotifier {
   }
 
   Future<void> clearFaceImage(String cardId) async {
+    _faceReads[cardId] = Future.value();
     try {
       await faceStore.delete(cardId);
       faceError = null;

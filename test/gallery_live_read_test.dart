@@ -34,6 +34,7 @@ import 'qingdao_cu_wallet_regression_test.dart' show qingdaoMetroReplay;
 import 'shanghai_local_terminal_regression_test.dart'
     show scanHarbinMirrorLedger;
 import 'support/gallery_scroll.dart';
+import 'support/gallery_wallpaper.dart';
 import 'support/test_database.dart';
 
 class _MemoryFaceStore implements GalleryFaceStore {
@@ -52,6 +53,41 @@ class _MemoryFaceStore implements GalleryFaceStore {
 }
 
 void main() {
+  testWidgets('live settings use and persist wallpaper Monet before reading', (
+    tester,
+  ) async {
+    mockGalleryWallpaper(tester, () => const Color(0xff76527d));
+    final store = MemorySettingsStore();
+    final fixture = await _showGallery(
+      tester,
+      _CardKind.tu,
+      autoSave: false,
+      settingsStore: store,
+    );
+    final app = fixture.app;
+    expect(fixture.native.discoveries, 0);
+    expect(app.monetEnabled, isTrue);
+    final control = find.widgetWithText(SwitchListTile, '莫奈取色');
+    await _openSettingsControl(tester, control);
+    GalleryTokens tokens() => Theme.of(
+      tester.element(control),
+    ).extension<GalleryTokens>()!;
+    expect(tokens().dynamic, isTrue);
+
+    await tester.tap(control);
+    await tester.pumpAndSettle();
+    expect(tokens().dynamic, isFalse);
+    expect(app.monetEnabled, isFalse);
+    expect(store.values[SettingsKeys.monetEnabled], 'false');
+
+    await tester.tap(control);
+    await tester.pumpAndSettle();
+    expect(tokens().dynamic, isTrue);
+    expect(app.monetEnabled, isTrue);
+    expect(store.values[SettingsKeys.monetEnabled], 'true');
+    await _unmount(tester);
+  });
+
   for (final kind in _CardKind.values) {
     testWidgets(
       '2.x uses one ${kind.name} result across three pages and saves supported cards',
@@ -832,6 +868,101 @@ void main() {
       await _unmount(tester);
     },
   );
+
+  for (final reduceMotion in [false, true]) {
+    testWidgets(
+      'reading shows a determinate bar while a percentage exists, reduce=$reduceMotion',
+      (tester) async {
+        tester.platformDispatcher.accessibilityFeaturesTestValue =
+            FakeAccessibilityFeatures(disableAnimations: reduceMotion);
+        addTearDown(
+          tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+        );
+        final fixture = await _showGallery(tester, _CardKind.tu);
+        final app = fixture.app;
+        final bar = find.byKey(const ValueKey('home-read-progress'));
+        LinearProgressIndicator indicator() =>
+            tester.widget<LinearProgressIndicator>(bar);
+        final response = fixture.native.response = Completer<NfcScanResult?>();
+        await tester.tap(find.widgetWithText(TextButton, '开始读取'));
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+        // Discovery is still pending: no percentage exists, so the bar loops.
+        expect(indicator().value, isNull);
+        expect(indicator().semanticsValue, '读取中');
+        expect(find.text('42%'), findsNothing);
+        // The caption row is already reserved, so the bar itself does not move.
+        final loopTop = tester.getTopLeft(bar).dy;
+
+        // ScanController.progress carries the reader's own percentage; the next
+        // notification (here a settings toggle) repaints the prompt with it.
+        app.scan.progress = 42;
+        await app.setHapticEnabled(!app.hapticEnabled);
+        await tester.pump();
+        expect(indicator().value, .42);
+        expect(indicator().semanticsValue, '42%');
+        expect(find.text('42%'), findsOneWidget);
+        expect(tester.getTopLeft(bar).dy, loopTop);
+        app.scan.progress = 80;
+        await app.setHapticEnabled(!app.hapticEnabled);
+        await tester.pump();
+        expect(indicator().value, .8);
+        expect(find.text('80%'), findsOneWidget);
+        expect(tester.getTopLeft(bar).dy, loopTop);
+
+        response.complete(fixture.native.tag);
+        fixture.native.response = null;
+        await tester.pump();
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 40)),
+        );
+        await tester.pumpAndSettle();
+        expect(app.hasCompletedRead, isTrue, reason: '${app.error}');
+        expect(bar, findsNothing);
+        expect(find.text('80%'), findsNothing);
+        await _unmount(tester);
+      },
+    );
+  }
+
+  testWidgets('the bar follows the percentage the reader reports mid-read', (
+    tester,
+  ) async {
+    final reader = _GatedProgressReader(_CardKind.tu);
+    final fixture = await _showGallery(tester, _CardKind.tu, reader: reader);
+    reader.app = fixture.app;
+    final bar = find.byKey(const ValueKey('home-read-progress'));
+    await tester.tap(find.widgetWithText(TextButton, '开始读取'));
+    for (var frame = 0; frame < 5 && !reader.held; frame++) {
+      await tester.pump();
+    }
+    expect(reader.held, isTrue, reason: 'the read never reached 55 %');
+    expect(fixture.app.readProgress, 55);
+    // The held exchange keeps the percentage on screen while the read stage
+    // finishes its exit and mounts the reading prompt.
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(bar, findsOneWidget);
+    expect(tester.widget<LinearProgressIndicator>(bar).value, .55);
+    expect(tester.widget<LinearProgressIndicator>(bar).semanticsValue, '55%');
+    expect(find.text('55%'), findsOneWidget);
+    // Only the percentage moved: the card projection is still the previous one.
+    expect(fixture.app.hasCompletedRead, isFalse);
+
+    reader.gate.complete();
+    await tester.pump();
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 40)),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      fixture.app.hasCompletedRead,
+      isTrue,
+      reason: '${fixture.app.error}',
+    );
+    expect(bar, findsNothing);
+    await _unmount(tester);
+  });
 
   testWidgets(
     'NFC off after close preserves the successful read and its pending auto-save',
@@ -1933,6 +2064,25 @@ class _Reader implements NfcChannel, FelicaChannel {
     0x30,
     0,
   ];
+}
+
+class _GatedProgressReader extends _Reader {
+  _GatedProgressReader(super.kind);
+
+  AppDependencies? app;
+  final gate = Completer<void>();
+  bool held = false;
+
+  @override
+  Future<List<int>> transceive(List<int> frame) async {
+    // Hold one exchange right after the reader reported 55 %, so the pending
+    // percentage stays on screen long enough to assert it.
+    if (!held && app?.scan.progress == 55) {
+      held = true;
+      await gate.future;
+    }
+    return super.transceive(frame);
+  }
 }
 
 class _SuzhouHomeReader extends _Reader {

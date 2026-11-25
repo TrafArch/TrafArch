@@ -47,6 +47,7 @@ void main() {
         List.generate(30, (index) => {...sample, 'entryStation': '站点 $index'}),
       );
       await mount(tester);
+      expect(find.textContaining('上次读取'), findsNothing);
       final face = find.byKey(const ValueKey('card-face-shanghai'));
       final tabs = find.byKey(const ValueKey('segments-detail-tabs-indicator'));
       final faceElement = tester.element(face);

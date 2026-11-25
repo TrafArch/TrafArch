@@ -45,7 +45,12 @@ class _GalleryKnowledgeSearchBar extends StatelessWidget {
             ),
           ),
       icon: Icon(Icons.search_rounded, size: 20, color: colors.inputIcon),
-      label: const Text(_knowledgeHint, style: GalleryTypography.body),
+      label: const Text(
+        _knowledgeHint,
+        style: GalleryTypography.body,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
     );
   }
 }
@@ -357,40 +362,48 @@ class _GalleryKnowledgeResultTile extends StatelessWidget {
 }
 
 extension _GalleryKnowledgeDetails on _GalleryViewState {
-  /// 二级城市详情页（spec §5）：城市信息 + 线路卡。线路卡内部展开站点列表
-  /// （名称 + 原始编码），不产生新的页面层级；搜索胶囊常驻。
+  /// 二级城市详情页（spec §5、§3.2）：顶部是与首页同一个吸顶搜索头，其下
+  /// 为城市信息 + 线路卡。线路卡内部展开站点列表（名称 + 原始编码），不产生
+  /// 新的页面层级；搜索胶囊随滚动收合进标题栏（spec §3.4 要求两页一致）。
   Widget _knowledgeCityPage() {
     final city = c.selectedKnowledgeCity;
-    Widget page(String title, Widget body) => Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
-          child: _header(title, back: true),
+    return CustomScrollView(
+      // 滚动位置按城市分别保存：换城市或回首页再进来不会串位。
+      key: PageStorageKey(
+        'gallery-${c.generation}-knowledge-city-'
+        '${city == null ? 'none' : '${city.system}-${city.code}'}',
+      ),
+      controller: _knowledgeScroll,
+      slivers: [
+        _knowledgeSearchHeader(
+          title: city?.name ?? '城市详情',
+          searchKey: const ValueKey('knowledge-city-search-position'),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-          child: _GalleryKnowledgeSearchBar(
-            onOpen: () => c.navigate(GalleryPage.knowledgeSearch),
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            6,
+            16,
+            30 + MediaQuery.paddingOf(context).bottom,
           ),
+          sliver: city == null
+              ? SliverList.list(
+                  children: [
+                    _empty(
+                      '未选择城市',
+                      '请从知识库首页的城市列表进入。',
+                      icon: Icons.location_city_outlined,
+                    ),
+                  ],
+                )
+              : _knowledgeCityBody(city),
         ),
-        Expanded(child: body),
       ],
     );
-    if (city == null) {
-      return page(
-        '城市详情',
-        _list([
-          _empty(
-            '未选择城市',
-            '请从知识库首页的城市列表进入。',
-            icon: Icons.location_city_outlined,
-          ),
-        ], id: 'knowledge-city'),
-      );
-    }
-    return page(city.name, _knowledgeCityBody(city));
   }
 
+  /// 城市页内容 sliver：调用方（[_knowledgeCityPage]）负责吸顶搜索头与外层
+  /// 滚动视图，这里只产出城市信息与按需构建的线路卡。
   Widget _knowledgeCityBody(GalleryKnowledgeCityView city) {
     final targetIndex = c.knowledgeCityLine == null
         ? -1
@@ -438,18 +451,8 @@ extension _GalleryKnowledgeDetails on _GalleryViewState {
       if (city.lines.isEmpty)
         _empty('暂无线路数据', '当前参考数据未包含该城市的线路与站点。', icon: Icons.route_outlined),
     ];
-    return ListView.builder(
-      key: PageStorageKey(
-        'gallery-${c.generation}-knowledge-city-${city.system}-${city.code}',
-      ),
-      controller: _knowledgeScroll,
-      padding: EdgeInsets.fromLTRB(
-        16,
-        6,
-        16,
-        30 + MediaQuery.paddingOf(context).bottom,
-      ),
-      // 城市页按需构建线路卡：只有接近视口的卡片才会建出站点容器。
+    // 城市页按需构建线路卡：只有接近视口的卡片才会建出站点容器。
+    return SliverList.builder(
       itemCount: header.length + city.lines.length,
       itemBuilder: (context, index) => index < header.length
           ? header[index]
@@ -652,8 +655,10 @@ extension _GalleryKnowledgeDetails on _GalleryViewState {
   void _scheduleKnowledgeReveal() {
     if (c.knowledgeCityLine == null || _knowledgeRevealKey == null) return;
     final token = c.knowledgeCityReveal;
-    // 在同步阶段取好时长，避免在异步回调里跨 gap 使用 context。
+    // 在同步阶段取好时长与顶栏高度，避免在异步回调里跨 gap 使用 context。
     final duration = GalleryMotion.duration(context, GalleryMotion.medium);
+    // 吸顶搜索头盖住视口顶部，定位目标要多让出它的收合高度。
+    final clearance = _KnowledgeSearchHeaderGeometry.of(context).compactHeight;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       for (var attempt = 0; attempt < 32; attempt++) {
         if (!mounted ||
@@ -663,12 +668,7 @@ extension _GalleryKnowledgeDetails on _GalleryViewState {
         }
         final target = _knowledgeRevealKey?.currentContext;
         if (target != null && target.mounted) {
-          await Scrollable.ensureVisible(
-            target,
-            alignment: .08,
-            duration: duration,
-            curve: GalleryMotion.curve,
-          );
+          await _revealKnowledgeTarget(target, clearance, duration);
           return;
         }
         if (!_knowledgeScroll.hasClients) {
@@ -686,5 +686,39 @@ extension _GalleryKnowledgeDetails on _GalleryViewState {
         await WidgetsBinding.instance.endOfFrame;
       }
     });
+  }
+
+  /// 把目标滚到吸顶搜索头下方。`ensureVisible` 只按视口计算，不知道顶部还有
+  /// 一个 pinned 的搜索头，会把目标顶到标题栏底下；这里显式让出收合高度。
+  Future<void> _revealKnowledgeTarget(
+    BuildContext target,
+    double clearance,
+    Duration duration,
+  ) async {
+    final box = target.findRenderObject();
+    final viewport = Scrollable.maybeOf(target)?.context.findRenderObject();
+    if (box is RenderBox &&
+        box.hasSize &&
+        viewport is RenderBox &&
+        _knowledgeScroll.hasClients) {
+      final position = _knowledgeScroll.position;
+      // 目标相对视口顶部的距离（含吸顶头占位）→ 再让出收合高度。
+      final delta = box.localToGlobal(Offset.zero, ancestor: viewport).dy;
+      await _knowledgeScroll.animateTo(
+        (position.pixels + delta - clearance - 8).clamp(
+          position.minScrollExtent,
+          position.maxScrollExtent,
+        ),
+        duration: duration,
+        curve: GalleryMotion.curve,
+      );
+      return;
+    }
+    await Scrollable.ensureVisible(
+      target,
+      alignment: .08,
+      duration: duration,
+      curve: GalleryMotion.curve,
+    );
   }
 }

@@ -231,9 +231,6 @@ class GalleryCardFace {
   Color get foreground => const Color(0xff18263a);
   Color get secondaryForeground => const Color(0xff304057);
 
-  /// The more saturated end of the preset gradient is the card's Monet seed
-  /// until the user supplies a photo of their own.
-  Color get seed => end;
   static const values = [
     GalleryCardFace('blue', '海蓝', Color(0xffc4dff7), Color(0xff8fb8e1)),
     GalleryCardFace('teal', '青玉', Color(0xffb9e5d9), Color(0xff82c7bd)),

@@ -126,6 +126,13 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
 
   bool get busy => _attempt != null || (app.scanning && !app.nfcReleaseFailed);
   bool get closing => _closing;
+
+  /// Reader percentage (0–100) of the attempt in flight, or null while the tag
+  /// is still being discovered. A progress-only notification ends in
+  /// [notifyListeners] without touching the projection: [_appChanged] rebuilds
+  /// the read stage through [_syncController], which returns [_current]
+  /// unchanged while [busy], so the prompt repaints without a card reprojection.
+  int? get readProgress => app.readProgress;
   bool get hasCurrent => _current != null && !app.nfcReleaseFailed;
   bool get hasFreshCurrent =>
       _freshCurrent && _current != null && !app.nfcReleaseFailed;
@@ -242,6 +249,10 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
     }
     if (navigation.hapticEnabled != app.hapticEnabled) {
       navigation.hapticEnabled = app.hapticEnabled;
+      changed = true;
+    }
+    if (navigation.monet != app.monetEnabled) {
+      navigation.monet = app.monetEnabled;
       changed = true;
     }
     final readState = _error != null || app.nfcReleaseFailed
@@ -633,6 +644,9 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
     _syncController();
     await write;
   }
+
+  @override
+  Future<void> setMonet(bool value) => app.setMonetEnabled(value);
 
   Future<bool> openQr() async {
     if (_disposed || openingQr || app.qrAcquiring) return true;

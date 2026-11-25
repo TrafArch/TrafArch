@@ -334,6 +334,7 @@ void main() {
       await tester.tap(find.text('陆家嘴'));
       await tester.pumpAndSettle();
       expect(controller.overlay, GalleryOverlay.trip);
+      expect(find.textContaining('本行程为内置样例摘要'), findsNothing);
       expect(find.text('未记录换乘站'), findsOneWidget);
       expect(find.text('0x18 交易 / 0x1E 过程'), findsOneWidget);
       expect(jsonEncode(controller.trips), original);

@@ -272,7 +272,7 @@ void main() {
   );
 
   testWidgets(
-    'wallet card name matches the home face title at 20sp and wraps long names',
+    'wallet card name uses the 18sp list style and wraps long names',
     (tester) async {
       final card = c.current;
       card
@@ -285,9 +285,9 @@ void main() {
         matching: find.text(card.name),
       );
       final walletStyle = tester.widget<Text>(walletTitle).style!;
-      // 与首页 face-title 相同的 20sp / 26 行高，保留 w600 与颜色逻辑。
-      expect(walletStyle.fontSize, 20);
-      expect(walletStyle.height, 26 / 20);
+      // 卡包列表卡名 18sp / 24 行高，保留 w600 与颜色逻辑。
+      expect(walletStyle.fontSize, 18);
+      expect(walletStyle.height, 24 / 18);
       expect(walletStyle.fontWeight, FontWeight.w600);
       // 长卡名换行不截断。
       expect(tester.widget<Text>(walletTitle).maxLines, isNull);
@@ -306,7 +306,7 @@ void main() {
         tester.platformDispatcher.textScaleFactorTestValue = scale;
         c.update(() {});
         await tester.pumpAndSettle();
-        expect(tester.widget<Text>(walletTitle).style!.fontSize, 20);
+        expect(tester.widget<Text>(walletTitle).style!.fontSize, 18);
         expect(tester.takeException(), isNull);
       }
       tester.platformDispatcher.clearTextScaleFactorTestValue();
@@ -315,8 +315,9 @@ void main() {
       final faceStyle = tester
           .widget<Text>(find.byKey(ValueKey('face-title-${card.id}')))
           .style!;
-      expect(walletStyle.fontSize, faceStyle.fontSize);
-      expect(walletStyle.height, faceStyle.height);
+      // 首页卡面标题保持 20sp，列表卡名 18sp 应小于它。
+      expect(faceStyle.fontSize, 20);
+      expect(walletStyle.fontSize, lessThan(faceStyle.fontSize!));
       expect(walletStyle.fontWeight, faceStyle.fontWeight);
     },
   );

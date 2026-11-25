@@ -230,10 +230,6 @@ class GalleryCard {
   GalleryFaceCrop detailCrop;
   GalleryFaceCrop listCrop;
 
-  /// Seed extracted from [image] in this session (Monet Adaptive Canvas).
-  /// Preset gradient faces derive their seed from [face] instead.
-  Color? monetSeed;
-
   /// A session preview copy: shares the frozen identity fields while the
   /// cropper's temporary image and crop parameters stay uncommitted.
   GalleryCard.preview(
@@ -260,8 +256,7 @@ class GalleryCard {
        detailCrop = detailCrop ?? other.detailCrop,
        listCrop = listCrop ?? other.listCrop,
        _currencyCode = other._currencyCode,
-       _live = other._live,
-       monetSeed = other.monetSeed;
+       _live = other._live;
 
   /// Display precision only; the original captured label remains unchanged.
   String get readDateLabel {

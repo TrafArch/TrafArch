@@ -144,8 +144,8 @@ class GalleryTokens extends ThemeExtension<GalleryTokens> {
   Color get tripBadgeOnBus => dark ? const Color(0xff102c4d) : Colors.white;
 
   /// Keep scene callers compatible; runtime design data is independent of
-  /// fixtures. [monetSeed] is the current home card's effective seed; when it
-  /// is null the user's preset (or Indigo by default) provides the tokens.
+  /// fixtures. [monetSeed] is derived from the Android system palette; when it
+  /// is null the supplied preset provides the tokens.
   static GalleryTokens from(
     GalleryData data,
     bool dark,

@@ -55,6 +55,7 @@ extension _GalleryPages on _GalleryViewState {
                   compact: _compactHeight,
                   nfcMessage: nfcMessage,
                   failureMessage: live?.error,
+                  progress: live?.readProgress,
                 )
               : _face(card),
         ),
@@ -269,7 +270,7 @@ extension _GalleryPages on _GalleryViewState {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 sliver: SliverPersistentHeader(
                   pinned: true,
-                  delegate: _TripsSummaryDelegate(
+                  delegate: _GalleryCollapsingHeaderDelegate(
                     expandedHeight: _reduceMotion
                         ? compactHeight
                         : math.max(expandedHeight, compactHeight),
@@ -897,7 +898,7 @@ extension _GalleryPages on _GalleryViewState {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 sliver: SliverPersistentHeader(
                   pinned: true,
-                  delegate: _TripsSummaryDelegate(
+                  delegate: _GalleryCollapsingHeaderDelegate(
                     expandedHeight: _reduceMotion
                         ? compactHeight
                         : math.max(expandedHeight, compactHeight),
@@ -1335,11 +1336,11 @@ extension _GalleryPages on _GalleryViewState {
             _switch(
               '莫奈取色',
               c.monet,
-              (value) => c.update(() => c.monet = value),
+              c.setMonet,
               subtitle: c.monet
                   ? (t.dynamic
-                        ? '跟随当前首页卡片的取色生成界面，更换卡面后自动更新'
-                        : '当前卡片暂无有效取色，使用${GalleryPalette.byId(c.palette).name}配色')
+                        ? '跟随 Android 系统动态配色'
+                        : '系统动态配色不可用，使用默认靛蓝')
                   : '使用手动选择的主题配色',
             ),
             _collapse(
@@ -1413,9 +1414,6 @@ extension _GalleryPages on _GalleryViewState {
               '预测性返回手势',
               _preferences.enabled,
               _preferences.setEnabled,
-              subtitle: _preferences.loading
-                  ? '正在读取偏好…'
-                  : '手势返回时预览上一页，松手返回或取消；支持的 Android 系统生效',
             ),
             _collapse(
               _preferences.error != null,
@@ -1841,8 +1839,8 @@ extension _GalleryPages on _GalleryViewState {
   }
 }
 
-class _TripsSummaryDelegate extends SliverPersistentHeaderDelegate {
-  _TripsSummaryDelegate({
+class _GalleryCollapsingHeaderDelegate extends SliverPersistentHeaderDelegate {
+  _GalleryCollapsingHeaderDelegate({
     required this.expandedHeight,
     required this.compactHeight,
     required this.builder,
@@ -1870,7 +1868,7 @@ class _TripsSummaryDelegate extends SliverPersistentHeaderDelegate {
   }
 
   @override
-  bool shouldRebuild(_TripsSummaryDelegate oldDelegate) => true;
+  bool shouldRebuild(_GalleryCollapsingHeaderDelegate oldDelegate) => true;
 }
 
 /// Journey rows read as clock times; seconds only widen the row and add noise.

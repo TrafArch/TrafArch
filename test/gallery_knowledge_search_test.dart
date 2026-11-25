@@ -11,6 +11,7 @@ import 'package:transit_card_analyzer/gallery/gallery_knowledge_index.dart';
 import 'package:transit_card_analyzer/gallery/gallery_theme.dart';
 
 import 'support/gallery_scroll.dart';
+import 'support/gallery_wallpaper.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -93,6 +94,7 @@ void main() {
   testWidgets(
     'search debounces, preserves focus on theme changes and routes to the exact station',
     (tester) async {
+      mockGalleryWallpaper(tester, () => const Color(0xff497253));
       var loads = 0;
       final controller = await openKnowledge(tester, () async {
         loads++;
@@ -154,6 +156,8 @@ void main() {
         Theme.of(tester.element(input)).extension<GalleryTokens>()!.dynamic,
         isTrue,
       );
+      expect(tester.widget<TextField>(input).controller, same(field.controller));
+      expect(field.focusNode!.hasFocus, isTrue);
       expect(loads, 1);
       await tester.tap(find.widgetWithText(ListTile, '290000100018').first);
       await tester.pumpAndSettle();

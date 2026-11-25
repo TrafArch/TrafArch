@@ -123,7 +123,8 @@ void main() {
     expect(c.navigationStack.length, routes);
     expect(c.overlay, GalleryOverlay.face);
     expect(find.text('调整图片'), findsOneWidget);
-    expect(find.text('分别调整图片在两个页面中的显示范围'), findsOneWidget);
+    expect(find.text('分别调整图片在两个页面中的显示范围'), findsNothing);
+    expect(find.text('拖动图片 · 双指缩放'), findsNothing);
     expect(
       find.byKey(const ValueKey('face-crop-region-detail')),
       findsOneWidget,
