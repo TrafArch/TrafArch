@@ -7,6 +7,7 @@ import 'package:transit_card_analyzer/protocols/transit/multiapp/application_evi
 import 'package:transit_card_analyzer/protocols/transport/transport_failure.dart';
 
 const suxin = '00A404000B535558494E2E4444463031';
+const suzhouPinVerify = '0020000003123456';
 const cika = '00A4040008535A504B5F5A5959';
 const tft = '00A404000DD156000015B9ABB9B2D3A6D3C3';
 const mf = '00A40000023F00';
@@ -47,6 +48,7 @@ void main() {
           return selected ? [...fci, ...ok] : missing;
         }
         if (!selected) return missing;
+        if (cmd == suzhouPinVerify) return ok;
         commands.add(cmd);
         return switch (cmd) {
           '00B095001E' => [...publicInfo, ...ok],
@@ -97,6 +99,7 @@ void main() {
       final apps = await readRegisteredLocalWallets((bytes) async {
         return switch (LocalHex.bytesToHex(bytes)) {
           suxin => ok,
+          suzhouPinVerify => ok,
           '00B095001E' => [...LocalHex.hexToBytes(common), ...ok],
           '805C000104' => [0, 0, 0x07, 0xD0, ...ok],
           '00B201CC32' => [...stats, ...ok],
@@ -113,6 +116,25 @@ void main() {
       expect(slots['suxin.statsCount'], 0);
     },
   );
+
+  test('SUXIN rejected PIN stops before protected reads', () async {
+    final sent = <String>[];
+    final apps = await readRegisteredLocalWallets((bytes) async {
+      final cmd = LocalHex.bytesToHex(bytes);
+      sent.add(cmd);
+      return switch (cmd) {
+        suxin => ok,
+        suzhouPinVerify => [0x63, 0xC2],
+        _ => missing,
+      };
+    });
+    final wallet = apps.first;
+    expect(wallet.confirmed, isFalse);
+    expect(wallet.state, ApplicationProbeState.selectRejected);
+    expect(wallet.transportFailure?.kind, TransportFailureKind.rejectedStatus);
+    expect(sent.take(2), [suxin, suzhouPinVerify]);
+    expect(sent, isNot(contains('00B095001E')));
+  });
 
   test(
     'SUXIN keeps undated and malformed discount records as raw observations',
@@ -131,6 +153,7 @@ void main() {
         final apps = await readRegisteredLocalWallets((bytes) async {
           return switch (LocalHex.bytesToHex(bytes)) {
             suxin => ok,
+            suzhouPinVerify => ok,
             '00B201CC32' => [...stats, ...ok],
             _ => missing,
           };
@@ -149,11 +172,11 @@ void main() {
     var directory = '';
     final apps = await readRegisteredLocalWallets((bytes) async {
       final cmd = LocalHex.bytesToHex(bytes);
+      if (cmd == suzhouPinVerify) return ok;
       if ([suxin, cika, mf].contains(cmd)) {
         directory = cmd;
         return ok;
       }
-      expect(bytes[1], isNot(0x20));
       if (directory == suxin && cmd == '00B095001E') {
         return [...LocalHex.hexToBytes(common), ...ok];
       }
@@ -285,6 +308,7 @@ void main() {
         final cmd = LocalHex.bytesToHex(bytes);
         sent.add(cmd);
         if (cmd == suxin) return ok;
+        if (cmd == suzhouPinVerify) return ok;
         if (cmd == '00B095001E') return [...LocalHex.hexToBytes(common), ...ok];
         throw const TransportFailure(
           kind: TransportFailureKind.tagLost,
