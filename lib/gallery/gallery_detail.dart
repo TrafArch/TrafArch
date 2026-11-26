@@ -22,7 +22,22 @@ extension _GalleryDetail on _GalleryViewState {
       1 => _spendingChildren(card),
       2 => [_cardInformation(card)],
       _ => <Widget>[
-        if (ledger.isEmpty) _empty('暂无交易记录', '卡内记录可能不完整'),
+        if (ledger.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 16),
+            child: Column(
+              children: [
+                Icon(Icons.credit_card_outlined, size: 40, color: t.onTone),
+                _gap(16),
+                _text(
+                  '暂无交易记录',
+                  role: GalleryTypography.card,
+                  weight: FontWeight.w600,
+                  align: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
         for (final group in _tripsByDate(ledger).entries) ...[
           _tripDateHeading(group.key),
           for (final (index, trip) in group.value.indexed) ...[
@@ -35,12 +50,6 @@ extension _GalleryDetail on _GalleryViewState {
             ),
           ],
         ],
-        _gap(16),
-        _text(
-          '仅展示样例中保留的记录，可能不代表完整历史。',
-          role: GalleryTypography.caption,
-          color: t.muted,
-        ),
       ],
     };
     const navHeight = 56.0;
@@ -362,7 +371,7 @@ extension _GalleryDetail on _GalleryViewState {
     final range = _spendingSelection.start == null
         ? '全部已保留记录'
         : '${_spendingDate(_spendingSelection.start!)} ～ ${_spendingDate(_spendingSelection.end!)}';
-    final widgets = <Widget>[
+    return <Widget>[
       Row(
         key: const ValueKey('spending-periods'),
         children: [
@@ -468,83 +477,18 @@ extension _GalleryDetail on _GalleryViewState {
         _text(
           _spendingSelection.period == GallerySpendingPeriod.all
               ? '${summary.undatedCount} 笔消费未记录完整日期，已计入总额和分类，未纳入趋势及日均。'
-              : '${summary.undatedCount} 笔消费未记录完整日期，未纳入所选日期；可在“全部”中查看。',
+              : '${summary.undatedCount} 笔消费未记录完整日期，未纳入所选日期；仅在“全部”中计入总额和分类。',
           role: GalleryTypography.caption,
           color: t.muted,
         ),
       ],
-      _sectionTitle('消费明细', trailing: '${summary.entries.length} 笔'),
-      if (summary.entries.isEmpty)
-        _empty('暂无消费记录', '此范围内没有明确币种和扣款金额的记录', icon: Icons.bar_chart_rounded),
-    ];
-    String? previousDate;
-    for (final entry in summary.entries) {
-      final date = entry.date == null ? '日期未记录' : _spendingDate(entry.date!);
-      if (date != previousDate) {
-        widgets.add(
-          Padding(
-            padding: const EdgeInsets.only(top: 12, bottom: 8),
-            child: _text(date, role: GalleryTypography.label, color: t.muted),
-          ),
-        );
-        previousDate = date;
-      }
-      widgets.add(
-        Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: _panel(
-            Row(
-              children: [
-                Icon(
-                  entry.record['kind'] == 'rail'
-                      ? Icons.train_outlined
-                      : entry.record['kind'] == 'bus'
-                      ? Icons.directions_bus_outlined
-                      : Icons.shopping_bag_outlined,
-                  color: t.onTone,
-                  size: 22,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _text(
-                        entry.record['title'] as String? ?? '消费',
-                        role: GalleryTypography.body,
-                      ),
-                      _gap(3),
-                      _text(
-                        '${entry.record['time'] ?? '时间未记录'} · ${entry.category}',
-                        role: GalleryTypography.caption,
-                        color: t.muted,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: _text(
-                    galleryDisplayAmount(entry.record['amount'] as String),
-                    role: GalleryTypography.lead,
-                    align: TextAlign.right,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-    widgets.addAll([
       _gap(12),
       _text(
         '仅统计本卡已保留且币种明确的扣款，不包含充值或过程记录，可能不代表完整消费历史。',
         role: GalleryTypography.caption,
         color: t.muted,
       ),
-    ]);
-    return widgets;
+    ];
   }
 
   Widget _spendingChart(GallerySpendingSummary summary) {
