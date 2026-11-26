@@ -3,6 +3,7 @@
 ## 2026-11-26 — 提高 CNB Android 构建规格
 
 - 分架构和 Universal APK 的手动流水线使用 CNB 的 amd64 最高规格，申请 64 核 CPU 和 128 GiB 内存。
+- 根据分架构构建 2252 的耗时记录，将打包时现场安装的 NDK 28.2.13676358、Android SDK Platform 35 和 CMake 3.22.1 预装进工具链镜像，并在 CNB 节点上缓存 Gradle 发行包和 Maven 依赖。
 
 ## 2026-11-25 — 修复 CNB 分架构和通用 APK 的构建环境
 

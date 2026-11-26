@@ -6,6 +6,11 @@
         cpus: 64
       docker:
         build: .cnb/android.Dockerfile
+        volumes:
+          - /root/.gradle/wrapper/dists:copy-on-write
+          - /root/.gradle/caches/modules-2:copy-on-write
+      env:
+        GRADLE_USER_HOME: /root/.gradle
       stages:
         - name: 准备 Flutter 和 Android 工具链
           timeout: 1h
