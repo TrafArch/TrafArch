@@ -397,14 +397,14 @@ extension _GalleryFaceCropper on _GalleryViewState {
                               top: false,
                               left: false,
                               right: false,
-                              child: AnimatedSize(
-                                duration: _reduceMotion
-                                    ? Duration.zero
-                                    : _GalleryMotion.sheet,
-                                curve: _GalleryMotion.curve,
-                                alignment: Alignment.topCenter,
-                                child: content,
-                              ),
+                              child: _reduceMotion
+                                  ? content
+                                  : AnimatedSize(
+                                      duration: _GalleryMotion.sheet,
+                                      curve: _GalleryMotion.curve,
+                                      alignment: Alignment.topCenter,
+                                      child: content,
+                                    ),
                             ),
                           ),
                         ),

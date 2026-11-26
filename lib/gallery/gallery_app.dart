@@ -138,6 +138,8 @@ class _GalleryAppState extends State<GalleryApp> {
   Color? _systemMonetSeed;
   int _systemColorRequest = 0;
   final _appearance = _GalleryAppearance();
+  final _rootBackStack = _GalleryBackStack();
+  late final _rootObservers = <NavigatorObserver>[_rootBackStack];
   Future<GalleryKnowledgeIndex>? _knowledgeIndex;
   KnowledgeBase? _indexedKnowledge;
 
@@ -291,6 +293,7 @@ class _GalleryAppState extends State<GalleryApp> {
                     key: ValueKey(c.generation),
                     controller: c,
                     preferences: _preferences,
+                    rootBackStack: _rootBackStack,
                     loadKnowledge: _loadKnowledge,
                     onDisableBeta: widget.onDisableBeta,
                     openWebLink: widget.openWebLink,
@@ -300,6 +303,7 @@ class _GalleryAppState extends State<GalleryApp> {
                 final updates = widget.liveApp?.updates;
                 final claimStartupUpdate = widget.claimStartupUpdatePrompt;
                 return MaterialApp(
+                  navigatorObservers: _rootObservers,
                   title: 'TrafArch',
                   debugShowCheckedModeBanner: false,
                   locale: const Locale('zh', 'CN'),

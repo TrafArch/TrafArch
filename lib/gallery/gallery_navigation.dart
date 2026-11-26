@@ -110,11 +110,45 @@ class _GalleryMenuAnchorState extends State<_GalleryMenuAnchor> {
 
 typedef _GalleryMotion = GalleryMotion;
 
+/// A snapshot detects even a push followed by a pop back to the same route
+/// during a gesture. Only the navigator that owned its start may consume it.
+class _GalleryBackStack extends NavigatorObserver {
+  Route<dynamic>? top;
+  int revision = 0;
+
+  @override
+  void didChangeTop(Route<dynamic> topRoute, Route<dynamic>? previousTopRoute) {
+    top = topRoute;
+    revision++;
+  }
+}
+
+class _GalleryBackGesture {
+  const _GalleryBackGesture({
+    required this.target,
+    required this.rootRevision,
+    this.innerRevision,
+    this.entryId,
+    this.crop,
+    this.editing = false,
+    this.preview,
+  });
+
+  final Route<dynamic> target;
+  final int rootRevision;
+  final int? innerRevision;
+  final String? entryId;
+  final GalleryFaceCropSession? crop;
+  final bool editing;
+  final _GalleryPredictiveRoute? preview;
+}
+
 class _GalleryNavigator extends StatefulWidget {
   const _GalleryNavigator({
     super.key,
     required this.controller,
     required this.preferences,
+    required this.rootBackStack,
     required this.loadKnowledge,
     this.onDisableBeta,
     this.openWebLink,
@@ -122,6 +156,7 @@ class _GalleryNavigator extends StatefulWidget {
   });
   final GalleryController controller;
   final GalleryPreferences preferences;
+  final _GalleryBackStack rootBackStack;
   final Future<GalleryKnowledgeIndex> Function() loadKnowledge;
   final VoidCallback? onDisableBeta;
   final Future<void> Function(Uri)? openWebLink;
@@ -134,10 +169,23 @@ class _GalleryNavigator extends StatefulWidget {
 class _GalleryNavigatorState extends State<_GalleryNavigator>
     with WidgetsBindingObserver {
   final _navigator = GlobalKey<NavigatorState>();
+  final _innerBackStack = _GalleryBackStack();
+  late final _innerObservers = <NavigatorObserver>[_innerBackStack];
   final _anchors = _GalleryAnchorRegistry();
   final Map<String, ModalRoute<void>> _routes = {};
-  ModalRoute<void>? _gesture;
+  ModalRoute<dynamic>? _hostRoute;
+  _GalleryBackGesture? _gesture;
   bool get _reduceMotion => MediaQuery.disableAnimationsOf(context);
+  bool get _predictiveMotion =>
+      widget.preferences.enabled &&
+      !widget.preferences.loading &&
+      !_reduceMotion;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _hostRoute = ModalRoute.of(context);
+  }
 
   @override
   void initState() {
@@ -160,58 +208,144 @@ class _GalleryNavigatorState extends State<_GalleryNavigator>
 
   void _navigationChanged() {
     _anchors.track(widget.controller.navigationStack.last.anchorId);
-    final active = _gesture;
-    if (active != null &&
-        (!widget.preferences.enabled ||
-            !widget.controller.navigationStack.any(
-              (e) => _routes[e.id] == active,
-            ))) {
-      _gesture = null;
-      active.handleCancelBackGesture();
+    final gesture = _gesture;
+    if (gesture != null &&
+        (!_isGestureCurrent(gesture) ||
+            gesture.preview != null && !_predictiveMotion)) {
+      handleCancelBackGesture();
     }
+  }
+
+  bool _isGestureCurrent(_GalleryBackGesture gesture) {
+    if (gesture.rootRevision != widget.rootBackStack.revision ||
+        !gesture.target.isCurrent) {
+      return false;
+    }
+    if (gesture.innerRevision == null) return true;
+    final controller = widget.controller;
+    return _hostRoute?.isCurrent == true &&
+        gesture.innerRevision == _innerBackStack.revision &&
+        gesture.entryId == controller.navigationStack.last.id &&
+        identical(gesture.crop, controller.faceCrop) &&
+        gesture.editing == (controller.faceCrop?.editing == true);
   }
 
   @override
   bool handleStartBackGesture(PredictiveBackEvent event) {
     if (!mounted ||
-        !widget.preferences.enabled ||
-        widget.preferences.loading ||
-        _reduceMotion ||
         event.isButtonEvent ||
         Theme.of(context).platform != TargetPlatform.android) {
       return false;
     }
-    final route = _routes[widget.controller.navigationStack.last.id];
+    handleCancelBackGesture();
+    final root = widget.rootBackStack;
+    if (_hostRoute?.isCurrent != true) {
+      // Root business popups have no Gallery transition. Pin the gesture to
+      // that popup and use Flutter's normal, veto-aware pop on commit. Simply
+      // returning false would let Flutter retarget to Gallery if it disappeared.
+      final route = root.top;
+      if (route is! PopupRoute<dynamic> || !route.isCurrent) return false;
+      _gesture = _GalleryBackGesture(
+        target: route,
+        rootRevision: root.revision,
+      );
+      return true;
+    }
+
+    final route = _innerBackStack.top;
     if (route == null ||
         !route.isCurrent ||
-        !route.popGestureEnabled ||
-        route.popGestureInProgress) {
+        route.popDisposition == RoutePopDisposition.bubble) {
       return false;
     }
-    _gesture = route;
-    route.handleStartBackGesture(progress: 1 - event.progress.clamp(0, 1));
+    final controller = widget.controller;
+    final entry = controller.navigationStack.last;
+    final crop = controller.faceCrop;
+    final preview =
+        _predictiveMotion &&
+            identical(route, _routes[entry.id]) &&
+            route is _GalleryPredictiveRoute &&
+            route.popGestureEnabled &&
+            !route.popGestureInProgress
+        ? route
+        : null;
+    _gesture = _GalleryBackGesture(
+      target: route,
+      rootRevision: root.revision,
+      innerRevision: _innerBackStack.revision,
+      entryId: entry.id,
+      crop: crop,
+      editing: crop?.editing == true,
+      preview: preview,
+    );
+    preview?.handleStartBackGesture(progress: 1 - event.progress.clamp(0, 1));
     return true;
   }
 
   @override
   void handleUpdateBackGestureProgress(PredictiveBackEvent event) {
-    _gesture?.handleUpdateBackGestureProgress(
+    final gesture = _gesture;
+    if (gesture == null) return;
+    if (!_isGestureCurrent(gesture)) {
+      handleCancelBackGesture();
+      return;
+    }
+    gesture.preview?.handleUpdateBackGestureProgress(
       progress: 1 - event.progress.clamp(0, 1),
     );
   }
 
   @override
   void handleCancelBackGesture() {
-    final route = _gesture;
+    final preview = _gesture?.preview;
     _gesture = null;
-    route?.handleCancelBackGesture();
+    preview?.handleCancelBackGesture();
   }
 
   @override
   void handleCommitBackGesture() {
-    final route = _gesture;
+    final gesture = _gesture;
     _gesture = null;
-    route?.handleCommitBackGesture();
+    if (gesture == null) return;
+    final preview = gesture.preview;
+    if (!_isGestureCurrent(gesture)) {
+      preview?.handleCancelBackGesture();
+      return;
+    }
+    if (preview != null) {
+      // Do not use the animation's direct pop if policy changed mid-gesture.
+      if (!_predictiveMotion ||
+          preview.popDisposition != RoutePopDisposition.pop ||
+          preview.willHandlePopInternally) {
+        preview.handleCancelBackGesture();
+        return;
+      }
+      preview.handleCommitBackGesture();
+    } else if (gesture.innerRevision != null) {
+      _popGalleryTop();
+    } else {
+      unawaited(gesture.target.navigator?.maybePop());
+    }
+  }
+
+  /// Ordinary back arrives here through the host's NavigatorPopHandler, only
+  /// after Flutter has given the root navigator's top route first refusal.
+  void _popGalleryTop() {
+    final route = _innerBackStack.top;
+    if (_hostRoute?.isCurrent != true || route == null || !route.isCurrent) {
+      return;
+    }
+    final controller = widget.controller;
+    final entry = controller.navigationStack.last;
+    if (identical(route, _routes[entry.id]) &&
+        entry.overlay == GalleryOverlay.face &&
+        controller.faceCrop?.editing == true &&
+        route.popDisposition == RoutePopDisposition.pop &&
+        !route.willHandlePopInternally) {
+      controller.exitFaceCrop();
+      return;
+    }
+    unawaited(route.navigator?.maybePop());
   }
 
   @override
@@ -241,24 +375,19 @@ class _GalleryNavigatorState extends State<_GalleryNavigator>
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: Listenable.merge([widget.controller, widget.preferences]),
     builder: (context, _) {
-      if (_reduceMotion && _gesture != null) {
+      final gesture = _gesture;
+      if (_reduceMotion && gesture?.preview != null) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) handleCancelBackGesture();
+          if (mounted && identical(_gesture, gesture)) {
+            handleCancelBackGesture();
+          }
         });
       }
       return NavigatorPopHandler<void>(
-        onPopWithResult: (_) {
-          final controller = widget.controller;
-          final top = controller.navigationStack.last;
-          if (top.overlay == GalleryOverlay.face &&
-              controller.faceCrop?.editing == true) {
-            controller.exitFaceCrop();
-            return;
-          }
-          _navigator.currentState?.maybePop();
-        },
+        onPopWithResult: (_) => _popGalleryTop(),
         child: Navigator(
           key: _navigator,
+          observers: _innerObservers,
           onDidRemovePage: (page) => widget.controller.didPopRoute(
             (page as _GalleryRoutePage).entry.id,
           ),
@@ -398,7 +527,9 @@ mixin _GalleryPredictiveRoute on ModalRoute<void> {
   @override
   void handleCancelBackGesture() {
     if (!_tracking) return;
-    if (isCurrent) {
+    // A newly pushed route can cover this one while its preview is partway
+    // through. Restore an active route, but do not revive a popped one.
+    if (isActive) {
       controller?.animateTo(
         1,
         duration: transitionDuration * (1 - controller!.value),
