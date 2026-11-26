@@ -13,6 +13,8 @@
 
 云端准备步骤会把仓库中的 Gradle 初始化脚本安装到本次构建的 `GRADLE_USER_HOME/init.d`。应用及 Flutter SDK 的独立插件构建都优先从 Google Cloud 的 Maven Central 镜像和阿里云 Gradle 插件镜像解析插件与依赖。更新镜像时，可先用项目的 Gradle `help` 任务验证插件加载。[云端 Gradle 配置](../.cnb/gradle-repositories.init.gradle) · [Gradle 插件镜像说明](https://plugins.gradle.org/docs/mirroring)
 
+构建镜像预装了 release 打包实际用到的 NDK 28.2.13676358、Android SDK Platform 35 和 CMake 3.22.1。流水线成功后，CNB 会保存 Gradle 发行包和 Maven 依赖，供同一节点上的后续构建复用。比较提速效果时，分别记录工具链镜像拉取耗时和日志中 `assembleRelease` 的秒数，并区分首次制作镜像和后续运行。[CNB 流水线缓存](https://docs.cnb.cool/zh/build/pipeline-cache.html)
+
 ## 开发者签名从哪里读取
 
 「签名并核验 APK」步骤通过 `.cnb.yml` 的 `imports` 直接引用密钥仓库 `TrafArch/taKeystore` 的 `main/androidSigning.yml`。CNB 将以下两个字段注入该步骤。[构建配置](../.cnb.yml) · [签名文件](https://cnb.cool/TrafArch/taKeystore/-/blob/main/androidSigning.yml) · [CNB 密钥仓库说明](https://docs.cnb.cool/zh/repo/secret.html)
