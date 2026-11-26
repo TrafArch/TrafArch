@@ -63,6 +63,7 @@ flutter:
     - assets/gallery/
     - assets/metro/
     - assets/Line_Icon/icons.json
+    - assets/Line_Icon/1000/
     - assets/Line_Icon/3910/
     - assets/Line_Icon/3930/
     - assets/Line_Icon/5810/

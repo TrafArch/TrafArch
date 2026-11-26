@@ -310,6 +310,35 @@ void main() {
         ),
         findsOneWidget,
       );
+
+      tester.view.physicalSize = const Size(412, 892);
+      tester.platformDispatcher.textScaleFactorTestValue = 1;
+      controller.update(
+        () => controller.trips[0] = {
+          ...controller.trips[0],
+          'city': '北京',
+          'entryLine': '18号线',
+          'exitLine': '大兴机场线',
+          'entryLineCity': {'system': 'tu', 'code': '1000', 'name': '北京'},
+          'exitLineCity': {'system': 'tu', 'code': '1000', 'name': '北京'},
+        },
+      );
+      await tester.pumpAndSettle();
+      for (final (key, asset) in [
+        ('trip-entry-line-badge', 'assets/Line_Icon/1000/1000_Line_12.svg'),
+        ('trip-exit-line-badge', 'assets/Line_Icon/1000/1000_Line_58.svg'),
+      ]) {
+        final picture = find.descendant(
+          of: find.byKey(ValueKey(key)),
+          matching: find.byType(SvgPicture),
+        );
+        expect(picture, findsOneWidget);
+        expect(
+          (tester.widget<SvgPicture>(picture).bytesLoader as SvgAssetLoader)
+              .assetName,
+          asset,
+        );
+      }
     },
   );
 

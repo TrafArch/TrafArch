@@ -9,7 +9,7 @@ void main() {
     final manifest = jsonDecode(
       File('assets/Line_Icon/icons.json').readAsStringSync(),
     ) as Map<String, dynamic>;
-    expect(manifest.keys.toSet(), {'3910', '3930', '5810'});
+    expect(manifest.keys.toSet(), {'1000', '3910', '3930', '5810'});
 
     final registered = <String>{};
     for (final city in manifest.entries) {
@@ -36,10 +36,13 @@ void main() {
         .map((path) => path.replaceFirst('assets/Line_Icon/', ''))
         .toSet();
     expect(registered, supplied);
-    expect(registered, hasLength(30));
+    expect(registered, hasLength(65));
     expect(
       registered,
       containsAll([
+        '1000/1000_Line_01.svg',
+        '1000/1000_Line_0A_5A.svg',
+        '1000/Northeast_Loop_Line.svg',
         '3910/3910_Line_4.svg',
         '3910/3910_Line_F1.svg',
         '3930/3930_Line6.svg',
@@ -104,9 +107,14 @@ void main() {
     expect(catalog.tuCode('2000', '上海', 'cu'), '2900');
     expect(catalog.tuCode('5180', '深圳', 'cu'), '5840');
     expect(catalog.lineKey('3910', 'F1'), '滨海快线');
+    expect(catalog.lineKey('1000', '怀柔-密云线'), '怀密线');
     expect(
       catalog.icon('3910', '滨海快线')?.path,
       'assets/Line_Icon/3910/3910_Line_F1.svg',
+    );
+    expect(
+      catalog.icon('1000', '18号线')?.path,
+      'assets/Line_Icon/1000/1000_Line_12.svg',
     );
     expect(catalog.paletteColor('2900', '4号线')?.toARGB32(), 0xff461d84);
     expect(catalog.paletteColor('5840', '4号线')?.toARGB32(), 0xffda291c);
