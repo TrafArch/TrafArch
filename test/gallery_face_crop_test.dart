@@ -34,11 +34,31 @@ Future<void> backGesture(
   await tester.pump();
 }
 
+class _FaceStore implements GalleryFaceStore {
+  final values = <String, GalleryFaceSnapshot>{};
+
+  @override
+  Future<GalleryFaceSnapshot?> read(String cardId) async => values[cardId];
+
+  @override
+  Future<void> write(String cardId, GalleryFaceSnapshot snapshot) async {
+    values[cardId] = snapshot;
+  }
+
+  @override
+  Future<void> delete(String cardId) async => values.remove(cardId);
+}
+
 void main() {
   late GalleryController c;
   late GalleryPreferences preferences;
+  late _FaceStore store;
   const channel = MethodChannel('transit_card_analyzer/qr_image');
   final imagePath = File('assets/icon/app_icon.png').absolute.path;
+  final otherImagePath = File('assets/gallery/city-union-logo.png')
+      .absolute
+      .path;
+  const picking = '正在打开相册…';
 
   setUp(() {
     c = GalleryController(
@@ -47,7 +67,8 @@ void main() {
             as GalleryRecord,
       ),
     )..monet = false;
-    preferences = GalleryPreferences();
+    store = _FaceStore();
+    preferences = GalleryPreferences(faceStore: store);
   });
 
   tearDown(() {
@@ -65,10 +86,21 @@ void main() {
         });
   }
 
-  Future<void> mountFace(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(412, 892);
+  Future<void> mountFace(
+    WidgetTester tester, {
+    Size screen = const Size(412, 892),
+    double topInset = 0,
+    double bottomInset = 0,
+    double textScale = 1,
+  }) async {
+    tester.view.physicalSize = screen;
     tester.view.devicePixelRatio = 1;
+    final padding = FakeViewPadding(top: topInset, bottom: bottomInset);
+    tester.view.viewPadding = padding;
+    tester.view.padding = padding;
+    tester.platformDispatcher.textScaleFactorTestValue = textScale;
     addTearDown(tester.view.reset);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     c.navigate(GalleryPage.cards);
     await tester.pumpWidget(
       GalleryApp(controller: c, preferences: preferences),
@@ -79,28 +111,43 @@ void main() {
   }
 
   // File reads and the engine codec must complete outside fake async time.
-  Future<void> pickAndFinish(WidgetTester tester) async {
+  Future<void> waitForPicker(WidgetTester tester) async {
+    final deadline = DateTime.now().add(const Duration(seconds: 15));
+    do {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      await tester.pump();
+      if (find.text(picking).evaluate().isEmpty) return;
+    } while (DateTime.now().isBefore(deadline));
+    fail('The gallery image operation did not finish');
+  }
+
+  Future<void> pickAndFinish(
+    WidgetTester tester, {
+    String label = '从相册选择图片',
+  }) async {
+    final button = find.text(label);
+    if (label == '从相册选择图片') await tester.ensureVisible(button);
+    await tester.pumpAndSettle();
     await tester.runAsync(() async {
-      await tester.tap(find.text('从相册选择图片'));
-      final deadline = DateTime.now().add(const Duration(seconds: 15));
-      do {
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-        await tester.pump();
-        if (find.text('正在打开相册…').evaluate().isEmpty) return;
-      } while (DateTime.now().isBefore(deadline));
-      fail('The gallery image operation did not finish');
+      await tester.tap(button);
+      await waitForPicker(tester);
     });
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   }
 
+  Finder cropCanvas(String key) => find.descendant(
+    of: find.byKey(ValueKey(key)),
+    matching: find.byKey(const ValueKey('face-crop-canvas')),
+  );
+
   Future<void> dragRegion(WidgetTester tester, String key, Offset delta) async {
-    await tester.dragFrom(tester.getCenter(find.byKey(ValueKey(key))), delta);
+    await tester.dragFrom(tester.getCenter(cropCanvas(key)), delta);
     await tester.pumpAndSettle();
   }
 
   Future<void> pinchRegion(WidgetTester tester, String key) async {
-    final center = tester.getCenter(find.byKey(ValueKey(key)));
+    final center = tester.getCenter(cropCanvas(key));
     final first = await tester.startGesture(center - const Offset(30, 0));
     final second = await tester.startGesture(center + const Offset(30, 0));
     await tester.pump();
@@ -144,6 +191,182 @@ void main() {
     for (final image in images) {
       expect((image.image as MemoryImage).bytes, same(session.image));
     }
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final (screen, bottom, textScale) in [
+    (const Size(412, 892), 24.0, 1.0),
+    (const Size(320, 568), 48.0, 1.0),
+    (const Size(360, 580), 48.0, 2.0),
+  ]) {
+    testWidgets(
+      'crop controls fit without vertical scrolling: $screen ×$textScale',
+      (tester) async {
+        const top = 24.0;
+        mockPicker(() async => imagePath);
+        await mountFace(
+          tester,
+          screen: screen,
+          topInset: top,
+          bottomInset: bottom,
+          textScale: textScale,
+        );
+        await pickAndFinish(tester);
+        final surface = find.byKey(const ValueKey('gallery-face-surface'));
+        final sheet = tester.getRect(surface);
+        expect(sheet.top, greaterThanOrEqualTo(top));
+        expect(sheet.bottom, screen.height);
+        // Wallet preview metadata may scroll sideways; the editor must not
+        // require vertical scrolling to reach either canvas or its controls.
+        expect(
+          find.descendant(
+            of: surface,
+            matching: find.byWidgetPredicate(
+              (widget) =>
+                  widget is Scrollable &&
+                  (widget.axisDirection == AxisDirection.up ||
+                      widget.axisDirection == AxisDirection.down),
+            ),
+          ),
+          findsNothing,
+        );
+
+        Rect expectVisibleAndTouchable(Finder finder) {
+          expect(finder.hitTestable(), findsOneWidget);
+          final frame = tester.getRect(finder);
+          expect(frame.top, greaterThanOrEqualTo(sheet.top));
+          expect(frame.bottom, lessThanOrEqualTo(screen.height - bottom));
+          return frame;
+        }
+
+        for (final label in ['重置全部', '换一张', '完成']) {
+          expectVisibleAndTouchable(find.widgetWithText(TextButton, label));
+        }
+        for (final key in [
+          'face-crop-region-detail',
+          'face-crop-region-list',
+        ]) {
+          final region = find.byKey(ValueKey(key));
+          final frame = expectVisibleAndTouchable(cropCanvas(key));
+          expect(frame.height, greaterThan(40));
+          expectVisibleAndTouchable(
+            find.descendant(
+              of: region,
+              matching: find.widgetWithText(TextButton, '恢复默认'),
+            ),
+          );
+        }
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets(
+    're-picking changes only the draft until the outer confirmation',
+    (tester) async {
+      mockPicker(() async => imagePath);
+      await mountFace(tester);
+      await pickAndFinish(tester);
+      await tester.tap(find.text('完成'));
+      await tester.pumpAndSettle();
+      final confirm = find.text('完成');
+      await tester.ensureVisible(confirm);
+      await tester.tap(confirm);
+      await tester.pumpAndSettle();
+      final card = c.current;
+      final saved = store.values[card.id]!;
+      expect(card.image, same(saved.image));
+
+      c.showOverlay(GalleryOverlay.face, card: card);
+      await tester.pumpAndSettle();
+      await pickAndFinish(tester);
+      await dragRegion(tester, 'face-crop-region-detail', const Offset(0, 60));
+      final firstDraft = c.faceCrop!;
+      final route = c.navigationStack.last.id;
+      expect(firstDraft.detail.offsetY, isNot(0));
+      mockPicker(() async => otherImagePath);
+      await pickAndFinish(tester, label: '换一张');
+      final replacement = c.faceCrop!;
+      expect(c.navigationStack.last.id, route);
+      expect(replacement, isNot(same(firstDraft)));
+      expect(replacement.image, isNot(orderedEquals(firstDraft.image)));
+      expect(replacement.editing, isTrue);
+      for (final crop in [replacement.detail, replacement.list]) {
+        expect(crop.scale, 1);
+        expect(crop.offsetX, 0);
+        expect(crop.offsetY, 0);
+      }
+      expect(card.image, same(saved.image));
+      expect(store.values[card.id], same(saved));
+
+      await tester.tap(find.text('完成'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(confirm);
+      await tester.tap(confirm);
+      await tester.pumpAndSettle();
+      expect(c.overlay, isNull);
+      expect(card.image, same(replacement.image));
+      expect(store.values[card.id]!.image, same(replacement.image));
+    },
+  );
+
+  testWidgets('canceling or failing to decode a replacement keeps both crops', (
+    tester,
+  ) async {
+    mockPicker(() async => imagePath);
+    await mountFace(tester);
+    await pickAndFinish(tester);
+    await dragRegion(tester, 'face-crop-region-detail', const Offset(0, 60));
+    await dragRegion(tester, 'face-crop-region-list', const Offset(0, -40));
+    final draft = c.faceCrop!;
+    final detail = draft.detail;
+    final list = draft.list;
+    expect(detail.offsetY, isNot(0));
+    expect(list.offsetY, isNot(0));
+
+    mockPicker(() async => null);
+    await pickAndFinish(tester, label: '换一张');
+    expect(c.faceCrop, same(draft));
+    expect(find.text('无法读取所选图片，请选择其他图片重试'), findsNothing);
+
+    mockPicker(() async => File('assets/gallery/fixtures.json').absolute.path);
+    await pickAndFinish(tester, label: '换一张');
+    expect(c.faceCrop, same(draft));
+    expect(draft.detail, same(detail));
+    expect(draft.list, same(list));
+    expect(draft.editing, isTrue);
+    expect(find.text('无法读取所选图片，请选择其他图片重试'), findsOneWidget);
+    expect(find.text('换一张').hitTestable(), findsOneWidget);
+    expect(c.current.image, isNull);
+    expect(store.values, isEmpty);
+  });
+
+  testWidgets('leaving and reopening the editor ignores a late replacement', (
+    tester,
+  ) async {
+    mockPicker(() async => imagePath);
+    await mountFace(tester);
+    await pickAndFinish(tester);
+    final original = c.faceCrop!;
+    final pick = Completer<String?>();
+    mockPicker(() => pick.future);
+    await tester.runAsync(() async {
+      await tester.tap(find.text('换一张'));
+      await tester.pumpAndSettle();
+      expect(find.text(picking), findsOneWidget);
+      await tester.tap(find.byTooltip('返回更换卡面'));
+      await tester.pumpAndSettle();
+      final edit = find.text('调整图片');
+      await tester.ensureVisible(edit);
+      await tester.tap(edit);
+      await tester.pumpAndSettle();
+      expect(original.editing, isTrue);
+      pick.complete(otherImagePath);
+      await waitForPicker(tester);
+    });
+    await tester.pumpAndSettle();
+    expect(c.faceCrop, same(original));
+    expect(c.current.image, isNull);
     expect(tester.takeException(), isNull);
   });
 

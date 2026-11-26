@@ -471,10 +471,23 @@ class _GalleryViewState extends State<_GalleryView> {
     if (_pickingFaceImage) return;
     final card = _selectedCard;
     final generation = c.generation;
+    final replacement = c.faceCrop;
+    final replacingInEditor = replacement?.editing == true;
+    var leftEditor = false;
+    void observeEditor() {
+      // The editor and chooser share a route. Exiting and reentering the
+      // editor must not let a previous picker result replace this draft.
+      if (!identical(c.faceCrop, replacement) || replacement?.editing != true) {
+        leftEditor = true;
+      }
+    }
+
     bool active() =>
         mounted &&
+        !leftEditor &&
         c.generation == generation &&
         c.navigationStack.last.id == _entry.id;
+    if (replacingInEditor) c.addListener(observeEditor);
     setState(() {
       _pickingFaceImage = true;
       _faceImageError = null;
@@ -523,6 +536,7 @@ class _GalleryViewState extends State<_GalleryView> {
     } catch (_) {
       if (active()) setState(() => _faceImageError = '无法读取所选图片，请选择其他图片重试');
     } finally {
+      if (replacingInEditor) c.removeListener(observeEditor);
       if (mounted) setState(() => _pickingFaceImage = false);
     }
   }
