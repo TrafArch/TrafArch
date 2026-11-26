@@ -359,9 +359,20 @@ void main() {
     },
   );
 
-  testWidgets('one-way bus ticket shows a single boarding row without arrow', (
+  testWidgets('one-way bus keeps money in its half-modal, not the ticket', (
     tester,
   ) async {
+    final index = controller.trips.indexWhere(
+      (record) => record['entryLine'] == '49 路',
+    );
+    expect(index, greaterThanOrEqualTo(0));
+    controller.trips = [
+      for (final (i, record) in controller.trips.indexed)
+        if (i == index)
+          {...record, 'amount': '¥2.47', 'balanceAfter': '¥61.39'}
+        else
+          record,
+    ];
     await mount(tester);
     final row = find.byKey(const ValueKey('trip-one-way'));
     expect(row, findsOneWidget);
@@ -386,6 +397,20 @@ void main() {
     expect(time.style!.fontWeight, FontWeight.w400);
     expect(find.text('公交'), findsWidgets);
     expect(find.text('上海'), findsWidgets);
+    expect(find.text('¥2.47'), findsNothing);
+    expect(find.text('¥61.39'), findsNothing);
+    await tester.ensureVisible(row);
+    await tester.tap(row);
+    await tester.pumpAndSettle();
+    final sheet = find.byKey(const ValueKey('gallery-modal-surface'));
+    expect(
+      find.descendant(of: sheet, matching: find.text('¥2.47')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: sheet, matching: find.text('¥61.39')),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 

@@ -665,7 +665,7 @@ extension _GalleryFaceCropper on _GalleryViewState {
                               height: 24 / 18,
                               color: _walletForeground(card),
                             ),
-                            _gap(4),
+                            _gap(1),
                             _walletAmount(card, numberWidth: numberWidth),
                           ],
                         ),
@@ -676,6 +676,17 @@ extension _GalleryFaceCropper on _GalleryViewState {
                       ],
                     ],
                   ),
+                  if (card.applicationNumbers.length > 1) ...[
+                    _gap(6),
+                    Text(
+                      _faceCardNumberText(card),
+                      key: ValueKey('$id-card-numbers-${card.id}'),
+                      style: GalleryTypography.field.copyWith(
+                        fontFamily: 'monospace',
+                        color: _walletForeground(card, secondary: true),
+                      ),
+                    ),
+                  ],
                   _cardMetadata(card, id: id),
                 ],
               ),

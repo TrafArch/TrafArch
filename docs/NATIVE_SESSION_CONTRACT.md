@@ -21,6 +21,7 @@ Channel: **`transit_card_analyzer/nfc`**. All existing method names remain uncha
 
 | Method | Session-aware arguments | Legacy arguments | Success |
 |---|---|---|---|
+| `getFelicaReaderSupport` | none | none | `true` when Android advertises NFC with an adapter (CDD 7.4.4 requires NFC-F reader/writer); `false` with no adapter; `null` if unknown. Does not check HCE-F or individual card compatibility. |
 | `scanOnce` | `{'sessionId': String}` | no arguments / null | Existing tag metadata map plus `sessionId: String` |
 | `transceive` | `{'sessionId': String, 'apdu': Uint8List or List<int>}` | Direct Uint8List or List<int> | Uint8List containing the unchanged ISO-DEP response, including SW1/SW2 |
 | `transceiveFelica` | `{'sessionId': String, 'frame': Uint8List or List<int>}` | Direct Uint8List or List<int> | Uint8List containing the unchanged complete NFC-F response, including LEN |

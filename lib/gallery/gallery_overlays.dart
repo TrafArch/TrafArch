@@ -176,15 +176,7 @@ extension _GalleryOverlays on _GalleryViewState {
           _toast('已保存到卡包');
           return;
         }
-        live.conflictResolver = _resolveLiveConflict;
-        await live.save(name);
-        _toast(
-          live.lastSaveMessage ??
-              (live.lastSaveSucceeded == true ? '已保存到卡包' : '卡片保存未完成'),
-          type: live.lastSaveSucceeded == true
-              ? GalleryFeedbackType.success
-              : GalleryFeedbackType.error,
-        );
+        await _saveLiveCard(live, name);
       },
     ),
     GalleryOverlay.rename => _GalleryNameForm(
@@ -205,12 +197,12 @@ extension _GalleryOverlays on _GalleryViewState {
     GalleryOverlay.delete => Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _text('删除“${_selectedCard.name}”及其本次会话记录？', size: 14),
+        _text('删除“${_selectedCard.name}”及其全部读取记录？', size: 14),
         _gap(8),
         _text(
           _GalleryLiveScope.of(context) == null
               ? '仅影响当前内存样例。'
-              : '将删除本机档案、读取批次与保存的行程证据，且无法撤销。',
+              : '确认后将删除本机档案和行程记录。可通过顶部消息撤回。',
           role: GalleryTypography.caption,
           color: t.muted,
         ),
@@ -220,8 +212,8 @@ extension _GalleryOverlays on _GalleryViewState {
             Expanded(child: _button('取消', c.back)),
             const SizedBox(width: 10),
             Expanded(
-              child: _button('删除', () {
-                _deleteWalletCard(_selectedCard);
+              child: _button('确定', () {
+                unawaited(_confirmDeleteWalletCard(_entry.cardId));
               }, danger: true),
             ),
           ],
@@ -345,6 +337,47 @@ extension _GalleryOverlays on _GalleryViewState {
         ),
       ),
     ];
+  }
+
+  Future<void> _requestLiveSave(_GalleryLiveRead live) async {
+    if (_checkingLiveSave) return;
+    _checkingLiveSave = true;
+    final pending = live.app.pendingCardSave;
+    final recovery = live.app.recoveredCapture;
+    final capture = recovery?.pending ?? pending;
+    try {
+      final exists =
+          capture != null &&
+          await live.app.archiveCardExists(capture.fingerprint);
+      if (!mounted ||
+          c.page != GalleryPage.home ||
+          c.overlay != null ||
+          live.busy ||
+          !identical(pending, live.app.pendingCardSave) ||
+          !identical(recovery, live.app.recoveredCapture))
+        return;
+      if (exists) {
+        await _saveLiveCard(live, '');
+      } else {
+        c.showOverlay(GalleryOverlay.save);
+      }
+    } catch (_) {
+      if (mounted) _toast('卡片保存未完成', type: GalleryFeedbackType.error);
+    } finally {
+      _checkingLiveSave = false;
+    }
+  }
+
+  Future<void> _saveLiveCard(_GalleryLiveRead live, String name) async {
+    live.conflictResolver = _resolveLiveConflict;
+    await live.save(name);
+    if (!mounted) return;
+    _toast(
+      live.lastSaveMessage ?? '卡片保存未完成',
+      type: live.lastSaveSucceeded == true
+          ? GalleryFeedbackType.success
+          : GalleryFeedbackType.error,
+    );
   }
 
   Future<ArchiveConflictPolicy?> _resolveLiveConflict() =>

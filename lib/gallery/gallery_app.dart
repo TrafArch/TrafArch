@@ -31,7 +31,6 @@ import '../features/archive/presentation/archive_balance_display.dart';
 import '../features/archive/presentation/archive_trip_presenter.dart';
 import '../features/archive/presentation/shanghai_archive_mirrored_records.dart';
 import '../features/archive/presentation/archive_transfer_dialogs.dart';
-import '../features/cards/cards_page.dart';
 import '../features/expert/expert_page.dart';
 import '../features/expert/expert_formatters.dart';
 import '../features/home/presentation/result_labels.dart';
@@ -372,14 +371,14 @@ class _GalleryAppearance {
   ThemeData theme(GalleryController controller, bool dark, Color? monetSeed) {
     final palette = controller.monet ? 'blue' : controller.palette;
     return _themes.putIfAbsent(
-        (identityHashCode(controller.data), dark, palette, monetSeed),
-        () => GalleryTokens.from(
-          controller.data,
-          dark,
-          palette,
-          monetSeed: monetSeed,
-        ).theme(),
-      );
+      (identityHashCode(controller.data), dark, palette, monetSeed),
+      () => GalleryTokens.from(
+        controller.data,
+        dark,
+        palette,
+        monetSeed: monetSeed,
+      ).theme(),
+    );
   }
 }
 
@@ -443,6 +442,8 @@ class _GalleryViewState extends State<_GalleryView> {
   String? _openingLink;
   String? _linkError;
   bool _pickingFaceImage = false;
+  bool _checkingLiveSave = false;
+  bool _confirmingCardDeletion = false;
   String? _faceImageError;
   Widget? _cachedLayout;
   Set<String>? _walletCardIds;
@@ -504,10 +505,7 @@ class _GalleryViewState extends State<_GalleryView> {
             c.beginFaceCrop(
               card.id,
               data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
-              Size(
-                frame.image.width.toDouble(),
-                frame.image.height.toDouble(),
-              ),
+              Size(frame.image.width.toDouble(), frame.image.height.toDouble()),
             );
           }
         } finally {

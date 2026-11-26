@@ -376,9 +376,11 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('删除本卡'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('删除'));
+    expect(c.selectedCard.saved, isTrue);
+    await tester.tap(find.text('确定'));
     await tester.pumpAndSettle();
     expect(c.savedCards.map((card) => card.id), isNot(contains('shenzhen')));
+    expect(find.text('撤回'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 

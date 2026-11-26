@@ -75,7 +75,11 @@ extension _GalleryDetail on _GalleryViewState {
                       children: [
                         _detailNav(progress, card, navHeight),
                         SizedBox(
-                          height: _detailLerp(layout.expandedHeight, 0, progress),
+                          height: _detailLerp(
+                            layout.expandedHeight,
+                            0,
+                            progress,
+                          ),
                           child: ClipRect(
                             child: Opacity(
                               opacity: (1 - progress).clamp(0.0, 1.0),
@@ -236,7 +240,11 @@ extension _GalleryDetail on _GalleryViewState {
     Column(
       children: [
         for (final row in <(String, String)>[
-          ('完整卡号', card.pan),
+          if (card.applicationNumbers.length < 2)
+            ('完整卡号', card.applicationNumbers.values.firstOrNull ?? card.pan)
+          else
+            for (final entry in card.applicationNumbers.entries)
+              ('${entry.key} 卡号', entry.value),
           ('发卡地', card.city),
           ('卡种', card.type),
           ('有效期', card.valid == '—' ? '未知' : '${card.valid}（未记录日）'),
@@ -907,7 +915,7 @@ class _DetailCardLayout {
           ).height;
     final cardNumberHeight = _measureDetailText(
       context,
-      _formatFaceCardNumber(card.pan),
+      _faceCardNumberText(card),
       cardNumberStyle,
       lowerWidth,
     ).height;
@@ -967,7 +975,7 @@ class _GalleryDetailFace extends StatelessWidget {
       color: foreground,
     );
     final currencyLabel = _faceCurrencyLabel(balance.currencyLabel);
-    final cardNumber = _formatFaceCardNumber(card.pan);
+    final cardNumber = _faceCardNumberText(card);
     final amount = Semantics(
       label: '余额，${balance.displayText}',
       excludeSemantics: true,

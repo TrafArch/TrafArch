@@ -15,7 +15,8 @@ extension _GalleryPages on _GalleryViewState {
   Widget _homeContent(GalleryReadState state, bool hasRead) {
     final live = _GalleryLiveScope.of(context);
     final card = c.current;
-    final nfcMessage = live?.app.nfcUnavailableMessage;
+    final noNfc = live?.app.nfcHardwareUnavailable == true;
+    final nfcMessage = noNfc ? '该手机不支持NFC识别' : live?.app.nfcUnavailableMessage;
     final readAction =
         nfcMessage != null ||
             live?.closing == true ||
@@ -54,6 +55,10 @@ extension _GalleryPages on _GalleryViewState {
                   failed: failed && nfcMessage == null,
                   compact: _compactHeight,
                   nfcMessage: nfcMessage,
+                  noNfc: noNfc,
+                  felicaSupported: live == null
+                      ? true
+                      : live.app.felicaReaderSupported,
                   failureMessage: live?.error,
                   progress: live?.readProgress,
                 )
@@ -123,7 +128,9 @@ extension _GalleryPages on _GalleryViewState {
                     card.saved ? '再次读取' : '保存卡片',
                     card.saved
                         ? readAction
-                        : () => c.showOverlay(GalleryOverlay.save),
+                        : live == null
+                        ? () => c.showOverlay(GalleryOverlay.save)
+                        : () => _requestLiveSave(live),
                     primary: true,
                     icon: card.saved
                         ? Icons.refresh_rounded
@@ -193,11 +200,7 @@ extension _GalleryPages on _GalleryViewState {
               padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
             )
           else if (partial)
-            _empty(
-              '本次未读到交易记录',
-              '可在「专家」中查看本次读取详情',
-              icon: Icons.route_outlined,
-            )
+            _empty('本次未读到交易记录', '可在「专家」中查看本次读取详情', icon: Icons.route_outlined)
           else
             _empty('暂无行程记录', '这张卡片没有可展示的行程', icon: Icons.route_outlined),
           Padding(
@@ -672,10 +675,11 @@ extension _GalleryPages on _GalleryViewState {
                           _chip('异地用卡', weight: FontWeight.w400),
                       ],
                     ),
-                    _text(
-                      galleryDisplayAmount(trip['amount'] as String),
-                      role: GalleryJourneyTypography.amount,
-                    ),
+                    if (rail)
+                      _text(
+                        galleryDisplayAmount(trip['amount'] as String),
+                        role: GalleryJourneyTypography.amount,
+                      ),
                   ],
                 ),
                 _gap(12),
@@ -754,7 +758,8 @@ extension _GalleryPages on _GalleryViewState {
         ? Semantics(
             button: true,
             label:
-                '${trip['title']}，${trip['sub']}，${galleryDisplayAmount(trip['amount'] as String)}',
+                '${trip['title']}，${trip['sub']}'
+                '${trip['kind'] == 'bus' ? '' : '，${galleryDisplayAmount(trip['amount'] as String)}'}',
             child: InkWell(
               onTap: () => c.showOverlay(GalleryOverlay.trip, trip: trip),
               child: body,
@@ -992,7 +997,8 @@ extension _GalleryPages on _GalleryViewState {
                           inserted: _walletArrivals.contains(card.id),
                           onFace: () =>
                               c.showOverlay(GalleryOverlay.face, card: card),
-                          onDelete: () => _deleteWalletCard(card),
+                          onDelete: () =>
+                              c.showOverlay(GalleryOverlay.delete, card: card),
                           child: DecoratedBox(
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(24),
@@ -1073,33 +1079,71 @@ extension _GalleryPages on _GalleryViewState {
     ),
   );
 
-  void _deleteWalletCard(GalleryCard card) {
+  Future<void> _confirmDeleteWalletCard(String cardId) async {
+    if (_confirmingCardDeletion ||
+        c.overlay != GalleryOverlay.delete ||
+        c.selectedCardId != cardId)
+      return;
+    final card = c.savedCards.where((card) => card.id == cardId).firstOrNull;
+    if (card == null) return;
+    final feedback = GalleryFeedbackHost.messengerOf(context);
     final live = _GalleryLiveScope.of(context);
-    if (live != null) {
-      final saved = live.savedCardFor(card.id);
-      if (saved == null) return;
-      unawaited(() async {
-        final deleted = await confirmDeleteArchiveCard(
-          context,
-          live.app,
-          saved,
+    if (live == null) {
+      final removal = c.deleteCard(card);
+      if (removal != null) {
+        feedback(
+          '已删除“${card.name}”',
+          actionLabel: '撤回',
+          prioritizeAction: true,
+          onAction: () => c.restoreCard(removal),
         );
-        if (deleted && mounted) {
-          c.overlay = null;
-          if (c.page == GalleryPage.detail) c.back();
-          _toast('已删除“${card.name}”', type: GalleryFeedbackType.info);
-        }
-      }());
+      }
       return;
     }
-    final removal = c.deleteCard(card);
-    if (removal == null || !mounted) return;
-    _toast(
-      '已删除“${card.name}”',
-      type: GalleryFeedbackType.info,
-      actionLabel: '撤销',
-      onAction: () => c.restoreCard(removal),
-    );
+    final controller = c;
+    final repository = live.app.cardRepository;
+    final detailRouteId = controller.navigationStack
+        .where(
+          (route) =>
+              route.kind == GalleryRouteKind.page &&
+              route.page == GalleryPage.detail,
+        )
+        .lastOrNull
+        ?.id;
+    _confirmingCardDeletion = true;
+    // The confirmation closes only after the user commits. The window-level
+    // feedback survives the overlay and the deleted detail route.
+    controller.back();
+    try {
+      final deletion = await repository.deleteCardWithUndo(cardId);
+      if (deletion == null) {
+        feedback('卡片不存在或已删除');
+        return;
+      }
+      if (!live._disposed &&
+          detailRouteId != null &&
+          controller.navigationStack.lastOrNull?.id == detailRouteId) {
+        controller.back();
+      }
+      feedback(
+        '已删除“${card.name}”',
+        actionLabel: '撤回',
+        prioritizeAction: true,
+        onAction: () async {
+          try {
+            if (!await repository.undoCardDeletion(deletion)) {
+              feedback('卡片已重新加入，未覆盖现有记录');
+            }
+          } catch (_) {
+            feedback('撤回失败', type: GalleryFeedbackType.error);
+          }
+        },
+      );
+    } catch (_) {
+      feedback('删除失败，请重试。', type: GalleryFeedbackType.error);
+    } finally {
+      _confirmingCardDeletion = false;
+    }
   }
 
   Widget _footprints() => _list([
@@ -1369,9 +1413,7 @@ extension _GalleryPages on _GalleryViewState {
               c.monet,
               c.setMonet,
               subtitle: c.monet
-                  ? (t.dynamic
-                        ? '跟随 Android 系统动态配色'
-                        : '系统动态配色不可用，使用默认靛蓝')
+                  ? (t.dynamic ? '跟随 Android 系统动态配色' : '系统动态配色不可用，使用默认靛蓝')
                   : '使用手动选择的主题配色',
             ),
             _collapse(
@@ -1441,11 +1483,7 @@ extension _GalleryPages on _GalleryViewState {
               subtitle: '控制开关点击与底栏切换的系统触感反馈',
             ),
             const Divider(),
-            _switch(
-              '预测性返回手势',
-              _preferences.enabled,
-              _preferences.setEnabled,
-            ),
+            _switch('预测性返回手势', _preferences.enabled, _preferences.setEnabled),
             _collapse(
               _preferences.error != null,
               (_) => Padding(
