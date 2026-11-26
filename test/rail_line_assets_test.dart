@@ -24,6 +24,17 @@ void main() {
         final source = File(path).readAsStringSync();
         expect(source, isNot(contains('<style')), reason: path);
         expect(source, isNot(contains('class=')), reason: path);
+        final viewBox = RegExp(r'viewBox="([^"]+)"').firstMatch(source);
+        expect(viewBox, isNotNull, reason: path);
+        final dimensions = viewBox!
+            .group(1)!
+            .trim()
+            .split(RegExp(r'\s+'))
+            .map(double.parse)
+            .toList(growable: false);
+        expect(dimensions, hasLength(4), reason: path);
+        expect(config[1] as num, closeTo(dimensions[2], .001), reason: path);
+        expect(config[2] as num, closeTo(dimensions[3], .001), reason: path);
         registered.add('${city.key}/$file');
       }
     }

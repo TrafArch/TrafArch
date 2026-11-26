@@ -339,6 +339,33 @@ void main() {
           asset,
         );
       }
+
+      controller.update(
+        () => controller.trips[0] = {
+          ...controller.trips[0],
+          'city': '厦门',
+          'entryLine': '1号线',
+          'exitLine': '3号线',
+          'entryLineCity': {'system': 'tu', 'code': '3930', 'name': '厦门'},
+          'exitLineCity': {'system': 'tu', 'code': '3930', 'name': '厦门'},
+        },
+      );
+      await tester.pumpAndSettle();
+      final xiamenOne = find.descendant(
+        of: find.byKey(const ValueKey('trip-entry-line-badge')),
+        matching: find.byType(SvgPicture),
+      );
+      final xiamenThree = find.descendant(
+        of: find.byKey(const ValueKey('trip-exit-line-badge')),
+        matching: find.byType(SvgPicture),
+      );
+      expect(xiamenOne, findsOneWidget);
+      expect(xiamenThree, findsOneWidget);
+      final oneSize = tester.getSize(xiamenOne);
+      final threeSize = tester.getSize(xiamenThree);
+      expect(oneSize.height, closeTo(24, .1));
+      expect(threeSize.height, closeTo(24, .1));
+      expect(oneSize.width / threeSize.width, greaterThan(.97));
     },
   );
 
