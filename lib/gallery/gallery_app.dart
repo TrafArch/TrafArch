@@ -27,6 +27,8 @@ import '../features/archive/data/card_repository.dart';
 import '../features/archive/domain/card_name_extension.dart';
 import '../features/archive/domain/card_session_snapshot.dart';
 import '../features/archive/domain/card_types.dart';
+import '../features/archive/domain/suica_archive_identity.dart';
+import '../features/archive/domain/suica_manual_number.dart';
 import '../features/archive/presentation/archive_balance_display.dart';
 import '../features/archive/presentation/archive_trip_presenter.dart';
 import '../features/archive/presentation/shanghai_archive_mirrored_records.dart';

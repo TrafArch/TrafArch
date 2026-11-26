@@ -245,26 +245,62 @@ extension _GalleryDetail on _GalleryViewState {
     );
   }
 
-  Widget _cardInformation(GalleryCard card) => _panel(
-    Column(
-      children: [
-        for (final row in <(String, String)>[
+  Widget _cardInformation(GalleryCard card) {
+    final live = _GalleryLiveScope.of(context);
+    final archive = card.saved ? live?.suicaArchiveFor(card.id) : null;
+    final number = archive?.suicaManualNumber;
+    final issue = live?.archiveIssue != null
+        ? '无法确认档案身份，暂不能编辑卡面编号。'
+        : archive?.suicaManualNumberEditIssue;
+    return _panel(
+      Column(
+        children: [
           if (card.applicationNumbers.length < 2)
-            ('完整卡号', card.applicationNumbers.values.firstOrNull ?? card.pan)
+            _kv('完整卡号', card.applicationNumbers.values.firstOrNull ?? card.pan)
           else
             for (final entry in card.applicationNumbers.entries)
-              ('${entry.key} 卡号', entry.value),
-          ('发卡地', card.city),
-          ('卡种', card.type),
-          ('有效期', card.valid == '—' ? '未知' : '${card.valid}（未记录日）'),
-          ('当前余额', card.balance(c.includeOverdraft)),
-          ('最近读取', card.when),
-          ('协议', card.type),
-        ])
-          _kv(row.$1, row.$2),
-      ],
-    ),
-  );
+              _kv('${entry.key} 卡号', entry.value),
+          if (live != null && archive != null) ...[
+            _kv('卡面编号（手工填写）', number?.formatted ?? '未填写'),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: issue != null
+                    ? _text(
+                        issue,
+                        role: GalleryTypography.caption,
+                        color: t.muted,
+                      )
+                    : _button(
+                        number == null ? '填写卡面编号' : '修改卡面编号',
+                        () => showDialog<void>(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (_) => _GallerySuicaManualNumberDialog(
+                            number: number,
+                            onSave: (value) =>
+                                live.setSuicaManualNumber(archive.saved, value),
+                          ),
+                        ),
+                        icon: Icons.edit_outlined,
+                      ),
+              ),
+            ),
+          ],
+          for (final row in <(String, String)>[
+            ('发卡地', card.city),
+            ('卡种', card.type),
+            ('有效期', card.valid == '—' ? '未知' : '${card.valid}（未记录日）'),
+            ('当前余额', card.balance(c.includeOverdraft)),
+            ('最近读取', card.when),
+            ('协议', card.type),
+          ])
+            _kv(row.$1, row.$2),
+        ],
+      ),
+    );
+  }
 
   Future<void> _selectSpendingPeriod(
     GallerySpendingPeriod period,
@@ -1092,6 +1128,100 @@ bool _sameCalendarDay(DateTime a, DateTime b) =>
 
 String _rangeDayKey(DateTime day) =>
     'range-day-${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
+
+class _GallerySuicaManualNumberDialog extends StatefulWidget {
+  const _GallerySuicaManualNumberDialog({
+    required this.number,
+    required this.onSave,
+  });
+
+  final SuicaManualNumber? number;
+  final Future<void> Function(String?) onSave;
+
+  @override
+  State<_GallerySuicaManualNumberDialog> createState() =>
+      _GallerySuicaManualNumberDialogState();
+}
+
+class _GallerySuicaManualNumberDialogState
+    extends State<_GallerySuicaManualNumberDialog> {
+  final _form = GlobalKey<FormState>();
+  late String? _value = widget.number?.formatted;
+  bool _saving = false;
+  String? _saveError;
+
+  Future<void> _save() async {
+    if (_saving || !_form.currentState!.validate()) return;
+    setState(() {
+      _saving = true;
+      _saveError = null;
+    });
+    try {
+      await widget.onSave(_value);
+      if (mounted) Navigator.of(context).pop();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _saveError = '卡面编号保存失败，请重试。';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => PopScope(
+    canPop: !_saving,
+    child: AlertDialog(
+      title: Text(widget.number == null ? '填写卡面编号' : '修改卡面编号'),
+      scrollable: true,
+      content: Form(
+        key: _form,
+        child: TextFormField(
+          initialValue: widget.number?.formatted,
+          enabled: !_saving,
+          autofocus: true,
+          textCapitalization: TextCapitalization.characters,
+          textInputAction: TextInputAction.done,
+          decoration: InputDecoration(
+            labelText: '卡面编号',
+            hintText: 'JE123 4567 8901 2345',
+            helperText: '仅保存为本地备注，留空可清除。',
+            helperMaxLines: 3,
+            errorText: _saveError,
+            errorMaxLines: 4,
+          ),
+          onChanged: (value) {
+            _value = value;
+            if (_saveError != null) setState(() => _saveError = null);
+          },
+          validator: (value) {
+            try {
+              normalizeSuicaManualNumber(value);
+              return null;
+            } on FormatException {
+              return '请输入 2 位英文字母和 15 位数字，可带空格';
+            }
+          },
+          onFieldSubmitted: (_) => _save(),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving
+              ? null
+              : () {
+                  if (!_saving) Navigator.of(context).pop();
+                },
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: _saving ? null : _save,
+          child: Text(_saving ? '保存中…' : '保存'),
+        ),
+      ],
+    ),
+  );
+}
 
 class _GalleryRangePickerDialog extends StatefulWidget {
   const _GalleryRangePickerDialog({

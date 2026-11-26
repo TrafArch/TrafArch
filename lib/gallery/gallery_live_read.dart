@@ -68,6 +68,25 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
   ArchiveHistoryResult? get currentHistory => _current?.history;
   String? get archiveIssue => _archiveIssue;
   SavedCard? savedCardFor(String id) => _archiveById[id]?.saved;
+
+  // The wallet may show a current read in place of its same-ID archive card.
+  // Use the saved row, not the current read, for editable archive metadata.
+  _LiveArchiveCard? suicaArchiveFor(String id) {
+    final archive = _archiveById[id];
+    return archive?.saved.cardType == CardTypes.suica ? archive : null;
+  }
+
+  Future<void> setSuicaManualNumber(SavedCard target, String? value) async {
+    final archive = suicaArchiveFor(target.id);
+    if (_archiveIssue != null ||
+        archive == null ||
+        archive.saved.cardFingerprint != target.cardFingerprint ||
+        archive.suicaManualNumberEditIssue != null) {
+      throw StateError('无法确认档案身份，未修改卡面编号');
+    }
+    await app.cardRepository.setSuicaManualNumber(target.id, value);
+  }
+
   Object? get currentFelicaSystems {
     final snapshot = currentHistory?.latestCapture?.snapshot;
     final decoded = app.recoveredCapture?.summary['decoded'];
@@ -981,6 +1000,34 @@ class _LiveArchiveCard {
   final ArchiveHistoryResult history;
   final GalleryCard card;
   final List<GalleryRecord> records;
+
+  Object? get _manualNumberJson => history.cardExtensions['suicaManualNumber'];
+
+  SuicaManualNumber? get suicaManualNumber =>
+      SuicaManualNumber.fromJson(_manualNumberJson);
+
+  String? get suicaManualNumberEditIssue {
+    if (history.cardExtensions.containsKey('suicaManualNumber') &&
+        !SuicaManualNumber.isSupportedJson(_manualNumberJson)) {
+      return '卡面编号格式暂不支持，原始资料已保留。';
+    }
+    final fingerprintIdentity = SuicaArchiveIdentity.resolve(
+      cardType: saved.cardType,
+      fingerprint: saved.cardFingerprint,
+    );
+    if (history.documentReadIssue != null ||
+        fingerprintIdentity.idm == null ||
+        SuicaArchiveIdentity.resolve(
+          cardType: saved.cardType,
+          fingerprint: saved.cardFingerprint,
+          snapshots: history.batches
+              .map((batch) => batch.decoded.snapshot)
+              .nonNulls,
+        ).hasConflict) {
+      return '无法确认档案身份，暂不能编辑卡面编号。';
+    }
+    return null;
+  }
 }
 
 GalleryCard _liveCard({
