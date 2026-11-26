@@ -492,13 +492,27 @@ extension _GalleryPages on _GalleryViewState {
 
   Widget _trip(GalleryRecord trip, {bool interactive = true}) {
     final rail = trip['kind'] == 'rail';
+    final bus = trip['kind'] == 'bus';
     final event = trip['kind'] == 'event';
     final oneWay = trip['oneWay'] == true;
     final boarding = trip['entryTime'] as String? ?? '未记录';
     final sub = (trip['sub'] as String? ?? '未记录 → 未记录').split(' → ');
-    final entry = trip['entryStation'] as String? ?? sub.first;
+    String stationFallback(String label) {
+      // Without a station, a projected bus transaction may reuse the
+      // presenter's balance subtitle. It's not a stop name.
+      if (bus &&
+          (label.startsWith('记录余额 ') ||
+              label.startsWith('交易后余额 ') ||
+              label.startsWith('余额 '))) {
+        return '未记录';
+      }
+      return label;
+    }
+
+    final entry = trip['entryStation'] as String? ?? stationFallback(sub.first);
     final exit =
-        trip['exitStation'] as String? ?? (sub.length > 1 ? sub.last : '未记录');
+        trip['exitStation'] as String? ??
+        (sub.length > 1 ? stationFallback(sub.last) : '未记录');
     final entryLine =
         trip['entryLine'] as String? ??
         (rail
@@ -613,7 +627,7 @@ extension _GalleryPages on _GalleryViewState {
                 _text('过程记录', role: GalleryTypography.caption, color: t.muted),
               ],
             )
-          : !rail && trip['kind'] != 'bus'
+          : !rail && !bus
           ? _transactionRow(trip)
           : Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -757,9 +771,10 @@ extension _GalleryPages on _GalleryViewState {
     return interactive
         ? Semantics(
             button: true,
-            label:
-                '${trip['title']}，${trip['sub']}'
-                '${trip['kind'] == 'bus' ? '' : '，${galleryDisplayAmount(trip['amount'] as String)}'}',
+            label: bus
+                ? '${trip['title']}，$entry${oneWay ? '' : ' → $exit'}'
+                : '${trip['title']}，${trip['sub']}，'
+                      '${galleryDisplayAmount(trip['amount'] as String)}',
             child: InkWell(
               onTap: () => c.showOverlay(GalleryOverlay.trip, trip: trip),
               child: body,
