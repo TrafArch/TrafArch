@@ -506,16 +506,18 @@ extension _GalleryOverlays on _GalleryViewState {
   Widget _tripSheet() {
     final trip = _entry.trip;
     if (trip == null) return _text('暂无可用行程信息', color: t.muted);
+    final sources = (trip['sources'] as List?) ?? [trip['source'] ?? '未记录'];
+    final terminals =
+        trip['terminalNumbers'] as List<_GalleryTripTerminal>? ?? const [];
+    final attributeTerminals =
+        sources.length > 1 || terminals.length > 1 || trip['oneWay'] == false;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _trip(trip, interactive: false),
         const Divider(),
         _kv('日期', trip['isoDate'] as String? ?? trip['date'] as String?),
-        _kv(
-          '记录来源',
-          ((trip['sources'] as List?) ?? [trip['source'] ?? '未记录']).join(' / '),
-        ),
+        _kv('记录来源', sources.join(' / ')),
         if (trip['kind'] == 'recharge')
           _kv('交易类型', '充值')
         else
@@ -534,6 +536,16 @@ extension _GalleryOverlays on _GalleryViewState {
         _kv('交易金额', trip['amount'] as String?),
         if (trip['kind'] != 'event')
           _kv('交易后余额', trip['balanceAfter'] as String?),
+        if (terminals.isEmpty)
+          _kv('终端编号', '未记录')
+        else if (!attributeTerminals)
+          _kv('终端编号', terminals.single.$3, mono: true)
+        else ...[
+          _gap(12),
+          _text('终端编号', role: GalleryTypography.label, color: t.muted),
+          for (final (source, operation, number) in terminals)
+            _kv([source, ?operation].join(' · '), number, mono: true),
+        ],
       ],
     );
   }

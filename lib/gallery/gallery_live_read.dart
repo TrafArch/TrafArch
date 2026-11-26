@@ -1391,6 +1391,14 @@ GalleryRecord _recordFromPresentation<T extends Enum>(
     return {'system': railCitySystem, 'code': ?code, 'name': ?name};
   }
 
+  final terminals = <_GalleryTripTerminal>{
+    if (events.isEmpty)
+      ?_capturedTripTerminal(info, event?.role, entry.mode)
+    else
+      for (final item in events)
+        ?_capturedTripTerminal(item.payload.info, item.role, item.mode),
+  };
+
   return <String, dynamic>{
     'kind': kind,
     'date': clock.date,
@@ -1426,6 +1434,8 @@ GalleryRecord _recordFromPresentation<T extends Enum>(
     if (city.isNotEmpty) 'city': city,
     'foreign': info.remoteCityText != null,
     'rawHex': info.rawHex,
+    if (terminals.isNotEmpty)
+      'terminalNumbers': List<_GalleryTripTerminal>.unmodifiable(terminals),
     'infoFields': [
       for (final field in info.fields) [field.$1, field.$2],
     ],
@@ -1442,6 +1452,48 @@ GalleryRecord _recordFromPresentation<T extends Enum>(
         },
     ],
   };
+}
+
+typedef _GalleryTripTerminal = (
+  String source,
+  String? operation,
+  String number,
+);
+
+_GalleryTripTerminal? _capturedTripTerminal(
+  TripEntryInfo info,
+  JourneyEventRole? role,
+  TripModeFilter mode,
+) {
+  final sideField = switch (role) {
+    JourneyEventRole.entry => '进入终端',
+    JourneyEventRole.exit => '离开终端',
+    _ => null,
+  };
+  for (final (label, value) in info.fields) {
+    // TU 0x18/0x1E name the terminal directly, while 0x1A carries both
+    // sides in each payload. CU and local wallets already expose the raw field.
+    if (label != '终端编号' &&
+        label != '终端原始编码' &&
+        label != '终端 HEX' &&
+        label != sideField) {
+      continue;
+    }
+    final checked = value.trim();
+    if (checked.isEmpty ||
+        const {'未知', '未记录', '—'}.contains(checked) ||
+        RegExp(r'^(?:0+|[Ff]+)$').hasMatch(checked)) {
+      continue;
+    }
+    final operation = switch (role) {
+      JourneyEventRole.entry => mode == TripModeFilter.bus ? '上车' : '进站',
+      JourneyEventRole.exit => mode == TripModeFilter.bus ? '下车' : '出站',
+      JourneyEventRole.fareAdjustment => '补票',
+      _ => null,
+    };
+    return (info.sourceLabel, operation, value);
+  }
+  return null;
 }
 
 JourneyEndpoint _singleEndpoint(JourneyEvent<TripEntryInfo> event) =>

@@ -439,6 +439,7 @@ extension _GalleryComponents on _GalleryViewState {
     String label,
     String? value, {
     double labelWidth = 112,
+    bool mono = false,
   }) => Container(
     constraints: const BoxConstraints(minHeight: 44),
     padding: const EdgeInsets.symmetric(vertical: 11),
@@ -458,6 +459,7 @@ extension _GalleryComponents on _GalleryViewState {
             value ?? '未知',
             role: GalleryTypography.field,
             align: TextAlign.right,
+            mono: mono,
           ),
         ),
       ],
