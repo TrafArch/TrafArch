@@ -3,7 +3,7 @@
     - name: 构建 Android 安装包
       runner:
         tags: cnb:arch:amd64
-        cpus: 8
+        cpus: 64
       docker:
         build: .cnb/android.Dockerfile
       stages:
