@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-26 — 提高 CNB Android 构建规格
+
+- 分架构和 Universal APK 的手动流水线使用 CNB 的 amd64 最高规格，申请 64 核 CPU 和 128 GiB 内存。
+
 ## 2026-11-25 — 修复 CNB 分架构和通用 APK 的构建环境
 
 - 修复 Flutter 插件加载时因 Maven Central 返回 HTTP 429 而中断的云构建。两个 APK 按钮在 Gradle 初始化时为应用和 Flutter SDK 的独立构建配置 Central 与插件镜像。
