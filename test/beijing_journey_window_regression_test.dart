@@ -1,9 +1,5 @@
-import 'package:drift/native.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
-import 'package:transit_card_analyzer/app/app_dependencies.dart';
-import 'package:transit_card_analyzer/features/archive/data/app_database.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/tu_region_live_source.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/tu_station_repository.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/tunion_bus_location.dart';
@@ -12,14 +8,13 @@ import 'package:transit_card_analyzer/features/reference_data/domain/station_cod
 import 'package:transit_card_analyzer/features/transit_analysis/tunion_analysis_engine.dart';
 import 'package:transit_card_analyzer/features/transit_analysis/tunion_analysis_models.dart';
 import 'package:transit_card_analyzer/features/trips/journey_presentation.dart';
-import 'package:transit_card_analyzer/features/trips/trip_entry_card.dart';
 import 'package:transit_card_analyzer/features/trips/trip_entry_presenter.dart';
+import 'package:transit_card_analyzer/features/trips/trip_journey_adapter.dart';
+import 'package:transit_card_analyzer/features/trips/trip_journey_evidence.dart';
 import 'package:transit_card_analyzer/features/trips/trip_presentation_context.dart';
-import 'package:transit_card_analyzer/features/trips/trip_stream_view.dart';
 import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/local/apdu_exchange.dart';
 import 'package:transit_card_analyzer/protocols/transit/local/local_card_models.dart';
-import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_models.dart';
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_reader.dart';
 
 // Exact transaction/process payloads from the final Beijing read in the
@@ -43,8 +38,8 @@ void main() {
   });
   tearDown(() => referenceDatabase.close());
 
-  testWidgets('北京十笔交易窗口边界的独立1E进站与交易出站合成完整行程', (tester) async {
-    final replay = await _pumpReplay(tester, stations, knowledge);
+  test('北京十笔交易窗口边界的独立1E进站与交易出站合成完整行程', () async {
+    final replay = await _projectReplay(stations, knowledge);
     final related = replay.journeys
         .where(
           (journey) => journey.events.any(
@@ -74,11 +69,10 @@ void main() {
       journey.events.map((event) => event.payload.rawHex),
       unorderedEquals([_cycles[9], _transactions[9]]),
     );
-    expect(tester.takeException(), isNull);
   });
 
-  testWidgets('北京345路重复1A和1E两侧仅显示一段且四份原始详情全部保留', (tester) async {
-    final replay = await _pumpReplay(tester, stations, knowledge);
+  test('北京345路重复1A和1E两侧仅显示一段且四份原始详情全部保留', () async {
+    final replay = await _projectReplay(stations, knowledge);
     final related = replay.journeys
         .where(
           (journey) => journey.events.any(
@@ -119,10 +113,9 @@ void main() {
         _cycles[11],
       ]),
     );
-    expect(tester.takeException(), isNull);
   });
-  testWidgets('北京十笔交易窗口之外完整公交和地铁行程按局部证据恢复后余额', (tester) async {
-    final replay = await _pumpReplay(tester, stations, knowledge);
+  test('北京十笔交易窗口之外完整公交和地铁行程按局部证据恢复后余额', () async {
+    final replay = await _projectReplay(stations, knowledge);
     // Hand-checked against the original 1E payloads. Rail records retain
     // pre-fare balances; bus records here already contain post-fare balances.
     for (final (time, expected) in [
@@ -146,11 +139,10 @@ void main() {
         .trip!;
     expect(raw.balanceFen, 15050);
     expect(raw.amountFen, 500);
-    expect(tester.takeException(), isNull);
   });
 
-  testWidgets('太原单次公交在北京零金额进站前的相邻1E证明后余额15050', (tester) async {
-    final replay = await _pumpReplay(tester, stations, knowledge);
+  test('太原单次公交在北京零金额进站前的相邻1E证明后余额15050', () async {
+    final replay = await _projectReplay(stations, knowledge);
     final journey = replay.journeys.singleWhere(
       (j) => j.events.any(
         (e) => e.endpoint.time == DateTime(2026, 9, 24, 18, 29, 29),
@@ -165,91 +157,54 @@ void main() {
         .trip!;
     expect(original.balanceFen, 15050);
     expect(original.amountFen, 100);
-    expect(tester.takeException(), isNull);
   });
 }
 
 Future<({ParsedCard card, List<JourneyPresentation<TripEntryInfo>> journeys})>
-_pumpReplay(
-  WidgetTester tester,
-  StationCodeTable stations,
-  KnowledgeBase knowledge,
-) async {
+_projectReplay(StationCodeTable stations, KnowledgeBase knowledge) async {
   final card = await _readSample();
   final analysis = AnalysisEngine(knowledge).analyze(card);
-  final database = AppDatabase(NativeDatabase.memory());
-  final app = _ReplayApp(card, database);
-  addTearDown(() async {
-    app.dispose();
-    await database.close();
-  });
+  final records = card.transitProcessRecords;
+  final rails = [for (final record in records) ?record.railTransit];
+  final buses = [for (final record in records) ?record.busTransit];
+  final cycles = [for (final record in records) ?record.trip];
   final stream = buildTripStream(
     trips: analysis.trips,
-    rails: [?app.railTransitRecord],
-    buses: [?app.busTransitRecord],
-    processTrips: app.cycleProcessTrips,
+    rails: rails,
+    buses: buses,
+    processTrips: cycles,
   );
   expect(card.transactions, hasLength(10));
-  expect(app.cycleProcessTrips, hasLength(30));
+  expect(cycles, hasLength(30));
   expect(card.transactions.last.sequence, 0x21);
   expect(
-    app.transitProcessRecords
+    records
         .where((record) => record.sfi == 0x1E)
         .map((record) => record.recordNumber),
     List.generate(30, (index) => index + 1),
   );
   expect(analysis.trips.last.balanceAfterFen, 13850);
-  await tester.pumpWidget(
-    MaterialApp(
-      home: Scaffold(
-        body: SingleChildScrollView(
-          child: TripStreamView(
-            stream: stream,
-            app: app,
-            isRemote: (_) => false,
-            presentationContext: _display(stations),
-          ),
-        ),
-      ),
-    ),
+  final display = _display(stations);
+  final evidence = buildLiveJourneyEvidence(
+    stream: stream,
+    processRecords: records,
+    rails: rails,
+    buses: buses,
   );
-  await tester.pumpAndSettle();
   return (
     card: card,
-    journeys: [
-      for (final widget in tester.widgetList<TripEntryCard>(
-        find.byType(TripEntryCard),
-      ))
-        if (widget.journey != null) widget.journey!,
-    ],
+    journeys: projectJourneys([
+      for (final group in groupTripsByDate(stream))
+        for (final entry in group.entries)
+          describeJourneyEvent(
+            entry,
+            display,
+            describeTripEntry(entry, display, remote: false),
+            applicationRecordId: evidence[entry]?.applicationRecordId,
+            processPositions: evidence[entry]?.processPositions ?? const {},
+          ),
+    ]),
   );
-}
-
-// Supplies the real read result through the existing presentation facade while
-// avoiding asynchronous application initialization in a widget fake clock.
-// No analysis, decoder, stream, or journey implementation is replaced here.
-class _ReplayApp extends AppDependencies {
-  _ReplayApp(this.card, AppDatabase database) : super(database: database);
-  final ParsedCard card;
-
-  @override
-  ParsedCard get parsedCard => card;
-  @override
-  List<TUnionProcessRecord> get transitProcessRecords =>
-      card.transitProcessRecords;
-  @override
-  List<TUnionTripRecord> get cycleProcessTrips => [
-    for (final record in card.transitProcessRecords)
-      if (record.trip != null) record.trip!,
-  ];
-  @override
-  TransitRecord? get railTransitRecord => card.transitProcessRecords
-      .singleWhere((record) => record.railTransit != null)
-      .railTransit;
-  @override
-  BusTransitRecord? get busTransitRecord => card.transitProcessRecords
-      .singleWhere((record) => record.busTransit != null)
-      .busTransit;
 }
 
 TripPresentationContext _display(StationCodeTable stations) =>

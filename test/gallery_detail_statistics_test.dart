@@ -136,6 +136,77 @@ void main() {
     },
   );
 
+  testWidgets('spending keeps summaries but not individual transactions', (
+    tester,
+  ) async {
+    const transactionTitle = '回归测试单笔扣款';
+    final cardId = c.current.id;
+    c.liveLedgers = {
+      cardId: [
+        {
+          'kind': 'other',
+          'title': transactionTitle,
+          'amount': '−¥3.21',
+          'date': '10月26日',
+          'isoDate': '2026-10-26',
+          'time': '10:04',
+        },
+      ],
+    };
+    c.detailTab = 1;
+    await mount(tester);
+
+    final overview = find.byKey(const ValueKey('spending-overview'));
+    final tail = find.textContaining('仅统计本卡已保留且币种明确的扣款');
+    final scrollable = galleryVerticalScroll();
+    Future<void> expectNoDetails() async {
+      void expectAbsent() {
+        for (final label in [
+          '消费明细',
+          '暂无消费记录',
+          '0 笔',
+          '1 笔',
+          transactionTitle,
+        ]) {
+          expect(find.text(label), findsNothing);
+        }
+      }
+
+      expectAbsent();
+      await tester.scrollUntilVisible(tail, 120, scrollable: scrollable);
+      await tester.pumpAndSettle();
+      expect(tail, findsOneWidget);
+      expectAbsent();
+      tester.state<ScrollableState>(scrollable).position.jumpTo(0);
+      await tester.pumpAndSettle();
+    }
+
+    expect(
+      find.descendant(of: overview, matching: find.text('¥3.21')),
+      findsWidgets,
+    );
+    expect(find.text('消费趋势'), findsOneWidget);
+    expect(find.byKey(const ValueKey('spending-bar-0')), findsOneWidget);
+    expect(find.text('分类开销'), findsOneWidget);
+    await expectNoDetails();
+
+    await tester.tap(find.text('最近交易'));
+    await tester.pumpAndSettle();
+    expect(find.text(transactionTitle), findsOneWidget);
+
+    c.update(() => c.liveLedgers = {cardId: []});
+    await tester.tap(find.text('消费统计'));
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(of: overview, matching: find.text('¥0.00')),
+      findsOneWidget,
+    );
+    expect(find.text('暂无可绘制的日期记录'), findsOneWidget);
+    expect(find.text('分类开销'), findsOneWidget);
+    await expectNoDetails();
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'custom date picker cancels without changes and applies both inclusive dates',
     (tester) async {

@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/app/app_dependencies.dart';
 import 'package:transit_card_analyzer/features/archive/application/archive_controller.dart';
@@ -11,8 +10,6 @@ import 'package:transit_card_analyzer/features/archive/domain/card_archive_ident
 import 'package:transit_card_analyzer/features/archive/domain/card_name_extension.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_session_snapshot.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_types.dart';
-import 'package:transit_card_analyzer/features/home/presentation/transit_summary_panel.dart';
-import 'package:transit_card_analyzer/features/cards/cards_page.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/tunion_knowledge_base.dart';
 import 'package:transit_card_analyzer/features/scan/domain/card_read_outcome.dart';
 import 'package:transit_card_analyzer/features/scan/domain/scan_presentation.dart';
@@ -76,27 +73,6 @@ class _App extends AppDependencies {
 }
 
 void main() {
-  testWidgets('最近扫描显示真实港币与 TU 组合余额，不再展示汇率', (tester) async {
-    final app = _App(
-      _card(4205),
-      balanceRead: OctopusBalanceResult(
-        balanceMinor: 5000,
-        idmHex: '0102030405060708',
-        readAt: DateTime.utc(2026, 11, 17),
-      ),
-    );
-    addTearDown(app.dispose);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(body: TransitSummaryPanel(app: app)),
-      ),
-    );
-    expect(find.text(r'HK$50.00 (￥42.05)'), findsOneWidget);
-    expect(find.textContaining('汇率'), findsNothing);
-    expect(find.text(r'1 HK$ = ￥0.881234'), findsNothing);
-    expect(find.text('TU侧金额'), findsNothing);
-  });
-
   test('组合余额保留零和负数，未读 TU 不补零或按汇率推算', () {
     for (final (tu, hkd, expected) in [
       (0, 0, r'HK$0.00 (￥0.00)'),
@@ -115,20 +91,6 @@ void main() {
       addTearDown(app.dispose);
       expect(app.octopusBalanceText, expected);
     }
-  });
-
-  testWidgets(r'八达通首页不把 TU 4225 冒充账户余额或 HK$42.25', (tester) async {
-    final app = _App(_card(4225));
-    addTearDown(app.dispose);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(body: TransitSummaryPanel(app: app)),
-      ),
-    );
-    expect(find.text('港币余额未读取 (￥42.25)'), findsOneWidget);
-    expect(find.text('卡内汇率'), findsNothing);
-    expect(find.text('HK\$42.25'), findsNothing);
-    expect(find.text('HK\$50.00'), findsNothing);
   });
 
   test('前缀 HKD 是账户元数据，不能更改 TU 观察金额单位', () {
@@ -290,32 +252,5 @@ void main() {
       buildArchiveHistoryExport([history]),
       contains('历史金额（口径待核验）：¥ 42.25'),
     );
-  });
-
-  testWidgets('旧八达通摘要在手机宽度下可完整阅读', (tester) async {
-    tester.view.physicalSize = const Size(390, 844);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    final app = _App(_card(4225));
-    addTearDown(app.dispose);
-    await tester.runAsync(
-      () => app.cardRepository.saveIdentity(
-        fingerprint: 'octopus-phone-width',
-        identity: const CardArchiveIdentity(cardType: CardTypes.octopusTunion),
-        balanceFen: 4225,
-        currencyCode: 'CNY',
-      ),
-    );
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(body: CardsPage(app: app)),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.textContaining('港币余额未读取'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox());
-    await tester.pump();
   });
 }

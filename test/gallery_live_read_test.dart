@@ -10,7 +10,6 @@ import 'package:transit_card_analyzer/app/trafarch_app.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_archive_identity.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_name_extension.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_session_snapshot.dart';
-import 'package:transit_card_analyzer/features/home/presentation/pending_save_presenter.dart';
 import 'package:transit_card_analyzer/features/octopus/octopus_balance_controller.dart';
 import 'package:transit_card_analyzer/features/recovery/recovery_state.dart';
 import 'package:transit_card_analyzer/features/updates/update_service.dart';
@@ -787,7 +786,6 @@ void main() {
       final fixture = await _showGallery(tester, _CardKind.tu, autoSave: false);
       final app = fixture.app;
       await _read(tester, '开始读取');
-      expect(find.byType(SaveCardDialog), findsNothing);
       expect(await tester.runAsync(app.cardRepository.getAllCards), isEmpty);
       await tester.tap(find.text('保存卡片'));
       await _settleIo(tester);
@@ -1346,17 +1344,13 @@ void main() {
     },
   );
 
-  testWidgets('initial live UI opens 2.x without the legacy screen', (
-    tester,
-  ) async {
+  testWidgets('production root directly opens the 2.x live UI', (tester) async {
     _size(tester);
     final fixture = _Fixture(_CardKind.suica);
     var created = 0;
     await tester.pumpWidget(
       TransitCardAnalyzerApp(
         enableUpdateChecks: false,
-        enableLiveBeta: true,
-        initialLiveUi: true,
         createDependencies: () {
           created++;
           return fixture.app;
@@ -1365,7 +1359,6 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.byType(GalleryApp), findsOneWidget);
-    expect(find.byType(AppShell), findsNothing);
     expect(find.text('开始读取'), findsOneWidget);
     expect(find.byType(AlertDialog), findsNothing);
     expect(
@@ -1374,78 +1367,13 @@ void main() {
     );
     expect(fixture.native.discoveries, 0);
     expect(created, 1);
+    await tester.tap(find.byTooltip('设置'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('备用界面', skipOffstage: false), findsNothing);
+    expect(fixture.app.disposed, isFalse);
     await _unmount(tester);
+    expect(fixture.app.disposed, isTrue);
   });
-
-  testWidgets(
-    'production toggle shares dependencies and waits for successful close',
-    (tester) async {
-      _size(tester);
-      final fixture = _Fixture(_CardKind.suica);
-      final app = fixture.app;
-      var created = 0;
-      await tester.pumpWidget(
-        TransitCardAnalyzerApp(
-          enableUpdateChecks: false,
-          enableLiveBeta: true,
-          initialLiveUi: true,
-          createDependencies: () {
-            created++;
-            return app;
-          },
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(
-        tester.widget<GalleryApp>(find.byType(GalleryApp)).liveApp,
-        same(app),
-      );
-      expect(fixture.native.discoveries, 0);
-
-      final response = fixture.native.response = Completer<NfcScanResult?>();
-      fixture.native.closeFails = true;
-      await tester.tap(find.text('开始读取'));
-      await tester.pump();
-      final fallbackSwitch = find.widgetWithText(SwitchListTile, '使用 1.x 备用界面');
-      await _openSettingsControl(tester, fallbackSwitch);
-      await tester.tap(fallbackSwitch);
-      await tester.pumpAndSettle();
-      expect(find.text('NFC 尚未关闭，无法切换。请重试。'), findsOneWidget);
-      expect(find.byType(GalleryApp), findsOneWidget);
-
-      fixture.native.closeFails = false;
-      final close = fixture.native.close = Completer<void>();
-      await tester.ensureVisible(fallbackSwitch);
-      await tester.pumpAndSettle();
-      await tester.tap(fallbackSwitch);
-      await tester.pump();
-      expect(find.text('正在切换到 1.x 备用界面…'), findsOneWidget);
-      expect(tester.widget<SwitchListTile>(fallbackSwitch).onChanged, isNull);
-      expect(find.byType(GalleryApp), findsOneWidget);
-      close.complete();
-      response.complete(fixture.native.tag);
-      await tester.pumpAndSettle();
-      expect(find.byType(GalleryApp), findsNothing);
-      expect(tester.widget<AppShell>(find.byType(AppShell)).app, same(app));
-      expect(app.disposed, isFalse);
-      expect(app.hasCompletedRead, isFalse);
-
-      final mainUiSwitch = find.widgetWithText(SwitchListTile, '返回 2.x 主界面');
-      await _openSettingsControl(tester, mainUiSwitch);
-      await tester.tap(mainUiSwitch);
-      await tester.pumpAndSettle();
-      expect(find.byType(AlertDialog), findsNothing);
-      expect(find.byType(AppShell), findsNothing);
-      expect(
-        tester.widget<GalleryApp>(find.byType(GalleryApp)).liveApp,
-        same(app),
-      );
-      expect(fixture.native.discoveries, 1);
-      expect(created, 1);
-      await _unmount(tester);
-      expect(app.disposed, isTrue);
-    },
-  );
 
   testWidgets(
     '2.x offers configured updates and only prompts once per launch',
@@ -1471,11 +1399,7 @@ void main() {
       );
       final fixture = _Fixture(_CardKind.suica, updateService: service);
       await tester.pumpWidget(
-        TransitCardAnalyzerApp(
-          enableLiveBeta: true,
-          initialLiveUi: true,
-          createDependencies: () => fixture.app,
-        ),
+        TransitCardAnalyzerApp(createDependencies: () => fixture.app),
       );
       await tester.pumpAndSettle();
       final updateDialog = find.byType(AlertDialog);
@@ -1494,17 +1418,10 @@ void main() {
       expect(find.text('暂无更新'), findsOneWidget);
       expect(checks, 2);
 
-      final fallbackSwitch = find.widgetWithText(SwitchListTile, '使用 1.x 备用界面');
-      await tester.scrollUntilVisible(
-        fallbackSwitch,
-        250,
-        scrollable: galleryVerticalScroll(),
-      );
-      await tester.ensureVisible(fallbackSwitch);
+      await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
-      await tester.tap(fallbackSwitch);
-      await tester.pumpAndSettle();
-      expect(find.byType(AppShell), findsOneWidget);
+      expect(find.byType(GalleryApp), findsOneWidget);
+      expect(find.text('开始读取'), findsOneWidget);
       expect(updateDialog, findsNothing);
       expect(checks, 2);
       await _unmount(tester);

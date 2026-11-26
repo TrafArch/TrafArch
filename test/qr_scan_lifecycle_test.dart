@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:transit_card_analyzer/features/qr/presentation/qr_scan_page.dart';
-import 'package:transit_card_analyzer/app/theme/app_theme.dart';
 
 void main() {
   testWidgets('浅色主题进入黑色扫码页后导航图标变白，返回后恢复', (tester) async {
@@ -29,10 +28,10 @@ void main() {
     );
     await tester.pumpWidget(
       MaterialApp(
-        theme: AppTheme.light(null),
+        theme: ThemeData.light(),
         builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
-          value: AppTheme.systemUiOverlayStyle(
-            Theme.of(context).scaffoldBackgroundColor,
+          value: SystemUiOverlayStyle.dark.copyWith(
+            systemNavigationBarIconBrightness: Brightness.dark,
           ),
           child: child!,
         ),

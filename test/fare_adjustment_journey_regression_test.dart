@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:drift/drift.dart' show DatabaseConnection;
 import 'package:drift/native.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/features/archive/application/archive_controller.dart';
@@ -19,7 +18,6 @@ import 'package:transit_card_analyzer/features/transit_analysis/tunion_analysis_
 import 'package:transit_card_analyzer/features/trips/journey_presentation.dart';
 import 'package:transit_card_analyzer/features/trips/trip_entry_presenter.dart';
 import 'package:transit_card_analyzer/features/trips/trip_filters.dart';
-import 'package:transit_card_analyzer/features/trips/trip_cards_view.dart';
 import 'package:transit_card_analyzer/features/trips/trip_journey_adapter.dart';
 import 'package:transit_card_analyzer/features/trips/trip_journey_evidence.dart';
 import 'package:transit_card_analyzer/features/trips/trip_presentation_context.dart';
@@ -183,47 +181,6 @@ void main() {
       jsonEncode([for (final record in saved.records) record.fields]),
       before,
     );
-  });
-
-  testWidgets('历史卡片明确显示补票并保留两笔详情且不虚构完整乘车时长', (tester) async {
-    final view = await _view(reference);
-    final saved = await _archiveProjection(view);
-    final entries = saved.projection.entries
-        .where(
-          (entry) => const {9215, 9216}.contains(entry.journeyEvent?.sequence),
-        )
-        .toList();
-    expect(entries, hasLength(2));
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SingleChildScrollView(
-            child: TripCardsView(
-              entries: entries,
-              sourceLabels: archiveTripSourceLabels,
-              summaryText: saved.projection.summaryText,
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('轨道交通'), findsOneWidget);
-    expect(find.text('杭州轨道交通'), findsNothing);
-    expect(find.text('绍兴轨道交通'), findsNothing);
-    expect(find.text('景芳'), findsOneWidget);
-    expect(find.text('中国轻纺城'), findsOneWidget);
-    expect(find.textContaining('补票'), findsWidgets);
-    expect(find.textContaining('1小时23分钟'), findsNothing);
-    expect(find.textContaining('83分钟'), findsNothing);
-    expect(find.textContaining('行程后余额'), findsOneWidget);
-    expect(find.byKey(const ValueKey('journey-arrow')), findsOneWidget);
-    await tester.tap(find.byTooltip('查看行程记录'));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('9215'), findsOneWidget);
-    expect(find.textContaining('9216'), findsOneWidget);
-    expect(find.textContaining('补票'), findsWidgets);
-    expect(tester.takeException(), isNull);
   });
 
   test('SIMULATED EC07补票类型走同一实时配对路径而不被改为普通进站', () async {

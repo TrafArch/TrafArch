@@ -254,11 +254,14 @@ void main() {
       var repository = CardRepository(database);
       final saved = await _save(repository);
       await repository.setSuicaManualNumber(saved.id, 'JE123456789012345');
+      await repository.setSuicaManualNumber(saved.id, 'AB123456789012345');
       await database.close();
       database = AppDatabase(NativeDatabase(file));
       repository = CardRepository(database);
       final history = await ArchiveHistory(repository).load(saved.id);
-      expect(_number(history.cardExtensions)!.value, 'JE123456789012345');
+      final number = _number(history.cardExtensions)!;
+      expect(number.value, 'AB123456789012345');
+      expect(number.formatted, 'AB123 4567 8901 2345');
       final json = CardArchiveBundle(
         cards: await repository.exportDocuments(),
         exportedAt: DateTime.utc(2026, 11, 16),

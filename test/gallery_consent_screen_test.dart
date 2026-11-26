@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/app/legal_consent_gate.dart';
-import 'package:transit_card_analyzer/gallery/gallery_consent_screen.dart';
 import 'package:transit_card_analyzer/gallery/gallery_design.dart';
 import 'package:transit_card_analyzer/gallery/gallery_theme.dart';
 import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
@@ -12,9 +11,8 @@ import 'package:transit_card_analyzer/shared/app_support.dart';
 
 const _home = Key('protected-home');
 
-Widget _gate(SettingsStore store, {bool gallery = true}) => LegalConsentGate(
+Widget _gate(SettingsStore store) => LegalConsentGate(
   settingsStore: store,
-  screenBuilder: gallery ? GalleryConsentScreen.new : null,
   child: const SizedBox(key: _home),
 );
 
@@ -141,7 +139,7 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('2.x 保存成功后退出弹窗，1.x 与 2.x 共用同意记录', (tester) async {
+  testWidgets('保存成功后退出弹窗，重启沿用同意记录', (tester) async {
     final store = _PendingConsentStore();
     await tester.pumpWidget(_gate(store));
     await tester.pumpAndSettle();
@@ -158,13 +156,11 @@ void main() {
     expect(find.byKey(_home), findsNothing);
     await tester.pumpAndSettle();
     expect(find.byKey(_home), findsOneWidget);
-    for (final gallery in [false, true]) {
-      await tester.pumpWidget(const SizedBox());
-      await tester.pumpWidget(_gate(store, gallery: gallery));
-      await tester.pumpAndSettle();
-      expect(find.byKey(_home), findsOneWidget);
-      expect(find.text(LegalConsentPrompt.title), findsNothing);
-    }
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(_gate(store));
+    await tester.pumpAndSettle();
+    expect(find.byKey(_home), findsOneWidget);
+    expect(find.text(LegalConsentPrompt.title), findsNothing);
   });
 }
 

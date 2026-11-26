@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/features/archive/application/archive_application_display.dart';
@@ -11,7 +10,6 @@ import 'package:transit_card_analyzer/features/archive/presentation/archive_trip
 import 'package:transit_card_analyzer/features/reference_data/application/reference_data_controller.dart';
 import 'package:transit_card_analyzer/features/transit_analysis/tunion_analysis_models.dart';
 import 'package:transit_card_analyzer/features/trips/journey_presentation.dart';
-import 'package:transit_card_analyzer/features/trips/trip_entry_card.dart';
 import 'package:transit_card_analyzer/features/trips/trip_entry_presenter.dart';
 import 'package:transit_card_analyzer/features/trips/trip_filters.dart';
 import 'package:transit_card_analyzer/features/trips/trip_journey_adapter.dart';
@@ -93,38 +91,6 @@ void main() {
     _expectReportedJourney(journey);
     expect(jsonEncode([for (final record in records) record.fields]), before);
     _expectSavedRaw(records);
-  });
-
-  testWidgets('reported intercity card uses generic rail heading', (
-    tester,
-  ) async {
-    final journey = projectJourneys(_liveEvents(_reportedRecords(), reference))
-        .single;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SingleChildScrollView(
-            child: TripEntryCard(
-              info: journey.events.first.payload,
-              remote: false,
-              onTap: () {},
-              journey: journey,
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('轨道交通'), findsOneWidget);
-    expect(find.text('绍兴轨道交通'), findsNothing);
-    expect(find.text('宁波轨道交通'), findsNothing);
-    expect(find.text('钱清'), findsOneWidget);
-    expect(find.text('宁波'), findsOneWidget);
-    expect(find.text('绍兴城际'), findsOneWidget);
-    expect(find.text('宁波城际'), findsOneWidget);
-    expect(find.text('11351501000000'), findsNothing);
-    expect(tester.takeException(), isNull);
   });
 }
 

@@ -1,19 +1,15 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/features/home/presentation/felica_summary_panel.dart';
 import 'package:transit_card_analyzer/features/home/presentation/summary_formatters.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/suica_station_repository.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/tunion_knowledge_base.dart';
 import 'package:transit_card_analyzer/features/scan/domain/card_read_outcome.dart';
 import 'package:transit_card_analyzer/features/scan/domain/scan_presentation.dart';
 import 'package:transit_card_analyzer/features/trips/journey_presentation.dart';
-import 'package:transit_card_analyzer/features/trips/suica_trip_list.dart';
 import 'package:transit_card_analyzer/features/trips/suica_trip_presenter.dart';
-import 'package:transit_card_analyzer/features/trips/trip_entry_card.dart';
 import 'package:transit_card_analyzer/features/trips/trip_filters.dart';
 import 'package:transit_card_analyzer/protocols/felica/models/felica_card_type.dart';
 import 'package:transit_card_analyzer/protocols/felica/models/felica_models.dart';
@@ -22,42 +18,6 @@ import 'package:transit_card_analyzer/protocols/felica/parsers/suica_record_pars
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  for (final balance in [0, 900]) {
-    for (final scale in [1.0, 2.0]) {
-      testWidgets(
-        'saved rail balance $balance remains visible without amount at scale $scale',
-        (tester) async {
-          tester.view.devicePixelRatio = 1;
-          tester.view.physicalSize = const Size(320, 740);
-          addTearDown(tester.view.resetDevicePixelRatio);
-          addTearDown(tester.view.resetPhysicalSize);
-          final live = presentSuicaTrips([
-            _rail(balance: balance, change: null),
-          ]).single;
-          final restored = SuicaTripPresentation.fromJson(live.toJson())!;
-          expect(restored.entry.info.amountText, isNull);
-          expect(restored.journey.balanceAfterText, 'JP￥$balance');
-          await tester.pumpWidget(
-            MaterialApp(
-              builder: (context, child) => MediaQuery(
-                data: MediaQuery.of(context)
-                    .copyWith(textScaler: TextScaler.linear(scale)),
-                child: child!,
-              ),
-              home: Scaffold(
-                body: SingleChildScrollView(
-                  child: SuicaTripList(trips: [restored]),
-                ),
-              ),
-            ),
-          );
-          expect(find.text('行程后余额 JP￥$balance'), findsOneWidget);
-          expect(find.textContaining('余额差'), findsNothing);
-          expect(tester.takeException(), isNull);
-        },
-      );
-    }
-  }
   test('a Suica scan exposes yen to shared currency consumers', () {
     final presentation = ScanPresentation(
       FelicaReadOutcome(
@@ -74,38 +34,6 @@ void main() {
     expect(presentation.cardCurrency.symbol, 'JP￥');
     expect(presentation.cardCurrency.unit, '日元');
   });
-
-  testWidgets(
-    'Japanese rail footer follows domestic amount layout without seats',
-    (tester) async {
-      for (final (change, expectedAmount) in [
-        (-100, '-JP￥100'),
-        (0, 'JP￥0'),
-        (100, '+JP￥100'),
-      ]) {
-        final live = presentSuicaTrips([_rail(change: change)]).single;
-        final stored = live.toJson();
-        final trip = SuicaTripPresentation.fromJson(stored)!;
-        expect(trip.entry.info.amountText, '余额差 $expectedAmount');
-        expect(trip.journey.amountText, expectedAmount);
-        expect(trip.journey.seatLabel, isNull);
-        expect(trip.toJson(), stored);
-        await tester.pumpWidget(
-          MaterialApp(
-            home: Scaffold(
-              body: SingleChildScrollView(child: SuicaTripList(trips: [trip])),
-            ),
-          ),
-        );
-        expect(find.text(expectedAmount), findsOneWidget);
-        expect(find.text('行程后余额 JP￥900'), findsOneWidget);
-        expect(find.textContaining('余额差'), findsNothing);
-        expect(find.textContaining('商务座'), findsNothing);
-        expect(find.textContaining('普通座'), findsNothing);
-        expect(tester.takeException(), isNull);
-      }
-    },
-  );
 
   test('Suica railway date does not invent a midnight time', () {
     final tx = const SuicaRecordParser()
@@ -342,59 +270,6 @@ void main() {
     },
   );
 
-  testWidgets(
-    'all twenty mixed records appear as independently openable cards',
-    (tester) async {
-      final transactions = List.generate(
-        20,
-        (index) => index < 10
-            ? _rail(block: index)
-            : _record(
-                kind: index.isEven
-                    ? SuicaRecordKind.shopping
-                    : SuicaRecordKind.special,
-                process: index.isEven ? 0x46 : 2,
-                block: index,
-              ),
-      );
-      final trips = presentSuicaTrips(transactions);
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SingleChildScrollView(child: SuicaTripList(trips: trips)),
-          ),
-        ),
-      );
-      expect(
-        find.byType(TripEntryCard, skipOffstage: false),
-        findsNWidgets(20),
-      );
-      expect(find.text('00:00'), findsNothing);
-      expect(find.text('Suica · 20 条记录'), findsOneWidget);
-      final last = find.byType(TripEntryCard).last;
-      await tester.ensureVisible(last);
-      await tester.pumpAndSettle();
-      await tester.tap(last);
-      await tester.pumpAndSettle();
-      expect(find.byType(BottomSheet), findsOneWidget);
-      final detailScroll = find
-          .descendant(
-            of: find.byType(BottomSheet),
-            matching: find.byType(Scrollable),
-          )
-          .first;
-      for (final label in ['历史块号', '处理码', '交易后余额', '原始数据（HEX）']) {
-        await tester.scrollUntilVisible(
-          find.text(label),
-          100,
-          scrollable: detailScroll,
-        );
-        expect(find.text(label), findsOneWidget);
-      }
-      expect(tester.takeException(), isNull);
-    },
-  );
-
   test(
     'rail parsing resolves hex keys through trips and the read summary',
     () async {
@@ -437,69 +312,6 @@ void main() {
           contains('$start → $end'),
         );
       }
-    },
-  );
-
-  testWidgets(
-    'restored Japanese rail cards explain date precision at large text',
-    (tester) async {
-      tester.view.devicePixelRatio = 1;
-      tester.view.physicalSize = const Size(320, 740);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      addTearDown(tester.view.resetPhysicalSize);
-      final original = presentSuicaTrips([_rail()]).single;
-      final restored = SuicaTripPresentation.fromJson(original.toJson())!;
-      await tester.pumpWidget(
-        MaterialApp(
-          builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context)
-                .copyWith(textScaler: TextScaler.linear(2)),
-            child: child!,
-          ),
-          home: Scaffold(
-            body: SingleChildScrollView(
-              child: SuicaTripList(trips: [restored]),
-            ),
-          ),
-        ),
-      );
-      expect(find.text('日本轨道交通'), findsOneWidget);
-      expect(find.text('地区未知轨道交通'), findsNothing);
-      expect(find.text('仅记录日期'), findsNWidgets(2));
-      expect(find.text('本次读取的乘车履历仅含日期，不含进出站时刻。'), findsOneWidget);
-      expect(find.text('00:00'), findsNothing);
-      expect(tester.takeException(), isNull);
-    },
-  );
-
-  testWidgets(
-    'summary resolves station names and points to the full trip page',
-    (tester) async {
-      final stations = (await tester.runAsync(_stations))!;
-      final scan = FelicaScanResult(
-        cardType: 'suica',
-        displayName: 'Suica',
-        cardProductType: FelicaCardType.suica,
-        scannedAt: DateTime(2025, 10, 20),
-        wallets: const [_yenWallet],
-        transactions: List.generate(6, (index) => _rail(block: index)),
-      );
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SingleChildScrollView(
-              child: FelicaSummaryPanel(felica: scan, stations: stations),
-            ),
-          ),
-        ),
-      );
-      expect(find.textContaining('東京 → 新橋'), findsNWidgets(5));
-      expect(find.text('JP￥15,000'), findsOneWidget);
-      expect(find.textContaining('JP￥900（残高）'), findsNWidgets(5));
-      expect(find.textContaining('余额差 -JP￥100'), findsNWidgets(5));
-      expect(find.textContaining('JPY ¥'), findsNothing);
-      expect(find.textContaining('完整记录见行程页'), findsOneWidget);
-      expect(find.textContaining('00:00'), findsNothing);
     },
   );
 }

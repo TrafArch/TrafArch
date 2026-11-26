@@ -2,7 +2,7 @@ import 'dart:typed_data';
 
 import '../../protocols/transit/local/local_card_models.dart';
 import 'journey_presentation.dart';
-import 'trip_cards_view.dart';
+import 'trip_card_presentation.dart';
 import 'trip_entry_presenter.dart';
 import 'trip_filters.dart';
 

@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/features/archive/application/archive_controller.dart';
@@ -19,7 +18,6 @@ import 'package:transit_card_analyzer/features/scan/domain/scan_presentation.dar
 import 'package:transit_card_analyzer/features/transit_analysis/tunion_analysis_engine.dart';
 import 'package:transit_card_analyzer/features/transit_analysis/tunion_analysis_models.dart';
 import 'package:transit_card_analyzer/features/trips/journey_presentation.dart';
-import 'package:transit_card_analyzer/features/trips/trip_cards_view.dart';
 import 'package:transit_card_analyzer/features/trips/trip_entry_presenter.dart';
 import 'package:transit_card_analyzer/features/trips/trip_filters.dart';
 import 'package:transit_card_analyzer/features/trips/trip_journey_adapter.dart';
@@ -222,35 +220,6 @@ void main() {
       expect(persisted.processRecordCount, 2);
     },
   );
-
-  testWidgets('saved app00 ordinary card visibly uses its captured location', (
-    tester,
-  ) async {
-    final projection = presentArchiveTrips([
-      _history({
-        ..._savedCycle,
-        'capturedDisplay': {'line': '4号线', 'station': '角门西'},
-      }),
-    ], onDiagnostics: (_) {});
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SingleChildScrollView(
-            child: TripCardsView(
-              entries: projection.entries,
-              sourceLabels: archiveTripSourceLabels,
-              summaryText: projection.summaryText,
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('单次消费 · 角门西'), findsOneWidget);
-    expect(find.text('4号线'), findsOneWidget);
-    expect(find.textContaining('退资'), findsNothing);
-    expect(tester.takeException(), isNull);
-  });
 
   test('legacy app00 archive stays unchanged without captured location', () {
     final fields = Map<String, dynamic>.from(_savedCycle);

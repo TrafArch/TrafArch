@@ -4,7 +4,7 @@ import '../../../protocols/transit/tunion/tunion_process_parser.dart';
 import '../../reference_data/domain/tunion_terminal_decoder.dart';
 import '../../transit_analysis/balance_interpretation.dart';
 import '../../trips/journey_presentation.dart';
-import '../../trips/trip_cards_view.dart';
+import '../../trips/trip_card_presentation.dart';
 import '../application/archive_history.dart';
 import '../domain/captured_transaction_balance.dart';
 import '../domain/card_session_snapshot.dart';

@@ -9,7 +9,7 @@ import '../../transit_analysis/shanghai_balance_display.dart';
 import '../../transit_analysis/tunion_analysis_models.dart'
     show kWalletAnchoredBalanceParseVersion;
 import '../../trips/journey_presentation.dart';
-import '../../trips/trip_cards_view.dart';
+import '../../trips/trip_card_presentation.dart';
 import '../../trips/trip_entry_presenter.dart';
 import '../../trips/trip_filters.dart';
 import '../application/archive_history.dart';

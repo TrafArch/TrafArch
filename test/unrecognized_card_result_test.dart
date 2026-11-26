@@ -1,8 +1,6 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/app/app_dependencies.dart';
 import 'package:transit_card_analyzer/features/home/presentation/result_labels.dart';
-import 'package:transit_card_analyzer/features/home/recent_scan_section.dart';
 import 'package:transit_card_analyzer/features/scan/domain/card_read_outcome.dart';
 import 'package:transit_card_analyzer/platform/nfc/nfc_models.dart';
 import 'package:transit_card_analyzer/platform/nfc/nfc_service.dart';
@@ -31,18 +29,14 @@ void main() {
   });
 
   for (final scenario in ['metadata', 'unsupported', 'transit-io']) {
-    testWidgets('homepage $scenario result shows an unrecognized card', (
-      tester,
-    ) async {
+    test('$scenario does not publish or save a parsed card', () async {
       final channel = _UnknownChannel(
         isoDepConnected: scenario != 'metadata',
         failOnExchange: scenario == 'transit-io',
       );
       final app = _createApp(channel);
-      await tester.runAsync(() async {
-        await app.init();
-        await app.scanOnce();
-      });
+      await app.init();
+      await app.scanOnceForGallery();
       expect(app.parsedCard, isNull);
       expect(app.pendingCardSave, isNull);
       if (scenario == 'transit-io') {
@@ -53,14 +47,6 @@ void main() {
         expect(app.error, isNull);
         if (scenario == 'metadata') expect(channel.commands, isEmpty);
       }
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(body: RecentScanSection(app: app)),
-        ),
-      );
-      expect(find.text(_unknownLabel), findsOneWidget);
-      await tester.pumpWidget(const SizedBox.shrink());
     });
   }
 

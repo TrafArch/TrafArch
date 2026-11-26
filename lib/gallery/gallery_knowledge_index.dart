@@ -110,7 +110,7 @@ class GalleryKnowledgeCityView {
         listed: city.lines.length,
       ),
       codeCount: city.codeCount,
-      lines: List.unmodifiable(lines),
+      lines: _orderedCityLines(lines),
       // 发布包可能只有线路行（如 CU 的 routes 表）而没有站点行；此时站点数
       // 不可得，不能当成 0。
       hasStationData: lines.any((line) => line.stations.isNotEmpty),
@@ -155,10 +155,41 @@ class GalleryKnowledgeCityView {
       province: '${region['province'] ?? ''}',
       lineCount: knowledgeLineCountOfRegion(region),
       codeCount: region['entries'] as int?,
-      lines: List.unmodifiable(built),
+      lines: _orderedCityLines(built),
       hasStationData: hasStationData,
     );
   }
+}
+
+// 只识别显示名里的单个地铁号线。公交纯数字名、S1 线、1/2 号线和
+// 松江有轨电车 1 号线等不参与排序。规范化仅用于比较，不改变原名。
+final _metroLineNumber = RegExp(
+  r'^(?:地[铁鐵]\s*)?([0-9]+)\s*[号號]\s*[线線]'
+  r'(?:\s*(?:[东西南北東]?支[线線]|\([^()]+\)))?$',
+);
+
+List<GalleryKnowledgeLineView> _orderedCityLines(
+  List<GalleryKnowledgeLineView> lines,
+) {
+  final slots = <int>[];
+  final numbered =
+      <({int number, int original, GalleryKnowledgeLineView line})>[];
+  for (final (index, line) in lines.indexed) {
+    final label = _metroLineNumber.firstMatch(_normalize(line.name))?.group(1);
+    final number = label == null ? null : int.tryParse(label);
+    if (number == null) continue;
+    slots.add(index);
+    numbered.add((number: number, original: index, line: line));
+  }
+  numbered.sort((a, b) {
+    final byNumber = a.number.compareTo(b.number);
+    return byNumber != 0 ? byNumber : a.original.compareTo(b.original);
+  });
+  // 只在原有号线的槽位内重排；公交和具名线路不移动，同号线路按源顺序。
+  for (final (index, entry) in numbered.indexed) {
+    lines[slots[index]] = entry.line;
+  }
+  return List.unmodifiable(lines);
 }
 
 /// 线路数的唯一口径：发布包／设计快照声明的值优先，只有缺失时才退回当前

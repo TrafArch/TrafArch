@@ -5,17 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/app/app_dependencies.dart';
-import 'package:transit_card_analyzer/app/navigation/app_shell.dart';
-import 'package:transit_card_analyzer/app/navigation/recovery_route_observer.dart';
-import 'package:transit_card_analyzer/features/settings/presentation/settings_page.dart';
+import 'package:transit_card_analyzer/app/trafarch_app.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_archive_identity.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_session_snapshot.dart';
 import 'package:transit_card_analyzer/features/archive/domain/pending_card_save.dart';
-import 'package:transit_card_analyzer/features/expert/expert_page.dart';
-import 'package:transit_card_analyzer/features/home/home_page.dart';
 import 'package:transit_card_analyzer/features/recovery/recovery_state.dart';
-import 'package:transit_card_analyzer/features/recovery/recovery_result_panel.dart';
-import 'package:transit_card_analyzer/features/trips/trips_page.dart';
 import 'package:transit_card_analyzer/platform/memory/memory_platform.dart';
 import 'package:transit_card_analyzer/platform/nfc/nfc_models.dart';
 import 'package:transit_card_analyzer/platform/nfc/nfc_service.dart';
@@ -40,7 +34,9 @@ void main() {
       settingsStore: settings ?? MemorySettingsStore(),
       logger: AppLogger(store: MemoryLogStore()),
     );
-    addTearDown(app.dispose);
+    addTearDown(() {
+      if (!app.disposed) app.dispose();
+    });
     return app;
   }
 
@@ -288,36 +284,18 @@ void main() {
     final nfc = _Nfc();
     final app = appFor(memory, nfc: nfc);
     await tester.runAsync(app.init);
-    final observer = RecoveryRouteObserver(app);
     await tester.pumpWidget(
-      MaterialApp(
-        navigatorObservers: [observer],
-        home: AppShell(app: app, routeObserver: observer),
+      TransitCardAnalyzerApp(
+        createDependencies: () => app,
+        enableUpdateChecks: false,
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.byType(SettingsPage), findsOneWidget);
+    expect(find.text('读卡与数据'), findsOneWidget);
     expect(app.recoveryRoute, '/settings');
     expect(nfc.scans, 0);
     await tester.pumpWidget(const SizedBox());
   });
-
-  testWidgets(
-    'restart restores selected tab, frozen result and confirmation buttons without starting NFC',
-    (tester) async {
-      final memory = _Memory()..text = _state().encode();
-      final nfc = _Nfc();
-      final app = appFor(memory, nfc: nfc);
-      await tester.runAsync(app.init);
-      await tester.pumpWidget(MaterialApp(home: AppShell(app: app)));
-      await tester.pumpAndSettle();
-      expect(find.text('上次读取结果').hitTestable(), findsOneWidget);
-      expect(find.text('保存这次读取').hitTestable(), findsOneWidget);
-      expect(app.recoveryTab, 1);
-      expect(nfc.scans, 0);
-      await tester.pumpWidget(const SizedBox());
-    },
-  );
 
   test('Android bridge rejects stale and malformed notices before business handling', () async {
     final bridge = AndroidMemoryPlatform();
@@ -354,20 +332,17 @@ void main() {
     expect(calls, 1);
   });
 
-  testWidgets(
+  test(
     'recovered pending save is explicit even with auto-save enabled',
-    (tester) async {
+    () async {
       final memory = _Memory()..text = _state().encode();
-      final app = appFor(memory);
-      await tester.runAsync(app.init);
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(body: RecoveryResultPanel(app: app)),
-        ),
+      final app = appFor(
+        memory,
+        settings: MemorySettingsStore({SettingsKeys.autoSaveEnabled: 'true'}),
       );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('不保存'));
-      await tester.pumpWidget(const SizedBox());
+      await app.init();
+      expect(app.recoveredCapture!.canSave, isTrue);
+      app.declineRecoveredCapture();
       expect(app.recoveredCapture!.canSave, isFalse);
       expect(
         await app.cardRepository.db
@@ -380,7 +355,7 @@ void main() {
 
   for (final (heading, fields) in const [
     (
-      '逐应用探测 · 捕获时快照',
+      '逐应用探测',
       {
         'applications': [
           {
@@ -412,28 +387,31 @@ void main() {
         summary: {'cardName': '恢复的交通卡', ...fields},
         frames: const [],
       );
-      for (final page in [
-        HomePage(app: app, active: false),
-        TripsPage(app: app),
-        ExpertPage(app: app),
-      ]) {
-        await tester.pumpWidget(MaterialApp(home: Scaffold(body: page)));
-        expect(find.text('恢复的交通卡'), findsOneWidget);
+      await tester.pumpWidget(GalleryApp(liveApp: app));
+      await tester.pumpAndSettle();
+      for (final page in ['home', 'trips', 'expert']) {
+        await tester.tap(find.byKey(ValueKey('nav-$page')));
+        await tester.pumpAndSettle();
+        expect(find.text('恢复的交通卡'), findsWidgets);
         expect(
           find.text(heading),
-          page is ExpertPage ? findsOneWidget : findsNothing,
+          page == 'expert' ? findsOneWidget : findsNothing,
         );
         expect(find.text('查看上次读取的原始数据'), findsNothing);
         expect(find.text('读取时的完整字段'), findsNothing);
-        if (page is ExpertPage && heading.startsWith('FeliCa')) {
-          expect(find.textContaining('IDm 0808080808080808'), findsOneWidget);
+        if (page == 'expert' && heading.startsWith('FeliCa')) {
+          expect(find.text('0808080808080808'), findsNothing);
+          await tester.ensureVisible(find.text(heading));
+          await tester.pumpAndSettle();
           await tester.tap(find.text(heading));
           await tester.pumpAndSettle();
+          expect(find.text('0808080808080808'), findsOneWidget);
           expect(find.text('上次读取的原始数据'), findsNothing);
           expect(find.text(heading), findsOneWidget);
         }
       }
       await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
     });
   }
 
@@ -467,17 +445,15 @@ void main() {
     final app = appFor(memory);
     await tester.runAsync(app.init);
     expect(app.recoveredCapture?.toJson(), capture.toJson());
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(body: RecoveryResultPanel(app: app)),
-      ),
-    );
-    expect(find.text(label), findsNothing);
+    await tester.pumpWidget(GalleryApp(liveApp: app));
+    await tester.pumpAndSettle();
+    expect(find.text(label), findsWidgets);
     expect(find.text(number), findsNothing);
     expect(find.text('读取时的完整字段'), findsNothing);
 
     expect(find.text('查看上次读取的原始数据'), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
   });
 }
 

@@ -3,13 +3,13 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/app/app_dependencies.dart';
-import 'package:transit_card_analyzer/features/archive/presentation/card_detail_page.dart';
-import 'package:transit_card_analyzer/features/cards/cards_page.dart';
+import 'package:transit_card_analyzer/gallery/gallery_app.dart';
 import 'package:transit_card_analyzer/platform/storage/app_logger.dart';
 import 'package:transit_card_analyzer/platform/storage/archive_document_store.dart';
 import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
 
 import 'support/test_database.dart';
+import 'support/gallery_scroll.dart';
 
 void main() {
   AppDependencies appFor(_Documents documents) {
@@ -27,75 +27,61 @@ void main() {
   }
 
   Future<void> mount(WidgetTester tester, AppDependencies app) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(body: CardsPage(app: app)),
-      ),
-    );
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(412, 892);
+    addTearDown(tester.view.reset);
+    await tester.runAsync(app.init);
+    await tester.pumpWidget(GalleryApp(liveApp: app));
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => app.cardRepository.getAllCards());
     await tester.pumpAndSettle();
   }
-
-  testWidgets('空卡片列表导入预览确认后出现卡片，详情显示所选字段', (tester) async {
-    final documents = _Documents()..next = _file();
-    final app = appFor(documents);
-    await mount(tester, app);
-    expect(find.text('还没有保存的卡片'), findsOneWidget);
-    await tester.tap(find.byTooltip('导入卡片 JSON'));
-    await tester.pumpAndSettle();
-    expect(find.byType(AlertDialog), findsOneWidget);
-    expect(find.text('通勤记录.json'), findsOneWidget);
-    expect(await app.cardRepository.getAllCards(), isEmpty);
-    await tester.tap(find.widgetWithText(FilledButton, '导入'));
-    await tester.pumpAndSettle();
-    expect(find.text('示例通勤卡'), findsOneWidget);
-    expect(find.text('0000123'), findsOneWidget);
-    expect(find.text('还没有保存的卡片'), findsNothing);
-    await tester.tap(find.text('示例通勤卡'));
-    await tester.pumpAndSettle();
-    expect(find.byType(CardDetailPage), findsOneWidget);
-    expect(find.text('导入记录 · 1 条'), findsOneWidget);
-    await tester.ensureVisible(find.byType(ExpansionTile));
-    await tester.tap(find.byType(ExpansionTile));
-    await tester.pumpAndSettle();
-    expect(find.text('001号站'), findsWidgets);
-    expect(find.text('0000123'), findsWidgets);
-    expect(find.text('来自 JSON 文件，仅显示文件提供的字段。'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
 
   testWidgets('文件选择取消与预览取消都不写入卡片', (tester) async {
     final documents = _Documents();
     final app = appFor(documents);
     await mount(tester, app);
-    await tester.tap(find.byTooltip('导入卡片 JSON'));
+    await tester.tap(find.byTooltip('设置'));
+    await tester.pumpAndSettle();
+    final import = find.text('导入卡片记录');
+    await tester.scrollUntilVisible(
+      import,
+      150,
+      scrollable: galleryVerticalScroll(),
+    );
+    await tester.tap(import);
     await tester.pumpAndSettle();
     expect(find.byType(AlertDialog), findsNothing);
     expect(find.textContaining('导入失败'), findsNothing);
     documents.next = _file();
-    await tester.tap(find.byTooltip('导入卡片 JSON'));
+    await tester.tap(import);
     await tester.pumpAndSettle();
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
-    expect(await app.cardRepository.getAllCards(), isEmpty);
+    expect(await tester.runAsync(app.cardRepository.getAllCards), isEmpty);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('nav-cards')));
+    await tester.pumpAndSettle();
     expect(find.text('还没有保存的卡片'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
   });
 
   testWidgets('单卡菜单导出限制卡片范围并遵守字段选择', (tester) async {
     final documents = _Documents()..next = _file(twoCards: true);
     final app = appFor(documents);
-    await app.archiveTransfer.confirmImport(
-      (await app.archiveTransfer.pickImport())!,
+    await tester.runAsync(
+      () async => app.archiveTransfer.confirmImport(
+        (await app.archiveTransfer.pickImport())!,
+      ),
     );
     await mount(tester, app);
-    final tile = find.ancestor(
-      of: find.text('示例通勤卡'),
-      matching: find.byType(Card),
-    );
-    await tester.tap(
-      find.descendant(of: tile, matching: find.byTooltip('卡片操作')),
-    );
+    await tester.tap(find.byKey(const ValueKey('nav-cards')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('导出此卡 JSON'));
+    await tester.tap(find.text('示例通勤卡'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('导出本卡记录'));
     await tester.pumpAndSettle();
     expect(find.text('导出：示例通勤卡'), findsOneWidget);
     await tester.tap(find.text('清空选择'));
@@ -127,6 +113,8 @@ void main() {
     ]);
     expect(documents.saved, isNot(contains('0000123')));
     expect(documents.saved, isNot(contains('第二张卡')));
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
   });
 }
 

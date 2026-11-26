@@ -3,10 +3,8 @@ import 'dart:io';
 
 import 'package:drift/drift.dart' show DatabaseConnection;
 import 'package:drift/native.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/app/app_dependencies.dart';
 import 'package:transit_card_analyzer/features/archive/application/archive_controller.dart';
 import 'package:transit_card_analyzer/features/archive/application/archive_history.dart';
 import 'package:transit_card_analyzer/features/archive/data/app_database.dart';
@@ -19,18 +17,12 @@ import 'package:transit_card_analyzer/features/scan/domain/card_read_outcome.dar
 import 'package:transit_card_analyzer/features/scan/domain/scan_presentation.dart';
 import 'package:transit_card_analyzer/features/transit_analysis/tunion_analysis_models.dart';
 import 'package:transit_card_analyzer/features/trips/journey_presentation.dart';
-import 'package:transit_card_analyzer/features/trips/trip_cards_view.dart';
-import 'package:transit_card_analyzer/features/trips/trip_entry_card.dart';
 import 'package:transit_card_analyzer/features/trips/trip_entry_presenter.dart';
 import 'package:transit_card_analyzer/features/trips/trip_filters.dart';
 import 'package:transit_card_analyzer/features/trips/trip_journey_adapter.dart';
 import 'package:transit_card_analyzer/features/trips/trip_journey_evidence.dart';
 import 'package:transit_card_analyzer/features/trips/trip_presentation_context.dart';
-import 'package:transit_card_analyzer/features/trips/trips_page.dart';
-import 'package:transit_card_analyzer/platform/nfc/nfc_models.dart';
-import 'package:transit_card_analyzer/platform/nfc/nfc_service.dart';
 import 'package:transit_card_analyzer/platform/storage/log_exporter.dart';
-import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
 import 'package:transit_card_analyzer/protocols/transit/local/apdu_exchange.dart';
 import 'package:transit_card_analyzer/protocols/transit/local/local_card_models.dart';
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_reader.dart';
@@ -184,76 +176,6 @@ void main() {
     }
   });
 
-  testWidgets('苏州日志经完整扫描入口按时间混排3条公交与1条充值', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 2000));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    final database = _memoryDatabase();
-    addTearDown(database.close);
-    final channel = _LogNfcChannel(_responses());
-    final app = AppDependencies(
-      channel: channel,
-      bundle: rootBundle,
-      settingsStore: MemorySettingsStore(),
-      database: database,
-    );
-    addTearDown(app.dispose);
-    await tester.runAsync(() async {
-      await app.init();
-      await app.scanOnce();
-    });
-    expect(app.scan.error, isNull);
-    expect(app.scan.outcome, isA<TransitReadOutcome>());
-    expect(app.parsedCard!.info.balanceFen, 640);
-    expect(
-      app.analysis!.trips.take(3).map((trip) => trip.resolvedBusLineLabel),
-      ['301', '204', '8'],
-    );
-    expect(app.cycleProcessTrips.map((trip) => trip.rawHex), _cycles);
-    expect(app.railTransitRecord, isNull);
-    expect(app.busTransitRecord, isNull);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(body: TripsPage(app: app)),
-      ),
-    );
-    await tester.pumpAndSettle();
-    _expectBusCards(tester);
-    expect(find.text('记录 4 条'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pumpAndSettle();
-  });
-
-  testWidgets('苏州恢复历史投影按时间混排3条公交与1条充值', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(800, 2000));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    final saved = (await tester.runAsync(() => _saveAndRestore(view)))!;
-    final projection = presentArchiveTrips(
-      saved.restoredHistory.records,
-      batches: saved.restoredHistory.batches,
-      onDiagnostics: (_) {},
-    );
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SingleChildScrollView(
-            child: TripCardsView(
-              entries: projection.entries,
-              projectedJourneys: projection.journeys,
-              sourceLabels: archiveTripSourceLabels,
-              summaryText: projection.summaryText,
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    _expectBusCards(tester);
-    expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pumpAndSettle();
-  });
-
   test('缺少过程信息时不能因苏州发卡地或1.20元金额猜测公交线路', () async {
     final basicOnly = await _read(reference, cycleBodies: const []);
     expect(basicOnly.cycleProcessTrips, isEmpty);
@@ -292,29 +214,6 @@ void _expectBusJourneys<T>(Iterable<JourneyPresentation<T>> journeys) {
     journeys.where((journey) => journey.mode == TripModeFilter.other),
     hasLength(1),
   );
-}
-
-void _expectBusCards(WidgetTester tester) {
-  expect(find.text('历史行程 4'), findsOneWidget);
-  expect(find.textContaining('其他记录'), findsNothing);
-  expect(find.text('充值'), findsOneWidget);
-  final cards = tester.widgetList<TripEntryCard>(find.byType(TripEntryCard));
-  expect(cards.map((card) => _compact(card.info.rawHex)), _transactions);
-  expect(find.byType(TripEntryCard), findsNWidgets(4));
-  for (final line in ['301路', '204路', '8路']) {
-    expect(find.text(line), findsOneWidget);
-  }
-  final bus = find
-      .byType(TripEntryCard)
-      .evaluate()
-      .map((element) => element.widget as TripEntryCard)
-      .where((card) => card.journey?.mode == TripModeFilter.bus);
-  expect(bus, hasLength(3));
-  expect(bus.map((card) => _compact(card.journey!.balanceAfterText)), [
-    '¥6.40',
-    '¥7.60',
-    '¥8.80',
-  ]);
 }
 
 List<JourneyPresentation<TripEntryInfo>> _journeys(
@@ -416,26 +315,6 @@ List<int> _response(Map<String, List<int>> responses, List<int> command) =>
     (command.length > 1 && command[1] == 0xA4
         ? const [0x6A, 0x82]
         : const [0x6A, 0x83]);
-
-class _LogNfcChannel implements NfcChannel {
-  _LogNfcChannel(this.responses);
-  final Map<String, List<int>> responses;
-
-  @override
-  Future<NfcScanResult?> scanOnce() async => NfcScanResult(
-    uid: '01020304',
-    technologies: const ['IsoDep'],
-    isoDepConnected: true,
-    timestamp: DateTime(2026, 10, 31, 21, 29, 58),
-  );
-
-  @override
-  Future<void> stopScan() async {}
-
-  @override
-  Future<List<int>> transceive(List<int> apdu) async =>
-      _response(responses, apdu);
-}
 
 AppDatabase _memoryDatabase() => AppDatabase(
   DatabaseConnection(NativeDatabase.memory(), closeStreamsSynchronously: true),

@@ -195,7 +195,7 @@ class SettingsController extends OwnedNotifier {
           errorChanged = true;
         }
       }
-      // Avoid rebuilding the whole SettingsPage a second time when the
+      // Avoid rebuilding the settings view a second time when the
       // optimistic value was already rendered; notify only for an error change.
       if (!disposed && errorChanged) notifyListeners();
     });

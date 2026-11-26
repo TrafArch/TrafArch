@@ -116,8 +116,8 @@ class _FaceImageScrim extends StatelessWidget {
   }
 }
 
-/// Claims pointers as soon as they land inside a crop canvas so the page's
-/// vertical scroll never steals an image drag (spec 2.4 §7.3).
+/// Claims pointers as soon as they land inside a crop canvas so other
+/// gestures on the sheet do not steal an image drag (spec 2.4 §7.3).
 class _CropScaleRecognizer extends ScaleGestureRecognizer {
   @override
   void addPointer(PointerDownEvent event) {
@@ -205,43 +205,62 @@ class _FaceCropRegionState extends State<_FaceCropRegion> {
   Widget build(BuildContext context) {
     final t = Theme.of(context).extension<GalleryTokens>()!;
     return Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          widget.title,
-          style: GalleryTypography.label.copyWith(
-            color: t.text,
-            fontWeight: FontWeight.w600,
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                widget.title,
+                style: GalleryTypography.label.copyWith(
+                  color: t.text,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () => widget.onChanged(const GalleryFaceCrop()),
+              child: const Text('恢复默认'),
+            ),
+          ],
         ),
-        const SizedBox(height: 10),
-        AnimatedContainer(
-          duration: _GalleryMotion.highlight,
-          curve: _GalleryMotion.decelerate,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(widget.radius),
-            border: _active ? Border.all(color: t.onTone, width: 2) : null,
-          ),
-          child: RawGestureDetector(
-            gestures: {
-              _CropScaleRecognizer:
-                  GestureRecognizerFactoryWithHandlers<_CropScaleRecognizer>(
-                    () => _CropScaleRecognizer(),
-                    (recognizer) => recognizer
-                      ..onStart = _onStart
-                      ..onUpdate = _onUpdate
-                      ..onEnd = _onEnd,
+        Flexible(
+          child: LayoutBuilder(
+            builder: (context, constraints) => FittedBox(
+              fit: BoxFit.scaleDown,
+              // Keep the surface's natural aspect ratio, including when
+              // the window is short. The recognizer still uses local units.
+              child: SizedBox(
+                width: constraints.maxWidth,
+                child: AnimatedContainer(
+                  duration: _GalleryMotion.highlight,
+                  curve: _GalleryMotion.decelerate,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(widget.radius),
+                    border: _active
+                        ? Border.all(color: t.onTone, width: 2)
+                        : null,
                   ),
-            },
-            child: KeyedSubtree(key: _surfaceKey, child: widget.child),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Align(
-          alignment: AlignmentDirectional.centerEnd,
-          child: TextButton(
-            onPressed: () => widget.onChanged(const GalleryFaceCrop()),
-            child: const Text('恢复默认'),
+                  child: RawGestureDetector(
+                    key: const ValueKey('face-crop-canvas'),
+                    gestures: {
+                      _CropScaleRecognizer:
+                          GestureRecognizerFactoryWithHandlers<
+                            _CropScaleRecognizer
+                          >(
+                            () => _CropScaleRecognizer(),
+                            (recognizer) => recognizer
+                              ..onStart = _onStart
+                              ..onUpdate = _onUpdate
+                              ..onEnd = _onEnd,
+                          ),
+                    },
+                    child: KeyedSubtree(key: _surfaceKey, child: widget.child),
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       ],
@@ -333,7 +352,8 @@ extension _GalleryFaceCropper on _GalleryViewState {
                   maxHeight: math.max(
                     0.0,
                     cropping
-                        ? available - gap
+                        // The inner SafeArea already reserves the bottom inset.
+                        ? constraints.maxHeight - gap
                         : math.min(available * .9, available - gap),
                   ),
                 ),
@@ -377,14 +397,14 @@ extension _GalleryFaceCropper on _GalleryViewState {
                               top: false,
                               left: false,
                               right: false,
-                              child: AnimatedSize(
-                                duration: _reduceMotion
-                                    ? Duration.zero
-                                    : _GalleryMotion.sheet,
-                                curve: _GalleryMotion.curve,
-                                alignment: Alignment.topCenter,
-                                child: content,
-                              ),
+                              child: _reduceMotion
+                                  ? content
+                                  : AnimatedSize(
+                                      duration: _GalleryMotion.sheet,
+                                      curve: _GalleryMotion.curve,
+                                      alignment: Alignment.topCenter,
+                                      child: content,
+                                    ),
                             ),
                           ),
                         ),
@@ -414,9 +434,11 @@ extension _GalleryFaceCropper on _GalleryViewState {
     );
     final balance = _balancePresentation(preview);
     return Column(
+      key: ObjectKey(session),
+      mainAxisSize: MainAxisSize.min,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(4, 6, 8, 0),
+          padding: const EdgeInsets.fromLTRB(4, 2, 8, 0),
           child: Row(
             children: [
               IconButton(
@@ -432,43 +454,42 @@ extension _GalleryFaceCropper on _GalleryViewState {
                 ),
               ),
               TextButton(
-                onPressed: () => _confirmResetAllCrops(),
+                onPressed: _confirmResetAllCrops,
                 child: const Text('重置全部'),
               ),
             ],
           ),
         ),
         Divider(height: 1, color: t.line),
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(22, 14, 22, 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                LayoutBuilder(
-                  builder: (context, box) {
-                    final layout = _DetailCardLayout(
-                      context,
-                      preview,
-                      balance,
-                      box.maxWidth,
-                    );
-                    return _FaceCropRegion(
-                      key: const ValueKey('face-crop-region-detail'),
-                      title: '卡片详情页',
-                      crop: session.detail,
-                      source: session.sourceSize,
-                      onChanged: (crop) => c.updateFaceCrop(detail: crop),
-                      child: _GalleryDetailFace(
-                        card: preview,
-                        balance: balance,
-                        layout: layout,
-                      ),
-                    );
-                  },
-                ),
-                _gap(14),
-                _FaceCropRegion(
+        Flexible(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: LayoutBuilder(
+              builder: (context, box) {
+                final wideAndShort = box.maxWidth >= 448 && box.maxHeight < 280;
+                final gap = box.maxHeight < 360 ? 4.0 : 10.0;
+                final previewWidth = wideAndShort
+                    ? (box.maxWidth - gap) / 2
+                    : box.maxWidth;
+                final layout = _DetailCardLayout(
+                  context,
+                  preview,
+                  balance,
+                  previewWidth,
+                );
+                final detail = _FaceCropRegion(
+                  key: const ValueKey('face-crop-region-detail'),
+                  title: '卡片详情页',
+                  crop: session.detail,
+                  source: session.sourceSize,
+                  onChanged: (crop) => c.updateFaceCrop(detail: crop),
+                  child: _GalleryDetailFace(
+                    card: preview,
+                    balance: balance,
+                    layout: layout,
+                  ),
+                );
+                final list = _FaceCropRegion(
                   key: const ValueKey('face-crop-region-list'),
                   title: '卡包列表页',
                   crop: session.list,
@@ -476,19 +497,59 @@ extension _GalleryFaceCropper on _GalleryViewState {
                   radius: 24,
                   onChanged: (crop) => c.updateFaceCrop(list: crop),
                   child: _walletCardSurface(preview, id: 'crop-list'),
-                ),
-              ],
+                );
+                if (wideAndShort) {
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: detail),
+                      SizedBox(width: gap),
+                      Expanded(child: list),
+                    ],
+                  );
+                }
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Flexible(flex: 3, child: detail),
+                    SizedBox(height: gap),
+                    Flexible(flex: 2, child: list),
+                  ],
+                );
+              },
             ),
           ),
         ),
-        SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(22, 8, 22, 12),
-            child: SizedBox(
-              width: double.infinity,
-              child: _button('完成', c.exitFaceCrop, primary: true),
-            ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_faceImageError case final error?) ...[
+                Semantics(
+                  liveRegion: true,
+                  child: _text(
+                    error,
+                    role: GalleryTypography.caption,
+                    color: t.danger,
+                  ),
+                ),
+                _gap(8),
+              ],
+              Row(
+                children: [
+                  Expanded(
+                    child: _button(
+                      _pickingFaceImage ? '正在打开相册…' : '换一张',
+                      _pickingFaceImage ? null : _pickFaceImage,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(child: _button('完成', c.exitFaceCrop, primary: true)),
+                ],
+              ),
+            ],
           ),
         ),
       ],

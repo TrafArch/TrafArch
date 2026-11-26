@@ -1,17 +1,11 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/features/expert/city_union_panel.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/tunion_knowledge_base.dart';
 import 'package:transit_card_analyzer/features/scan/domain/card_read_outcome.dart';
 import 'package:transit_card_analyzer/features/scan/domain/scan_presentation.dart';
-import 'package:transit_card_analyzer/features/transit_analysis/cu_transaction_analysis.dart';
-import 'package:transit_card_analyzer/features/trips/cu_transaction_list.dart';
-import 'package:transit_card_analyzer/features/trips/trip_entry_card.dart';
 import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/city_union/city_union_file_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/city_union/city_union_models.dart';
 import 'package:transit_card_analyzer/protocols/transit/city_union/city_union_reader.dart';
-import 'package:transit_card_analyzer/protocols/transit/city_union/cj_t331_wallet_local_consumption_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/local/apdu_exchange.dart';
 import 'package:transit_card_analyzer/protocols/transit/local/local_card_models.dart';
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_models.dart';
@@ -170,81 +164,6 @@ void main() {
       expect(records.map((row) => row.fileSelector), [0x1A]);
     },
   );
-  testWidgets(
-    'expert groups wallet credits under recharge with their actual files',
-    (tester) async {
-      final files = [
-        for (final (sfi, slot) in [(0x18, 9), (0x06, 3)])
-          CityUnionFileParser.parseWalletRecord(
-            sfi,
-            _record('001122334455', type: 2),
-            kind: CityUnionTransactionKind.recharge,
-            recordNumber: slot,
-          ),
-      ];
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SingleChildScrollView(
-              child: CityUnionPanel(
-                files: files,
-                resolveStationName: (
-                  _, {
-                  cityCode,
-                  decodedCarrierType,
-                  transactionTime,
-                  busLookupEnabled = false,
-                }) => null,
-              ),
-            ),
-          ),
-        ),
-      );
-      await tester.tap(find.text('电子钱包本地消费交易明细（0x18）'));
-      await tester.pumpAndSettle();
-      expect(find.text('未读取到本地消费交易明细（文件不存在或记录未写入）'), findsOneWidget);
-      await tester.tap(find.text('电子钱包充值交易明细'));
-      await tester.pumpAndSettle();
-      expect(find.text('0x18 · 记录 9'), findsOneWidget);
-      expect(find.text('0x06 · 记录 3'), findsOneWidget);
-    },
-  );
-
-  testWidgets(
-    'CU terminal lookup preserves raw HEX even when standard BCD field is invalid',
-    (tester) async {
-      String? receivedTerminal;
-      final record = CjT331WalletLocalConsumptionParser.parseRecord(
-        _record('2000110A0100'),
-      );
-      expect(record.terminalNumber, isNull);
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SingleChildScrollView(
-              child: CityUnionPanel(
-                files: [record],
-                resolveStationName:
-                    (
-                      terminal, {
-                      cityCode,
-                      decodedCarrierType,
-                      transactionTime,
-                      busLookupEnabled = false,
-                    }) {
-                      receivedTerminal = terminal;
-                      return null;
-                    },
-              ),
-            ),
-          ),
-        ),
-      );
-      await tester.tap(find.text('电子钱包本地消费交易明细（0x18）'));
-      await tester.pumpAndSettle();
-      expect(receivedTerminal, '2000110A0100');
-    },
-  );
 
   test('CU scan projection retains source file, raw identifiers and unknown classifications', () {
     final files = [
@@ -290,40 +209,6 @@ void main() {
     expect(view.cityUnionTransactions[2].record.terminalHex, '000000000001');
     expect(view.cityUnionTransactions[2].kindLabel, '充值');
   });
-
-  testWidgets(
-    'CU transaction list displays partial records independently of TU analysis',
-    (tester) async {
-      final transaction = CityUnionFileParser.parseWalletRecord(
-        0x06,
-        _record('518020000001'),
-        kind: CityUnionTransactionKind.foreignConsumption,
-        recordNumber: 5,
-      );
-      final views = analyzeCuTransactions([transaction], KnowledgeBase.empty());
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SingleChildScrollView(
-              child: CuTransactionList(transactions: views),
-            ),
-          ),
-        ),
-      );
-      expect(find.text('城市一卡通 · 1 条记录'), findsOneWidget);
-      expect(find.text('地区 5180公共汽电车'), findsOneWidget);
-      final card = tester.widget<TripEntryCard>(find.byType(TripEntryCard));
-      expect(card.info.title, '异地消费 · 地点未匹配 · 序号 1');
-      expect(card.info.amountText, '-¥0.01');
-      expect(card.info.fields, contains(('终端原始编码', '518020000001')));
-      expect(card.info.fields, contains(('金额原始字段', '00000001')));
-      expect(card.info.fields, contains(('金额四字节原始值', '1')));
-      await tester.tap(find.byType(TripEntryCard));
-      await tester.pumpAndSettle();
-      expect(find.byType(DraggableScrollableSheet), findsOneWidget);
-      expect(find.textContaining('CU 0x06 #5'), findsOneWidget);
-    },
-  );
 }
 
 List<int> _record(String terminal, {int type = 6}) => [

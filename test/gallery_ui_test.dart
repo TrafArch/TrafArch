@@ -17,7 +17,7 @@ void main() {
     );
   });
 
-  testWidgets('navigation, saving and the fallback switch work by touch', (
+  testWidgets('navigation and saving work by touch without a fallback UI', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(412, 892);
@@ -26,10 +26,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     final c = GalleryController(data);
     addTearDown(c.dispose);
-    var disabled = false;
-    await tester.pumpWidget(
-      GalleryApp(controller: c, onDisableBeta: () => disabled = true),
-    );
+    await tester.pumpWidget(GalleryApp(controller: c));
     await tester.pumpAndSettle();
     await tester.tap(find.text('开始读取'));
     await tester.pump(const Duration(milliseconds: 1700));
@@ -59,22 +56,7 @@ void main() {
     await tester.pumpAndSettle();
     c.navigate(GalleryPage.settings);
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.text('使用 1.x 备用界面'),
-      400,
-      scrollable: find
-          .byWidgetPredicate(
-            (widget) =>
-                widget is Scrollable &&
-                widget.axisDirection == AxisDirection.down,
-          )
-          .last,
-    );
-    await tester.ensureVisible(find.text('使用 1.x 备用界面'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('使用 1.x 备用界面'));
-    await tester.pump();
-    expect(disabled, isTrue);
+    expect(find.textContaining('备用界面', skipOffstage: false), findsNothing);
   });
 
   testWidgets('source and mode use working dropdown menus', (tester) async {
