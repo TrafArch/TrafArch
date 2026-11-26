@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.nfc.NfcAdapter
 import com.kajolno.TrafArch.platform.OnceResult
 import io.flutter.plugin.common.BinaryMessenger
@@ -40,6 +41,16 @@ internal class NfcChannelHandler(private val activity: Activity, messenger: Bina
             val result = OnceResult(rawResult)
             when (call.method) {
                 "scanOnce", "stopScan", "transceiveFelica" -> handle(call, result, felicaOnly)
+                "getFelicaReaderSupport" -> if (felicaOnly) result.notImplemented() else {
+                    // Android CDD 7.4.4 requires NFC-F reader mode for advertised NFC.
+                    // NFC-F host card emulation is a separate capability.
+                    val supported = when {
+                        sessions.adapterEnabled() == null -> false
+                        activity.packageManager.hasSystemFeature(PackageManager.FEATURE_NFC) -> true
+                        else -> null
+                    }
+                    result.success(supported)
+                }
                 "transceive" -> if (felicaOnly) result.notImplemented() else handle(call, result, felicaOnly)
                 else -> result.notImplemented()
             }

@@ -748,7 +748,7 @@ extension _GalleryComponents on _GalleryViewState {
 
   Widget _face(GalleryCard card) {
     final foreground = _faceForeground(card);
-    final cardNumber = _formatFaceCardNumber(card.pan);
+    final cardNumber = _faceCardNumberText(card);
     final balance = _balancePresentation(card);
     final currencyLabel = _faceCurrencyLabel(balance.currencyLabel);
     final numberStyle = GalleryTypography.amount.copyWith(
@@ -1304,6 +1304,15 @@ class _GalleryTabbedListState extends State<_GalleryTabbedList> {
     );
   }
 }
+
+String _faceCardNumberText(GalleryCard card) =>
+    card.applicationNumbers.length < 2
+    ? _formatFaceCardNumber(
+        card.applicationNumbers.values.firstOrNull ?? card.pan,
+      )
+    : card.applicationNumbers.entries
+          .map((entry) => '${entry.key} ${_formatFaceCardNumber(entry.value)}')
+          .join('\n');
 
 String _formatFaceCardNumber(String value) {
   final text = value.trim();

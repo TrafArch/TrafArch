@@ -127,12 +127,16 @@ class _GalleryReadPrompt extends StatefulWidget {
     required this.failed,
     required this.compact,
     required this.nfcMessage,
+    required this.noNfc,
+    required this.felicaSupported,
     required this.failureMessage,
     this.progress,
   });
   final bool reading, failed;
   final bool compact;
   final String? nfcMessage;
+  final bool noNfc;
+  final bool? felicaSupported;
   final String? failureMessage;
 
   /// Reader percentage (0–100) of the attempt in flight. Null keeps the loop
@@ -221,11 +225,19 @@ class _GalleryReadPromptState extends State<_GalleryReadPrompt>
             : widget.failed
             ? '未能读到卡片'
             : '贴卡，了解你的每一次出行');
-    final subtitle = widget.reading
+    final subtitle = widget.noNfc
+        ? '此设备无法读取实体交通卡，仍可查看已有记录'
+        : widget.nfcMessage != null
+        ? '打开 NFC 后即可读取实体交通卡'
+        : widget.reading
         ? '正在读取余额与行程\n请保持贴卡，直到读取完成'
         : widget.failed
         ? widget.failureMessage ?? '调整卡片位置后再试一次'
-        : '支持交通联合、城市一卡通\n及部分 FeliCa 卡片';
+        : switch (widget.felicaSupported) {
+            true => '支持交通联合、城市一卡通\n及部分 FeliCa 卡片',
+            false => '支持交通联合、城市一卡通\n此设备不支持 FeliCa 识别',
+            null => '支持交通联合、城市一卡通\n无法确认此设备是否支持 FeliCa 识别',
+          };
     return Column(
       key: const ValueKey('home-read-prompt'),
       children: [
@@ -270,7 +282,9 @@ class _GalleryReadPromptState extends State<_GalleryReadPrompt>
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
-                                  widget.failed
+                                  widget.noNfc
+                                      ? Icons.portable_wifi_off_rounded
+                                      : widget.failed
                                       ? Icons.contactless_outlined
                                       : Icons.nfc_rounded,
                                   size: 40,

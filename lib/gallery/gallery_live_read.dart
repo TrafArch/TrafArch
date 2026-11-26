@@ -417,8 +417,9 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
           ? saved.card.id
           : (fingerprint == null ? 'live-current' : 'live:$fingerprint'),
       saved: sameSavedRead,
-      name: summary.name,
+      name: sameSavedRead ? saved.card.name : summary.name,
       cardNumber: summary.cardNumber,
+      applicationNumbers: _observedApplicationNumbers(app.applications),
       balance: summary.balance ?? '余额未知',
       currencyCode: summary.currencyCode,
       city: summary.city,
@@ -501,6 +502,7 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
           saved?.card.name ??
           '上次读取的交通卡',
       cardNumber: cardNumber,
+      applicationNumbers: _observedApplicationNumbers(evidence),
       balance:
           rawBalance ??
           (balanceFen == null
@@ -578,7 +580,7 @@ class _GalleryLiveRead extends ChangeNotifier implements GalleryLiveAdapter {
         pending.pendingSaveId,
         conflictPolicy: policy,
       );
-      if (ok && name.trim().isNotEmpty) {
+      if (ok && !exists && name.trim().isNotEmpty) {
         final cards = await app.cardRepository.getAllCards();
         final saved = cards
             .where((card) => card.cardFingerprint == pending.fingerprint)
@@ -926,11 +928,17 @@ class _LiveArchiveCard {
     final records = _galleryRecords(history, app.includeShanghaiOverdraft);
     final count = ArchiveRecordCount.fromHistory(history);
     final confirmedApplications = _archivedConfirmedApplications(history);
+    final applicationNumbers = _observedApplicationNumbers([
+      ..._snapshotApplications(history.latestCapture),
+      for (final batch in history.batches)
+        ..._snapshotApplications(batch.decoded),
+    ]);
     final card = _liveCard(
       id: saved.id,
       saved: true,
       name: saved.displayName,
       cardNumber: saved.cardNumber,
+      applicationNumbers: applicationNumbers,
       balance:
           archiveCardBalanceText(
             saved,
@@ -980,6 +988,7 @@ GalleryCard _liveCard({
   required bool saved,
   required String name,
   required String? cardNumber,
+  Map<String, String> applicationNumbers = const {},
   required String balance,
   required String? currencyCode,
   required String city,
@@ -995,6 +1004,7 @@ GalleryCard _liveCard({
   name: name,
   tail: _tail(cardNumber),
   pan: cardNumber ?? '未提供',
+  applicationNumbers: applicationNumbers,
   rawBalance: balance,
   city: city.isEmpty ? '未知' : city,
   type: type,
@@ -1045,6 +1055,36 @@ List<String> _regionalApplications(
         confirmedApplications.contains('shenzhen'))
       'shenzhen',
   ];
+}
+
+Iterable<ApplicationEvidence> _snapshotApplications(
+  SnapshotDecodeResult? capture,
+) sync* {
+  final raw = capture?.snapshot?.extensions['applicationEvidence'];
+  if (raw is! List) return;
+  for (final item in raw) {
+    if (ApplicationEvidence.tryParse(item) case final application?)
+      yield application;
+  }
+}
+
+Map<String, String> _observedApplicationNumbers(
+  Iterable<ApplicationEvidence> evidence,
+) {
+  final byApp = <String, ApplicationEvidence>{};
+  for (final app in evidence) {
+    final number = app.cardNumber?.trim();
+    if (number == null || number.isEmpty || number == '未知' || number == '未提供')
+      continue;
+    byApp.putIfAbsent(app.appId, () => app);
+  }
+  return Map.unmodifiable({
+    if (byApp['tu'] case final app?) 'TU': app.cardNumber!.trim(),
+    if (byApp['cu'] case final app?) 'CU': app.cardNumber!.trim(),
+    for (final app in byApp.values)
+      if (app.appId != 'tu' && app.appId != 'cu')
+        app.displayName: app.cardNumber!.trim(),
+  });
 }
 
 Set<String>? _archivedConfirmedApplications(ArchiveHistoryResult history) {
@@ -1568,7 +1608,11 @@ extension _GalleryLivePages on _GalleryViewState {
             ['解析器', parsed?.parserName ?? felica?.displayName ?? '未知'],
             ['选中 AID', parsed?.selectedAidHex ?? '未提供'],
             ['识别状态', identified?.identity.identificationSource ?? '未提供'],
-            ['卡号', identified?.cardNumber ?? c.current.pan],
+            if (c.current.applicationNumbers.isEmpty)
+              ['卡号', identified?.cardNumber ?? c.current.pan]
+            else
+              for (final entry in c.current.applicationNumbers.entries)
+                ['${entry.key} 卡号', entry.value],
             ['识别城市', identified?.identity.cityName ?? c.current.city],
             ['卡种', identified?.identity.cardType ?? c.current.type],
             if (local?.info.isCika != true) ['货币', app.cardCurrency.code],

@@ -180,7 +180,7 @@ void main() {
   });
 
   testWidgets(
-    'left swipe reveals a button, deletion collapses and undo expands the same card',
+    'wallet confirms before removing a row and undo expands the same card',
     (tester) async {
       final card = c.savedCards.first;
       final image = card.image = File('assets/icon/app_icon.png')
@@ -192,18 +192,26 @@ void main() {
       final nextY = tester.getTopLeft(next).dy;
       await reveal(tester, card.id);
       expect(c.savedCards, hasLength(3));
-      expect(find.text('撤销'), findsNothing);
+      expect(find.text('撤回'), findsNothing);
       await tester.tap(find.byKey(ValueKey('wallet-delete-${card.id}')));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-      expect(tester.getSize(row).height, inExclusiveRange(0, originalHeight));
-      expect(tester.getTopLeft(next).dy, lessThan(nextY));
+      await tester.pumpAndSettle();
+      expect(c.overlay, GalleryOverlay.delete);
+      expect(c.savedCards, hasLength(3));
+      expect(tester.getSize(row).height, originalHeight);
+      expect(tester.getTopLeft(next).dy, nextY);
+      await tester.tap(find.text('取消'));
+      await tester.pumpAndSettle();
+      expect(c.savedCards, hasLength(3));
+      await reveal(tester, card.id);
+      await tester.tap(find.byKey(ValueKey('wallet-delete-${card.id}')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('确定'));
       await tester.pumpAndSettle();
       expect(c.savedCards, hasLength(2));
       expect(find.byKey(const ValueKey('gallery-feedback')), findsOneWidget);
       expect(find.byIcon(Icons.info_outline_rounded), findsOneWidget);
       expect(find.text('已删除“${card.name}”'), findsOneWidget);
-      await tester.tap(find.text('撤销'));
+      await tester.tap(find.text('撤回'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
       expect(c.savedCards.first, same(card));
@@ -235,9 +243,11 @@ void main() {
       await reveal(tester, 'shenzhen');
       await tester.tap(find.byKey(const ValueKey('wallet-delete-shenzhen')));
       await tester.pumpAndSettle();
+      await tester.tap(find.text('确定'));
+      await tester.pumpAndSettle();
       c.navigate(GalleryPage.trips);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('撤销'));
+      await tester.tap(find.text('撤回'));
       await tester.pumpAndSettle();
       expect(c.savedCards.first.id, 'shenzhen');
       expect(c.page, GalleryPage.trips);
@@ -254,13 +264,15 @@ void main() {
         await reveal(tester, id);
         await tester.tap(find.byKey(ValueKey('wallet-delete-$id')));
         await tester.pumpAndSettle();
+        await tester.tap(find.text('确定'));
+        await tester.pumpAndSettle();
       }
       expect(c.savedCards.map((card) => card.id), ['octopus']);
-      await tester.tap(find.text('撤销'));
+      await tester.tap(find.text('撤回'));
       await tester.pumpAndSettle();
       expect(c.savedCards.map((card) => card.id), ['shenzhen', 'octopus']);
-      expect(find.text('撤销'), findsOneWidget);
-      await tester.tap(find.text('撤销'));
+      expect(find.text('撤回'), findsOneWidget);
+      await tester.tap(find.text('撤回'));
       await tester.pumpAndSettle();
       expect(c.savedCards.map((card) => card.id), [
         'shenzhen',
@@ -296,11 +308,11 @@ void main() {
         isNot(TextOverflow.ellipsis),
       );
       expect(tester.takeException(), isNull);
-      // 卡名与下方余额的间距保持 4。
+      // 卡名与下方余额的间距缩到 1。
       final amount = tester.getRect(
         find.byKey(ValueKey('wallet-number-${card.id}')),
       );
-      expect(amount.top - tester.getRect(walletTitle).bottom, closeTo(4, .5));
+      expect(amount.top - tester.getRect(walletTitle).bottom, closeTo(1, .5));
       // 系统大字体缩放不影响字号 token，也不产生溢出。
       for (final scale in [1.5, 2.0]) {
         tester.platformDispatcher.textScaleFactorTestValue = scale;
@@ -328,12 +340,15 @@ void main() {
       await mount(tester, reduced: true);
       await reveal(tester, 'shenzhen');
       await tester.tap(find.byKey(const ValueKey('wallet-delete-shenzhen')));
+      await tester.pumpAndSettle();
+      expect(c.savedCards, hasLength(3));
+      await tester.tap(find.text('确定'));
       await tester.pump();
       expect(c.savedCards, hasLength(2));
-      expect(find.text('撤销'), findsOneWidget);
+      expect(find.text('撤回'), findsOneWidget);
       await tester.pump(const Duration(seconds: 7));
       await tester.pumpAndSettle();
-      expect(find.text('撤销'), findsNothing);
+      expect(find.text('撤回'), findsNothing);
       expect(c.savedCards, hasLength(2));
       expect(tester.takeException(), isNull);
     },

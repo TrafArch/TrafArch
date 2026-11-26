@@ -15,6 +15,20 @@ Stream<NfcAdapterState> watchNfcAdapterState() {
   );
 }
 
+/// Advertised NFC-F reader capability, independent of NFC power.
+/// Null means the platform could not establish support.
+Future<bool?> getFelicaReaderSupport({bool? isAndroid}) async {
+  if (!(isAndroid ?? Platform.isAndroid)) return null;
+  try {
+    return await const MethodChannel('transit_card_analyzer/nfc')
+        .invokeMethod<bool>('getFelicaReaderSupport');
+  } on PlatformException {
+    return null;
+  } on MissingPluginException {
+    return null;
+  }
+}
+
 /// NFC 硬件通道层（原 NfcService 拆分后的纯通道，无任何业务状态）。
 ///
 /// 仅负责：发起扫描 / 停止扫描 / 收发 APDU。

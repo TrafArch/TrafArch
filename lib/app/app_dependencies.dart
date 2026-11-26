@@ -66,6 +66,7 @@ class AppDependencies extends OwnedNotifier {
   AppDependencies({
     NfcChannel? channel,
     Stream<NfcAdapterState>? nfcAdapterStates,
+    Future<bool?> Function()? felicaReaderSupport,
     FelicaChannel? felicaChannel,
     AssetBundle? bundle,
     SettingsStore? settingsStore,
@@ -151,6 +152,9 @@ class AppDependencies extends OwnedNotifier {
     _memory.listen(handleMemoryPressure);
     _nfcAdapterSubscription = (nfcAdapterStates ?? watchNfcAdapterState())
         .listen(_onNfcAdapterState);
+    unawaited(
+      _loadFelicaReaderSupport(felicaReaderSupport ?? getFelicaReaderSupport),
+    );
   }
   late final UpdateService updates;
   late final SettingsController settings;
@@ -468,6 +472,19 @@ class AppDependencies extends OwnedNotifier {
   IdentifiedCard? get lastIdentified => archive.identified;
   NfcScanResult? get lastResult => scan.tag;
   bool get hasCompletedRead => _completedScanRequest != null;
+  bool get nfcHardwareUnavailable =>
+      _nfcAdapterState == NfcAdapterState.unavailable;
+  bool? _felicaReaderSupport;
+  bool? get felicaReaderSupported =>
+      nfcHardwareUnavailable ? false : _felicaReaderSupport;
+
+  Future<void> _loadFelicaReaderSupport(Future<bool?> Function() query) async {
+    final supported = await query();
+    if (disposed || _felicaReaderSupport == supported) return;
+    _felicaReaderSupport = supported;
+    notifyListeners();
+  }
+
   String? get nfcUnavailableMessage => switch (_nfcAdapterState) {
     NfcAdapterState.disabled => '请先打开系统 NFC',
     NfcAdapterState.unavailable => '当前设备没有 NFC',

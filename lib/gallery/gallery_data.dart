@@ -172,6 +172,7 @@ class GalleryCard {
       face = json['face'] as String,
       detailCrop = const GalleryFaceCrop(),
       listCrop = const GalleryFaceCrop(),
+      applicationNumbers = const {},
       _currencyCode = null,
       _live = false,
       // Explicit applications win over the frozen sample's known identity.
@@ -204,6 +205,7 @@ class GalleryCard {
     required this.count,
     required this.face,
     required this.applications,
+    this.applicationNumbers = const {},
     required String? currencyCode,
   }) : _currencyCode = currencyCode,
        _live = true,
@@ -222,6 +224,8 @@ class GalleryCard {
   final String when;
   final String count;
   final List<String> applications;
+  final Map<String, String> applicationNumbers;
+
   final String? _currencyCode;
   final bool _live;
   String face;
@@ -251,6 +255,7 @@ class GalleryCard {
        count = other.count,
        face = other.face,
        applications = other.applications,
+       applicationNumbers = other.applicationNumbers,
        image = image ?? other.image,
        imageSize = imageSize ?? other.imageSize,
        detailCrop = detailCrop ?? other.detailCrop,

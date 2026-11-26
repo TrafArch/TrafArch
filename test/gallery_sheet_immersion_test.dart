@@ -218,7 +218,7 @@ void main() {
       expect(rect.bottom, lessThan(_screen.height));
       expect(rect.bottom, lessThanOrEqualTo(_screen.height - inset));
       expect(
-        buttonRect(tester, '删除').bottom,
+        buttonRect(tester, '确定').bottom,
         lessThanOrEqualTo(_screen.height - inset),
       );
       expect(tester.takeException(), isNull);

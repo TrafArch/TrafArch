@@ -22,6 +22,30 @@ class GalleryFeedbackHost extends StatefulWidget {
   final bool mainPage, docked;
   final Widget child;
 
+  /// Capture the window host before an async action that may close its route.
+  static GalleryFeedbackMessenger messengerOf(BuildContext context) {
+    final host = context.findAncestorStateOfType<_GalleryFeedbackHostState>()!;
+    return (
+      message, {
+      type = GalleryFeedbackType.info,
+      title,
+      actionLabel,
+      onAction,
+      prioritizeAction = false,
+    }) {
+      assert((actionLabel == null) == (onAction == null));
+      if (!host.mounted) return;
+      host._show((
+        type: type,
+        title: title,
+        message: message,
+        actionLabel: actionLabel,
+        onAction: onAction,
+        prioritizeAction: prioritizeAction,
+      ));
+    };
+  }
+
   static void show(
     BuildContext context,
     String message, {
@@ -29,20 +53,26 @@ class GalleryFeedbackHost extends StatefulWidget {
     String? title,
     String? actionLabel,
     VoidCallback? onAction,
-  }) {
-    assert((actionLabel == null) == (onAction == null));
-    context.findAncestorStateOfType<_GalleryFeedbackHostState>()!._show((
-      type: type,
-      title: title,
-      message: message,
-      actionLabel: actionLabel,
-      onAction: onAction,
-    ));
-  }
+  }) => messengerOf(context)(
+    message,
+    type: type,
+    title: title,
+    actionLabel: actionLabel,
+    onAction: onAction,
+  );
 
   @override
   State<GalleryFeedbackHost> createState() => _GalleryFeedbackHostState();
 }
+
+typedef GalleryFeedbackMessenger = void Function(
+  String message, {
+  GalleryFeedbackType type,
+  String? title,
+  String? actionLabel,
+  VoidCallback? onAction,
+  bool prioritizeAction,
+});
 
 typedef _Message = ({
   GalleryFeedbackType type,
@@ -50,6 +80,7 @@ typedef _Message = ({
   String message,
   String? actionLabel,
   VoidCallback? onAction,
+  bool prioritizeAction,
 });
 
 class _GalleryFeedbackHostState extends State<GalleryFeedbackHost>
@@ -86,10 +117,20 @@ class _GalleryFeedbackHostState extends State<GalleryFeedbackHost>
         _pending.contains(message)) {
       return;
     }
-    // Finish the current message; errors precede other waiting feedback.
-    if (message.type == GalleryFeedbackType.error) {
+    // Undo must not wait behind unrelated confirmations. Keep existing
+    // actions and preserve FIFO ordering among multiple pending undos.
+    if (message.prioritizeAction) {
+      final index = _pending.indexWhere((item) => !item.prioritizeAction);
+      _pending.insert(index < 0 ? _pending.length : index, message);
+      if (_current case final current?
+          when current.onAction == null &&
+              current.type != GalleryFeedbackType.error) {
+        _dismiss();
+      }
+    } else if (message.type == GalleryFeedbackType.error) {
       final index = _pending.indexWhere(
-        (item) => item.type != GalleryFeedbackType.error,
+        (item) =>
+            !item.prioritizeAction && item.type != GalleryFeedbackType.error,
       );
       _pending.insert(index < 0 ? _pending.length : index, message);
     } else {

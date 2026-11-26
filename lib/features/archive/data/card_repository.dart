@@ -332,21 +332,85 @@ class CardRepository {
   /// 删除卡片档案及其全部读取批次（同一事务，避免残留孤儿批次数据）；
   /// 返回是否确实删除了档案（档案不存在时返回 false）。
   /// 列表 / 详情页数据流会随删除自动刷新；该卡再次读取时可重新建档。
-  Future<bool> deleteCard(String id) {
-    return db.transaction(() async {
-      await db.customStatement(
-        'DELETE FROM archive_field_observation_times WHERE card_id=?',
-        [id],
-      );
-      await (db.delete(
-        db.cardReadBatches,
-      )..where((t) => t.cardId.equals(id))).go();
-      final deleted = await (db.delete(
-        db.savedCards,
-      )..where((t) => t.id.equals(id))).go();
-      return deleted > 0;
-    });
+  Future<bool> deleteCard(String id) =>
+      db.transaction(() => _deleteCardRows(id));
+
+  Future<bool> _deleteCardRows(String id) async {
+    await db.customStatement(
+      'DELETE FROM archive_field_observation_times WHERE card_id=?',
+      [id],
+    );
+    await (db.delete(
+      db.cardReadBatches,
+    )..where((t) => t.cardId.equals(id))).go();
+    return await (db.delete(
+          db.savedCards,
+        )..where((t) => t.id.equals(id))).go() >
+        0;
   }
+
+  /// Keeps an in-memory undo token; archive bytes, including any unreadable or
+  /// future-version document, are never decoded/re-encoded by deletion.
+  Future<ArchiveCardDeletion?> deleteCardWithUndo(String id) => db.transaction(
+    () async {
+      final card = await (db.select(
+        db.savedCards,
+      )..where((t) => t.id.equals(id))).getSingleOrNull();
+      if (card == null) return null;
+      final batches = await (db.select(
+        db.cardReadBatches,
+      )..where((t) => t.cardId.equals(id))).get();
+      final times = await db
+          .customSelect(
+            'SELECT field_name, observed_at FROM archive_field_observation_times WHERE card_id=?',
+            variables: [Variable<String>(id)],
+          )
+          .get();
+      final document = await db
+          .customSelect(
+            'SELECT payload_json, dirty FROM archive_documents WHERE card_id=?',
+            variables: [Variable<String>(id)],
+          )
+          .getSingleOrNull();
+      if (!await _deleteCardRows(id)) return null;
+      return ArchiveCardDeletion._(card, batches, times, document);
+    },
+  );
+
+  /// Do not overwrite an archive recreated by a read/import during the undo window.
+  Future<bool> undoCardDeletion(ArchiveCardDeletion deletion) =>
+      db.transaction(() async {
+        final card = deletion._card;
+        final existing =
+            await (db.select(db.savedCards)..where(
+                  (t) =>
+                      t.id.equals(card.id) |
+                      t.cardFingerprint.equals(card.cardFingerprint),
+                ))
+                .get();
+        if (existing.isNotEmpty) return false;
+        await db.into(db.savedCards).insert(card);
+        await db.batch(
+          (batch) => batch.insertAll(db.cardReadBatches, deletion._batches),
+        );
+        for (final row in deletion._times) {
+          await db.customStatement(
+            'INSERT INTO archive_field_observation_times(card_id,field_name,observed_at) VALUES(?,?,?)',
+            [
+              card.id,
+              row.read<String>('field_name'),
+              row.read<int>('observed_at'),
+            ],
+          );
+        }
+        if (deletion._document case final row?) {
+          await db.customStatement(
+            'INSERT INTO archive_documents(card_id,payload_json,dirty) VALUES(?,?,?)',
+            [card.id, row.read<String>('payload_json'), row.read<int>('dirty')],
+          );
+        }
+        return true;
+      });
 
   /// 卡片档案列表（最近读取优先，其次最近更新）。
   Stream<List<SavedCard>> watchCards() {
@@ -543,6 +607,20 @@ class CardRepository {
           'Store a separate projection; captured batch parser versions are immutable',
         ),
       );
+}
+
+class ArchiveCardDeletion {
+  const ArchiveCardDeletion._(
+    this._card,
+    this._batches,
+    this._times,
+    this._document,
+  );
+
+  final SavedCard _card;
+  final List<CardReadBatch> _batches;
+  final List<QueryRow> _times;
+  final QueryRow? _document;
 }
 
 class ArchiveRows {
