@@ -38,6 +38,13 @@ RUN yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses >/dev/null \
     && test -x "$ANDROID_HOME/build-tools/37.0.0/apksigner" \
     && test -f "$ANDROID_HOME/ndk/30.0.16248370/source.properties"
 
+# Android plugins request these alongside the app's SDK and NDK during assembleRelease.
+RUN sdkmanager --sdk_root="$ANDROID_HOME" \
+        'ndk;28.2.13676358' 'platforms;android-35' 'cmake;3.22.1' \
+    && test -f "$ANDROID_HOME/ndk/28.2.13676358/source.properties" \
+    && test -f "$ANDROID_HOME/platforms/android-35/android.jar" \
+    && test -x "$ANDROID_HOME/cmake/3.22.1/bin/cmake"
+
 # Fail before CNB caches the image if a future SDK introduces an unmappable owner.
 RUN bad_owner="$(find /opt -xdev \( -uid +65535 -o -gid +65535 \) -printf '%U:%G %p\n' -quit)" \
     && if [ -n "$bad_owner" ]; then echo "CNB cannot map $bad_owner" >&2; exit 1; fi
