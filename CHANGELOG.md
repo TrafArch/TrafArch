@@ -12,7 +12,6 @@
 - 删除未实现的 `TripReaderImportService` 占位契约，以及 `test/support` 中无引用的读卡识途 CSV 解析器。保留读卡识途公开数据来源致谢、参考数据库与现有归档导入。
 - 更新 2.x 设置与 live 导入回归，覆盖不显示来源选择、不出现读卡识途导入文案；TU/CU SQLite 与 `reference_manifest.json` 的 SHA256 保持不变。
 - 回归：`flutter test` 3,421 项全部通过；`flutter analyze --no-fatal-infos` 无 error／warning（5 条既有 info）；未编译 APK。
-
 ## 2026-11-25 — 行程线路 SVG 与离线色号
 
 - 行程卡片按两端各自的已确认城市和线路显示标识，支持同一趟行程同时显示福州 4 号线与滨海快线。实时记录和保存快照都保留城市证据，不从发卡地或站名猜测线路。
