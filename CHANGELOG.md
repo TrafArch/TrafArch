@@ -1,12 +1,17 @@
 # Changelog
 
+## 2026-11-25 — 修复 CNB 分架构和通用 APK 的构建环境
+
+- 修复 Flutter 插件加载时因 Maven Central 返回 HTTP 429 而中断的云构建。两个 APK 按钮在 Gradle 初始化时为应用和 Flutter SDK 的独立构建配置 Central 与插件镜像。
+- 修复 IDEA 在提交检查中无法解析 CNB 初始化脚本 Gradle API 导入的问题。脚本通过 Maven 仓库支持的 `mavenContent` 方法识别仓库。
+- 修复分架构构建在加载 Flutter 镜像时因文件属主 ID `397546` 超出 CNB 映射范围而中断的问题。两个 APK 按钮共用基于 Debian 的项目镜像，按 SHA256 核验 Flutter 和 Android 命令行工具，并在解压 Flutter 时使用容器内的属主。
+
 ## 2026-11-25 — 移除读卡识途数据导入预留
 
 - 删除设置页「导入卡片记录」中的「选择导入来源」弹窗与「从读卡识途数据导入」入口；导入操作恢复为直接选择并预览 TrafArch 归档文件。
 - 删除未实现的 `TripReaderImportService` 占位契约，以及 `test/support` 中无引用的读卡识途 CSV 解析器。保留读卡识途公开数据来源致谢、参考数据库与现有归档导入。
 - 更新 2.x 设置与 live 导入回归，覆盖不显示来源选择、不出现读卡识途导入文案；TU/CU SQLite 与 `reference_manifest.json` 的 SHA256 保持不变。
 - 回归：`flutter test` 3,421 项全部通过；`flutter analyze --no-fatal-infos` 无 error／warning（5 条既有 info）；未编译 APK。
-
 ## 2026-11-25 — 行程线路 SVG 与离线色号
 
 - 行程卡片按两端各自的已确认城市和线路显示标识，支持同一趟行程同时显示福州 4 号线与滨海快线。实时记录和保存快照都保留城市证据，不从发卡地或站名猜测线路。

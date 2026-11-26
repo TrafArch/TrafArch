@@ -5,21 +5,16 @@
         tags: cnb:arch:amd64
         cpus: 8
       docker:
-        image: plugfox/flutter:3.47.6-android@sha256:a60d49be9ffea916dc7f530f467f6210a43688e0fda602bcf5ea22afcadb88e4
+        build: .cnb/android.Dockerfile
       stages:
         - name: 准备 Flutter 和 Android 工具链
           timeout: 1h
           script: |
             set -eu
             case "$APK_MODE" in split|universal) ;; *) echo 'APK_MODE must be split or universal' >&2; exit 2 ;; esac
-            if ! command -v python3 >/dev/null; then
-              apt-get update
-              apt-get install -y --no-install-recommends python3
-            fi
-            sdkmanager --sdk_root="$ANDROID_HOME" 'cmdline-tools;19.0'
-            manager="$ANDROID_HOME/cmdline-tools/19.0/bin/sdkmanager"
-            (yes || :) | "$manager" --sdk_root="$ANDROID_HOME" --licenses >/dev/null
-            "$manager" --sdk_root="$ANDROID_HOME" 'platforms;android-36' 'platforms;android-37.0' 'build-tools;36.0.0' 'build-tools;37.0.0' 'ndk;30.0.16248370'
+            install -Dm644 .cnb/gradle-repositories.init.gradle "${GRADLE_USER_HOME:-$HOME/.gradle}/init.d/trafarch-repositories.init.gradle"
+            flutter --version
+            "$ANDROID_HOME/build-tools/37.0.0/aapt" version
             flutter pub get --enforce-lockfile
         - name: 分配 Android 版本码
           lock:
