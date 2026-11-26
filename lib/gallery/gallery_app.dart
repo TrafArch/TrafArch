@@ -17,7 +17,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../app/app_info.dart';
 import '../app/app_dependencies.dart';
-import '../app/beta_ui_scope.dart';
 import '../features/archive/application/archive_history.dart';
 import '../features/archive/application/archive_record_count.dart';
 import '../features/archive/application/cu_archive_projection.dart';
@@ -33,7 +32,6 @@ import '../features/archive/presentation/archive_balance_display.dart';
 import '../features/archive/presentation/archive_trip_presenter.dart';
 import '../features/archive/presentation/shanghai_archive_mirrored_records.dart';
 import '../features/archive/presentation/archive_transfer_dialogs.dart';
-import '../features/expert/expert_page.dart';
 import '../features/expert/expert_formatters.dart';
 import '../features/home/presentation/result_labels.dart';
 import '../features/qr/presentation/jt_t1179_qr_display.dart';
@@ -52,7 +50,7 @@ import '../features/trips/journey_presentation.dart';
 import '../features/trips/local_card_trip_presenter.dart';
 import '../features/trips/trip_filters.dart';
 import '../features/trips/trip_entry_presenter.dart';
-import '../features/trips/trip_cards_view.dart';
+import '../features/trips/trip_card_presentation.dart';
 import '../features/updates/update_prompt.dart';
 import '../features/updates/update_service.dart';
 import '../platform/browser/feedback_browser.dart';
@@ -101,13 +99,25 @@ part 'gallery_live_read.dart';
 part 'gallery_live_archive.dart';
 part 'gallery_live_knowledge.dart';
 
+SystemUiOverlayStyle _gallerySystemOverlayStyle(
+  GalleryTokens tokens,
+  Color navigationSurface,
+) => (tokens.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
+    .copyWith(
+      statusBarColor: Colors.transparent,
+      systemNavigationBarColor: navigationSurface,
+      systemNavigationBarDividerColor: Colors.transparent,
+      systemNavigationBarIconBrightness: tokens.dark
+          ? Brightness.light
+          : Brightness.dark,
+    );
+
 class GalleryApp extends StatefulWidget {
   const GalleryApp({
     super.key,
     this.controller,
     this.liveApp,
     this.claimStartupUpdatePrompt,
-    this.onDisableBeta,
     this.openWebLink,
     this.openEmail,
     this.preferences,
@@ -117,7 +127,6 @@ class GalleryApp extends StatefulWidget {
   final GalleryController? controller;
   final AppDependencies? liveApp;
   final bool Function()? claimStartupUpdatePrompt;
-  final VoidCallback? onDisableBeta;
   final Future<void> Function(Uri)? openWebLink;
   final Future<bool> Function(String)? openEmail;
   final GalleryPreferences? preferences;
@@ -295,7 +304,6 @@ class _GalleryAppState extends State<GalleryApp> {
                     preferences: _preferences,
                     rootBackStack: _rootBackStack,
                     loadKnowledge: _loadKnowledge,
-                    onDisableBeta: widget.onDisableBeta,
                     openWebLink: widget.openWebLink,
                     openEmail: widget.openEmail,
                   ),
@@ -324,19 +332,12 @@ class _GalleryAppState extends State<GalleryApp> {
                     final tokens = Theme.of(context)
                         .extension<GalleryTokens>()!;
                     return AnnotatedRegion<SystemUiOverlayStyle>(
-                      value:
-                          (tokens.dark
-                                  ? SystemUiOverlayStyle.light
-                                  : SystemUiOverlayStyle.dark)
-                              .copyWith(
-                                statusBarColor: Colors.transparent,
-                                systemNavigationBarColor:
-                                    c.docked && c.isMainPage
-                                    ? tokens.dockedNavigationSurface
-                                    : tokens.canvas,
-                                systemNavigationBarDividerColor:
-                                    Colors.transparent,
-                              ),
+                      value: _gallerySystemOverlayStyle(
+                        tokens,
+                        c.docked && c.isMainPage
+                            ? tokens.dockedNavigationSurface
+                            : tokens.canvas,
+                      ),
                       child: ColoredBox(
                         color: tokens.canvas,
                         child: GalleryWindow(
@@ -397,7 +398,6 @@ class _GalleryView extends StatefulWidget {
     required this.anchors,
     required this.loadKnowledge,
     this.visible = true,
-    this.onDisableBeta,
     this.openWebLink,
     this.openEmail,
   });
@@ -407,7 +407,6 @@ class _GalleryView extends StatefulWidget {
   final _GalleryAnchorRegistry anchors;
   final Future<GalleryKnowledgeIndex> Function() loadKnowledge;
   final bool visible;
-  final VoidCallback? onDisableBeta;
   final Future<void> Function(Uri)? openWebLink;
   final Future<bool> Function(String)? openEmail;
   @override
@@ -596,7 +595,7 @@ class _GalleryViewState extends State<_GalleryView> {
         final opened = await widget.openEmail?.call(value) ?? false;
         if (!opened) throw StateError('email unavailable');
       } else if (value == AppSupport.qqJoin) {
-        // 与 1.x 一致：优先唤起 QQ 加群卡片，失败再打开邀请页。
+        // 优先唤起 QQ 加群卡片，失败再打开邀请页。
         if (!await _openQqGroup()) {
           throw const FeedbackBrowserException('无法打开 QQ 或加群页，请安装 QQ 后重试。');
         }
@@ -608,7 +607,7 @@ class _GalleryViewState extends State<_GalleryView> {
     } on FeedbackBrowserException catch (error) {
       if (mounted && c.page == page && c.generation == generation) {
         if (error.copiedToClipboard) {
-          // 无可用浏览器时链接已复制到剪贴板，与 1.x 一样以气泡提示。
+          // 无可用浏览器时以气泡提示链接已复制。
           _toast(error.message, type: GalleryFeedbackType.info);
         } else {
           setState(() => _linkError = error.message);
@@ -693,12 +692,7 @@ class _GalleryViewState extends State<_GalleryView> {
     if (_entry.overlay != null) {
       final sheet = _entry.overlay!.isBottomSheet;
       return AnnotatedRegion<SystemUiOverlayStyle>(
-        value: (t.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
-            .copyWith(
-              statusBarColor: Colors.transparent,
-              systemNavigationBarColor: sheet ? t.raised : t.canvas,
-              systemNavigationBarDividerColor: Colors.transparent,
-            ),
+        value: _gallerySystemOverlayStyle(t, sheet ? t.raised : t.canvas),
         child: Padding(
           padding: EdgeInsets.only(
             bottom: MediaQuery.viewInsetsOf(context).bottom,
@@ -715,14 +709,10 @@ class _GalleryViewState extends State<_GalleryView> {
       );
     }
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: (t.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
-          .copyWith(
-            statusBarColor: Colors.transparent,
-            systemNavigationBarColor: c.docked && _isMain
-                ? t.dockedNavigationSurface
-                : t.canvas,
-            systemNavigationBarDividerColor: Colors.transparent,
-          ),
+      value: _gallerySystemOverlayStyle(
+        t,
+        c.docked && _isMain ? t.dockedNavigationSurface : t.canvas,
+      ),
       child: Shortcuts(
         shortcuts: const {
           SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),

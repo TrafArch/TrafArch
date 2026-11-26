@@ -1309,7 +1309,6 @@ extension _GalleryPages on _GalleryViewState {
 
   Widget _settings() {
     final live = _GalleryLiveScope.of(context);
-    final beta = BetaUiScope.maybeOf(context);
     return _list([
       _header('设置', back: true),
       _sectionTitle('读卡与数据'),
@@ -1636,22 +1635,6 @@ extension _GalleryPages on _GalleryViewState {
         color: t.muted,
         align: TextAlign.center,
       ),
-      if (widget.onDisableBeta != null) ...[
-        _sectionTitle('备用界面'),
-        _panel(
-          _switch(
-            '使用 1.x 备用界面',
-            false,
-            beta?.switching == true ? null : (_) => widget.onDisableBeta!(),
-            subtitle:
-                beta?.switchError ??
-                (beta?.switching == true
-                    ? '正在切换到 1.x 备用界面…'
-                    : '默认使用 2.x 主界面；开启后仅在本次运行切换到 1.x，重启自动恢复 2.x。'),
-          ),
-          padding: EdgeInsets.zero,
-        ),
-      ],
     ]);
   }
 

@@ -150,7 +150,6 @@ class _GalleryNavigator extends StatefulWidget {
     required this.preferences,
     required this.rootBackStack,
     required this.loadKnowledge,
-    this.onDisableBeta,
     this.openWebLink,
     this.openEmail,
   });
@@ -158,7 +157,6 @@ class _GalleryNavigator extends StatefulWidget {
   final GalleryPreferences preferences;
   final _GalleryBackStack rootBackStack;
   final Future<GalleryKnowledgeIndex> Function() loadKnowledge;
-  final VoidCallback? onDisableBeta;
   final Future<void> Function(Uri)? openWebLink;
   final Future<bool> Function(String)? openEmail;
 
@@ -413,7 +411,6 @@ class _GalleryNavigatorState extends State<_GalleryNavigator>
                     loadKnowledge: widget.loadKnowledge,
                     anchors: _anchors,
                     visible: _isVisible(entry),
-                    onDisableBeta: widget.onDisableBeta,
                     openWebLink: widget.openWebLink,
                     openEmail: widget.openEmail,
                   ),

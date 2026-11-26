@@ -1,26 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 
 import '../features/settings/presentation/legal_document_links.dart';
 import '../features/settings/presentation/firebase_analytics_tile.dart';
 import '../platform/analytics/firebase_collection.dart';
 import '../platform/browser/feedback_browser.dart';
 import '../platform/storage/settings_store.dart';
-import 'app_info.dart';
-import 'theme/app_theme.dart';
+import '../gallery/gallery_consent_screen.dart';
 
 class LegalConsentGate extends StatefulWidget {
-  const LegalConsentGate({
-    super.key,
-    required this.child,
-    this.settingsStore,
-    this.screenBuilder,
-  });
+  const LegalConsentGate({super.key, required this.child, this.settingsStore});
 
   final Widget child;
   final SettingsStore? settingsStore;
-  final Widget Function(LegalConsentPrompt?)? screenBuilder;
 
   @override
   State<LegalConsentGate> createState() => _LegalConsentGateState();
@@ -138,41 +130,7 @@ class _LegalConsentGateState extends State<LegalConsentGate> {
     final prompt = _accepted == null
         ? null
         : LegalConsentPrompt._(_saving ? null : _accept, _error);
-    final screenBuilder = widget.screenBuilder;
-    if (screenBuilder != null) {
-      return _scope(screenBuilder(prompt), _selectAnalytics);
-    }
-    return _scope(
-      MaterialApp(
-        title: AppInfo.appName,
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light(null),
-        darkTheme: AppTheme.dark(null),
-        localizationsDelegates: GlobalMaterialLocalizations.delegates,
-        supportedLocales: const [Locale('zh'), Locale('en')],
-        home: Scaffold(
-          body: prompt == null
-              ? const Center(child: CircularProgressIndicator())
-              : Stack(
-                  children: [
-                    const ModalBarrier(
-                      dismissible: false,
-                      color: Colors.black54,
-                    ),
-                    SafeArea(
-                      child: AlertDialog(
-                        scrollable: true,
-                        title: const Text(LegalConsentPrompt.title),
-                        content: prompt.content(),
-                        actions: prompt.actions(),
-                      ),
-                    ),
-                  ],
-                ),
-        ),
-      ),
-      _selectAnalytics,
-    );
+    return _scope(GalleryConsentScreen(prompt), _selectAnalytics);
   }
 
   Widget _scope(Widget child, ValueChanged<bool> onChanged) =>

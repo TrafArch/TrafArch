@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:drift/native.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/app/app_dependencies.dart';
 import 'package:transit_card_analyzer/features/archive/application/archive_history.dart';
@@ -9,8 +8,6 @@ import 'package:transit_card_analyzer/features/archive/data/app_database.dart';
 import 'package:transit_card_analyzer/features/archive/data/card_repository.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_session_snapshot.dart';
 import 'package:transit_card_analyzer/features/scan/domain/card_read_outcome.dart';
-import 'package:transit_card_analyzer/features/recovery/recovery_result_panel.dart';
-import 'package:transit_card_analyzer/features/cards/cards_page.dart';
 import 'package:transit_card_analyzer/platform/memory/memory_platform.dart';
 import 'package:transit_card_analyzer/platform/storage/app_logger.dart';
 import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
@@ -106,47 +103,6 @@ Future<void> _complete(
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  testWidgets(
-    'recovered Suica can be saved and viewed in the wallet with integer yen',
-    (tester) async {
-      final memory = _Memory();
-      final database = testDatabase();
-      final app = _app(database, memory: memory);
-      await tester.runAsync(() async {
-        await app.init();
-        await _complete(app, _read(), 'recover-suica', DateTime(2026, 11, 16));
-        expect(await app.handleMemoryPressure(true), isTrue);
-      });
-      app.dispose();
-      final restored = _app(database, memory: memory);
-      await tester.runAsync(restored.init);
-      expect(restored.recoveredCapture!.canSave, isTrue);
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SingleChildScrollView(
-              child: RecoveryResultPanel(app: restored),
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('读取时余额：JP￥900'), findsOneWidget);
-      await tester.runAsync(restored.saveRecoveredCapture);
-      expect(
-        (await restored.cardRepository.getAllCards()).single.balanceFen,
-        900,
-      );
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(body: CardsPage(app: restored)),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.textContaining('JP￥900'), findsWidgets);
-      expect(find.textContaining('已保存 1 条'), findsWidgets);
-    },
-  );
   test('Suica saves integer yen, frozen journeys and explicit identity across reopen and backup', () async {
     final directory = await Directory.systemTemp.createTemp(
       'trafarch-suica-archive-',

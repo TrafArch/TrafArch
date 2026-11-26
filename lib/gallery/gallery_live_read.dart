@@ -1,5 +1,16 @@
 part of 'gallery_app.dart';
 
+enum ExpertReadTab {
+  information('信息获取', 'expert-info-get'),
+  transit('交通数据解析', 'expert-parsed'),
+  compliance('JT/T 978 符合性', 'expert-compliance'),
+  raw('APDU / Raw Data', 'expert-apdu');
+
+  const ExpertReadTab(this.label, this.storageKey);
+  final String label;
+  final String storageKey;
+}
+
 class _GalleryLiveScope extends InheritedNotifier<_GalleryLiveRead> {
   const _GalleryLiveScope({required super.notifier, required super.child});
 
@@ -1593,8 +1604,13 @@ extension _GalleryLivePages on _GalleryViewState {
         _liveReadHint(live, '读取卡片后展示解析字段与原始数据', Icons.science_outlined),
       ]);
     }
-    final sections = ExpertReadSections(live.app);
-    final tabs = sections.tabs;
+    final tabs = [
+      ExpertReadTab.information,
+      ExpertReadTab.transit,
+      if (CardParserIds.isTUnionFamily(live.app.parsedCard?.parserId))
+        ExpertReadTab.compliance,
+      ExpertReadTab.raw,
+    ];
     final tab = tabs.contains(live.expertTab) ? live.expertTab : tabs.first;
     return _list([
       _tabs(

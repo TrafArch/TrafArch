@@ -2,9 +2,9 @@
 
 ## 2.x 界面与实卡接入
 
-正式入口 `lib/main.dart` 与实卡测试入口 `lib/main_gallery.dart` 均使用 2.x 协议确认页，再由 `TransitCardAnalyzerApp` 以 `enableLiveBeta` 和 `initialLiveUi` 进入 2.x 实卡界面。1.x 通过设置手动启用，在本次运行中作为备用。切换前等待 NFC 关闭，两套界面共用同一个 `AppDependencies`。实卡测试入口关闭自动更新检查。`InternalPreviewApp` 与样例 fixtures 用于组件测试和设计回归。
+正式入口 `lib/main.dart` 和实卡测试入口 `lib/main_gallery.dart` 均通过 `LegalConsentGate` 显示 2.x 协议确认页，由 `TransitCardAnalyzerApp` 创建并管理 `AppDependencies` 后直接进入 2.x 实卡界面。实卡测试入口关闭自动更新检查。`InternalPreviewApp` 直接打开 2.x 样例，与实卡会话及真实档案隔离。
 
-2.x 的主题、四项导航和读取交互位于 `lib/gallery/`。实卡模式不加载 fixtures，而是通过 `_GalleryLiveRead` 适配真实 `AppDependencies`：订阅 `watchAllArchiveRows` 生成卡包和历史，把当前 `CardSessionSnapshot` 投影成原预览的首页、行程与专家记录，并把保存、改名、删除、冲突策略、导入导出、诊断和设置动作委托给既有业务层。专家的「交通数据解析」直接消费 1.x 同一套解析结果：余额、币种、卡种与机构字段并入固定展开的「交通应用信息」；0x1A 轨道／公交保留各自原有展开卡，全部 0x1E 记录合并到一张卡并按记录分组，交易明细也合并到一张卡并按交易分组，两类记录整体保持过程记录在前。CU 文件字段继续按 2.x 展开卡片展示。未知值不补猜。失败重读可在首页保留上次摘要，但本次行程和专家不展示旧证据；关闭失败、取消和迟到响应仍由现有会话屏障隔离。
+2.x 的主题、四项导航和读取交互位于 `lib/gallery/`。实卡模式不加载 fixtures，而是通过 `_GalleryLiveRead` 适配真实 `AppDependencies`：订阅 `watchAllArchiveRows` 生成卡包和历史，把当前 `CardSessionSnapshot` 投影成原预览的首页、行程与专家记录，并把保存、改名、删除、冲突策略、导入导出、诊断和设置动作委托给既有业务层。专家的「交通数据解析」直接消费业务层解析结果：余额、币种、卡种与机构字段并入固定展开的「交通应用信息」；0x1A 轨道／公交保留各自原有展开卡，全部 0x1E 记录合并到一张卡并按记录分组，交易明细也合并到一张卡并按交易分组，两类记录整体保持过程记录在前。CU 文件字段继续按 2.x 展开卡片展示。未知值不补猜。失败重读可在首页保留上次摘要，但本次行程和专家不展示旧证据；关闭失败、取消和迟到响应仍由现有会话屏障隔离。
 
 行程卡片的两端线路标识由 `gallery_rail_line_badge.dart` 统一显示。实时读取时，`gallery_live_read.dart` 把已确认的端点城市系统、城市代码和名称写入展示记录；历史快照仍从已保存的端点证据恢复，不在查看时重查数据库。线路外观优先读取 `assets/Line_Icon/icons.json` 指向的本地 SVG，目前已登记北京 `1000`、福州 `3910`、厦门 `3930` 和广州 `5810`；索引中的宽高必须与 SVG `viewBox` 一致，再由资源回归逐个校验。其次使用同一配置中的明确色号，再使用 `third_party/railmapgen_palette/tu_colors.json` 的离线 RMG Palette 色号，最后保留通用徽章。该文件包含固定版本的 RMG 中国大陆线路色，并通过 TU 城市编码映射供行程使用；当前没有 TU 编码映射的城市和线路仍按 RMG 城市 ID 与线路 ID 保留。Flutter 的 SVG 解析器不应用素材内部通过 `<style>` 类选择器声明的填充色，新增 SVG 必须先用 `dev/gallery/normalize_rail_line_svgs.py` 把简单 CSS 颜色转为内联属性，并以 `--check` 确认不存在 CSS 类着色。`dev/gallery/build_rail_line_palette.py` 只以固定版本 RMG 源目录和 TU/CU 包的只读连接生成色板，不修改发布数据库或 manifest；线路名会去除括号别名，同名线路通过明确 RMG 身份消歧，每个城市保留源色板 SHA256。RMG 数据及其 GPL v3 许可作为独立资源随应用许可列表登记。
 
@@ -17,10 +17,9 @@
 的 ATS 历史字节以 `4D 54` 开头，第 3–4 字节是芯片备案码，第 7–8 字节是 IC
 卡备案码。解析器兼容 PC/SC 的 `3B 8n 80 01` 封装，并校验历史字节长度和 TCK。
 `CardProviderResolver` 分别查表，明确提取但未收录的备案码显示为「未知（备案码）」，
-数据缺失或布局未识别时显示「未提供」。重复备案码列出所有匹配机构。1.x 专家
-「信息获取」使用字段行，2.x 使用同一套专家展开卡、字段行、间距和主题颜色。
+数据缺失或布局未识别时显示「未提供」。重复备案码列出所有匹配机构。专家的「信息获取」使用统一的展开卡、字段行、间距和主题颜色。
 
-两套 UI 共用 `QrReadContent`、`QrAcquisition` 与 `QrController`。`AppDependencies.runQrAcquisition` 先等待普通及八达通 NFC 会话关闭，并独占相机／相册获取；离开路由或内存恢复使在途结果失效。2.x 知识库以当前 `KnowledgeBase.packagePaths` 启动后台只读索引；已校验包的实例变更后废弃旧索引，独立预览加载器不参与实卡路径。2.x 的主要页、档案详情、扫码和设置映射为现有恢复路由；恢复只展示冻结读卡证据，不重查参考库或自动归档。诊断由既有 `DiagnosticsController` 写本机文件，反馈只打开用户主动选择的外部链接。
+扫码使用 `QrReadContent`、`QrAcquisition` 与 `QrController`。`AppDependencies.runQrAcquisition` 先等待普通及八达通 NFC 会话关闭，并独占相机／相册获取；离开路由或内存恢复使在途结果失效。2.x 知识库以当前 `KnowledgeBase.packagePaths` 启动后台只读索引；已校验包的实例变更后废弃旧索引，独立预览加载器不参与实卡路径。2.x 的主要页、档案详情、扫码和设置映射为现有恢复路由；恢复只展示冻结读卡证据，不重查参考库或自动归档。诊断由既有 `DiagnosticsController` 写本机文件，反馈只打开用户主动选择的外部链接。
 
 `InternalPreviewApp` 承载样例模式：`GalleryApp` → `GalleryController` / `GalleryQrController` → 合成 fixtures，不连接真实读卡或档案。以下样例、模拟场景和设计回归说明只适用于该宿主的测试路径，不适用于 `lib/main_gallery.dart` 的实卡构建。
 
@@ -44,7 +43,7 @@ Gallery 周统计在独立展示模型中按固定演示周汇总，使用样例
 
 Android Gradle 根据 Dart target 的文件名识别 2.x Gallery 构建。Gallery 默认应用 Google Services 插件并包含 Firebase Analytics 依赖；需要完全离线的预览包时可通过 Gradle 属性 `galleryAnalytics=false` 显式关闭。包名、显示名称、原签名和每次打包预留下一构建号的流程保持统一。详见 [GALLERY.md](GALLERY.md)。
 
-Android 版本码直接使用 pubspec 的构建号，`force-version-code-ignoring-abi=true` 固定关闭 Flutter 拆分 APK 的 ABI 偏移；Gradle 拒绝用 false 覆盖，避免 AppInfo、更新比较与安装版本码分离。旧界面和 2.x 关于页统一显示同一个 `AppInfo.buildNumber`，不再对历史 4xxx 产物额外加减 2000。打包前同步 AppInfo、成功打包后预留下一号的机制继续沿用；测试和配置检查不消耗号码。可通过 `dev/gallery/verify_version_codes.gradle` 只读核对 Debug／Profile／Release 各输出的配置版本码，最终交付仍须以 APK/AAB 清单为准。
+Android 版本码直接使用 pubspec 的构建号，`force-version-code-ignoring-abi=true` 固定关闭 Flutter 拆分 APK 的 ABI 偏移；Gradle 拒绝用 false 覆盖，避免 AppInfo、更新比较与安装版本码分离。2.x 关于页显示 `AppInfo.buildNumber`，不再对历史 4xxx 产物额外加减 2000。打包前同步 AppInfo、成功打包后预留下一号的机制继续沿用；测试和配置检查不消耗号码。可通过 `dev/gallery/verify_version_codes.gradle` 只读核对 Debug／Profile／Release 各输出的配置版本码，最终交付仍须以 APK/AAB 清单为准。
 
 ## 八达通本地余额读取
 
@@ -74,7 +73,7 @@ Android 主 Activity 显式声明 `resizeableActivity=true`，沿用 Flutter emb
 
 独立通道 `transit_card_analyzer/memory` 的原生→Dart `onMemoryPressure({'kill': bool, 'expiresAtMillis': int})` 返回 bool；原生 UI 队列与 Dart 消息队列均拒绝已过期通知。Dart→原生 `readRecovery`／`writeRecovery({'content': String})`／`clearRecovery` 只操作 `noBackupFilesDir/memory_recovery.json`。Android `AtomicFile` 发布完整文件，限制 UTF-8 8 MiB，不进入系统备份；有效期 24 小时，读取成功后消费，损坏／过期文件清理，新读取和确认操作作废旧现场。没有新增 SQLite 文件、表、迁移或后台服务。
 
-`AppDependencies` 将 TRIM 与 `WidgetsBindingObserver.didHaveMemoryPressure` 统一为可重建缓存清理；不销毁借给当前展示的参考库连接，不删除原始帧／日志／未保存结果。KILL 同步失效当前读卡代次，发起但不等待物理 NFC 关闭；现场写入、诊断及已接受档案操作使用独立 1.8 秒等待预算，超时如实返回失败。恢复启动就绪前不自动扫描。恢复主 Tab、设置／二维码／档案详情入口及行程筛选；临时弹窗返回父页面，不恢复相机或 NFC 句柄。交通卡沿用捕获快照的历史展示器，FeliCa 保留已读字段与物理证据，不重跑协议、匹配或自动归档。恢复文件保留快照原文；待保存内容由恢复面板显式确认，沿用原读取时间和捕获解析版本，新档案继续执行既有保存观察元数据策略。
+`AppDependencies` 将 TRIM 与 `WidgetsBindingObserver.didHaveMemoryPressure` 统一为可重建缓存清理；不销毁借给当前展示的参考库连接，不删除原始帧／日志／未保存结果。KILL 同步失效当前读卡代次，发起但不等待物理 NFC 关闭；现场写入、诊断及已接受档案操作使用独立 1.8 秒等待预算，超时如实返回失败。恢复启动就绪前不自动扫描。恢复主 Tab 和设置／二维码／档案详情入口；临时弹窗返回父页面，不恢复相机或 NFC 句柄。交通卡沿用捕获快照的历史展示器，FeliCa 保留已读字段与物理证据，不重跑协议、匹配或自动归档。恢复文件保留快照原文；待保存内容由恢复面板显式确认，沿用原读取时间和捕获解析版本，新档案继续执行既有保存观察元数据策略。
 
 ## Amusement IC Access Code
 
@@ -187,7 +186,7 @@ UI → `AppDependencies.archiveTransfer` → `ArchiveTransferController` → `Ca
 
 `features/trips/journey_presentation.dart` 负责纯展示投影，live 与 archive adapter 分别提供当前与捕获时的证据。只有同应用、币种、时钟、方式和共同读取批次内的明确进出事件才可配对，两端分别需要有效受理城市，允许城市不同；依据为唯一同一 1A、相邻连续交易序号或可靠连续 1E 原始槽位。公交还要求相同非空线路。跨城 `isCrossCity` 从有效两端城市派生，标题省略单一城市前缀；同城异地卡不省略城市。相邻序号及槽位配对不能跳过未知或中间记录，明确同一应用记录的双侧沿用自身关系。不能使用过滤后的列表序号代替原始槽位。各侧 payload 保留独立详情；票卡数量不替代交易笔数，UI 筛选不重新配对。
 
-实时和档案共用的 `TripCardsView` 将已识别的充值和 TU `0x18` 确认消费按时间列入同一历史列表。充值使用独立交易卡，标题为「充值」。来源筛选仍按 `0x18` 交易，未知方式仍可用“其他”筛选。分组使用已观测消费证据，城市、线路、站点与进出站继续以卡内字段和参考匹配为准。
+2.x 行程和档案详情将已识别的充值和 TU `0x18` 确认消费按时间列入同一历史列表。充值使用独立交易卡，标题为「充值」。来源筛选仍按 `0x18` 交易，未知方式仍可用“其他”筛选。分组使用已观测消费证据，城市、线路、站点与进出站继续以卡内字段和参考匹配为准。
 
 `trip_journey_evidence.dart` 和归档 adapter 仅在已保存关联的时间、城市、方式、角色、金额与唯一性均通过时，把原始 1E 槽位传给交易代表事件；POS 包含关系本身不建立行程。交易序号与物理槽位是独立证据，两个已知交易的序号缺口不能被槽位覆盖。1A/1E 同侧另需有效且严格相等的完整终端号；公交上车不使用标注金额作为扣款。模型在配对前折叠不同来源家族的已验证同侧操作，保留每个原始 `JourneyEvent`，详情和来源筛选仍可访问全部 payload。归档关联逐批次证明，不能经合并历史借用另一批次的身份。
 
@@ -218,7 +217,8 @@ TU 1E 金额与记录余额默认按大端解析。v12 起，`TUnionProcessParse
 ```text
 lib/
   main.dart
-  app/                          根组件、依赖装配、主题、导航、版本
+  app/                          根组件、依赖装配、协议确认、版本
+  gallery/                      2.x 导航、主题、页面和实卡展示适配
   protocols/
     iso7816/                    APDU 模型、交换策略、有界 BER-TLV
     transport/                  平台无关的传输失败
@@ -227,15 +227,13 @@ lib/
   platform/{nfc,qr,storage,browser}/ MethodChannel、目录、设置、导出、日志、反馈浏览器
   features/
     scan/{application,domain}/  会话、采集、协议编排、当前读取展示
-    reference_data/             发布包、用户库、查询接口、覆盖范围页面
-    archive/                    档案模型、Drift、快照、统一历史查询、详情
-    settings/                   设置与诊断控制器及页面
+    reference_data/             发布包、用户库与查询接口
+    archive/                    档案模型、Drift、快照、统一历史查询与展示投影
+    settings/                   设置与诊断控制器及共用组件
     qr/                         独立扫码页、相机 / 相册获取、字段 / 证书 / 原始数据展示
     transit_analysis/           识别、交易解码、行程分析
-    home/                       各卡族独立面板
-    expert/                     各文件和原始数据面板
-    trips/                      行程条目、筛选、格式化与详情
-    cards/                      档案列表
+    home/ 与 expert/            读卡结果和技术字段格式化
+    trips/                      行程条目、筛选与展示投影
   shared/                       生命周期基类和少量展示常量
 android/app/src/main/kotlin/com/kajolno/TrafArch/
   MainActivity.kt
@@ -256,23 +254,15 @@ Android targetSdk 保持 37，遵守 Android 15 起强制边到边显示的要�
 
 `MaterialApp.builder` 通过 `AnnotatedRegion<SystemUiOverlayStyle>` 根据实际主题背景设置导航栏图标亮度，AppBar／SliverAppBar 继续根据自身背景决定状态栏图标；黑色扫码页面单独声明浅色系统栏图标，退出后由当前页面恢复。透明系统栏颜色仅用于兼容较旧 Android，不依赖 Android 15 已停用的栏颜色 API 防遮挡；三按钮导航保留系统对比度保护，手势导航保持透明。
 
-交互内容根据 `MediaQuery` 的当前窗口安全区域避让系统栏及刘海：AppBar／SliverAppBar 处理顶部，正文 SafeArea 处理侧边与底部，悬浮导航使用底栏库已有的 SafeArea，避免重复叠加。记录详情弹层除 `useSafeArea: true` 外，还在内容外补充底部 SafeArea（框架的该参数只保护顶部和侧边）；档案批次诊断及恢复原始数据页同样使用 FoldSafePage 与正文 SafeArea。回归覆盖手势／三按钮的底部边距、横屏侧边刘海、明暗主题切换、扫码进退及弹层最后操作可点击；真实 Android 15+ 设备的系统栏与启动画面仍需设备验收。
+顶栏、正文、底栏和弹层按当前子屏的系统安全区布局。两种底栏共用 `GalleryNavigationLayout`，不重复计算键盘高度；半模态表面延伸到系统导航区，按钮仍由底部安全区保护。
 
 规范来源：https://developer.android.com/about/versions/15/behavior-changes-15#edge-to-edge
 
 ### 窗口与折叠屏布局
 
-展示层 `shared/presentation/adaptive_layout.dart` 结合 ITGSA 大屏白皮书 2.2／4.2／4.4 和 Android 列表详情布局按当前窗口逻辑像素适配内容。手机、平板、横屏及分屏统一使用居中的悬浮胶囊底栏，沿用 280dp 宽度上限、56dp 高度、28dp 圆角与距系统安全区 20dp 的间距；窄窗及大字体沿用等宽图标收缩，滚动显隐与子页面返回回显保持一致。壳页不创建侧边导航及竖分隔线，状态栏背景保持连续；AppBar／SliverAppBar 独立处理顶部安全区，不额外增加一层顶部留白。主页面 IndexedStack 与底栏始终挂载在同一容器，窗口缩放不重建控制器或等待中的 NFC；主页面统一预留悬浮底栏留白，独立档案详情路由不预留主导航高度。首页在正文可用宽度至少 840 时左右排布，顺序列表及设置内容限宽。
-
-专家页与二维码结果页共用 `ExpertField`，字段名后统一显示中文冒号，字段标签和值通过 Wrap 按实际文字及当前字体缩放宽度排布，不按窗口断点强制上下排列，也不为短标签预留固定宽列。能容纳的字段保持同行；长值移到下一行并获得完整正文宽度，允许自然换行，不截断公钥、HEX、账户或诊断原文。
-
-`AdaptiveCardDetailPage` 在同一路由保存当前卡片 ID，`AdaptiveListDetail` 在可用宽度至少 840 且高度至少 480 时并列列表和详情；窄窗仅显示已选择详情，系统返回退出详情路由。列表与详情窗格通过稳定 key、Offstage 保持挂载，详情的查询流、筛选和滚动不因窗口缩放重新创建；各窗格独立 ScaffoldMessenger，避免同一 SnackBar 同时注册多个 Hero。已存在的本地恢复继续保存选中卡片路径与筛选，不写入新的数据库字段。
-
-折叠屏只按折叠与展开后的当前窗口尺寸适配外屏／内屏，不识别半折、书本或桌面姿态，不根据折叠角度切换布局。`MaterialApp.builder` 在 Navigator 与 Overlay 外统一注入 `FoldableDisplayScope`，从布局使用的 `MediaQuery.displayFeatures` 中过滤 fold 折痕及零面积特征，完整页面与列表详情组件也应用同一规则；主页面、路由、Dialog 与 BottomSheet 均不因半折信号缩至半屏或重新分栏。实体铰链及刘海仍按真实遮挡区域避让，完整页面通过 DisplayFeatureSubScreen 更新可用子屏和局部 MediaQuery，列表详情仅可沿满足两侧最小宽度的实体竖向铰链分栏，其余按当前可用宽高布局。行程面板保留触发 anchorPoint 与 useSafeArea，对话框最大宽度 560。Android 17／targetSdk 37 不添加限制旋转／缩放的兼容退出项，不接入厂商平行视窗或 Activity Embedding 来拆分同一 Flutter 引擎。
-
 扫码页拥有外部 MobileScannerController，因此自行监听 WidgetsBinding 生命周期，将相机 stop/start 串行化，处理权限请求尚未结束时进入 inactive 的情况，失败后允许用户重试；窗口布局变化不重建相机控制器。预览比例和旋转交给现有 CameraX／mobile_scanner，NFC 通道与会话契约保持不变。模拟回归不能证明厂商内外屏、相机独占资源、物理 NFC 连接或系统强杀行为，仍需真机验收。
 
-2.x Gallery 使用独立 `GalleryWindow`，置于 MaterialApp.builder 的 Navigator／Overlay 外，复用 FoldableDisplayScope 过滤折痕。实体铰链分隔时选最大子屏，等面积优先左／上；通过 removeDisplayFeatures 调整 Insets 后显式更新 MediaQuery.size，背景保持全窗口主题色。标题和正文限宽 720dp，悬浮导航 320dp、下沉按钮区域 720dp，不引入双栏。布局缩放保持 GalleryController 和路由身份；展示层锚点注册表按布局、滚动和窗口指标变化重测，GalleryRouteEntry 的可选 anchorId 连接真实触发器，原 anchor 仅为无触发器样例提供回退。Flutter embedding 已合并 captionBar 到系统安全区，不新增原生桥接；Gallery 仍为隔离样例，不改变 NFC、相机或进程恢复政策。相关行为与尺寸回归见 gallery_window_layout_test。
+2.x 使用 `GalleryWindow`，置于 MaterialApp.builder 的 Navigator／Overlay 外，复用 FoldableDisplayScope 过滤折痕。实体铰链分隔时选最大子屏，等面积优先左／上；通过 removeDisplayFeatures 调整 Insets 后显式更新 MediaQuery.size，背景保持全窗口主题色。标题和正文限宽 720dp，悬浮导航 320dp、下沉按钮区域 720dp，不引入双栏。布局缩放保持 GalleryController 和路由身份；展示层锚点注册表按布局、滚动和窗口指标变化重测，GalleryRouteEntry 的可选 anchorId 连接真实触发器，原 anchor 仅为无触发器样例提供回退。Flutter embedding 已合并 captionBar 到系统安全区，不新增原生桥接；窗口适配不改变 NFC、相机或进程恢复政策。相关行为与尺寸回归见 gallery_window_layout_test。
 
 规范来源：
 - https://www.itgsa.com/documents/5242001394058240
@@ -301,7 +291,7 @@ flowchart TD
 
 主程序与预览入口均先挂载 `LegalConsentGate`。它只从本机 `SettingsStore` 检查 EULA 与隐私政策的共同同意记录，未确认时不挂载业务界面，也不启动更新检查、读卡或档案恢复。查看协议不写入同意记录；显式确认且持久化成功才放行。
 
-同意记录同时保存可选 Firebase 分析的选择（`v2:analytics-on` / `v2:analytics-off`）；旧的 `true` 不表示已授权分析。Android 清单将 `firebase_analytics_collection_enabled` 默认设为 `false`，宿主通过独立的 `transit_card_analyzer/analytics` 通道查询可用性并调用 `setAnalyticsCollectionEnabled`。运行时开关与是否打包 SDK 是两回事；未配置或离线构建不采集。两套设置页通过同一个宿主更新选择，不发送读卡或行程参数。
+同意记录同时保存可选 Firebase 分析的选择（`v2:analytics-on` / `v2:analytics-off`）；旧的 `true` 不表示已授权分析。Android 清单将 `firebase_analytics_collection_enabled` 默认设为 `false`，宿主通过独立的 `transit_card_analyzer/analytics` 通道查询可用性并调用 `setAnalyticsCollectionEnabled`。运行时开关与是否打包 SDK 是两回事；未配置或离线构建不采集。设置页通过同一个宿主更新选择，不发送读卡或行程参数。
 
 反馈问卷、EULA 和隐私政策使用 `FeedbackBrowser` 的独立 `transit_card_analyzer/browser` 通道。主界面经 `AppDependencies → SettingsController` 调用，首次确认弹窗直接复用同一浏览器实现，无需启动业务依赖。原生先通过 `CustomTabsClient.getPackageName(activity, null)` 检测已安装浏览器的 Custom Tabs 支持，不限制包名；有提供方则显式指定该包打开 Custom Tab，没有提供方或启动失败则用 `ACTION_VIEW` 交给默认浏览器直接打开原网址（未设置默认浏览器时由系统选择）。通道返回提供方包名或 `default_browser` 表示打开成功，仅两种方式均失败时返回 null，由 Dart 复制链接并提示。QQ 群入口经 `AppDependencies → SettingsController` 使用 `url_launcher` 的外部应用模式，优先以 `mqqapi://card/show_pslcard` 打开指定群资料页；启动失败时改用原 HTTPS 邀请页，两种方式均失败则提示用户复制群号搜索。
 
@@ -327,7 +317,7 @@ ISO-DEP 入口由 `CardReadCoordinator` 调用 `LocalCardReader.scan()`。每个
 
 `TuCuWalletScan` 先读 TU 电子钱包 010105 的身份、余额和 18 文件，随后实际选择 CU。CU 支持带 Le 与无 Le 的选择变体。在继续读取 TU 1A、1E 前必须重新选择原 TU 钱包。CU 选择拒绝时仍恢复 TU，终止性错误时直接发布已读前缀。上海、哈尔滨与青岛均走这一顺序；产品名、已保存的 parserId 和展示设置不控制通信。CU 独立探测 18、10、1A、06、19，结合文件、长度与交易类型解码；原始 SFI、物理槽位和不确定的字段保留在本应用内。两个余额选择子有冲突时保留原文，余额待定。
 
-CU 的实时行程、档案详情与恢复现场通过 `cu_trip_presenter.dart` 适配共用的 `TripCardsView`、票据式 `TripEntryCard` 和详情弹层，来源按 CU 实际文件筛选，方式采用已解码的运营分类或唯一匹配类别；充值进入按时间排列的交易历史，未知方式保留「其他」筛选。金额展示沿用 Trip Reader 1.7.17 的可追踪规则：金额字段字节 07-09 按卡内分解释，消费为负、充值为正；字节 06 仍包含在四字节原字段中，详情完整保留 `amountHex`、`amountRaw` 与解释依据，不从余额反推交易金额。琴岛通 CU 0x19 的进、出站时刻分别唯一对应同批 0x18 钱包流水，且符合顺序与票价规则时，两个界面都按同一条已验证关联展示一趟地铁。站名缺失时显示「站点未记录」。其他缺少方向证据的 CU 消费保持独立事件。票卡显示交易金额，但行程后余额保持未知。详情保留线路站点编码、HEX、异常与全部保存来源。日期使用 CU 捕获的 UTC+08 卡内时钟，不随手机时区换日；实时 CU 补齐卡名、卡号、当前余额与可见记录数摘要。异地标识只比较 CU 命名空间内的发卡地区与受理地区，历史要求每份来源均能独立核实；上海双应用的镜像折叠继续保留。CU 筛选以独立恢复键保存，不改变快照、解析版本或数据库。
+CU 的实时行程、档案详情与恢复现场通过 `cu_trip_presenter.dart` 适配 2.x 的行程票据和详情半模态，来源按 CU 实际文件筛选，方式采用已解码的运营分类或唯一匹配类别；充值进入按时间排列的交易历史，未知方式保留「其他」筛选。金额展示沿用 Trip Reader 1.7.17 的可追踪规则：金额字段字节 07-09 按卡内分解释，消费为负、充值为正；字节 06 仍包含在四字节原字段中，详情完整保留 `amountHex`、`amountRaw` 与解释依据，不从余额反推交易金额。琴岛通 CU 0x19 的进、出站时刻分别唯一对应同批 0x18 钱包流水，且符合顺序与票价规则时，实时与档案均按同一条已验证关联展示一趟地铁。站名缺失时显示「站点未记录」。其他缺少方向证据的 CU 消费保持独立事件。票卡显示交易金额，但行程后余额保持未知。详情保留线路站点编码、HEX、异常与全部保存来源。日期使用 CU 捕获的 UTC+08 卡内时钟，不随手机时区换日；实时 CU 补齐卡名、卡号、当前余额与可见记录数摘要。异地标识只比较 CU 命名空间内的发卡地区与受理地区，历史要求每份来源均能独立核实；上海双应用的镜像折叠继续保留。筛选不改变快照、解析版本或数据库。
 
 苏州市民卡（`SUXIN.DDF01`）在逐应用探测中选择成功后，先用默认 PIN `123456` 执行 VERIFY（`00 20 00 00 03 12 34 56`），再读取受保护文件；VERIFY 被拒时应用不标记为已确认。应用从 `0x15` 分别提取原始卡号、卡面显示号、发卡日期和有效期。钱包余额与 `0x18` 流水独立记录读取结果。卡片返回 `6982` 时保留相应文件的拒绝状态及已读资料。余额查询被拒时，余额显示为未知。`0x19` 首条 50 字节记录独立于钱包余额读取。按 Trip Reader 1.7.17-cn 的苏州字段布局，偏移 8 起的 4 字节依次以 6、4、5、5、6、6 位表示自 2000 年起的年、月、日、时、分、秒（UTC+08:00），偏移 38 为所属自然月的地铁优惠累计次数。卡内时间有效时展示月份与次数，含零次。苏州计次应用 `SZPK_ZYY` 独立确认应用、余次与有效期。天府通主应用读取钱包及交易、月统计，1002 子目录独立保存计次和流水。相同 SFI 在不同目录可有不同单位，计次记录与金额分开。各应用只读取可以直接访问的文件。
 
@@ -348,13 +338,13 @@ CU 从同一会话收集到零金额与正金额的消费时，可核对 19 文�
 
 档案有自己的数据库与生命周期。采集时上下文、余额观察、原始帧、解析版本、参考包版本和逐记录来源一起存入快照；展示层的记录抑制不决定归档。`ArchiveHistory` 同时服务详情与导出，不读取当前贴卡对象来补旧档案。时间 / 币种未知显式保留，详见 `MIGRATION.md`。
 
-已保存行程通过 `ArchiveHistory.projectRecords` 从每个 `ArchiveBatchEvidence` 的原始快照独立投影，匹配时保留同批次的每个记录路径。`ArchiveTripProjection.journeys` 只合并已经在各自批次内完成验证的展示结果，`TripCardsView.projectedJourneys` 消费此结果后不再调用配对器。聚合记录与计数仍沿用精确历史身份，避免旧的可变 1A、展示关联或余额捕获干扰新批次的唯一性。跨批展示身份由完整交易／1E 原码及原始字段、钱包和时钟上下文构成；可变 1A 只按原码重新核实本侧字段，不借另一侧、站名或数组位置判断身份。每批余额仍使用其原捕获解释，跨批合并不重新推导金额或余额；重复候选和已知冲突不择新覆盖。全部来源及原始详情继续保留，JSON、数据库结构与解析版本不变。
+已保存行程通过 `ArchiveHistory.projectRecords` 从每个 `ArchiveBatchEvidence` 的原始快照独立投影，匹配时保留同批次的每个记录路径。`ArchiveTripProjection.journeys` 只合并已经在各自批次内完成验证的展示结果，2.x 界面直接消费此投影，不再次配对。聚合记录与计数仍沿用精确历史身份，避免旧的可变 1A、展示关联或余额捕获干扰新批次的唯一性。跨批展示身份由完整交易／1E 原码及原始字段、钱包和时钟上下文构成；可变 1A 只按原码重新核实本侧字段，不借另一侧、站名或数组位置判断身份。每批余额仍使用其原捕获解释，跨批合并不重新推导金额或余额；重复候选和已知冲突不择新覆盖。全部来源及原始详情继续保留，JSON、数据库结构与解析版本不变。
 
 CU 在 v3 快照扩展 `cuProjection` 中保存独立记录与捕获时的匹配结果（内部版本 1），原始文件仍同时存入 `rawEvidence`。历史详情与导出恢复冻结结果，不按当前参考库重新解释旧数据；不支持或损坏的扩展保留原始快照并给出诊断，不改变 Drift 表结构。
 
 ## CDN 更新契约
 
-`features/updates` 的 `UpdateService` 由 `AppDependencies` 装配。正式入口的 `UpdatePrompt` 在首帧后检查一次，2.x 与 1.x 切换共用检查结果，启动提示在单次运行中最多显示一次。配置 `--dart-define=UPDATE_MANIFEST_URL=https://cdn.example.com/manifest.json` 时，两套界面的关于区域均可手动检查更新。当前 build 使用打包前从 pubspec 同步的 AppInfo，测试可注入 build 与获取函数。Debug / Profile / Release 打包成功后，pubspec 自动预留下一个构建号，AppInfo 保留产物实际使用的构建号；repairBuild 同样自增，普通测试、静态检查和 dry-run 不自增。整数 build 严格大于当前值才提示，version 仅展示；下载经 url_launcher 外部浏览器，不安装、不自动下载参考库。
+`features/updates` 的 `UpdateService` 由 `AppDependencies` 装配。正式入口的 `UpdatePrompt` 在首帧后检查一次，启动提示在单次运行中最多显示一次。配置 `--dart-define=UPDATE_MANIFEST_URL=https://cdn.example.com/manifest.json` 时，可在设置的关于区域手动检查更新。当前 build 使用打包前从 pubspec 同步的 AppInfo，测试可注入 build 与获取函数。Debug / Profile / Release 打包成功后，pubspec 自动预留下一个构建号，AppInfo 保留产物实际使用的构建号；repairBuild 同样自增，普通测试、静态检查和 dry-run 不自增。整数 build 严格大于当前值才提示，version 仅展示；下载经 url_launcher 外部浏览器，不安装、不自动下载参考库。
 
 manifest v1 必须含 `format_version: 1` 和 `app: {build: 整数, version: 字符串, notes: 字符串, download_url: HTTPS}`。可选 `references` 对象以 `TU` / `CU` 为键，每项为 `{url: HTTPS, package: {...}}`；package 原样复制离线 CLI 发布的 reference_manifest.json 对应包条目（file、sha256、bytes、content_version、tables）。HTTPS 禁止凭据、片段和所有重定向；连接超时 10 秒，总下载超时 30 秒，manifest 上限 256 KiB，单库上限 128 MiB。只请求 CDN 公共内容，无用户数据上传；CDN 仍能看到通常的网络连接信息。SHA256 校验完整性，不替代 CDN 发布端的可信性管理。
 

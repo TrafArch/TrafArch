@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/features/archive/application/archive_controller.dart';
 import 'package:transit_card_analyzer/features/archive/application/archive_history.dart';
@@ -14,9 +13,7 @@ import 'package:transit_card_analyzer/features/scan/domain/scan_presentation.dar
 import 'package:transit_card_analyzer/features/transit_analysis/balance_interpretation.dart';
 import 'package:transit_card_analyzer/features/transit_analysis/tunion_analysis_models.dart';
 import 'package:transit_card_analyzer/features/trips/journey_presentation.dart';
-import 'package:transit_card_analyzer/features/trips/trip_cards_view.dart';
-import 'package:transit_card_analyzer/features/trips/trip_entry_card.dart';
-import 'package:transit_card_analyzer/features/trips/trip_entry_details.dart';
+import 'package:transit_card_analyzer/features/trips/trip_card_presentation.dart';
 import 'package:transit_card_analyzer/platform/storage/log_exporter.dart';
 import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_models.dart';
@@ -668,71 +665,6 @@ void main() {
     expect(journeys.every((journey) => journey.events.length == 1), isTrue);
     _expectUnchanged(history, payloads, before);
   });
-
-  testWidgets('档案视图采用预先投影的行程并保留来源方式筛选及三份原始详情', (tester) async {
-    final history = _history([
-      _snapshot(rails: [_rail(status: 1, withExit: false)], marker: 'entry'),
-      _snapshot(rails: [_rail()], marker: 'completed'),
-    ]);
-    final projection = presentArchiveTrips(
-      history.records,
-      batches: history.batches,
-      onDiagnostics: (_) {},
-    );
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SingleChildScrollView(
-            child: TripCardsView(
-              entries: projection.entries,
-              projectedJourneys: projection.journeys,
-              sourceLabels: const {
-                ArchiveRecordKind.transaction: '0x18 交易',
-                ArchiveRecordKind.rail: '0x1A 轨道',
-                ArchiveRecordKind.bus: '0x1A 公交',
-                ArchiveRecordKind.process: '0x1E 过程',
-              },
-              summaryText: '合并后的归档行程',
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.byType(TripEntryCard), findsOneWidget);
-    expect(find.text('进行中 1'), findsNothing);
-
-    await _selectFilter(tester, '全部来源', '0x18 交易');
-    expect(find.byType(TripEntryCard), findsNothing);
-    await _selectFilter(tester, '0x18 交易', '0x1A 轨道');
-    expect(find.byType(TripEntryCard), findsOneWidget);
-
-    await _selectFilter(tester, '全部方式', '公共汽电车');
-    expect(find.byType(TripEntryCard), findsNothing);
-    await _selectFilter(tester, '公共汽电车', '轨道交通');
-    expect(find.byType(TripEntryCard), findsOneWidget);
-
-    await tester.tap(find.byType(TripEntryCard));
-    await tester.pumpAndSettle();
-    expect(find.text('行程记录'), findsOneWidget);
-    expect(find.byType(ListTile), findsNWidgets(3));
-    await tester.tap(find.byType(ListTile).first);
-    await tester.pumpAndSettle();
-    expect(find.byType(TripDetailRow), findsWidgets);
-    expect(find.text('记录来源：0x1A 轨道记录'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
-}
-
-Future<void> _selectFilter(
-  WidgetTester tester,
-  String current,
-  String next,
-) async {
-  await tester.tap(find.text(current));
-  await tester.pumpAndSettle();
-  await tester.tap(find.widgetWithText(MenuItemButton, next));
-  await tester.pumpAndSettle();
 }
 
 List<_Journey> _journeys(ArchiveHistoryResult history) => presentArchiveTrips(

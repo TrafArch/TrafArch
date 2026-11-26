@@ -1,8 +1,6 @@
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/app/app_dependencies.dart';
 import 'package:transit_card_analyzer/features/archive/application/archive_controller.dart';
 import 'package:transit_card_analyzer/features/archive/application/archive_record_count.dart';
 import 'package:transit_card_analyzer/features/archive/application/archive_records_json.dart';
@@ -10,60 +8,18 @@ import 'package:transit_card_analyzer/features/archive/application/archive_histo
 import 'package:transit_card_analyzer/features/archive/application/card_records_export.dart';
 import 'package:transit_card_analyzer/features/archive/data/card_repository.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_session_snapshot.dart';
-import 'package:transit_card_analyzer/features/archive/presentation/card_detail_page.dart';
-import 'package:transit_card_analyzer/features/archive/presentation/local_card_history_records.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/tunion_knowledge_base.dart';
-import 'package:transit_card_analyzer/features/recovery/recovery_result_panel.dart';
-import 'package:transit_card_analyzer/features/recovery/recovery_state.dart';
 import 'package:transit_card_analyzer/features/scan/domain/card_read_outcome.dart';
 import 'package:transit_card_analyzer/features/scan/domain/scan_presentation.dart';
-import 'package:transit_card_analyzer/features/transit_analysis/tunion_analysis_models.dart';
 import 'package:transit_card_analyzer/features/trips/journey_presentation.dart';
 import 'package:transit_card_analyzer/features/trips/local_card_trip_presenter.dart';
-import 'package:transit_card_analyzer/features/trips/local_card_trip_list.dart';
-import 'package:transit_card_analyzer/features/trips/trip_cards_view.dart';
-import 'package:transit_card_analyzer/features/trips/trip_entry_card.dart';
 import 'package:transit_card_analyzer/features/trips/trip_filters.dart';
-import 'package:transit_card_analyzer/features/trips/trips_page.dart';
-import 'package:transit_card_analyzer/platform/storage/app_logger.dart';
 import 'package:transit_card_analyzer/platform/storage/log_exporter.dart';
-import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
 import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/local/local_card_models.dart';
-import 'package:transit_card_analyzer/protocols/transit/multiapp/application_evidence.dart';
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_models.dart';
 
 import 'support/test_database.dart';
-
-class _App extends AppDependencies {
-  _App(this.card, {this.applications = const []})
-    : super(
-        database: testDatabase(),
-        bundle: MissingTestAssets(),
-        settingsStore: MemorySettingsStore(),
-        logger: AppLogger(store: MemoryLogStore()),
-      );
-
-  final ParsedCard card;
-  @override
-  final List<ApplicationEvidence> applications;
-
-  @override
-  ParsedCard? get parsedCard => card;
-
-  @override
-  ReadResult? get localReadResult => card.localCard;
-
-  @override
-  Currency get cardCurrency =>
-      Currency.fromCode(card.localCard?.info.currencyCode);
-
-  @override
-  String? get cardCityCode => null;
-
-  @override
-  String? cityNameOf(String? code) => null;
-}
 
 ApduRecord _trip({
   int recordNumber = 1,
@@ -217,8 +173,10 @@ void main() {
       expect(presentation.info.subText, isNull);
       expect(presentation.info.fields, contains(('记录类型', '消费')));
       expect(presentation.info.fields, contains(('交易序号', '2')));
-      expect(presentation.info.fields.map((field) => field.$1),
-          isNot(contains('类型字节')));
+      expect(
+        presentation.info.fields.map((field) => field.$1),
+        isNot(contains('类型字节')),
+      );
       expect(presentation.info.fields, contains(('终端 HEX', '123456789012')));
       expect(presentation.journeyEvent!.endpoint.time!.year, 2026);
     });
@@ -311,155 +269,6 @@ void main() {
     });
   });
 
-  testWidgets('TripsPage 展示地方交通卡行程（实时读取）', (tester) async {
-    final app = _App(
-      _whctcCard(
-        trips: [
-          _trip(
-            recordNumber: 1,
-            posType: 0x06,
-            balanceDelta: -1000,
-            timestamp: DateTime(2026, 10, 21, 12, 30),
-          ),
-        ],
-      ),
-    );
-    addTearDown(app.dispose);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(body: TripsPage(app: app)),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('暂无行程数据'), findsNothing);
-    expect(find.text('武汉通'), findsWidgets);
-    expect(find.text('地方交通卡 · 1 条记录'), findsOneWidget);
-    final view = tester.widget<TripCardsView>(
-      find.byWidgetPredicate((widget) => widget is TripCardsView),
-    );
-    expect(view.entries, hasLength(1));
-    expect(view.entries.single.mode, TripModeFilter.rail);
-    expect(find.text('记录 1 条'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('岭南通行程卡不显示类型码，详情仍保留原始记录', (tester) async {
-    final app = _App(_walletCard(
-      CardParserIds.lingnanTong,
-      localTrips: [_trip(
-        posType: 0x06,
-        balanceDelta: -180,
-        rawBody: [0, 1, 0x06],
-      )],
-    ));
-    addTearDown(app.dispose);
-    await tester.pumpWidget(
-      MaterialApp(home: Scaffold(body: TripsPage(app: app))),
-    );
-    await tester.pumpAndSettle();
-    expect(find.textContaining('岭南通·羊城通'), findsNothing);
-    expect(find.textContaining('类型 0x06'), findsNothing);
-    final card = tester.widget<TripEntryCard>(find.byType(TripEntryCard));
-    expect(card.info.title, startsWith('岭南通 · 消费'));
-    expect(card.info.subText, isNull);
-    expect(card.info.fields.map((field) => field.$1),
-        isNot(contains('类型字节')));
-    expect(card.info.rawHex, '000106');
-    await tester.tap(find.byType(TripEntryCard).first);
-    await tester.pumpAndSettle();
-    expect(find.text('类型字节'), findsNothing);
-    expect(find.text('000106'), findsOneWidget);
-  });
-
-  testWidgets('PAY.TICL 行程只出现一次，相同原码的深圳钱包记录仍独立', (tester) async {
-    final same = _trip(rawBody: [0, 0x59]);
-    final primary = _walletCard(CardParserIds.lingnanTong, localTrips: [same]);
-    final ticl = _walletCard(
-      CardParserIds.lingnanTong,
-      localTrips: [same],
-    ).localCard!;
-    final shenzhen = _walletCard(
-      CardParserIds.shenzhenTunion,
-      localTrips: [same],
-    ).localCard!;
-    final app = _App(
-      primary,
-      applications: [
-        ApplicationEvidence.succeeded('lingnan', 'PAY.TICL', payload: ticl),
-        ApplicationEvidence.succeeded('shenzhen', 'PAY.SZT', payload: shenzhen),
-      ],
-    );
-    addTearDown(app.dispose);
-    await tester.pumpWidget(
-      MaterialApp(home: Scaffold(body: TripsPage(app: app))),
-    );
-    await tester.pumpAndSettle();
-    final lists = tester.widgetList<LocalCardTripList>(
-      find.byType(LocalCardTripList),
-    );
-    expect(lists.map((list) => list.profile), [
-      LocalTripProfile.lingnan,
-      LocalTripProfile.shenzhen,
-    ]);
-    expect(lists.map((list) => list.trips.single.rawBody), [
-      [0, 0x59], [0, 0x59],
-    ]);
-  });
-
-  testWidgets('旧岭南通恢复现场名称和行程均使用当前展示规则', (tester) async {
-    final app = _App(_walletCard(
-      CardParserIds.lingnanTong,
-      localTrips: const [],
-    ));
-    addTearDown(app.dispose);
-    final snapshot = CardSessionSnapshot(extensions: {
-      'lingnanTong': {
-        'records': [{
-          'recordNumber': 1,
-          'fileSelector': 0xC4,
-          'timestamp': DateTime.utc(2024, 10, 27, 21, 13)
-              .millisecondsSinceEpoch,
-          'subtype': 0x06,
-          'amountDelta': -180,
-          'rawBody': [0, 1, 0x06],
-        }],
-      },
-    });
-    final raw = snapshot.encode();
-    app.recoveredCapture = RecoveryCapture(
-      readAt: DateTime.utc(2026, 11, 11),
-      summary: const {
-        'parserId': CardParserIds.lingnanTong,
-        'cardName': '岭南通·羊城通',
-      },
-      frames: const [],
-      snapshotJson: raw,
-    );
-    await tester.pumpWidget(MaterialApp(home: Scaffold(
-      body: SingleChildScrollView(child: RecoveryResultPanel(app: app)),
-    )));
-    await tester.pumpAndSettle();
-    expect(find.text('岭南通'), findsWidgets);
-    expect(find.textContaining('岭南通·羊城通'), findsNothing);
-    expect(find.byType(TripEntryCard), findsOneWidget);
-    expect(find.textContaining('类型 0x06'), findsNothing);
-    expect(app.recoveredCapture!.snapshotJson, raw);
-  });
-
-  testWidgets('TripsPage 无地方卡行程时不显示地方卡区块', (tester) async {
-    final app = _App(_whctcCard());
-    addTearDown(app.dispose);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(body: TripsPage(app: app)),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('暂无行程数据'), findsOneWidget);
-    expect(find.text('地方交通卡 · '), findsNothing);
-  });
-
   for (final parser in [
     CardParserIds.lingnanTong,
     CardParserIds.lingnanTunion,
@@ -492,33 +301,6 @@ void main() {
         expect(view.localReadResult!.trips, hasLength(1));
       });
     }
-    testWidgets('$parser 的本地钱包流水和 TU 行程在实时页独立展示', (tester) async {
-      final app = _App(
-        _walletCard(
-          parser,
-          localTrips: [_trip(recordNumber: 1, balanceDelta: -100)],
-        ),
-      );
-      addTearDown(app.dispose);
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(body: TripsPage(app: app)),
-        ),
-      );
-      await tester.pumpAndSettle();
-      final view = tester.widget<LocalCardTripList>(
-        find.byType(LocalCardTripList),
-      );
-      expect(view.trips, hasLength(1));
-      expect(
-        view.profile,
-        parser == CardParserIds.shenzhenTunion
-            ? LocalTripProfile.shenzhen
-            : LocalTripProfile.lingnan,
-      );
-      expect(find.text('暂无行程数据'), findsNothing);
-      expect(tester.takeException(), isNull);
-    });
   }
 
   test('岭南通旧快照和深圳通新快照独立投影为票据，不改写原文', () {
@@ -590,18 +372,28 @@ void main() {
   });
 
   test('旧深圳通本地快照仍按深圳通来源展示，不按 SFI 18 推断地铁', () {
-    final snapshot = CardSessionSnapshot(extensions: {
-      'localCardTrips': {
-        'cardKindLabel': '深圳通',
-        'records': [{
-          'recordNumber': 1,
-          'fileSelector': 0xC4,
-          'timestamp': DateTime(2026, 10, 31, 12, 34).millisecondsSinceEpoch,
-          'balanceDelta': -300,
-          'rawBody': [0, 23],
-        }],
+    final snapshot = CardSessionSnapshot(
+      extensions: {
+        'localCardTrips': {
+          'cardKindLabel': '深圳通',
+          'records': [
+            {
+              'recordNumber': 1,
+              'fileSelector': 0xC4,
+              'timestamp': DateTime(
+                2026,
+                10,
+                31,
+                12,
+                34,
+              ).millisecondsSinceEpoch,
+              'balanceDelta': -300,
+              'rawBody': [0, 23],
+            },
+          ],
+        },
       },
-    });
+    );
     final raw = snapshot.encode();
     final decoded = CardSessionSnapshot.decodeResult(raw);
     final batch = ArchiveBatchEvidence(
@@ -614,8 +406,10 @@ void main() {
       issues: const [],
     );
     final row = ArchiveHistory.projectLocalCardRecords([batch]).single;
-    expect(localTripProfileOf(row.fields, cardType: row.cardType),
-        LocalTripProfile.shenzhen);
+    expect(
+      localTripProfileOf(row.fields, cardType: row.cardType),
+      LocalTripProfile.shenzhen,
+    );
     final presentation = describeLocalTrip(
       restoreLocalTripRecord(row.fields, profile: LocalTripProfile.shenzhen)!,
       currencySymbol: '¥',
@@ -696,70 +490,6 @@ void main() {
     });
   }
 
-  testWidgets('归档和恢复投影将岭南通与深圳通钱包用票据展示，未解码旧行保留文本', (tester) async {
-    final local = [
-      LocalCardHistoryRecord(
-        cardType: 'lingnanTong',
-        batchId: 'old',
-        fields: {
-          'recordNumber': 1,
-          'fileSelector': 0xC4,
-          'timestamp': DateTime.utc(
-            2024,
-            10,
-            27,
-            21,
-            13,
-          ).millisecondsSinceEpoch,
-          'subtype': 0x09,
-          'amountDelta': -100,
-          'isMetro': true,
-          'rawBody': [0, 11],
-        },
-      ),
-      LocalCardHistoryRecord(
-        cardType: 'shenzhenTong',
-        batchId: 'new',
-        fields: {
-          'recordNumber': 2,
-          'fileSelector': 0xC4,
-          'timestamp': DateTime(2026, 10, 31, 12, 34).millisecondsSinceEpoch,
-          'posType': 0x09,
-          'balanceDelta': -300,
-          'rawBody': [0, 23],
-        },
-      ),
-      const LocalCardHistoryRecord(
-        cardType: 'shenzhenTong',
-        batchId: 'legacy',
-        fields: {
-          'recordNumber': 3,
-          'response': [1, 2],
-        },
-      ),
-    ];
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SingleChildScrollView(
-            child: Column(
-              children: [
-                ArchivedLocalCardTrips(records: local),
-                LocalCardHistoryRecords(records: local),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.byType(TripEntryCard), findsNWidgets(2));
-    expect(find.text('岭南通 · 1 条记录'), findsOneWidget);
-    expect(find.text('深圳通 · 1 条记录'), findsOneWidget);
-    expect(find.text('本地卡交易记录 · 1 条'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
-
   test('归档保存 localCardTrips 扩展并可导出', () async {
     final repository = CardRepository(testDatabase());
     final controller = ArchiveController(
@@ -805,127 +535,5 @@ void main() {
     expect(exported, contains('地方交通卡行程（1 条）'));
     expect(exported, contains('消费 · 序号 1'));
     expect(exported, contains('-¥10.00'));
-  });
-
-  testWidgets('卡片详情用票据式行程卡展示地方卡行程', (tester) async {
-    final repository = CardRepository(testDatabase());
-    final controller = ArchiveController(
-      repository,
-      const MethodChannelLogExporter(),
-      (_) {},
-    );
-    addTearDown(controller.dispose);
-    controller.stage(
-      ScanPresentation(
-        TransitReadOutcome(
-          _whctcCard(
-            trips: [
-              _trip(
-                recordNumber: 1,
-                posType: 0x06,
-                balanceDelta: -1000,
-                timestamp: DateTime(2026, 10, 21, 12, 30),
-              ),
-            ],
-          ),
-        ),
-        KnowledgeBase.empty(),
-      ),
-      'whctc-capture',
-      DateTime.utc(2026, 10, 26),
-      const [],
-    );
-    final pending = controller.pending!;
-    expect(await controller.accept(pending.pendingSaveId), isTrue);
-    final saved = (await repository.getAllCards()).single;
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: CardDetailPage(repository: repository, cardId: saved.id),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('地方交通卡 · 1 条记录'), findsOneWidget);
-    final tripCard = tester.widget<TripEntryCard>(find.byType(TripEntryCard));
-    expect(tripCard.journey, isNotNull);
-    expect(tripCard.info.amountText, '-¥10.00');
-    expect(tripCard.info.fields, contains(('记录类型', '消费')));
-    expect(tester.takeException(), isNull);
-    await tester.ensureVisible(find.byType(TripEntryCard));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byType(TripEntryCard));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('记录来源：地铁流水'), findsOneWidget);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pumpAndSettle();
-  });
-
-  testWidgets('恢复现场投影含 localCardTrips 且票据还原可复用', (tester) async {
-    final snapshot = CardSessionSnapshot(
-      parseVersion: 15,
-      context: const ArchiveContext(
-        systemId: CardParserIds.localCard,
-        currencyCode: 'CNY',
-        minorUnitDigits: 2,
-      ),
-      extensions: {
-        'localCardTrips': {
-          'cardKindLabel': '武汉通',
-          'version': 1,
-          'records': [
-            {
-              'recordNumber': 1,
-              'fileSelector': TripFile.metro.p2,
-              'statusCode': 0,
-              'posType': 0x06,
-              'timestamp': DateTime(
-                2026,
-                10,
-                21,
-                12,
-                30,
-              ).millisecondsSinceEpoch,
-              'balanceDelta': -1000,
-              'cityCode': 0,
-              'isMetro': false,
-              'isBus': false,
-              'terminalHex': '123456789012',
-              'rawBody': [0x00, 0x01, 0x02],
-            },
-          ],
-        },
-      },
-    );
-    final batch = ArchiveBatchEvidence(
-      id: 'recovered',
-      readAt: DateTime(2026, 10, 26).millisecondsSinceEpoch,
-      storedParseVersion: 15,
-      origin: 'memory_recovery',
-      timeSource: 'captured',
-      decoded: CardSessionSnapshot.decodeResult(snapshot.encode()),
-      issues: const [],
-    );
-    final history = ArchiveHistoryResult(
-      card: null,
-      batches: [batch],
-      localCardRecords: ArchiveHistory.projectLocalCardRecords([batch]),
-    );
-    final local = history.localCardRecords
-        .where((record) => record.cardType == 'localCardTrips')
-        .toList();
-    expect(local, hasLength(1));
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SingleChildScrollView(
-            child: ArchivedLocalCardTrips(records: local),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('地方交通卡 · 1 条记录'), findsOneWidget);
-    expect(find.text('-¥10.00'), findsOneWidget);
-    expect(tester.takeException(), isNull);
   });
 }

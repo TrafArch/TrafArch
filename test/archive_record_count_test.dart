@@ -3,9 +3,7 @@ import 'dart:convert';
 
 import 'package:drift/drift.dart' show Value, driftRuntimeOptions;
 import 'package:drift/native.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/app/app_dependencies.dart';
 import 'package:transit_card_analyzer/features/archive/application/archive_history.dart';
 import 'package:transit_card_analyzer/features/archive/application/archive_record_count.dart';
 import 'package:transit_card_analyzer/features/archive/application/archive_records_json.dart';
@@ -16,20 +14,14 @@ import 'package:transit_card_analyzer/features/archive/domain/card_archive_docum
 import 'package:transit_card_analyzer/features/archive/domain/card_archive_identity.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_session_snapshot.dart';
 import 'package:transit_card_analyzer/features/archive/presentation/shanghai_archive_mirrored_records.dart';
-import 'package:transit_card_analyzer/features/cards/cards_page.dart';
-import 'package:transit_card_analyzer/features/archive/presentation/card_detail_page.dart';
 import 'package:transit_card_analyzer/features/reference_data/domain/reference_match.dart';
 import 'package:transit_card_analyzer/features/transit_analysis/cu_transaction_analysis.dart';
 import 'package:transit_card_analyzer/features/transit_analysis/tunion_analysis_models.dart';
-import 'package:transit_card_analyzer/platform/storage/app_logger.dart';
-import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
 import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/city_union/city_union_models.dart';
 import 'package:transit_card_analyzer/protocols/transit/city_union/city_union_file_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_models.dart';
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_trip_matcher.dart';
-
-import 'support/test_database.dart';
 
 void main() {
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
@@ -541,111 +533,6 @@ void main() {
     expect(ArchiveRecordCount.fromHistory(history).savedRecordCount, 2);
     expect(projectArchiveRecords([history]), hasLength(2));
   });
-
-  testWidgets('one damaged archive keeps names and healthy cards in the list', (
-    tester,
-  ) async {
-    final db = testDatabase();
-    final app = AppDependencies(
-      database: db,
-      settingsStore: MemorySettingsStore(),
-      logger: AppLogger(store: MemoryLogStore()),
-    );
-    addTearDown(app.dispose);
-    await app.cardRepository.importDocuments([
-      CardArchiveDocument(
-        card: _card(),
-        batches: [],
-        fieldObservationTimes: {},
-        importedRecords: [
-          {'amount': '-1.00'},
-        ],
-      ),
-      CardArchiveDocument(
-        card: _card(count: 10).copyWith(
-          id: 'damaged',
-          cardFingerprint: 'fingerprint-damaged',
-          officialName: const Value('损坏档案卡'),
-        ),
-        batches: [],
-        fieldObservationTimes: {},
-      ),
-    ]);
-    await db.customStatement(
-      'UPDATE archive_documents SET payload_json=? WHERE card_id=?',
-      ['{broken', 'damaged'],
-    );
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(body: CardsPage(app: app)),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('累计记录测试卡'), findsOneWidget);
-    expect(find.text('损坏档案卡'), findsOneWidget);
-    expect(find.text('已保存 1 条'), findsOneWidget);
-    expect(find.text('记录数待核实'), findsOneWidget);
-    expect(find.byTooltip('卡片操作'), findsNWidgets(2));
-    expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox());
-    await tester.pump();
-  });
-
-  testWidgets(
-    'card list displays cumulative saved records and refreshes batch-only changes',
-    (tester) async {
-      final db = testDatabase();
-      final app = AppDependencies(
-        database: db,
-        settingsStore: MemorySettingsStore(),
-        logger: AppLogger(store: MemoryLogStore()),
-      );
-      addTearDown(app.dispose);
-      await app.cardRepository.importDocuments([
-        CardArchiveDocument(
-          card: _card(count: 10),
-          batches: [
-            _batch(
-              'one',
-              CardSessionSnapshot(
-                trips: [for (var i = 1; i <= 15; i++) _trip(i)],
-              ).encode(),
-            ),
-          ],
-          fieldObservationTimes: {},
-        ),
-      ]);
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(body: CardsPage(app: app)),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('已保存 15 条'), findsOneWidget);
-      expect(find.text('10条'), findsNothing);
-
-      await db
-          .into(db.cardReadBatches)
-          .insert(
-            _batch('two', CardSessionSnapshot(trips: [_trip(16)]).encode()),
-          );
-      await tester.pumpAndSettle();
-      expect(find.text('已保存 16 条'), findsOneWidget);
-      expect(
-        (await app.cardRepository.getAllCards()).single.transactionCount,
-        10,
-      );
-      await tester.tap(find.text('累计记录测试卡'));
-      await tester.pumpAndSettle();
-      expect(find.byType(CardDetailPage), findsOneWidget);
-      expect(find.text('已保存记录'), findsOneWidget);
-      expect(find.text('16条'), findsOneWidget);
-      expect(find.text('10条'), findsNothing);
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox());
-      await tester.pump();
-    },
-  );
 }
 
 SavedCard _card({int? count, String? snapshot, int at = 100}) => SavedCard(

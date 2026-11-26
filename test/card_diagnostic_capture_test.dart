@@ -1,8 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/features/expert/raw_data_panel.dart';
-import 'package:flutter/material.dart';
 import 'package:transit_card_analyzer/features/scan/application/card_read_coordinator.dart';
 import 'package:transit_card_analyzer/features/scan/application/scan_controller.dart';
 import 'package:transit_card_analyzer/features/scan/domain/card_read_outcome.dart';
@@ -140,36 +138,6 @@ void main() {
     expect(classifyRawCommand([0, 0xB0, 0x15, 0, 0]).sfi, isNull);
     expect(classifyRawCommand([0, 0xB2, 1, 0, 0]).sfi, isNull);
     expect(classifyRawCommand([]).category, RawDataCategory.other);
-  });
-
-  testWidgets('专家原始页使用同样分类且保留完整通信顺序与过程原文', (tester) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SingleChildScrollView(
-            child: RawDataPanel(
-              apduLog: const [
-                '>> 00 A4 04 00 01 A0\n<< 90 00',
-                '>> 00 B2 01 D4 00\n<< 01 02 90 00',
-                '>> 00 B2 07 F4 00\n<< 06 07 90 00',
-              ],
-              processRecords: _process,
-            ),
-          ),
-        ),
-      ),
-    );
-    for (final category in [
-      RawDataCategory.selection,
-      RawDataCategory.file1A,
-      RawDataCategory.file1E,
-    ]) {
-      expect(find.text(category.label), findsOneWidget);
-    }
-    expect(find.text(ProcessDataCategory.rail1A.label), findsOneWidget);
-    expect(find.text(ProcessDataCategory.bus1A.label), findsOneWidget);
-    expect(find.text(ProcessDataCategory.cycle1E.label), findsNWidgets(2));
-    expect(find.text('00 00'), findsOneWidget);
   });
 }
 

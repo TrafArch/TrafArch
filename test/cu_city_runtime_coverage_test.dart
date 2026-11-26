@@ -2,15 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/features/expert/city_union_panel.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/city_union_region_database.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/city_union_lookup_rules.dart';
 import 'package:transit_card_analyzer/features/reference_data/domain/reference_match.dart';
 import 'package:transit_card_analyzer/features/reference_data/domain/region_db_store.dart';
-import 'package:transit_card_analyzer/protocols/transit/city_union/city_union_models.dart';
-import 'package:transit_card_analyzer/protocols/transit/city_union/cj_t331_wallet_local_consumption_parser.dart';
 
 // Coverage uses the published CU package and its public runtime interfaces.
 // Database rows are the independent oracle for preservation/reachability;
@@ -45,21 +41,6 @@ void main() {
   late Directory temporary;
   late CityUnionRegionDatabaseContent content;
   late CityUnionRegionKnowledgeDb live;
-  String? resolveName(
-    String? terminal, {
-    String? cityCode,
-    int? decodedCarrierType,
-    DateTime? transactionTime,
-    bool busLookupEnabled = false,
-  }) => content.terminalMatcher
-      .match(
-        terminal,
-        cityCode: cityCode,
-        decodedCarrierType: decodedCarrierType,
-        transactionTime: transactionTime,
-        busLookupEnabled: busLookupEnabled,
-      )
-      ?.displayLabel;
 
   setUpAll(() async {
     temporary = Directory.systemTemp.createTempSync('trafarch-cu-coverage-');
@@ -486,73 +467,6 @@ void main() {
     },
   );
 
-  for (final sample in [
-    ('20240920', '120000', '徐泾东'),
-    ('20240921', '040000', '国家会展中心'),
-  ]) {
-    testWidgets('CU panel passes original local time for ${sample.$3}', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SingleChildScrollView(
-              child: CityUnionPanel(
-                files: [
-                  const CjT331PublicInfo(
-                    cityCode: '2000',
-                    fields: [],
-                    rawHex: '',
-                  ),
-                  _cuRecord('200011023400', sample.$1, sample.$2),
-                ],
-                resolveStationName: resolveName,
-              ),
-            ),
-          ),
-        ),
-      );
-      await tester.tap(find.text('电子钱包本地消费交易明细（0x18）'));
-      await tester.pumpAndSettle();
-      expect(find.textContaining(sample.$3), findsWidgets);
-    });
-  }
-
-  testWidgets(
-    'CU panel passes independently decoded Shenzhen carrier and explicit bus option',
-    (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SingleChildScrollView(
-              child: CityUnionPanel(
-                files: [
-                  const CjT331PublicInfo(
-                    cityCode: '5180',
-                    fields: [],
-                    rawHex: '',
-                  ),
-                  _cuRecord(
-                    '000020000001',
-                    '20241201',
-                    '120000',
-                    instruction: 0x09,
-                  ),
-                ],
-                terminalProfile: CuLocalTerminalProfile.shenzhen,
-                busLookupEnabled: true,
-                resolveStationName: resolveName,
-              ),
-            ),
-          ),
-        ),
-      );
-      await tester.tap(find.text('电子钱包本地消费交易明细（0x18）'));
-      await tester.pumpAndSettle();
-      expect(find.textContaining('东部公交 · 963'), findsOneWidget);
-    },
-  );
-
   test('CU terminal normalization requires an explicit recognized local-card profile', () {
     final standard = CityUnionLookupRules.identifyTerminal(
       '000030000001',
@@ -591,90 +505,4 @@ void main() {
     expect(foreign.regionCode, '5180');
     expect(foreign.carrier, 1);
   });
-
-  for (final instruction in [0x06, 0x09]) {
-    testWidgets(
-      'CU panel does not turn instruction $instruction into a carrier or invent missing time',
-      (tester) async {
-        final record = _cuRecord(
-          '999999999999',
-          '20240231',
-          '120000',
-          instruction: instruction,
-        );
-        int? receivedCarrier = -999;
-        DateTime? receivedTime = DateTime.utc(2099);
-        await tester.pumpWidget(
-          MaterialApp(
-            home: Scaffold(
-              body: SingleChildScrollView(
-                child: CityUnionPanel(
-                  files: [
-                    const CjT331PublicInfo(
-                      cityCode: '2000',
-                      fields: [],
-                      rawHex: '',
-                    ),
-                    record,
-                  ],
-                  resolveStationName:
-                      (
-                        terminal, {
-                        cityCode,
-                        decodedCarrierType,
-                        transactionTime,
-                        busLookupEnabled = false,
-                      }) {
-                        receivedCarrier = decodedCarrierType;
-                        receivedTime = transactionTime;
-                        return content.terminalMatcher
-                            .match(
-                              terminal,
-                              cityCode: cityCode,
-                              decodedCarrierType: decodedCarrierType,
-                              transactionTime: transactionTime,
-                              busLookupEnabled: busLookupEnabled,
-                            )
-                            ?.displayLabel;
-                      },
-                ),
-              ),
-            ),
-          ),
-        );
-        await tester.tap(find.text('电子钱包本地消费交易明细（0x18）'));
-        await tester.pumpAndSettle();
-        expect(receivedCarrier, isNull);
-        expect(receivedTime, isNull);
-        expect(find.text('站点（终端解析）'), findsNothing);
-      },
-    );
-  }
-}
-
-CjT331WalletLocalConsumption _cuRecord(
-  String terminal,
-  String date,
-  String time, {
-  int instruction = 0x06,
-}) {
-  List<int> bcd(String value) => [
-    for (var i = 0; i < value.length; i += 2)
-      int.parse(value.substring(i, i + 2), radix: 16),
-  ];
-  return CjT331WalletLocalConsumptionParser.parseRecord([
-    0,
-    1,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    1,
-    instruction,
-    ...bcd(terminal),
-    ...bcd(date),
-    ...bcd(time),
-  ]);
 }

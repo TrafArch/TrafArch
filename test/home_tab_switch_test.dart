@@ -11,7 +11,7 @@ import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
 import 'support/test_database.dart';
 
 void main() {
-  testWidgets('legacy home waits for NFC to be enabled before its first scan', (
+  testWidgets('home enables manual reading after NFC is turned on', (
     tester,
   ) async {
     final states = StreamController<NfcAdapterState>.broadcast(sync: true);
@@ -36,7 +36,7 @@ void main() {
     expect(find.textContaining('请先打开系统 NFC'), findsOneWidget);
     expect(
       tester
-          .widget<FilledButton>(find.widgetWithText(FilledButton, '开始读取'))
+          .widget<TextButton>(find.widgetWithText(TextButton, '开始读取'))
           .onPressed,
       isNull,
     );
@@ -44,9 +44,13 @@ void main() {
 
     states.add(NfcAdapterState.enabled);
     await tester.pumpAndSettle();
-    expect(channel.discoveries, 1);
+    expect(channel.discoveries, 0);
     expect(find.textContaining('请先打开系统 NFC'), findsNothing);
+    await tester.tap(find.text('开始读取'));
+    await tester.pumpAndSettle();
+    expect(channel.discoveries, 1);
     await tester.pumpWidget(const SizedBox());
+    await tester.pump();
   });
 
   for (final width in [390.0, 800.0]) {
@@ -65,13 +69,14 @@ void main() {
       await tester.pumpWidget(
         TransitCardAnalyzerApp(createDependencies: () => app),
       );
-      await tester.pump();
+      await tester.pumpAndSettle();
 
-      await tester.tap(find.byIcon(Icons.directions_transit_outlined));
-      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('nav-trips')));
+      await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      expect(find.text('暂无行程数据'), findsOneWidget);
+      expect(find.text('尚未读取卡片'), findsOneWidget);
+      expect(find.text('前往首页'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox());
       await tester.pump();

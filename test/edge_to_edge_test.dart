@@ -2,17 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/app/app_dependencies.dart';
-import 'package:transit_card_analyzer/app/navigation/floating_nav_bar.dart';
 import 'package:transit_card_analyzer/app/trafarch_app.dart';
-import 'package:transit_card_analyzer/features/expert/expert_page.dart';
-import 'package:transit_card_analyzer/features/recovery/recovery_state.dart';
-import 'package:transit_card_analyzer/features/trips/trip_entry_details.dart';
-import 'package:transit_card_analyzer/features/trips/trip_entry_presenter.dart';
+import 'package:transit_card_analyzer/gallery/gallery_theme.dart';
 import 'package:transit_card_analyzer/platform/nfc/nfc_models.dart';
 import 'package:transit_card_analyzer/platform/nfc/nfc_service.dart';
 import 'package:transit_card_analyzer/platform/storage/app_logger.dart';
 import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
-import 'package:transit_card_analyzer/shared/presentation/ui_constants.dart';
 
 import 'support/test_database.dart';
 
@@ -63,11 +58,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     MaterialApp appWidget() => tester.widget(find.byType(MaterialApp));
-    expect(
-      appWidget().themeAnimationDuration,
-      const Duration(milliseconds: 200),
-    );
-    expect(appWidget().themeAnimationCurve, Curves.easeInOutCubic);
+    expect(appWidget().themeAnimationDuration, Duration.zero);
     tester.platformDispatcher.accessibilityFeaturesTestValue =
         const FakeAccessibilityFeatures(disableAnimations: true);
     await tester.pump();
@@ -75,10 +66,7 @@ void main() {
     tester.platformDispatcher.accessibilityFeaturesTestValue =
         const FakeAccessibilityFeatures(disableAnimations: false);
     await tester.pump();
-    expect(
-      appWidget().themeAnimationDuration,
-      const Duration(milliseconds: 200),
-    );
+    expect(appWidget().themeAnimationDuration, Duration.zero);
 
     Map<dynamic, dynamic> style() =>
         calls
@@ -91,8 +79,8 @@ void main() {
 
     expect(style()['systemNavigationBarIconBrightness'], 'Brightness.dark');
     expect(style()['statusBarIconBrightness'], 'Brightness.dark');
-    expect(style()['systemNavigationBarColor'], Colors.transparent.toARGB32());
-    expect(style()['systemNavigationBarContrastEnforced'], isTrue);
+    final tokens = appWidget().theme!.extension<GalleryTokens>()!;
+    expect(style()['systemNavigationBarColor'], tokens.canvas.toARGB32());
 
     tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
     await tester.pumpAndSettle();
@@ -102,7 +90,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('读卡与数据'), findsOneWidget);
     expect(style()['systemNavigationBarIconBrightness'], 'Brightness.light');
-    await tester.pageBack();
+    await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
     tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
     await tester.pumpAndSettle();
@@ -110,148 +98,6 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
     await tester.pump();
-  });
-
-  testWidgets('手机与平板统一悬浮底栏，标题及底栏避开系统安全区且不叠加', (tester) async {
-    addTearDown(tester.view.reset);
-    final app = _app();
-    await tester.runAsync(app.init);
-    for (final (size, insets) in [
-      (const Size(390, 844), const FakeViewPadding(top: 32, bottom: 24)),
-      (const Size(390, 844), const FakeViewPadding(top: 32, bottom: 48)),
-      (
-        const Size(844, 390),
-        const FakeViewPadding(left: 44, right: 24, bottom: 24),
-      ),
-      (const Size(1000, 800), const FakeViewPadding(top: 32, right: 48)),
-      (
-        const Size(1000, 800),
-        const FakeViewPadding(top: 48, bottom: 24, left: 44, right: 24),
-      ),
-    ]) {
-      _window(tester, size, insets);
-      await tester.pumpWidget(MaterialApp(home: AppShell(app: app)));
-      await tester.pumpAndSettle();
-      final title = tester.getRect(find.text('TrafArch'));
-      expect(title.top, greaterThanOrEqualTo(insets.top));
-      expect(title.left, greaterThanOrEqualTo(insets.left));
-      expect(find.byType(NavigationRail), findsNothing);
-      expect(find.byType(VerticalDivider), findsNothing);
-      final bar = tester.getRect(find.byType(FloatingNavBar));
-      expect(
-        bar.size,
-        const Size(
-          UiConstants.floatingNavBarWidth,
-          UiConstants.floatingNavBarHeight,
-        ),
-      );
-      expect(bar.bottom, closeTo(size.height - insets.bottom - 20, 0.1));
-      expect(bar.left, greaterThanOrEqualTo(insets.left));
-      expect(bar.right, lessThanOrEqualTo(size.width - insets.right));
-      expect(
-        bar.center.dx,
-        closeTo((size.width + insets.left - insets.right) / 2, 0.1),
-      );
-      // 页面 AppBar 继续独立消费一次顶部安全区，标题不多加一层留白。
-      final appBar = tester.getRect(find.byType(AppBar));
-      expect(appBar.top, 0);
-      expect(appBar.bottom, insets.top + kToolbarHeight);
-      expect(tester.takeException(), isNull);
-    }
-    await tester.pumpWidget(const SizedBox());
-    await tester.pump();
-    app.dispose();
-  });
-
-  for (final bottom in [24.0, 48.0]) {
-    testWidgets('详情弹层在底部安全区 $bottom 下仍能滚动并点击最后操作', (tester) async {
-      addTearDown(tester.view.reset);
-      _window(
-        tester,
-        const Size(390, 844),
-        FakeViewPadding(top: 32, bottom: bottom),
-      );
-      var tapped = false;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Builder(
-              builder: (context) => Center(
-                child: TextButton(
-                  onPressed: () => showTripEntryDetails(
-                    context,
-                    TripEntryInfo(
-                      sourceLabel: '测试记录',
-                      title: '记录详情',
-                      isConsume: true,
-                      fields: [
-                        for (var i = 0; i < 35; i++) ('字段 $i', '原始值 $i'),
-                      ],
-                    ),
-                    onDiagnostics: () => tapped = true,
-                  ),
-                  child: const Text('打开记录'),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-      await tester.tap(find.text('打开记录'));
-      await tester.pumpAndSettle();
-      final list = find.descendant(
-        of: find.byType(DraggableScrollableSheet),
-        matching: find.byType(ListView),
-      );
-      expect(tester.getRect(list).bottom, closeTo(844 - bottom, 0.1));
-      final lastAction = find.text('查看记录来源');
-      await tester.scrollUntilVisible(
-        lastAction,
-        250,
-        scrollable: find
-            .descendant(of: list, matching: find.byType(Scrollable))
-            .first,
-      );
-      await tester.pumpAndSettle();
-      expect(
-        tester.getRect(lastAction).bottom,
-        lessThanOrEqualTo(844 - bottom),
-      );
-      await tester.tap(lastAction);
-      expect(tapped, isTrue);
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox());
-    });
-  }
-
-  testWidgets('恢复的专家页在横屏避开侧边刘海和系统导航栏', (tester) async {
-    addTearDown(tester.view.reset);
-    _window(
-      tester,
-      const Size(844, 390),
-      const FakeViewPadding(left: 44, right: 48, bottom: 24),
-    );
-    final app = _app();
-    app.recoveredCapture = RecoveryCapture(
-      readAt: DateTime(2026, 11, 5),
-      summary: const {'cardName': '测试卡'},
-      frames: const [],
-    );
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(body: ExpertPage(app: app)),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('专家分析 · 上次读取'), findsOneWidget);
-    final body = tester.getRect(find.byType(ListView));
-    expect(body.left, 44);
-    expect(body.right, lessThanOrEqualTo(844 - 48));
-    expect(body.bottom, lessThanOrEqualTo(390 - 24));
-    expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox());
-    await tester.pump();
-    app.dispose();
   });
 }
 

@@ -1,5 +1,5 @@
 import '../../trips/journey_presentation.dart';
-import '../../trips/trip_cards_view.dart';
+import '../../trips/trip_card_presentation.dart';
 import '../../trips/trip_filters.dart';
 import '../application/archive_history.dart';
 
