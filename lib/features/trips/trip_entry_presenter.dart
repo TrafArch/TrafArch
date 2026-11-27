@@ -1,5 +1,6 @@
 import '../transit_analysis/tunion_analysis_models.dart';
 import '../reference_data/domain/station_codes.dart';
+import '../reference_data/domain/tu_transit_facility.dart';
 import '../reference_data/data/tunion_bus_location.dart';
 import '../transit_analysis/tunion_record_context.dart';
 import 'trip_presentation_context.dart';
@@ -7,14 +8,17 @@ import 'trip_presentation_context.dart';
 /// 条目的统一展示数据（卡片与详情弹层共用，避免两处口径不一致）。
 class TripEntryInfo {
   final String sourceLabel;
-  final String title;
+  final String _title;
+  String get title => facility?.nameLabel ?? _title;
+  final TuTransitFacility? facility;
   final String? line;
   final String? timeText;
   final String? amountText;
   final bool isConsume;
   final bool isRecharge;
   final String? subText;
-  final String? category;
+  final String? _category;
+  String? get category => facility?.modeLabel ?? _category;
   final List<String> badges;
   final String? related;
   final String? rawHex;
@@ -25,14 +29,15 @@ class TripEntryInfo {
 
   const TripEntryInfo({
     required this.sourceLabel,
-    required this.title,
+    required this._title,
     required this.isConsume,
     this.isRecharge = false,
     this.line,
     this.timeText,
     this.amountText,
     this.subText,
-    this.category,
+    this._category,
+    this.facility,
     this.badges = const [],
     this.related,
     this.rawHex,
@@ -44,6 +49,7 @@ class TripEntryInfo {
   TripEntryInfo withRemoteCity(String city) => TripEntryInfo(
     sourceLabel: sourceLabel,
     title: title,
+    facility: facility,
     line: line,
     timeText: timeText,
     amountText: amountText,
@@ -98,6 +104,13 @@ TripEntryInfo _describeEntry(TripEntry entry, TripPresentationContext display) {
       ].where((b) => b.isNotEmpty).toList();
       return TripEntryInfo(
         sourceLabel: '0x18 交易明细',
+        facility: facilityForBusTransaction(
+          isBusPurchase:
+              trip.isConsume && !trip.isRecharge && trip.appTypeCode == 0x02,
+          matchedCycle: trip.matchedProcessTrip,
+          cityCode: trip.cityCode,
+          line: trip.resolvedBusLineLabel ?? trip.lineLabel,
+        ),
         title: trip.isRecharge
             ? '充值'
             : <String>[
@@ -212,8 +225,9 @@ TripEntryInfo _describeEntry(TripEntry entry, TripPresentationContext display) {
           ? record.entryStationCode
           : record.exitStationCode;
       final rawLine = isEntry ? record.entryLineCode : record.exitLineCode;
+      final city = isEntry ? record.entryCityCode : record.exitCityCode;
       final location = display.resolveBusLocation(
-        isEntry ? record.entryCityCode : record.exitCityCode,
+        city,
         busRecordLocationField(
           rawLine,
           rawStation,
@@ -233,6 +247,9 @@ TripEntryInfo _describeEntry(TripEntry entry, TripPresentationContext display) {
       final time = isEntry ? record.entryTime : record.exitTime;
       return TripEntryInfo(
         sourceLabel: '0x1A 公交记录',
+        facility: time == null
+            ? null
+            : TuTransitFacility.fromBusLine(city, rawLine),
         title: <String>[isEntry ? '上车' : '下车', ?station].join(' · '),
         line: location.lineLabel ?? rawLine,
         timeText: time == null ? null : _fmtTime(time),
@@ -296,6 +313,7 @@ TripEntryInfo _describeEntry(TripEntry entry, TripPresentationContext display) {
       final symbol = display.currency.symbol;
       return TripEntryInfo(
         sourceLabel: '0x1E 过程记录',
+        facility: facilityForBusCycle(record),
         title: record.isRecharge
             ? '充值'
             : <String>[

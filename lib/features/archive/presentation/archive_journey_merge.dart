@@ -98,7 +98,9 @@ String? archiveJourneyOperationKey(
       // against the original protocol payload, ignoring status/opposite side.
       if (side == null ||
           (event.role != JourneyEventRole.entry &&
-              event.role != JourneyEventRole.exit)) {
+              event.role != JourneyEventRole.exit &&
+              !(record.kind == ArchiveRecordKind.bus &&
+                  event.role == JourneyEventRole.single))) {
         return null;
       }
       final bytes = [

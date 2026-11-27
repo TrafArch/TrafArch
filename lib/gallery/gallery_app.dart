@@ -39,6 +39,7 @@ import '../features/qr/presentation/qr_acquire.dart';
 import '../features/recovery/recovery_state.dart';
 import '../features/reference_data/data/city_union_lookup_rules.dart';
 import '../features/reference_data/data/tunion_knowledge_base.dart';
+import '../features/reference_data/domain/tu_transit_facility.dart';
 import '../features/scan/application/scan_controller.dart';
 import '../features/settings/presentation/diagnostic_export_dialog.dart';
 import '../features/settings/presentation/firebase_analytics_tile.dart';

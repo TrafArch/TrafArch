@@ -523,7 +523,8 @@ extension _GalleryOverlays on _GalleryViewState {
         else
           _kv(
             '交通方式',
-            trip['mode'] as String? ??
+            (trip['facility'] as TuTransitFacility?)?.modeLabel ??
+                trip['mode'] as String? ??
                 switch (trip['kind']) {
                   'rail' => '城市轨道交通',
                   'bus' => '公共汽电车',

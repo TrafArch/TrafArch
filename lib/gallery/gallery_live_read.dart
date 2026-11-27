@@ -1332,6 +1332,8 @@ GalleryRecord _recordFromPresentation<T extends Enum>(
 }) {
   final info = entry.info;
   final events = journey?.events ?? const [];
+  final facility =
+      info.facility ?? infos.map((item) => item.facility).nonNulls.firstOrNull;
   final start =
       journey?.start ?? (event == null ? null : _singleEndpoint(event));
   final end = journey?.end;
@@ -1363,6 +1365,7 @@ GalleryRecord _recordFromPresentation<T extends Enum>(
   final line = start?.line ?? observed?.line ?? info.line ?? end?.line;
   final title = switch (kind) {
     'recharge' => '充值',
+    'bus' when facility != null => facility.nameLabel,
     'rail' when line != null && line.trim().isNotEmpty => '地铁 ${line.trim()}',
     'bus' when line != null && line.trim().isNotEmpty => '公交 ${line.trim()}',
     'rail' when completed => '地铁',
@@ -1412,6 +1415,7 @@ GalleryRecord _recordFromPresentation<T extends Enum>(
 
   return <String, dynamic>{
     'kind': kind,
+    'facility': ?facility,
     'date': clock.date,
     'isoDate': ?clock.isoDate,
     'time': clock.exitTime ?? clock.entryTime ?? info.timeText ?? '未记录',

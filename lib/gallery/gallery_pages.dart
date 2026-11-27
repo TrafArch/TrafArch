@@ -493,6 +493,7 @@ extension _GalleryPages on _GalleryViewState {
   Widget _trip(GalleryRecord trip, {bool interactive = true}) {
     final rail = trip['kind'] == 'rail';
     final bus = trip['kind'] == 'bus';
+    final facility = trip['facility'] as TuTransitFacility?;
     final event = trip['kind'] == 'event';
     final oneWay = trip['oneWay'] == true;
     final boarding = trip['entryTime'] as String? ?? '未记录';
@@ -509,11 +510,15 @@ extension _GalleryPages on _GalleryViewState {
       return label;
     }
 
-    final entry = trip['entryStation'] as String? ?? stationFallback(sub.first);
+    final entry =
+        facility?.nameLabel ??
+        trip['entryStation'] as String? ??
+        stationFallback(sub.first);
     final exit =
         trip['exitStation'] as String? ??
         (sub.length > 1 ? stationFallback(sub.last) : '未记录');
     final entryLine =
+        facility?.routeNumber ??
         trip['entryLine'] as String? ??
         (rail
             ? (trip['title'] as String).replaceFirst('地铁 ', '')
@@ -663,7 +668,15 @@ extension _GalleryPages on _GalleryViewState {
                               size: 23,
                               fallbackIcon: rail
                                   ? Icons.train_outlined
-                                  : Icons.directions_bus_outlined,
+                                  : switch (facility) {
+                                      TuTransitFacility.yangtzeCableway =>
+                                        Icons.tram_outlined,
+                                      TuTransitFacility.kaixuanRoadElevator =>
+                                        Icons.elevator_outlined,
+                                      TuTransitFacility.crownEscalator =>
+                                        Icons.escalator_outlined,
+                                      null => Icons.directions_bus_outlined,
+                                    },
                               fallbackColor: rail
                                   ? t.text
                                   : t.onSecondaryContainer,
@@ -671,7 +684,7 @@ extension _GalleryPages on _GalleryViewState {
                           ),
                         ),
                         _text(
-                          rail ? '轨道交通' : '公交',
+                          facility?.modeLabel ?? (rail ? '轨道交通' : '公交'),
                           role: GalleryJourneyTypography.mode,
                         ),
                         if (city.isNotEmpty) ...[
@@ -771,7 +784,9 @@ extension _GalleryPages on _GalleryViewState {
     return interactive
         ? Semantics(
             button: true,
-            label: bus
+            label: facility != null
+                ? '${facility.modeLabel}，${facility.routeNumber}，${facility.nameLabel}，${_tripClock(boarding)}'
+                : bus
                 ? '${trip['title']}，$entry${oneWay ? '' : ' → $exit'}'
                 : '${trip['title']}，${trip['sub']}，'
                       '${galleryDisplayAmount(trip['amount'] as String)}',

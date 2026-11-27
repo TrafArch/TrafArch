@@ -125,6 +125,55 @@ void main() {
     expect(event.endpoint.station, '站点10');
   });
 
+  test('重庆设施公交字段即使写有上下车方向也按两次乘坐投影', () {
+    for (final (city, line, expected) in [
+      ('6900', '701', '长江索道'),
+      ('6900', '703', '凯旋路电梯'),
+      ('6900', '704', '皇冠大扶梯'),
+      ('6900', '702', null),
+      ('1000', '704', null),
+    ]) {
+      final display = _display(busLine: line);
+      final events = <JourneyEvent<TripEntryInfo>>[];
+      for (final (type, minute, slot) in [(1, 0, 2), (2, 8, 1)]) {
+        final entry = ProcessTripEntry(
+          _cycle(
+            type: type,
+            app: 2,
+            city: city,
+            lineStationCode: '0${line}0000000000',
+            time: DateTime(2025, 7, 12, 10, minute),
+          ),
+        );
+        events.add(
+          describeJourneyEvent(
+            entry,
+            display,
+            describeTripEntry(entry, display, remote: true),
+            processPositions: {'live': slot},
+          ),
+        );
+      }
+      final journeys = projectJourneys(events);
+      if (expected == null) {
+        expect(
+          journeys.single.state,
+          JourneyState.completed,
+          reason: '$city/$line',
+        );
+      } else {
+        expect(journeys, hasLength(2), reason: '$city/$line');
+        for (final journey in journeys) {
+          expect(journey.state, JourneyState.single);
+          expect(journey.events.single.endpoint.line, expected);
+          expect(journey.events.single.endpoint.station, isNull);
+          expect(journey.start, isNull);
+          expect(journey.end, isNull);
+        }
+      }
+    }
+  });
+
   test('未匹配的公交原码不会添加路字或丢失前导零', () {
     final event = describeJourneyEvent(
       ProcessTripEntry(_cycle(type: 3, app: 2)),
