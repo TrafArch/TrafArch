@@ -28,6 +28,7 @@ import 'package:transit_card_analyzer/platform/storage/app_logger.dart';
 import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
 import 'package:transit_card_analyzer/protocols/octopus/octopus_balance.dart';
 import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
+import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_models.dart';
 import 'package:transit_card_analyzer/shared/domain/archive_conflict_policy.dart';
 
 import 'qingdao_cu_wallet_regression_test.dart' show qingdaoMetroReplay;
@@ -271,6 +272,73 @@ void main() {
       await _unmount(tester);
     });
   }
+
+  testWidgets('重庆一票制设施在卡包最近交易和详情中显示设施与编号', (tester) async {
+    final fixture = await _showGallery(tester, _CardKind.tu);
+    final snapshot = CardSessionSnapshot(
+      cardCityCode: '4401',
+      recordProvenance: const {
+        'cycle[0]': {
+          'capturedDisplay': {'line': '703路', 'cityName': '重庆市'},
+        },
+      },
+      processTrips: [
+        TUnionTripRecord(
+          typeCode: 6,
+          appTypeCode: 2,
+          cityCode: '6900',
+          terminalId: '0000000000000073',
+          lineStationCode: '07030000000000',
+          time: DateTime(2025, 7, 12, 10, 34),
+          amountFen: 100,
+          balanceFen: 5000,
+        ),
+      ],
+    );
+    await tester.runAsync(
+      () => fixture.app.cardRepository.saveIdentity(
+        fingerprint: 'test-facility',
+        identity: const CardArchiveIdentity(
+          cardType: 'china_tunion',
+          officialName: '重庆行程测试卡',
+        ),
+        sessionDataJson: snapshot.encode(),
+        readAt: _readAt,
+      ),
+    );
+    await _navigate(tester, 'cards');
+    await _settleIo(tester);
+    await tester.tap(find.text('重庆行程测试卡'));
+    await _settleIo(tester);
+    final ticket = find.byKey(const ValueKey('trip-one-way'));
+    expect(ticket, findsOneWidget);
+    for (final value in ['703', '凯旋路电梯', '10:34']) {
+      expect(
+        find.descendant(of: ticket, matching: find.text(value)),
+        findsOneWidget,
+      );
+    }
+    expect(find.text('电梯'), findsOneWidget);
+    expect(find.byIcon(Icons.elevator_outlined), findsOneWidget);
+    expect(
+      find.descendant(of: ticket, matching: find.text('未记录')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey('trip-direction-arrow')), findsNothing);
+    await tester.ensureVisible(ticket);
+    await tester.tap(ticket);
+    await tester.pumpAndSettle();
+    final sheet = find.byKey(const ValueKey('gallery-modal-surface'));
+    expect(
+      find.descendant(of: sheet, matching: find.text('电梯')),
+      findsNWidgets(2),
+    );
+    expect(
+      find.descendant(of: sheet, matching: find.text('凯旋路电梯')),
+      findsOneWidget,
+    );
+    await _unmount(tester);
+  });
 
   testWidgets('哈尔滨卡卡片详情显示 CU 镜像核实的站点，保留未知方向', (tester) async {
     final fixture = await _showGallery(tester, _CardKind.tu);

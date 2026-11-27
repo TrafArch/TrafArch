@@ -51,6 +51,47 @@ void main() {
     expect(mixed.entries, isEmpty);
     expect(mixed.format(mixed.total), '暂不可用');
   });
+
+  test('重庆一票制设施的三笔扣款各计一次乘行并显示设施名称', () {
+    final summary = projectGalleryArchiveSpending(
+      ArchiveHistoryResult(
+        card: null,
+        records: [
+          _record(amount: 100, busLine: '703', civil: '2025-07-12T10:34:39'),
+          _record(amount: 200, busLine: '704', civil: '2025-07-12T10:08:56'),
+          _record(amount: 200, busLine: '704', civil: '2025-07-12T10:00:28'),
+          _record(amount: 100, kind: ArchiveRecordKind.bus),
+        ],
+      ),
+    );
+    expect(summary.total, 500);
+    expect(summary.rideCount, 3);
+    expect(summary.entries.map((entry) => entry.record['title']), [
+      '凯旋路电梯',
+      '皇冠大扶梯',
+      '皇冠大扶梯',
+    ]);
+    expect(
+      summary.entries.map((entry) => entry.record['kind']),
+      everyElement('facility'),
+    );
+    expect(summary.categories, {'其他': 500});
+  });
+
+  test('仅一票制设施保留标为上车的实际扣款', () {
+    final summary = projectGalleryArchiveSpending(
+      ArchiveHistoryResult(
+        card: null,
+        records: [
+          _record(amount: 150, entry: true, busLine: '701'),
+          _record(amount: 160, entry: true, busLine: '702'),
+        ],
+      ),
+    );
+    expect(summary.total, 150);
+    expect(summary.rideCount, 1);
+    expect(summary.entries.single.record['title'], '长江索道');
+  });
 }
 
 ArchiveHistoryRecord _record({
@@ -58,6 +99,7 @@ ArchiveHistoryRecord _record({
   String? currency = 'CNY',
   int? digits = 2,
   String? civil,
+  String? busLine,
   bool consume = true,
   bool entry = false,
   ArchiveRecordKind kind = ArchiveRecordKind.transaction,
@@ -67,7 +109,13 @@ ArchiveHistoryRecord _record({
     'amountFen': amount,
     'consume': consume,
     'isEntry': entry,
-    'stationType': '地铁',
+    if (busLine == null)
+      'stationType': '地铁'
+    else ...{
+      'cityCode': '6900',
+      'appTypeName': '公共汽电车',
+      'lineLabel': busLine,
+    },
     if (civil != null)
       'capturedTimes': {
         'time': {'civil': civil},

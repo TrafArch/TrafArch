@@ -26,6 +26,68 @@ import 'support/test_database.dart';
 typedef _Journey = JourneyPresentation<TripCardPresentation<ArchiveRecordKind>>;
 
 void main() {
+  test('重庆设施的1A两侧分别计次，同一乘坐的1E和重复读取不增加次数', () {
+    // Synthetic direction-tagged evidence for two rides eight minutes apart.
+    final raw = List.filled(88, 0);
+    raw[0] = 2;
+    for (final offset in [0x01, 0x2C]) {
+      _putHex(raw, offset, '6900');
+    }
+    for (final offset in [0x0D, 0x38]) {
+      _putHex(raw, offset, '0704');
+    }
+    _putHex(raw, 0x18, '0000000000000011');
+    _putHex(raw, 0x43, '0000000000000012');
+    _putHex(raw, 0x20, '20250712100000');
+    _putHex(raw, 0x4B, '20250712100800');
+    _putInt(raw, 0x52, 200);
+    final bus = const TUnionProcessParser().parseBusTransit(2, raw)!;
+    final cycles = <TUnionTripRecord>[
+      for (final entry in [true, false])
+        TUnionTripRecord(
+          typeCode: entry ? 1 : 2,
+          appTypeCode: 2,
+          cityCode: '6900',
+          terminalId: entry ? bus.entryTerminalId! : bus.exitTerminalId!,
+          lineStationCode: '07040000000000',
+          time: entry ? bus.entryTime! : bus.exitTime!,
+          amountFen: 200,
+          balanceFen: entry ? 9000 : 8800,
+        ),
+    ];
+    final history = _history([
+      for (final withCycles in [true, false])
+        CardSessionSnapshot(
+          context: _context,
+          buses: [bus],
+          processTrips: withCycles ? cycles : const [],
+        ).encode(),
+    ]);
+    final journeys = _journeys(history);
+    expect(journeys, hasLength(2));
+    expect(journeys.map((j) => j.state), everyElement(JourneyState.single));
+    expect(journeys.map((j) => j.events.first.endpoint.time!.minute), [8, 0]);
+    for (final journey in journeys) {
+      expect(
+        journey.events.map((event) => event.evidenceSource),
+        unorderedEquals([
+          JourneyEvidenceSource.application,
+          JourneyEvidenceSource.application,
+          JourneyEvidenceSource.cycle,
+        ]),
+      );
+      expect(journey.events.map((e) => e.endpoint.line), everyElement('皇冠大扶梯'));
+      expect(
+        journey.events.map((e) => e.endpoint.station),
+        everyElement(isNull),
+      );
+      expect(journey.events.expand((e) => e.sourceIds).toSet(), {
+        'read-0',
+        'read-1',
+      });
+    }
+  });
+
   test('同一张卡覆盖保存两次只保留最新等价批次', () async {
     final database = testDatabase();
     final repository = CardRepository(database);

@@ -198,15 +198,18 @@ JourneyEvent<TripEntryInfo> describeJourneyEvent(
       : _text(display.cityNameOf(locationCityCode));
   cityLabel = _cityLabel(cityLabel);
   locationCityLabel = _cityLabel(locationCityLabel);
+  final facility = info.facility;
   return JourneyEvent(
     payload: info,
     mode: mode,
-    role: role,
+    role: facility == null ? role : JourneyEventRole.single,
     endpoint: JourneyEndpoint(
-      line: mode == TripModeFilter.bus
-          ? formatJourneyBusLine(decodedBusLine) ?? _text(info.line)
-          : _text(info.line),
-      station: station,
+      line:
+          facility?.nameLabel ??
+          (mode == TripModeFilter.bus
+              ? formatJourneyBusLine(decodedBusLine) ?? _text(info.line)
+              : _text(info.line)),
+      station: facility == null ? station : null,
       time: time,
       timeText: time == null ? null : _clockText(time),
       locationCityCode: locationCityCode,

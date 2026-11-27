@@ -1,5 +1,6 @@
 import '../features/archive/application/archive_history.dart';
 import '../features/archive/application/cu_archive_projection.dart';
+import '../features/archive/presentation/archive_trip_presenter.dart';
 import '../features/archive/presentation/shanghai_archive_mirrored_records.dart';
 import '../features/trips/cu_trip_presenter.dart';
 import '../features/trips/trip_filters.dart';
@@ -49,13 +50,14 @@ GallerySpendingSummary projectGalleryArchiveSpending(
     final digits = record.context.minorUnitDigits;
     if (record.kind != ArchiveRecordKind.transaction ||
         fields['consume'] != true ||
-        fields['isEntry'] == true ||
         amount is! int ||
         amount <= 0 ||
         code == null ||
         digits == null) {
       continue;
     }
+    final facility = archiveTransactionFacility(record);
+    if (fields['isEntry'] == true && facility == null) continue;
     final times = fields['capturedTimes'];
     final capturedTime = times is Map ? times['time'] : null;
     final civil = capturedTime is Map ? capturedTime['civil'] : null;
@@ -86,14 +88,17 @@ GallerySpendingSummary projectGalleryArchiveSpending(
       code,
       digits,
       displayTime,
-      switch (fields['stationType']) {
-        '地铁' || '轨道' || '轨道交通' || '城市轨道交通' => 'rail',
-        '公交' || '公共汽电车' => 'bus',
-        _ => 'other',
-      },
-      fields['stationLabel'] is String
-          ? fields['stationLabel'] as String
-          : '消费',
+      facility != null
+          ? 'facility'
+          : switch (fields['stationType']) {
+              '地铁' || '轨道' || '轨道交通' || '城市轨道交通' => 'rail',
+              '公交' || '公共汽电车' => 'bus',
+              _ => 'other',
+            },
+      facility?.nameLabel ??
+          (fields['stationLabel'] is String
+              ? fields['stationLabel'] as String
+              : '消费'),
     );
   }
   final cu = projectCuArchive(history);

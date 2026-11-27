@@ -467,18 +467,33 @@ class _JourneyOperation<T> {
 /// operation. Repeated candidates from one family remain ambiguous. All raw
 /// events survive in evidence, including their original positions and payloads.
 List<_JourneyOperation<T>> _journeyOperations<T>(List<JourneyEvent<T>> events) {
-  final groups = <(String, String, JourneyEventRole), List<int>>{};
+  final groups =
+      <(String, String, JourneyEventRole, DateTime?, String?), List<int>>{};
   for (var i = 0; i < events.length; i++) {
     final event = events[i];
     final scope = _presentText(event.scopeKey);
     final identity = _presentText(event.applicationRecordId);
+    final single =
+        event.role == JourneyEventRole.single &&
+        event.mode == TripModeFilter.bus;
     if (scope == null ||
         identity == null ||
         (event.role != JourneyEventRole.entry &&
-            event.role != JourneyEventRole.exit)) {
+            event.role != JourneyEventRole.exit &&
+            !single)) {
       continue;
     }
-    groups.putIfAbsent((scope, identity, event.role), () => []).add(i);
+    // A bus application can hold two flat-fare operations in the same record.
+    // Its identity already links verified sources; time and line distinguish
+    // the individual rides while folding the sources of each ride.
+    final key = (
+      scope,
+      identity,
+      event.role,
+      single ? event.endpoint.time : null,
+      single ? event.endpoint.line : null,
+    );
+    groups.putIfAbsent(key, () => []).add(i);
   }
   final aliases = <int, List<JourneyEvent<T>>>{};
   final consumed = <int>{};

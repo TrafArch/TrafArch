@@ -1,6 +1,27 @@
 import '../../protocols/transit/tunion/tunion_models.dart';
 import '../reference_data/data/tunion_bus_location.dart';
 import '../reference_data/domain/tunion_bus_caller.dart';
+import '../reference_data/domain/tu_transit_facility.dart';
+
+/// Use the accepting city and line in the same record, including on roaming cards.
+TuTransitFacility? facilityForBusCycle(TUnionTripRecord record) =>
+    record.isBus && (record.isEntry || record.isConsume)
+    ? TuTransitFacility.fromBusLine(record.cityCode, record.lineCode)
+    : null;
+
+TuTransitFacility? facilityForBusTransaction({
+  required bool isBusPurchase,
+  required TUnionTripRecord? matchedCycle,
+  required String? cityCode,
+  required String? line,
+}) {
+  if (!isBusPurchase) return null;
+  if (matchedCycle != null) {
+    if (cityCode != null && cityCode != matchedCycle.cityCode) return null;
+    return facilityForBusCycle(matchedCycle);
+  }
+  return TuTransitFacility.fromBusLine(cityCode, line);
+}
 
 ({int classification, int carrier}) _busCallerForCycle(
   TUnionTripRecord record,

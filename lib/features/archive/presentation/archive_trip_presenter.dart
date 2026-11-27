@@ -4,6 +4,7 @@ import '../../../shared/domain/remote_card_use.dart';
 import '../../../protocols/transit/tunion/tunion_models.dart';
 import '../../../protocols/transit/tunion/tunion_trip_matcher.dart';
 import '../../transit_analysis/tunion_record_context.dart';
+import '../../reference_data/domain/tu_transit_facility.dart';
 import '../../transit_analysis/balance_interpretation.dart';
 import '../../transit_analysis/shanghai_balance_display.dart';
 import '../../transit_analysis/tunion_analysis_models.dart'
@@ -27,6 +28,28 @@ const archiveTripSourceLabels = {
   ArchiveRecordKind.rail: '0x1A 轨道',
   ArchiveRecordKind.bus: '0x1A 公交',
 };
+
+/// Shared by saved journey cards and the spending summary, including legacy
+/// snapshots that retain a numeric bus label without the matched cycle.
+TuTransitFacility? archiveTransactionFacility(ArchiveHistoryRecord record) {
+  if (record.kind != ArchiveRecordKind.transaction ||
+      record.fields['consume'] != true ||
+      record.isTunionRecharge) {
+    return null;
+  }
+  final event = _ArchiveEvent(record);
+  final cycle = event.matchedProcess;
+  final appType = record.fields['appTypeName'] ?? record.fields['appTypeCode'];
+  return facilityForBusTransaction(
+    isBusPurchase: cycle?.isBus ?? (appType == '公共汽电车' || appType == 0x02),
+    matchedCycle: cycle,
+    cityCode: event.city,
+    line:
+        event.capturedDisplay('line') ??
+        event.text('lineLabel') ??
+        event.text('lineName'),
+  );
+}
 
 /// Saved-history projection plus the visible record counts. Captured display
 /// links merge individual 1E/1A sides into 0x18. Independent 1E/1A payloads remain
@@ -845,9 +868,12 @@ class _ArchiveEvent {
     final clock = _archiveClock(fields, timeKey, record.context);
     final application = rail || record.kind == ArchiveRecordKind.bus;
     final staleExit = rail && side == 'exit' && fields['status'] == 1;
+    final facility = details.facility;
     final JourneyEventRole role;
     if (record.isTunionRecharge) {
       role = JourneyEventRole.unknown;
+    } else if (facility != null) {
+      role = JourneyEventRole.single;
     } else if (application) {
       role = side == null || epoch == null || staleExit
           ? JourneyEventRole.unknown
@@ -916,8 +942,10 @@ class _ArchiveEvent {
       mode: mode,
       role: role,
       endpoint: JourneyEndpoint(
-        line: record.isTunionRecharge ? null : _usefulIdentifier(line),
-        station: record.isTunionRecharge ? null : station,
+        line: record.isTunionRecharge
+            ? null
+            : facility?.nameLabel ?? _usefulIdentifier(line),
+        station: record.isTunionRecharge || facility != null ? null : station,
         time: clock.time,
         timeText: clock.text,
         locationCityCode: _mappedCityCode(capturedDisplay('locationCityCode')),
@@ -1120,6 +1148,15 @@ class _ArchiveEvent {
     final batchCount = record.sources.map((s) => s.batchId).toSet().length;
     return TripEntryInfo(
       sourceLabel: source,
+      facility: switch (record.kind) {
+        ArchiveRecordKind.transaction => archiveTransactionFacility(record),
+        ArchiveRecordKind.process when cycle != null => facilityForBusCycle(
+          cycle,
+        ),
+        ArchiveRecordKind.bus when side != null && epoch != null =>
+          TuTransitFacility.fromBusLine(city, text('${side}LineCode')),
+        _ => null,
+      },
       title: record.isTunionRecharge
           ? '充值'
           : [

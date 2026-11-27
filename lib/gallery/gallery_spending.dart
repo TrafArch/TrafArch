@@ -140,7 +140,9 @@ class GallerySpendingSummary {
       if (!selection.contains(date)) continue;
       entries.add(entry);
       total += amount;
-      if (record['kind'] == 'rail' || record['kind'] == 'bus') rideCount++;
+      if (const {'rail', 'bus', 'facility'}.contains(record['kind'])) {
+        rideCount++;
+      }
       categories.update(
         entry.category,
         (sum) => sum + amount,
