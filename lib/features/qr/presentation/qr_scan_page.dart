@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
-import '../../../app/theme/app_theme.dart';
 import '../domain/qr_barcode_payload.dart';
 import '../../../shared/presentation/adaptive_layout.dart';
 
@@ -148,7 +147,11 @@ class _QrScanPageState extends State<QrScanPage> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: AppTheme.systemUiOverlayStyle(Colors.black),
+      value: SystemUiOverlayStyle.light.copyWith(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarContrastEnforced: true,
+      ),
       child: PopScope<List<int>>(
         canPop: false,
         onPopInvokedWithResult: (didPop, _) {

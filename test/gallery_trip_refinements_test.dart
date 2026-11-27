@@ -310,6 +310,62 @@ void main() {
         ),
         findsOneWidget,
       );
+
+      tester.view.physicalSize = const Size(412, 892);
+      tester.platformDispatcher.textScaleFactorTestValue = 1;
+      controller.update(
+        () => controller.trips[0] = {
+          ...controller.trips[0],
+          'city': '北京',
+          'entryLine': '18号线',
+          'exitLine': '大兴机场线',
+          'entryLineCity': {'system': 'tu', 'code': '1000', 'name': '北京'},
+          'exitLineCity': {'system': 'tu', 'code': '1000', 'name': '北京'},
+        },
+      );
+      await tester.pumpAndSettle();
+      for (final (key, asset) in [
+        ('trip-entry-line-badge', 'assets/Line_Icon/1000/1000_Line_12.svg'),
+        ('trip-exit-line-badge', 'assets/Line_Icon/1000/1000_Line_58.svg'),
+      ]) {
+        final picture = find.descendant(
+          of: find.byKey(ValueKey(key)),
+          matching: find.byType(SvgPicture),
+        );
+        expect(picture, findsOneWidget);
+        expect(
+          (tester.widget<SvgPicture>(picture).bytesLoader as SvgAssetLoader)
+              .assetName,
+          asset,
+        );
+      }
+
+      controller.update(
+        () => controller.trips[0] = {
+          ...controller.trips[0],
+          'city': '厦门',
+          'entryLine': '1号线',
+          'exitLine': '3号线',
+          'entryLineCity': {'system': 'tu', 'code': '3930', 'name': '厦门'},
+          'exitLineCity': {'system': 'tu', 'code': '3930', 'name': '厦门'},
+        },
+      );
+      await tester.pumpAndSettle();
+      final xiamenOne = find.descendant(
+        of: find.byKey(const ValueKey('trip-entry-line-badge')),
+        matching: find.byType(SvgPicture),
+      );
+      final xiamenThree = find.descendant(
+        of: find.byKey(const ValueKey('trip-exit-line-badge')),
+        matching: find.byType(SvgPicture),
+      );
+      expect(xiamenOne, findsOneWidget);
+      expect(xiamenThree, findsOneWidget);
+      final oneSize = tester.getSize(xiamenOne);
+      final threeSize = tester.getSize(xiamenThree);
+      expect(oneSize.height, closeTo(24, .1));
+      expect(threeSize.height, closeTo(24, .1));
+      expect(oneSize.width / threeSize.width, greaterThan(.97));
     },
   );
 
@@ -359,9 +415,20 @@ void main() {
     },
   );
 
-  testWidgets('one-way bus ticket shows a single boarding row without arrow', (
+  testWidgets('one-way bus keeps money in its half-modal, not the ticket', (
     tester,
   ) async {
+    final index = controller.trips.indexWhere(
+      (record) => record['entryLine'] == '49 路',
+    );
+    expect(index, greaterThanOrEqualTo(0));
+    controller.trips = [
+      for (final (i, record) in controller.trips.indexed)
+        if (i == index)
+          {...record, 'amount': '¥2.47', 'balanceAfter': '¥61.39'}
+        else
+          record,
+    ];
     await mount(tester);
     final row = find.byKey(const ValueKey('trip-one-way'));
     expect(row, findsOneWidget);
@@ -386,6 +453,20 @@ void main() {
     expect(time.style!.fontWeight, FontWeight.w400);
     expect(find.text('公交'), findsWidgets);
     expect(find.text('上海'), findsWidgets);
+    expect(find.text('¥2.47'), findsNothing);
+    expect(find.text('¥61.39'), findsNothing);
+    await tester.ensureVisible(row);
+    await tester.tap(row);
+    await tester.pumpAndSettle();
+    final sheet = find.byKey(const ValueKey('gallery-modal-surface'));
+    expect(
+      find.descendant(of: sheet, matching: find.text('¥2.47')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: sheet, matching: find.text('¥61.39')),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 

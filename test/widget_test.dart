@@ -29,10 +29,11 @@ void main() {
     await tester.pumpWidget(
       TransitCardAnalyzerApp(createDependencies: () => app),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.text('TrafArch'), findsOneWidget);
     expect(find.text('首页'), findsOneWidget);
+    expect(find.text('开始读取'), findsOneWidget);
 
     // 卸载组件树并清空挂起定时器：卡片档案数据流（Drift）取消订阅时
     // 会留出一次事件循环的收尾定时器，避免测试结束报 Timer 未清理。

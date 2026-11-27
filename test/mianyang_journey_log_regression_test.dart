@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/features/archive/application/archive_history.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_session_snapshot.dart';
@@ -9,8 +8,7 @@ import 'package:transit_card_analyzer/features/reference_data/domain/station_cod
 import 'package:transit_card_analyzer/features/transit_analysis/tunion_analysis_engine.dart';
 import 'package:transit_card_analyzer/features/transit_analysis/tunion_analysis_models.dart';
 import 'package:transit_card_analyzer/features/trips/journey_presentation.dart';
-import 'package:transit_card_analyzer/features/trips/trip_cards_view.dart';
-import 'package:transit_card_analyzer/features/trips/trip_entry_card.dart';
+import 'package:transit_card_analyzer/features/trips/trip_card_presentation.dart';
 import 'package:transit_card_analyzer/features/trips/trip_entry_presenter.dart';
 import 'package:transit_card_analyzer/features/trips/trip_filters.dart';
 import 'package:transit_card_analyzer/features/trips/trip_journey_adapter.dart';
@@ -39,9 +37,9 @@ const _busSequence = 91;
 
 void main() {
   for (final archive in [false, true]) {
-    testWidgets(
+    test(
       '${archive ? 'archived' : 'live'} TU history keeps all newer unmatched debits',
-      (tester) async {
+      () async {
         final card = await _readCard();
         final analysis = AnalysisEngine(KnowledgeBase.empty()).analyze(card);
         final cycles = card.transitProcessRecords
@@ -90,10 +88,8 @@ void main() {
           expect(decoded.snapshot!.encode(), encoded);
           expect(projection.transactionCount, 10);
           expect(projection.mergedRecordCount, 1);
-          await _expectHistory(
-            tester,
+          _expectHistory(
             projection.entries,
-            archiveTripSourceLabels,
             ArchiveRecordKind.transaction,
             projectedJourneys: projection.journeys,
           );
@@ -127,12 +123,7 @@ void main() {
           ];
           expect(stream.whereType<TransactionTripEntry>(), hasLength(10));
           expect(stream.whereType<ProcessTripEntry>(), hasLength(1));
-          await _expectHistory(
-            tester,
-            entries,
-            tripSourceLabels,
-            TripSourceFilter.transaction,
-          );
+          _expectHistory(entries, TripSourceFilter.transaction);
         }
       },
     );
@@ -162,13 +153,11 @@ TripCardPresentation<TripSourceFilter> _liveEntry(
   );
 }
 
-Future<void> _expectHistory<S extends Enum>(
-  WidgetTester tester,
+void _expectHistory<S extends Enum>(
   List<TripCardPresentation<S>> entries,
-  Map<S, String> labels,
   S transaction, {
   List<JourneyPresentation<TripCardPresentation<S>>>? projectedJourneys,
-}) async {
+}) {
   final debits = entries
       .where(
         (entry) =>
@@ -189,46 +178,29 @@ Future<void> _expectHistory<S extends Enum>(
     expect(debit.journeyEvent!.endpoint.station, isNull);
   }
 
-  Future<void> show([TripModeFilter? mode]) => tester.pumpWidget(
-    MaterialApp(
-      home: Scaffold(
-        body: SingleChildScrollView(
-          child: TripCardsView(
-            key: ValueKey(mode),
-            entries: entries,
-            sourceLabels: labels,
-            summaryText: '',
-            projectedJourneys: projectedJourneys,
-            initialFilters: mode == null ? null : ['mode:${mode.name}'],
-          ),
-        ),
-      ),
+  final journeys =
+      projectedJourneys ??
+      projectJourneys(
+        entries.map((entry) => entry.journeyEvent!.withPayload(entry)),
+      );
+  final walletOperations = journeys.where(
+    (journey) => journey.events.any(
+      (event) =>
+          event.payload.info.isConsume &&
+          event.evidenceSource == JourneyEvidenceSource.transaction,
     ),
   );
-  List<TripEntryCard> cards() => tester
-      .widgetList<TripEntryCard>(
-        find.byType(TripEntryCard, skipOffstage: false),
-      )
-      .toList();
-  await show();
-  expect(find.text('历史行程 10'), findsOneWidget);
-  expect(find.text('其他记录 1'), findsOneWidget);
+  expect(walletOperations, hasLength(10));
   expect(
-    cards().take(9).map((card) => card.info.rawHex),
+    walletOperations
+        .where((journey) => journey.mode == TripModeFilter.other)
+        .map((journey) => journey.events.single.payload.info.rawHex),
     debits.map((entry) => entry.info.rawHex),
   );
-  expect(cards().take(9).every((card) => card.journey == null), isTrue);
-  expect(cards()[9].journey?.events.single.sequence, _busSequence);
-  expect(cards()[9].journey?.mode, TripModeFilter.bus);
-
-  await show(TripModeFilter.bus);
-  expect(cards().single.journey?.events.single.sequence, _busSequence);
-  await show(TripModeFilter.other);
-  expect(
-    cards().take(9).map((card) => card.info.rawHex),
-    debits.map((entry) => entry.info.rawHex),
+  final bus = journeys.singleWhere(
+    (journey) => journey.mode == TripModeFilter.bus,
   );
-  expect(cards(), hasLength(10));
+  expect(bus.events.single.sequence, _busSequence);
 }
 
 Future<ParsedCard> _readCard() async {

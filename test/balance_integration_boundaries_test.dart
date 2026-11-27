@@ -1,8 +1,6 @@
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/app/app_dependencies.dart';
 import 'package:transit_card_analyzer/features/archive/application/archive_controller.dart';
 import 'package:transit_card_analyzer/features/archive/application/archive_history.dart';
 import 'package:transit_card_analyzer/features/archive/application/card_records_export.dart';
@@ -12,18 +10,12 @@ import 'package:transit_card_analyzer/features/archive/domain/card_archive_ident
 import 'package:transit_card_analyzer/features/archive/domain/card_session_snapshot.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_types.dart';
 import 'package:transit_card_analyzer/features/archive/domain/pending_card_save.dart';
-import 'package:transit_card_analyzer/features/expert/expert_formatters.dart';
-import 'package:transit_card_analyzer/features/expert/tunion_panel.dart';
-import 'package:transit_card_analyzer/features/home/presentation/transit_summary_panel.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/tunion_knowledge_base.dart';
 import 'package:transit_card_analyzer/features/scan/domain/card_read_outcome.dart';
 import 'package:transit_card_analyzer/features/scan/domain/scan_presentation.dart';
 import 'package:transit_card_analyzer/features/transit_analysis/balance_interpretation.dart';
-import 'package:transit_card_analyzer/features/transit_analysis/tunion_analysis_engine.dart';
 import 'package:transit_card_analyzer/features/transit_analysis/tunion_analysis_models.dart';
-import 'package:transit_card_analyzer/platform/storage/app_logger.dart';
 import 'package:transit_card_analyzer/platform/storage/log_exporter.dart';
-import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
 import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_models.dart';
 
@@ -46,26 +38,6 @@ KnowledgeBase _knowledge() => KnowledgeBase.fromJsonStrings(
     ],
   }),
 );
-
-class _App extends AppDependencies {
-  _App(this.card)
-    : result = AnalysisEngine(_knowledge()).analyze(card),
-      super(
-        database: testDatabase(),
-        bundle: MissingTestAssets(),
-        settingsStore: MemorySettingsStore(),
-        logger: AppLogger(store: MemoryLogStore()),
-      );
-  final ParsedCard card;
-  final CardAnalysisResult result;
-  @override
-  ParsedCard get parsedCard => card;
-  @override
-  CardAnalysisResult get analysis => result;
-  // 与生产一致：ScanPresentation.cardCurrency 取自同一份分析结果。
-  @override
-  Currency get cardCurrency => result.currency;
-}
 
 ArchiveController _controller(CardRepository repository) {
   final controller = ArchiveController(
@@ -121,63 +93,6 @@ String _verifiedPayload(PendingCardSave item) {
 }
 
 void main() {
-  testWidgets('截断八达通身份在首页和专家页保持 unknown，不受 HKD 元数据影响', (tester) async {
-    final card = _card(4225, serial: '003104850000000000');
-    final app = _App(card);
-    addTearDown(app.dispose);
-    for (final panel in <Widget>[
-      TransitSummaryPanel(app: app),
-      TunionPanel(
-        parsed: card,
-        analysis: app.result,
-        processRecords: const [],
-        fallbackRail: null,
-        values: ExpertValues(currency: Currency.hkd, cityNameOf: (_) => null),
-      ),
-    ]) {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(body: SingleChildScrollView(child: panel)),
-        ),
-      );
-      expect(find.text('余额未读取'), findsOneWidget);
-      expect(find.text('4225 原始单位（币种未知）'), findsOneWidget);
-      expect(find.text(r'HK$42.25'), findsNothing);
-      expect(find.text('¥42.25'), findsNothing);
-    }
-  });
-
-  testWidgets('普通非八达通 TU 保留首页和专家页既有外币展示', (tester) async {
-    final card = _card(4225, serial: '00310499000000000001');
-    final app = _App(card);
-    addTearDown(app.dispose);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(body: TransitSummaryPanel(app: app)),
-      ),
-    );
-    expect(find.text(r'HK$42.25'), findsOneWidget);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SingleChildScrollView(
-            child: TunionPanel(
-              parsed: card,
-              analysis: app.result,
-              processRecords: const [],
-              fallbackRail: null,
-              values: ExpertValues(
-                currency: Currency.hkd,
-                cityNameOf: (_) => null,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    expect(find.text(r'HK$42.25'), findsOneWidget);
-  });
-
   test('普通非八达通 TU 保留既有外币归档策略', () async {
     final card = _card(4225, serial: '00310499000000000001');
     final repository = CardRepository(testDatabase());

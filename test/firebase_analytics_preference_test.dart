@@ -4,17 +4,13 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/app/app_dependencies.dart';
 import 'package:transit_card_analyzer/app/legal_consent_gate.dart';
-import 'package:transit_card_analyzer/features/settings/presentation/settings_page.dart';
 import 'package:transit_card_analyzer/gallery/gallery_app.dart';
-import 'package:transit_card_analyzer/gallery/gallery_consent_screen.dart';
 import 'package:transit_card_analyzer/gallery/gallery_controller.dart';
 import 'package:transit_card_analyzer/gallery/gallery_data.dart';
 import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
 
 import 'support/gallery_scroll.dart';
-import 'support/test_database.dart';
 
 void main() {
   const channel = MethodChannel('transit_card_analyzer/analytics');
@@ -65,10 +61,8 @@ void main() {
     expect(changes, [false, false]);
   });
 
-  testWidgets('旧同意记录不自动授权分析，两个设置页可切换且重启保留', (tester) async {
+  testWidgets('旧同意记录不自动授权分析，设置页可切换且重启保留', (tester) async {
     final store = MemorySettingsStore({SettingsKeys.legalConsent: 'true'});
-    final app = AppDependencies(database: testDatabase(), settingsStore: store);
-    addTearDown(app.dispose);
     final gallery = GalleryController(
       GalleryData(
         jsonDecode(File('assets/gallery/fixtures.json').readAsStringSync())
@@ -77,21 +71,18 @@ void main() {
     );
     addTearDown(gallery.dispose);
     gallery.navigate(GalleryPage.settings);
-    Future<void> start({required bool preview}) async {
+    Future<void> start() async {
       await tester.pumpWidget(const SizedBox());
       await tester.pumpWidget(
         LegalConsentGate(
           settingsStore: store,
-          screenBuilder: preview ? GalleryConsentScreen.new : null,
-          child: preview
-              ? GalleryApp(controller: gallery)
-              : MaterialApp(home: SettingsPage(app: app)),
+          child: GalleryApp(controller: gallery),
         ),
       );
       await tester.pumpAndSettle();
     }
 
-    await start(preview: true);
+    await start();
     expect(changes, [false]);
     final analyticsIcon = find.descendant(
       of: tile,
@@ -114,10 +105,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(changes.last, isFalse);
     expect(tester.widget<SwitchListTile>(tile).value, isFalse);
-    await start(preview: false);
+    await start();
     expect(find.text(LegalConsentPrompt.title), findsNothing);
     expect(changes.last, isFalse);
-    await tester.scrollUntilVisible(tile, 160);
+    await tester.scrollUntilVisible(
+      tile,
+      160,
+      scrollable: galleryVerticalScroll(),
+    );
     await tester.pumpAndSettle();
     expect(analyticsIcon, findsOneWidget);
     expect(tester.widget<SwitchListTile>(tile).value, isFalse);
@@ -131,7 +126,7 @@ void main() {
     await tester.tap(tile);
     await tester.pumpAndSettle();
     expect(changes.last, isTrue);
-    await start(preview: true);
+    await start();
     expect(changes.last, isTrue);
     expect(find.text(LegalConsentPrompt.title), findsNothing);
     await tester.pumpWidget(const SizedBox());

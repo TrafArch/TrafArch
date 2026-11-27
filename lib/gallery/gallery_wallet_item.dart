@@ -26,11 +26,10 @@ class _GallerySwipeReveal extends StatefulWidget {
     required this.actions,
     required this.child,
     required this.reduceMotion,
-    this.enabled = true,
   });
   final List<_GallerySwipeAction> actions;
   final Widget child;
-  final bool reduceMotion, enabled;
+  final bool reduceMotion;
 
   @override
   State<_GallerySwipeReveal> createState() => _GallerySwipeRevealState();
@@ -50,7 +49,6 @@ class _GallerySwipeRevealState extends State<_GallerySwipeReveal>
   );
 
   void _act(_GallerySwipeAction action) {
-    if (!widget.enabled) return;
     _settle(false);
     action.onTap();
   }
@@ -76,30 +74,18 @@ class _GallerySwipeRevealState extends State<_GallerySwipeReveal>
           animation: _reveal,
           builder: (context, _) => GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: widget.enabled && _reveal.value > 0
-                ? () => _settle(false)
-                : null,
-            onHorizontalDragUpdate: widget.enabled
-                ? (details) {
-                    _reveal.value =
-                        (_reveal.value - details.delta.dx / totalWidth).clamp(
-                          0.0,
-                          1.0,
-                        );
-                  }
-                : null,
-            onHorizontalDragEnd: widget.enabled
-                ? (details) {
-                    final velocity = details.primaryVelocity ?? 0;
-                    _settle(
-                      velocity < -250 ||
-                          velocity <= 250 && _reveal.value >= .35,
-                    );
-                  }
-                : null,
-            onHorizontalDragCancel: widget.enabled
-                ? () => _settle(_reveal.value >= .35)
-                : null,
+            onTap: _reveal.value > 0 ? () => _settle(false) : null,
+            onHorizontalDragUpdate: (details) {
+              _reveal.value = (_reveal.value - details.delta.dx / totalWidth)
+                  .clamp(0.0, 1.0);
+            },
+            onHorizontalDragEnd: (details) {
+              final velocity = details.primaryVelocity ?? 0;
+              _settle(
+                velocity < -250 || velocity <= 250 && _reveal.value >= .35,
+              );
+            },
+            onHorizontalDragCancel: () => _settle(_reveal.value >= .35),
             child: ClipRect(
               clipBehavior: _reveal.value == 0 ? Clip.none : Clip.hardEdge,
               child: Stack(
@@ -118,9 +104,7 @@ class _GallerySwipeRevealState extends State<_GallerySwipeReveal>
                               child: _GallerySwipeButton(
                                 action: action,
                                 trailing: index == count - 1,
-                                onPressed: widget.enabled
-                                    ? () => _act(action)
-                                    : null,
+                                onPressed: () => _act(action),
                               ),
                             ),
                           ],
@@ -130,7 +114,7 @@ class _GallerySwipeRevealState extends State<_GallerySwipeReveal>
                   Transform.translate(
                     offset: Offset(-totalWidth * _reveal.value, 0),
                     child: AbsorbPointer(
-                      absorbing: _reveal.value > 0 || !widget.enabled,
+                      absorbing: _reveal.value > 0,
                       child: widget.child,
                     ),
                   ),
@@ -216,7 +200,7 @@ class _GallerySwipeButton extends StatelessWidget {
 }
 
 /// A swipe only reveals the action. Even a full-width fling cannot delete.
-/// Collapse before removing the keyed row so its neighbours move continuously.
+/// Tap opens confirmation without collapsing or otherwise mutating the row.
 class _GalleryWalletItem extends StatefulWidget {
   const _GalleryWalletItem({
     super.key,
@@ -243,14 +227,11 @@ class _GalleryWalletItemState extends State<_GalleryWalletItem>
     vsync: this,
     value: widget.inserted && !widget.reduceMotion ? 0 : 1,
     duration: _GalleryMotion.insert,
-    reverseDuration: _GalleryMotion.remove,
   );
   late final _sizeCurve = CurvedAnimation(
     parent: _size,
     curve: _GalleryMotion.decelerate,
-    reverseCurve: _GalleryMotion.standard,
   );
-  bool _deleting = false;
 
   @override
   void initState() {
@@ -262,18 +243,8 @@ class _GalleryWalletItemState extends State<_GalleryWalletItem>
   void didUpdateWidget(_GalleryWalletItem oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.reduceMotion && !oldWidget.reduceMotion) {
-      _size.value = _deleting ? 0 : 1;
+      _size.value = 1;
     }
-  }
-
-  void _delete() {
-    if (_deleting) return;
-    setState(() => _deleting = true);
-    final commit = widget.onDelete;
-    _size.reverseDuration = widget.reduceMotion
-        ? Duration.zero
-        : _GalleryMotion.remove;
-    _size.reverse().whenCompleteOrCancel(commit);
   }
 
   @override
@@ -295,7 +266,6 @@ class _GalleryWalletItemState extends State<_GalleryWalletItem>
           padding: const EdgeInsets.only(bottom: 12),
           child: _GallerySwipeReveal(
             reduceMotion: widget.reduceMotion,
-            enabled: !_deleting,
             actions: [
               _GallerySwipeAction(
                 key: ValueKey('wallet-face-${widget.id}'),
@@ -313,7 +283,7 @@ class _GalleryWalletItemState extends State<_GalleryWalletItem>
                 semanticsLabel: '删除${widget.name}',
                 background: tokens.dangerContainer,
                 foreground: tokens.onDangerContainer,
-                onTap: _delete,
+                onTap: widget.onDelete,
               ),
             ],
             child: widget.child,

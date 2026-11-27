@@ -3,7 +3,7 @@ import '../reference_data/data/city_union_lookup_rules.dart';
 import '../reference_data/domain/reference_match.dart';
 import '../transit_analysis/cu_transaction_analysis.dart';
 import 'journey_presentation.dart';
-import 'trip_cards_view.dart';
+import 'trip_card_presentation.dart';
 import 'trip_entry_presenter.dart';
 import 'trip_filters.dart';
 

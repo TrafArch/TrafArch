@@ -1,7 +1,7 @@
 ﻿name: transit_card_analyzer
 description: "TrafArch - NFC 交通卡读取与分析"
 publish_to: 'none'
-version: 2.0.0-beta2+2250
+version: 2.0.0-beta2+2254
 
 environment:
   sdk: ^3.13.5
@@ -12,17 +12,14 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
-  # 2.x 已迁移至 material_ui（Material 从 SDK 剥离后的官方独立包），其回调
+  # dynamic_color 2.x 已迁移至 material_ui（Material 从 SDK 剥离后的官方独立包），其回调
   # 提供的 ColorScheme 与项目仍在使用的内置 flutter/material 类型不兼容；
   # 锁定 1.9.x（最后的内置 Material 版本），待项目整体迁移 material_ui 后再升。
   dynamic_color: ^1.9.0
   path_provider: ^2.1.6
-  flutter_floating_bottom_bar: ^3.0.1
   mobile_scanner: ^7.5.0
   # 调用系统默认浏览器/外部应用打开链接（QQ 加群跳转）
   url_launcher: ^6.3.3
-  # 应用内打开 QQ 加群页；反馈问卷使用 Edge / Chrome Custom Tabs
-  webview_flutter: ^4.14.1
   # 纯 Dart 二维码解码（ZXing 移植）：MLKit 不可用（无 Google Play 服务 / 无法联网）时的兜底
   zxing2: ^0.2.4
 
@@ -63,6 +60,7 @@ flutter:
     - assets/gallery/
     - assets/metro/
     - assets/Line_Icon/icons.json
+    - assets/Line_Icon/1000/
     - assets/Line_Icon/3910/
     - assets/Line_Icon/3930/
     - assets/Line_Icon/5810/

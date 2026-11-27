@@ -1,20 +1,11 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:transit_card_analyzer/app/app_dependencies.dart';
 import 'package:transit_card_analyzer/features/archive/application/archive_controller.dart';
 import 'package:transit_card_analyzer/features/archive/application/archive_history.dart';
 import 'package:transit_card_analyzer/features/archive/data/card_repository.dart';
-import 'package:transit_card_analyzer/features/archive/domain/card_archive_identity.dart';
-import 'package:transit_card_analyzer/features/archive/domain/card_types.dart';
-import 'package:transit_card_analyzer/features/archive/domain/pending_card_save.dart';
-import 'package:transit_card_analyzer/features/home/presentation/pending_save_presenter.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/tunion_knowledge_base.dart';
 import 'package:transit_card_analyzer/features/scan/domain/card_read_outcome.dart';
 import 'package:transit_card_analyzer/features/scan/domain/scan_presentation.dart';
-import 'package:transit_card_analyzer/features/settings/presentation/settings_page.dart';
-import 'package:transit_card_analyzer/platform/storage/app_logger.dart';
 import 'package:transit_card_analyzer/platform/storage/log_exporter.dart';
-import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
 import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_models.dart';
 import 'package:transit_card_analyzer/shared/domain/archive_conflict_policy.dart';
@@ -162,53 +153,5 @@ void main() {
     card = (await repository.getAllCards()).single;
     expect(card.balanceFen, 1000);
     expect(controller.autoSaveNotice, contains('已跳过'));
-  });
-
-  testWidgets('设置页可选择已存在记录策略并持久化', (tester) async {
-    final store = MemorySettingsStore();
-    final app = AppDependencies(
-      database: testDatabase(),
-      bundle: MissingTestAssets(),
-      settingsStore: store,
-      logger: AppLogger(store: MemoryLogStore()),
-    );
-    addTearDown(app.dispose);
-    await tester.pumpWidget(MaterialApp(home: SettingsPage(app: app)));
-    await tester.pumpAndSettle();
-
-    expect(find.text('已经存在的记录'), findsOneWidget);
-    await tester.tap(find.text('已经存在的记录'));
-    await tester.pumpAndSettle();
-    expect(find.text('跳过'), findsOneWidget);
-    expect(find.text('每次询问'), findsOneWidget);
-
-    await tester.tap(find.text('跳过'));
-    await tester.pumpAndSettle();
-    expect(app.archiveConflictPolicy, ArchiveConflictPolicy.skip);
-    expect(store.values[SettingsKeys.archiveConflictPolicy], 'skip');
-    expect(find.text('跳过'), findsOneWidget);
-  });
-
-  testWidgets('保存冲突对话框提供跳过与覆盖两种选择', (tester) async {
-    const pending = PendingCardSave(
-      fingerprint: 'tunion:test',
-      identity: CardArchiveIdentity(
-        cardType: CardTypes.chinaTunion,
-        officialName: '测试卡',
-      ),
-    );
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: SaveCardDialog(
-          pending: pending,
-          conflict: true,
-          askEachTime: true,
-        ),
-      ),
-    );
-    expect(find.text('记录已存在'), findsOneWidget);
-    expect(find.textContaining('已有历史记录会保留'), findsOneWidget);
-    expect(find.text('跳过'), findsOneWidget);
-    expect(find.text('覆盖'), findsOneWidget);
   });
 }

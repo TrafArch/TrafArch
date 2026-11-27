@@ -4,7 +4,7 @@ import '../../protocols/felica/models/suica_transaction_details.dart';
 import '../home/presentation/summary_formatters.dart';
 import '../reference_data/data/suica_station_repository.dart';
 import 'journey_presentation.dart';
-import 'trip_cards_view.dart';
+import 'trip_card_presentation.dart';
 import 'trip_entry_presenter.dart';
 import 'trip_filters.dart';
 

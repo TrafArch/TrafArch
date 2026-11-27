@@ -50,7 +50,7 @@ void main() {
     });
     await tester.pumpWidget(gate(store));
     await tester.pumpAndSettle();
-    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.text(LegalConsentPrompt.title), findsOneWidget);
     await tester.tap(find.text(AppSupport.eulaLabel));
     await tester.pumpAndSettle();
     await tester.tap(find.text('隐私政策'));
@@ -73,7 +73,7 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await tester.pumpWidget(gate(store));
     await tester.pumpAndSettle();
-    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.text(LegalConsentPrompt.title), findsOneWidget);
   });
 
   testWidgets('同意记录写入成功才启动，重新启动后不再询问', (tester) async {
@@ -96,7 +96,7 @@ void main() {
     await tester.pumpWidget(gate(store));
     await tester.pumpAndSettle();
     expect(find.byKey(home), findsOneWidget);
-    expect(find.byType(AlertDialog), findsNothing);
+    expect(find.text(LegalConsentPrompt.title), findsNothing);
   });
 
   testWidgets('无法读取或保存时不会放行，保存失败后可以重试', (tester) async {

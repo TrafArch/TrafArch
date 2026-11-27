@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/features/archive/application/archive_history.dart';
 import 'package:transit_card_analyzer/features/archive/data/app_database.dart';
@@ -8,8 +7,6 @@ import 'package:transit_card_analyzer/features/archive/data/card_repository.dart
 import 'package:transit_card_analyzer/features/archive/domain/card_session_snapshot.dart';
 import 'package:transit_card_analyzer/features/archive/presentation/archive_trip_presenter.dart';
 import 'package:transit_card_analyzer/features/transit_analysis/tunion_analysis_models.dart';
-import 'package:transit_card_analyzer/features/trips/trip_cards_view.dart';
-import 'package:transit_card_analyzer/features/trips/trip_entry_card.dart';
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_process_parser.dart';
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_trip_matcher.dart';
 
@@ -127,49 +124,6 @@ void main() {
     for (final payload in payloads) {
       expect(CardSessionSnapshot.decode(payload)!.encode(), payload);
     }
-  });
-
-  testWidgets('相同余额版本只渲染一张卡且详情保留八次读取来源', (tester) async {
-    final history = _history([
-      for (var i = 0; i < 8; i++) _snapshot(balance: 1290, slot: i + 3),
-      _snapshot(balance: 1740, slot: 3),
-    ]);
-    final projection = presentArchiveTrips(
-      history.records,
-      batches: history.batches,
-      onDiagnostics: (_) {},
-    );
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SingleChildScrollView(
-            child: TripCardsView(
-              entries: projection.entries,
-              projectedJourneys: projection.journeys,
-              sourceLabels: archiveTripSourceLabels,
-              summaryText: projection.summaryText,
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.byType(TripEntryCard), findsNWidgets(2));
-    expect(find.textContaining('12.90'), findsOneWidget);
-    expect(find.textContaining('17.40'), findsOneWidget);
-    await tester.tap(
-      find.byWidgetPredicate(
-        (widget) =>
-            widget is TripEntryCard &&
-            widget.journey?.balanceAfterText == '¥ 12.90',
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('行程记录'), findsOneWidget);
-    expect(find.byType(ListTile), findsNWidgets(8));
-    expect(tester.takeException(), isNull);
   });
 }
 

@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/features/archive/application/archive_history.dart';
 import 'package:transit_card_analyzer/features/archive/application/archive_record_count.dart';
@@ -7,12 +6,7 @@ import 'package:transit_card_analyzer/features/archive/application/card_records_
 import 'package:transit_card_analyzer/features/archive/application/suica_archive_projection.dart';
 import 'package:transit_card_analyzer/features/archive/data/app_database.dart';
 import 'package:transit_card_analyzer/features/archive/data/card_repository.dart';
-import 'package:transit_card_analyzer/features/archive/domain/card_archive_identity.dart';
 import 'package:transit_card_analyzer/features/archive/domain/card_session_snapshot.dart';
-import 'package:transit_card_analyzer/features/archive/presentation/card_detail_page.dart';
-import 'package:transit_card_analyzer/features/trips/suica_trip_list.dart';
-
-import 'support/test_database.dart';
 
 void main() {
   test('new corrected station capture wins without rewriting old evidence', () {
@@ -266,38 +260,6 @@ void main() {
     expect(ArchiveRecordCount.fromHistory(history).savedRecordCount, 1);
   });
 
-  testWidgets(
-    'unobserved Suica history stays unknown in detail and text export',
-    (tester) async {
-      final payload = CardSessionSnapshot(
-        context: _context,
-        extensions: const {
-          'suica': {'version': 1, 'historyObserved': false, 'records': []},
-        },
-      ).encode();
-      final text = buildArchiveHistoryExport([
-        _historyPayloads([payload]),
-      ]);
-      expect(text, contains('尚未读取到 Suica 历史记录'));
-      expect(text, isNot(contains('行程记录：（无）')));
-      final repository = CardRepository(testDatabase());
-      await repository.saveIdentity(
-        fingerprint: 'felica:suica:idm:0102030405060708',
-        identity: const CardArchiveIdentity(cardType: 'suica'),
-        sessionDataJson: payload,
-      );
-      final card = (await repository.getAllCards()).single;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: CardDetailPage(repository: repository, cardId: card.id),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('尚未读取到 Suica 历史记录'), findsOneWidget);
-      expect(find.text('暂无行程数据'), findsNothing);
-    },
-  );
-
   test(
     'future Suica section is not reported as a successful empty history',
     () {
@@ -325,32 +287,6 @@ void main() {
       '¥ 9.00',
     );
   });
-
-  testWidgets(
-    'saved Suica detail uses the frozen trip list without an empty TU placeholder',
-    (tester) async {
-      final repository = CardRepository(testDatabase());
-      await repository.saveIdentity(
-        fingerprint: 'felica:suica:idm:0102030405060708',
-        identity: const CardArchiveIdentity(cardType: 'suica'),
-        balanceFen: 900,
-        currencyCode: 'JPY',
-        transactionCount: 1,
-        sessionDataJson: _payload([_record()]),
-      );
-      final card = (await repository.getAllCards()).single;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: CardDetailPage(repository: repository, cardId: card.id),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.byType(SuicaTripList), findsOneWidget);
-      expect(find.text('暂无行程数据'), findsNothing);
-      expect(find.textContaining('捕获时起点'), findsWidgets);
-      expect(find.textContaining('JP￥900'), findsWidgets);
-    },
-  );
 }
 
 const _context = ArchiveContext(

@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-11-26 — 移除 1.x 界面
+
+- 正式入口、实卡测试入口及内部样例直接使用 2.x；移除备用界面开关、旧主题、导航壳、页面及旧底栏、问卷 WebView 依赖。
+- 浅色界面显式使用深色系统导航栏图标，深色界面及黑色相机页继续使用浅色图标。
+- 保留只读 NFC、卡片档案、诊断、参考数据及历史同意记录，回归改由 2.x 界面和共用业务层承载。
+- 全量 Flutter 测试 3,105 项通过，静态检查无错误或警告；TU／CU SQLite 与参考包清单的 SHA256 不变，未编译 APK。
+
+## 2026-11-26 — 厦门 1 号线图标尺寸
+
+- 同步 `3930_Line1.svg` 调整后的 `1876 × 804` 画布尺寸。此前 `icons.json` 仍记录旧画布 `1944 × 856`，卡片按旧比例布局，导致 1 号线图标相对 3 号线继续偏小。
+- 素材回归现逐个核对索引宽高与实际 SVG `viewBox`，并增加厦门 1、3 号线在卡片中的同高显示测试。
+
+## 2026-11-26 — 北京地铁线路图标
+
+- 接入 `assets/Line_Icon/1000` 的 35 张北京线路 SVG，按 TU 北京城市编码 `1000` 登记 1～19 号线、机场线、市郊线路、亦庄 T1、S1/S2、八通线、大兴线及东北环线。
+- 北京线路图沿用 SVG 优先逻辑，并按明确线路名匹配素材。`1000_Line_0A_5A.svg` 映射 10 号线，`Northeast_Loop_Line.svg` 映射东北环线，不从文件后缀猜测其他线路。
+=======
+## 2026-11-26 — 2.x NFC 能力与卡片交互修复
+
+- 首页区分 NFC 关闭与手机不支持 NFC，接入原生 FeliCa 读取能力声明。
+- 卡包卡名与余额贴近；专家、卡包与卡面按 TU、CU、其他应用展示已知卡号。公交交易金额、交易后余额集中在半模态。
+- 卡包和卡片详情删除统一为一次确认，确认后通过顶部悬浮消息撤回，移除底部删除提示。已存档卡片再次保存时跳过命名表单，保留用户自定义名称。
+
 ## 2026-11-26 — 提高 CNB Android 构建规格
 
 - 分架构和 Universal APK 的手动流水线使用 CNB 的 amd64 最高规格，申请 64 核 CPU 和 128 GiB 内存。
@@ -34,7 +57,7 @@
 ## 2026-11-25 — 2.x 半模态沉浸、读卡百分比反馈、明细卡名 24sp 与知识库二级搜索吸顶
 
 - 半模态表面覆盖系统导航栏（手势小黑条）区域：修复更换卡面弹窗（含图片裁切器）外层 SafeArea 缺省 bottom:true 把表面顶起导航栏 inset、露出底色的问题；表面直达屏幕物理底部，内容仍由内层 SafeArea 保护。通用弹层与贡献者/许可证拖动弹层核验本就正确，用测试锁定。新增 gallery_sheet_immersion_test：inset 24/48 下覆盖更换卡面/裁切器/贡献者/trip/删除弹窗，断言表面底边、导航栏颜色同步与底部按钮安全区。
-- 首页读卡进度条显示真实百分比：接通 ScanController.progress → AppDependencies.readProgress → _GalleryLiveRead.readProgress → _GalleryReadPrompt；有百分比时渲染 determinate 进度条与右对齐百分比说明（固定预留行高，null↔有值布局不跳动），semanticsValue 同步播报；等待贴卡（无百分比）保持原循环动画。进度通知走既有记忆化链路，不触发卡片重投影。新增 reduceMotion 双态断言与真实链路 55% 门控测试。
+- 首页读卡进度条显示真实百分比：接通 ScanController.progress → AppDependencies.readProgress → \_GalleryLiveRead.readProgress → \_GalleryReadPrompt；有百分比时渲染 determinate 进度条与右对齐百分比说明（固定预留行高，null↔有值布局不跳动），semanticsValue 同步播报；等待贴卡（无百分比）保持原循环动画。进度通知走既有记忆化链路，不触发卡片重投影。新增 reduceMotion 双态断言与真实链路 55% 门控测试。
 - 卡片详情页大卡名 16→24sp（行高 30/24），卡面高度随测量自适应；首页卡面与卡包列表/换卡面预览/裁切预览维持 20sp（20sp/26）不变；余额 20sp/23sp 与其他版式不变。更新导航设计与卡包交互断言。
 - 知识库二级页（城市详情页）搜索框与首页一致：改为吸顶收合头，向下浏览时搜索条滑入标题栏、城市名淡出，回到顶部恢复；空态同样保留返回与搜索条；首页与二级页共用同一套几何实现（spec §3.2/§3.4），搜索定位的滚动避让收合头，城市页保留线路卡按需构建。
 - 清理 gallery_navigation_design_test 3 条既有 unnecessary_non_null_assertion warning。
@@ -142,6 +165,7 @@
 - 删除 2.x 界面中的「模拟数据」「测试信息」描述文本。
 - 修复复位信息提供机构解析：区分紧凑与带空格 HEX 输入，拒绝畸形或截断的 MT 块，支持 MT 提供机构块与 ATS 来源；芯片／IC 卡提供机构测试 9 项通过。
 - 版本同步为 `2.0.0-beta1`、构建号 `2236`；未修改 TU/CU 参考数据与用户档案数据库结构。
+
 ## 2026-11-22 — 专家页读取芯片与 IC 卡提供机构
 
 - 新增 `assets/data/card_provider_registry.json`，由用户提供的 2023 年 IC 卡及芯片备案表转换为 149 条四字节 HEX 对照记录，分为芯片提供机构与 IC 卡提供机构，并保留源文件 SHA256 和重复备案号。
@@ -291,6 +315,7 @@
 - 构建开发者原签名 arm64-v8a Release APK `1.0.8-beta.2+2192`（33.7 MiB，入口 `lib/main_gallery.dart`）：包名 `com.kajolno.TrafArch`、显示名 `TrafArch`、Android `versionCode` `2192`、仅 `arm64-v8a`、非 debuggable；证书 SHA-256 `3b86c431…1312b5` 与既有原签名一致。AppInfo 保留 `2192`，pubspec 自动预留 `2193`。APK 位于 `build/gallery/release-2192/`，SHA-256 `cc809592…43f40a`；TU／CU／manifest 包内哈希与源码一致；未连接设备安装。此前误按 4xxx 记录的构建号已作废，旧产物副本移至 `build/gallery/discarded-4192/`，不得安装。
 - 旧 1.x 界面与 `dynamic_color` 依赖保留，本次只替换 2.x Gallery 的取色来源。
 - 修复 2.x 滑动／转场掉帧：Monet 改写中保留上游 `885c511` 的掉帧修复并适配新主题体系——`GalleryTokens`／`GallerySchemeTokens` 增加值相等（含新增 `roles`）、按（数据源、明暗、调色板、种子色）复用同一 `ThemeData`、被不透明路由遮挡的页面保留上次构建、半模态下滑转场补 `RepaintBoundary`，避免 240 ms 主题交叉淡化被每次通知反复重启。回归：`gallery_motion_test`（含两项掉帧断言）、`gallery_monet_theme_test`、`gallery_wallet_interactions_test`、`gallery_navigation_design_test`、`gallery_design_test` 全部通过；`flutter analyze` 无 error／warning。
+
 ## 2026-11-18 — 重复读取批次替换
 
 - 读取批次查重改用稳定捕获内容：忽略每次会话的 `captureAttemptId`、物理帧 `sessionId` 和 `capturedAt`，保留交易、余额、应用、币种、解析版本及未知字段差异。

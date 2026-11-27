@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -7,10 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
-import 'package:transit_card_analyzer/app/app_info.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/reference_package.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/reference_updates.dart';
-import 'package:transit_card_analyzer/features/settings/presentation/about_page.dart';
 import 'package:transit_card_analyzer/features/updates/update_service.dart';
 import 'package:transit_card_analyzer/features/updates/update_prompt.dart';
 import 'package:transit_card_analyzer/features/reference_data/application/reference_data_controller.dart';
@@ -51,149 +48,6 @@ void main() {
     expect((await service.checkOnce())!.build, 1);
     expect(calls, 3);
   });
-
-  for (final invalidFormat in [false, true]) {
-    testWidgets(
-      'manual failure reports error, startup silent: $invalidFormat',
-      (tester) async {
-        var calls = 0;
-        final service = UpdateService(
-          currentBuild: 1,
-          manifestUrl: 'https://example.com/manifest.json',
-          fetch: (_, _) async {
-            calls++;
-            if (!invalidFormat) throw const SocketException('offline');
-            return Uint8List.fromList(utf8.encode('{}'));
-          },
-        );
-        expect(await service.checkOnce(), isNull);
-        await tester.pumpWidget(
-          MaterialApp(
-            home: AboutPage(updates: service, openWebLink: (_) async {}),
-          ),
-        );
-        await tester.tap(find.text('检查更新'));
-        await tester.pumpAndSettle();
-        expect(find.text('检查更新失败，请稍后重试'), findsOneWidget);
-        expect(find.text('暂无更新'), findsNothing);
-        await tester.tap(find.text('检查更新'));
-        await tester.pumpAndSettle();
-        expect(calls, 3);
-      },
-    );
-  }
-
-  testWidgets('unconfigured about hides update button and never fetches', (
-    tester,
-  ) async {
-    var calls = 0;
-    final service = UpdateService(
-      currentBuild: 1,
-      manifestUrl: '',
-      fetch: (_, _) async {
-        calls++;
-        throw StateError('must not fetch');
-      },
-    );
-    await tester.pumpWidget(
-      MaterialApp(
-        home: AboutPage(updates: service, openWebLink: (_) async {}),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('检查更新'), findsNothing);
-    expect(
-      find.text('版本 ${AppInfo.version} (${AppInfo.displayBuildNumber})'),
-      findsOneWidget,
-    );
-    expect(
-      AppInfo.displayBuildNumber,
-      AppInfo.buildNumber,
-    );
-    expect(
-      AppInfo.androidVersionCode,
-      AppInfo.buildNumber,
-    );
-    expect(await service.checkNow(), isNull);
-    expect(await service.checkOnce(), isNull);
-    expect(calls, 0);
-  });
-
-  for (final build in [1, 2, 3]) {
-    testWidgets('manual about check build $build and shared download dialog', (
-      tester,
-    ) async {
-      Uri? opened;
-      final service = UpdateService(
-        currentBuild: 2,
-        manifestUrl: 'https://example.com/manifest.json',
-        fetch: (_, _) async =>
-            Uint8List.fromList(utf8.encode(jsonEncode(appManifest(build)))),
-      );
-      await tester.pumpWidget(
-        MaterialApp(
-          home: AboutPage(
-            updates: service,
-            openWebLink: (_) async {},
-            openUrl: (uri) async {
-              opened = uri;
-              return true;
-            },
-          ),
-        ),
-      );
-      await tester.tap(find.text('检查更新'));
-      await tester.pumpAndSettle();
-      if (build <= 2) {
-        expect(find.text('暂无更新'), findsOneWidget);
-        expect(find.byType(AlertDialog), findsNothing);
-      } else {
-        expect(find.text('发现新版本 next'), findsOneWidget);
-        await tester.tap(find.text('暂不更新'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('检查更新'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('前往下载'));
-        await tester.pumpAndSettle();
-        expect(opened.toString(), 'https://example.com/app.apk');
-        expect(find.byType(AlertDialog), findsNothing);
-      }
-    });
-  }
-
-  testWidgets(
-    'pending manual check disables duplicates and tolerates disposal',
-    (tester) async {
-      var calls = 0;
-      final pending = Completer<Uint8List>();
-      final service = UpdateService(
-        currentBuild: 1,
-        manifestUrl: 'https://example.com/manifest.json',
-        fetch: (_, _) {
-          calls++;
-          return pending.future;
-        },
-      );
-      await tester.pumpWidget(
-        MaterialApp(
-          home: AboutPage(updates: service, openWebLink: (_) async {}),
-        ),
-      );
-      final button = find.byType(OutlinedButton);
-      await tester.tap(button);
-      await tester.tap(button);
-      await tester.pump();
-      expect(tester.widget<OutlinedButton>(button).onPressed, isNull);
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
-      expect(calls, 1);
-      await tester.pumpWidget(const SizedBox());
-      pending.complete(
-        Uint8List.fromList(utf8.encode(jsonEncode(appManifest(2)))),
-      );
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-    },
-  );
 
   for (final variant in [
     'missing document',

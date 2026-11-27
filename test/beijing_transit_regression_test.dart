@@ -1,6 +1,4 @@
 import 'package:transit_card_analyzer/features/reference_data/data/tu_region_live_source.dart';
-import 'package:flutter/material.dart';
-import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:transit_card_analyzer/features/transit_analysis/tunion_analysis_engine.dart';
@@ -11,9 +9,6 @@ import 'package:transit_card_analyzer/features/reference_data/data/tu_station_re
 import 'package:transit_card_analyzer/features/reference_data/data/tunion_knowledge_base.dart';
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_models.dart';
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_process_parser.dart';
-import 'package:transit_card_analyzer/features/trips/trip_stream_view.dart';
-import 'package:transit_card_analyzer/app/app_dependencies.dart';
-import 'package:transit_card_analyzer/features/archive/data/app_database.dart';
 
 void main() {
   late Database db;
@@ -105,66 +100,6 @@ void main() {
     expect(parsed, isNotNull);
     expect(parsed!.lineStationCode, '04430001000100');
     expect(parsed.cityCode, '1000');
-  });
-
-  testWidgets(
-    'unpaired Beijing bus process event displays route and stop ordinal',
-    (tester) async {
-      final database = AppDatabase(NativeDatabase.memory());
-      addTearDown(database.close);
-      final app = AppDependencies(database: database);
-      addTearDown(app.dispose);
-      final record = const TUnionProcessParser().parseCycleTrip(
-        cycleBytes('0001000A000100', bus: true),
-      )!;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SingleChildScrollView(
-              child: TripStreamView(
-                stream: [ProcessTripEntry(record)],
-                app: app,
-                isRemote: (_) => false,
-              ),
-            ),
-          ),
-        ),
-      );
-      expect(find.textContaining('站点10'), findsOneWidget);
-      expect(find.text('1路'), findsOneWidget);
-    },
-  );
-
-  testWidgets('Beijing 1A bus record uses the same decoded route as 1E', (
-    tester,
-  ) async {
-    final database = AppDatabase(NativeDatabase.memory());
-    addTearDown(database.close);
-    final app = AppDependencies(database: database);
-    addTearDown(app.dispose);
-    final record = BusTransitRecord(
-      statusCode: 1,
-      entryCityCode: '1000',
-      entryLineCode: '0001',
-      entryStationCode: '0A',
-      entryOperatorCode: '0001',
-      entryTime: _time,
-    );
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SingleChildScrollView(
-            child: TripStreamView(
-              stream: [BusRecordEntry(record, isEntry: true)],
-              app: app,
-              isRemote: (_) => false,
-            ),
-          ),
-        ),
-      ),
-    );
-    expect(find.textContaining('站点10'), findsOneWidget);
-    expect(find.text('1路'), findsOneWidget);
   });
 }
 

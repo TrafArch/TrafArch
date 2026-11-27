@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/features/archive/application/archive_application_display.dart';
@@ -11,8 +10,6 @@ import 'package:transit_card_analyzer/features/archive/presentation/archive_trip
 import 'package:transit_card_analyzer/features/reference_data/application/reference_data_controller.dart';
 import 'package:transit_card_analyzer/features/transit_analysis/tunion_analysis_models.dart';
 import 'package:transit_card_analyzer/features/trips/journey_presentation.dart';
-import 'package:transit_card_analyzer/features/trips/trip_cards_view.dart';
-import 'package:transit_card_analyzer/features/trips/trip_entry_card.dart';
 import 'package:transit_card_analyzer/features/trips/trip_entry_presenter.dart';
 import 'package:transit_card_analyzer/features/trips/trip_filters.dart';
 import 'package:transit_card_analyzer/features/trips/trip_journey_adapter.dart';
@@ -157,39 +154,6 @@ void main() {
     },
   );
 
-  testWidgets(
-    'saved cross city rail card shows both stations with generic heading',
-    (tester) async {
-      final projection = presentArchiveTrips(
-        _savedRecords(reference),
-        onDiagnostics: (_) {},
-      );
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SingleChildScrollView(
-              child: TripCardsView(
-                entries: projection.entries,
-                sourceLabels: archiveTripSourceLabels,
-                summaryText: projection.summaryText,
-              ),
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('轨道交通'), findsOneWidget);
-      expect(find.text('绍兴轨道交通'), findsNothing);
-      expect(find.text('杭州轨道交通'), findsNothing);
-      expect(find.text('中国轻纺城'), findsOneWidget);
-      expect(find.text('善贤'), findsOneWidget);
-      expect(find.text('1小时31分钟'), findsOneWidget);
-      expect(find.text('异地用卡'), findsOneWidget);
-      expect(find.byKey(const ValueKey('journey-arrow')), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    },
-  );
-
   for (final mode in [TripModeFilter.rail, TripModeFilter.bus]) {
     test('$mode consecutive transactions may pair across known cities', () {
       final journeys = projectJourneys([
@@ -213,64 +177,7 @@ void main() {
       expect(journeys.single.isCrossCity, isTrue);
       expect(journeys.single.cityLabel, isNull);
     });
-
-    testWidgets('$mode cross city heading omits a single city prefix', (
-      tester,
-    ) async {
-      final events = [
-        _event(
-          role: JourneyEventRole.entry,
-          city: '3370',
-          minute: 10,
-          mode: mode,
-        ),
-        _event(
-          role: JourneyEventRole.exit,
-          city: '3310',
-          minute: 25,
-          mode: mode,
-        ),
-      ];
-      await _showTicket(
-        tester,
-        JourneyPresentation(
-          events: events,
-          mode: mode,
-          state: JourneyState.completed,
-          cityLabel: '绍兴',
-          start: events.first.endpoint,
-          end: events.last.endpoint,
-        ),
-      );
-      final name = mode == TripModeFilter.bus ? '公共汽电车' : '轨道交通';
-      expect(find.text(name), findsOneWidget);
-      expect(find.text('绍兴$name'), findsNothing);
-      expect(tester.takeException(), isNull);
-    });
   }
-
-  testWidgets(
-    'one accepting city keeps its heading even for an out of town card',
-    (tester) async {
-      final events = [
-        _event(role: JourneyEventRole.entry, city: '3310', minute: 10),
-        _event(role: JourneyEventRole.exit, city: '3310', minute: 25),
-      ];
-      await _showTicket(
-        tester,
-        JourneyPresentation(
-          events: events,
-          mode: TripModeFilter.rail,
-          state: JourneyState.completed,
-          cityLabel: '杭州',
-          start: events.first.endpoint,
-          end: events.last.endpoint,
-        ),
-      );
-      expect(find.text('杭州轨道交通'), findsOneWidget);
-      expect(find.text('轨道交通'), findsNothing);
-    },
-  );
 
   test('a shared application record may contain two accepting cities', () {
     final journeys = projectJourneys([
@@ -552,22 +459,4 @@ JourneyEvent<TripEntryInfo> _event({
   scopeKey: scope,
   sourceIds: {source},
   applicationRecordId: application,
-);
-
-Future<void> _showTicket(
-  WidgetTester tester,
-  JourneyPresentation<TripEntryInfo> journey,
-) => tester.pumpWidget(
-  MaterialApp(
-    home: Scaffold(
-      body: SingleChildScrollView(
-        child: TripEntryCard(
-          info: journey.events.first.payload,
-          remote: true,
-          onTap: () {},
-          journey: journey,
-        ),
-      ),
-    ),
-  ),
 );

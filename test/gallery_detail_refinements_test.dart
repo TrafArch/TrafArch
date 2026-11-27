@@ -199,6 +199,24 @@ void main() {
         .map((label) => tester.getTopLeft(find.text(label)).dy)
         .toList();
     expect(positions, orderedEquals(positions.toList()..sort()));
+    final scroll = tester.state<ScrollableState>(galleryVerticalScroll());
+    scroll.position.jumpTo(scroll.position.maxScrollExtent);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('可能不代表完整历史'), findsNothing);
+  });
+
+  testWidgets('recent transactions retain only the empty-state title', (
+    tester,
+  ) async {
+    final card = c.current;
+    c.liveLedgers = {card.id: []};
+    c.openCard(card);
+    await mount(tester);
+
+    expect(find.text('暂无交易记录'), findsOneWidget);
+    expect(find.text('卡内记录可能不完整'), findsNothing);
+    expect(find.textContaining('可能不代表完整历史'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('recent transactions distinguish the same date across years', (
