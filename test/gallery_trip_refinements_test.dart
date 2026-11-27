@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/features/trips/journey_transport_icon.dart';
@@ -15,7 +16,11 @@ import 'package:transit_card_analyzer/gallery/gallery_theme.dart';
 import 'support/gallery_scroll.dart';
 
 void main() {
+  late GalleryRailLineCatalog bundledRailLineCatalog;
   late GalleryController controller;
+  setUpAll(() async {
+    bundledRailLineCatalog = await GalleryRailLineCatalog.load(rootBundle);
+  });
   setUp(() {
     controller = GalleryController(
       GalleryData(
@@ -46,7 +51,7 @@ void main() {
   testWidgets('trip reference typography bolds stations and trims the clock', (
     tester,
   ) async {
-    await mount(tester);
+    await mount(tester, railLineCatalog: GalleryRailLineCatalog.empty());
     for (final value in [
       '轨道交通',
       '1 号线',
@@ -219,17 +224,7 @@ void main() {
           'entryLineCity': {'system': 'tu', 'code': '3910', 'name': '福州'},
           'exitLineCity': {'system': 'tu', 'code': '3910', 'name': '福州'},
         });
-      await mount(
-        tester,
-        railLineCatalog: GalleryRailLineCatalog.fromJson(
-          jsonDecode(File('assets/Line_Icon/icons.json').readAsStringSync())
-              as Map<String, dynamic>,
-          jsonDecode(
-            File('third_party/railmapgen_palette/tu_colors.json')
-                .readAsStringSync(),
-          ) as Map<String, dynamic>,
-        ),
-      );
+      await mount(tester, railLineCatalog: bundledRailLineCatalog);
 
       for (final (key, asset) in [
         ('trip-entry-line-badge', 'assets/Line_Icon/3910/3910_Line_4.svg'),
@@ -262,14 +257,14 @@ void main() {
         () => controller.trips[0] = {
           ...controller.trips[0],
           'city': '上海',
-          'entryLine': '4号线',
-          'exitLine': '4号线',
+          'entryLine': '19号线',
+          'exitLine': '19号线',
           'entryLineCity': {'system': 'tu', 'code': '2900', 'name': '上海'},
           'exitLineCity': {'system': 'tu', 'code': '2900', 'name': '上海'},
         },
       );
       await tester.pumpAndSettle();
-      final colour = const Color(0xff461d84);
+      final colour = const Color(0xfff5ab78);
       expect(
         find.byWidgetPredicate(
           (widget) =>
@@ -278,8 +273,8 @@ void main() {
         ),
         findsNWidgets(2),
       );
-      for (final text in tester.widgetList<Text>(find.text('4号线'))) {
-        expect(text.style!.color, Colors.white);
+      for (final text in tester.widgetList<Text>(find.text('19号线'))) {
+        expect(text.style!.color, Colors.black);
       }
 
       controller.update(
@@ -368,6 +363,44 @@ void main() {
       expect(oneSize.width / threeSize.width, greaterThan(.97));
     },
   );
+
+  testWidgets('Shanghai TU and CU endpoints use bundled SVG line badges', (
+    tester,
+  ) async {
+    final base = controller.trips.first;
+    controller.trips
+      ..clear()
+      ..add({
+        ...base,
+        'city': '上海',
+        'entryLine': '1 号线',
+        'exitLine': '机场联络线',
+        'entryLineCity': {'system': 'tu', 'code': '2900'},
+        'exitLineCity': {'system': 'cu', 'code': '2000'},
+      });
+    await mount(tester, railLineCatalog: bundledRailLineCatalog);
+
+    for (final (endpoint, suffix, aspectRatio) in [
+      ('entry', '01', 157.6 / 94.2),
+      ('exit', '51', 43.32 / 18.19),
+    ]) {
+      final picture = find.descendant(
+        of: find.byKey(ValueKey('trip-$endpoint-line-badge')),
+        matching: find.byType(SvgPicture),
+      );
+      expect(picture, findsOneWidget);
+      final svg = tester.widget<SvgPicture>(picture);
+      expect(
+        (svg.bytesLoader as SvgAssetLoader).assetName,
+        'assets/Line_Icon/2900/2900_Line_$suffix.svg',
+      );
+      expect(svg.colorFilter, isNull);
+      final size = tester.getSize(picture);
+      expect(size.height, closeTo(24, .1));
+      expect(size.width, closeTo(24 * aspectRatio, .1));
+    }
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'unknown, multi-city and cross-city rail keep the themed fallback and bus stays unchanged',
@@ -524,7 +557,9 @@ void main() {
       final station = tester.getRect(find.text('徐家汇').first);
       expect(time.bottom, lessThan(station.top));
       // 线路徽章移到时间右侧，不再与站点同组。
-      final badge = tester.getRect(find.text('1 号线').first);
+      final badge = tester.getRect(
+        find.byKey(const ValueKey('trip-entry-line-badge')).first,
+      );
       expect(badge.left, greaterThan(time.right));
       expect(badge.center.dy, closeTo(time.center.dy, 1.5));
       expect(badge.bottom, lessThanOrEqualTo(station.top));

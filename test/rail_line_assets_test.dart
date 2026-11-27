@@ -1,15 +1,20 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/gallery/gallery_rail_line_catalog.dart';
 
 void main() {
-  test('rail SVG manifest covers the supplied city artwork', () {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('rail SVG manifest covers the supplied city artwork', () async {
     final manifest = jsonDecode(
       File('assets/Line_Icon/icons.json').readAsStringSync(),
     ) as Map<String, dynamic>;
-    expect(manifest.keys.toSet(), {'1000', '3910', '3930', '5810'});
+    expect(manifest.keys.toSet(), {'1000', '2900', '3910', '3930', '5810'});
+    final assetManifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+    final bundled = assetManifest.listAssets().toSet();
 
     final registered = <String>{};
     for (final city in manifest.entries) {
@@ -20,10 +25,14 @@ void main() {
         expect(config[1] as num, greaterThan(0), reason: entry.key);
         expect(config[2] as num, greaterThan(0), reason: entry.key);
         final path = 'assets/Line_Icon/${city.key}/$file';
+        expect(bundled, contains(path));
         expect(File(path).existsSync(), isTrue, reason: path);
         final source = File(path).readAsStringSync();
         expect(source, isNot(contains('<style')), reason: path);
         expect(source, isNot(contains('class=')), reason: path);
+        if (city.key == '2900') {
+          expect(source, isNot(contains('<text')), reason: path);
+        }
         final viewBox = RegExp(r'viewBox="([^"]+)"').firstMatch(source);
         expect(viewBox, isNotNull, reason: path);
         final dimensions = viewBox!
@@ -47,7 +56,7 @@ void main() {
         .map((path) => path.replaceFirst('assets/Line_Icon/', ''))
         .toSet();
     expect(registered, supplied);
-    expect(registered, hasLength(65));
+    expect(registered, hasLength(86));
     expect(
       registered,
       containsAll([
@@ -127,7 +136,27 @@ void main() {
       catalog.icon('1000', '18号线')?.path,
       'assets/Line_Icon/1000/1000_Line_12.svg',
     );
+    for (var number = 1; number <= 18; number++) {
+      final suffix = number.toString().padLeft(2, '0');
+      expect(
+        catalog.icon('2900', '$number号线')?.path,
+        'assets/Line_Icon/2900/2900_Line_$suffix.svg',
+      );
+    }
+    for (final (name, suffix) in [
+      ('浦江线', 'PJ'),
+      ('磁浮线', '90'),
+      ('机场联络线', '51'),
+      ('市域机场线', '51'),
+    ]) {
+      final line = catalog.lineKey('2900', name);
+      expect(
+        catalog.icon('2900', line)?.path,
+        'assets/Line_Icon/2900/2900_Line_$suffix.svg',
+      );
+    }
     expect(catalog.paletteColor('2900', '4号线')?.toARGB32(), 0xff461d84);
+    expect(catalog.paletteColor('2900', '机场联络线')?.toARGB32(), 0xff236890);
     expect(catalog.paletteColor('5840', '4号线')?.toARGB32(), 0xffda291c);
     expect(catalog.paletteColor('5840', '8号线')?.toARGB32(), 0xffb94700);
     expect(catalog.paletteColor('5840', '8号线（原）')?.toARGB32(), 0xffe45dbf);

@@ -95,11 +95,11 @@ class GalleryRailLineCatalog {
     if (selected != null) return selected;
     final rmg = city['rmg'];
     if (rmg is! String) return null;
-    return _rmgLineColor(rmg, line);
+    return _rmgLineColor(code, rmg, line);
   }
 
-  Color? _rmgLineColor(String city, String line) {
-    final rows = _jsonObject(_rmgCities[city])['lines'];
+  Color? _rmgLineColor(String code, String rmgCity, String line) {
+    final rows = _jsonObject(_rmgCities[rmgCity])['lines'];
     if (rows is! List) return null;
     final exact = <Map<String, dynamic>>[];
     final aliases = <Map<String, dynamic>>[];
@@ -113,7 +113,9 @@ class GalleryRailLineCatalog {
           .toList(growable: false);
       if (names.contains(label)) {
         exact.add(row);
-      } else if (names.any((name) => _baseLineName(name) == alias)) {
+      } else if (names.any(
+        (name) => _baseLineName(name) == alias || lineKey(code, name) == label,
+      )) {
         aliases.add(row);
       }
     }
