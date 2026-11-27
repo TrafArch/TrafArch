@@ -32,7 +32,7 @@ Flutter 和 Dart 实现界面、读卡协议解析与业务逻辑，Android Kotl
 | 技术项 | 版本或约束 | 仓库依据 |
 |---|---|---|
 | Dart SDK | `>=3.13.5 <4.0.0` | [pubspec.lock](../../pubspec.lock) |
-| Flutter SDK | `>=3.47.0` | [pubspec.lock](../../pubspec.lock) |
+| Flutter SDK | `>=3.44.0` | [pubspec.lock](../../pubspec.lock) |
 | drift | `2.35.4` | [pubspec.lock](../../pubspec.lock) |
 | drift_flutter | `0.3.1` | [pubspec.lock](../../pubspec.lock) |
 | sqlite3 | `3.9.1` | [pubspec.lock](../../pubspec.lock) |
