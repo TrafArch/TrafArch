@@ -12,9 +12,17 @@ void main() {
     final manifest = jsonDecode(
       File('assets/Line_Icon/icons.json').readAsStringSync(),
     ) as Map<String, dynamic>;
-    expect(manifest.keys.toSet(), {'1000', '2900', '3910', '3930', '5810'});
+    expect(manifest.keys.toSet(), {
+      '1000',
+      '2900',
+      '3050',
+      '3910',
+      '3930',
+      '5810',
+    });
     final assetManifest = await AssetManifest.loadFromAssetBundle(rootBundle);
     final bundled = assetManifest.listAssets().toSet();
+    final catalog = await GalleryRailLineCatalog.load(rootBundle);
 
     final registered = <String>{};
     for (final city in manifest.entries) {
@@ -25,26 +33,41 @@ void main() {
         expect(config[1] as num, greaterThan(0), reason: entry.key);
         expect(config[2] as num, greaterThan(0), reason: entry.key);
         final path = 'assets/Line_Icon/${city.key}/$file';
-        expect(bundled, contains(path));
-        expect(File(path).existsSync(), isTrue, reason: path);
-        final source = File(path).readAsStringSync();
-        expect(source, isNot(contains('<style')), reason: path);
-        expect(source, isNot(contains('class=')), reason: path);
-        if (city.key == '2900') {
-          expect(source, isNot(contains('<text')), reason: path);
+        final darkPath = catalog.icon(city.key, entry.key)?.darkPath;
+        for (final asset in [path, ?darkPath]) {
+          expect(bundled, contains(asset));
+          expect(File(asset).existsSync(), isTrue, reason: asset);
+          final source = File(asset).readAsStringSync();
+          expect(source, isNot(contains('<style')), reason: asset);
+          expect(source, isNot(contains('class=')), reason: asset);
+          if (city.key == '2900') {
+            expect(source, isNot(contains('<text')), reason: asset);
+          }
+          final viewBox = RegExp(r'viewBox="([^"]+)"').firstMatch(source);
+          expect(viewBox, isNotNull, reason: asset);
+          final dimensions = viewBox!
+              .group(1)!
+              .trim()
+              .split(RegExp(r'\s+'))
+              .map(double.parse)
+              .toList(growable: false);
+          expect(dimensions, hasLength(4), reason: asset);
+          expect(dimensions[2], greaterThan(0), reason: asset);
+          expect(dimensions[3], greaterThan(0), reason: asset);
+          if (asset == path) {
+            expect(
+              config[1] as num,
+              closeTo(dimensions[2], .001),
+              reason: asset,
+            );
+            expect(
+              config[2] as num,
+              closeTo(dimensions[3], .001),
+              reason: asset,
+            );
+          }
+          registered.add(asset.replaceFirst('assets/Line_Icon/', ''));
         }
-        final viewBox = RegExp(r'viewBox="([^"]+)"').firstMatch(source);
-        expect(viewBox, isNotNull, reason: path);
-        final dimensions = viewBox!
-            .group(1)!
-            .trim()
-            .split(RegExp(r'\s+'))
-            .map(double.parse)
-            .toList(growable: false);
-        expect(dimensions, hasLength(4), reason: path);
-        expect(config[1] as num, closeTo(dimensions[2], .001), reason: path);
-        expect(config[2] as num, closeTo(dimensions[3], .001), reason: path);
-        registered.add('${city.key}/$file');
       }
     }
 
@@ -56,7 +79,7 @@ void main() {
         .map((path) => path.replaceFirst('assets/Line_Icon/', ''))
         .toSet();
     expect(registered, supplied);
-    expect(registered, hasLength(86));
+    expect(registered, hasLength(104));
     expect(
       registered,
       containsAll([
@@ -78,6 +101,15 @@ void main() {
       File('assets/Line_Icon/3910/3910_Line_F1.svg').readAsStringSync(),
       contains('fill="#00ADB9"'),
     );
+    expect(catalog.tuCode('3050', '苏州市', 'tu'), '3050');
+    for (final number in [1, 2, 3, 4, 5, 6, 7, 8, 11]) {
+      final suffix = number.toString().padLeft(2, '0');
+      final stem = 'assets/Line_Icon/3050/3050_Line_$suffix';
+      final icon = catalog.icon('3050', '$number号线');
+      expect(icon?.path, '$stem.svg');
+      expect(icon?.darkPath, '${stem}_black.svg');
+    }
+    expect(catalog.icon('2900', '11号线')?.darkPath, isNull);
   });
 
   test('offline palette keeps verified mappings and its upstream license', () {

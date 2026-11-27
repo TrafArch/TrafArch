@@ -55,7 +55,8 @@ class _GalleryRailLineBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = Theme.of(context).extension<GalleryTokens>()!;
+    final theme = Theme.of(context);
+    final tokens = theme.extension<GalleryTokens>()!;
     final neutral = _label(tokens.tripBadgeRail, tokens.tripBadgeOnRail);
     if (cityCode == null && cityName == null) return neutral;
     final catalog = _GalleryRailLineCatalogScope.of(context);
@@ -75,6 +76,9 @@ class _GalleryRailLineBadge extends StatelessWidget {
 
     final icon = catalog.icon(code, label);
     if (icon == null) return fallback();
+    final path = theme.brightness == Brightness.dark
+        ? icon.darkPath ?? icon.path
+        : icon.path;
     return LayoutBuilder(
       builder: (context, constraints) {
         final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
@@ -83,19 +87,21 @@ class _GalleryRailLineBadge extends StatelessWidget {
           24 * scale * icon.aspectRatio,
         );
         final height = width / icon.aspectRatio;
+        Widget svg(String assetPath) => SvgPicture.asset(
+          assetPath,
+          key: ValueKey(assetPath),
+          width: width,
+          height: height,
+          fit: BoxFit.contain,
+          excludeFromSemantics: true,
+          errorBuilder: (_, _, _) =>
+              assetPath == icon.path ? fallback() : svg(icon.path),
+        );
+
         return Semantics(
           label: line,
           image: true,
-          child: ExcludeSemantics(
-            child: SvgPicture.asset(
-              icon.path,
-              width: width,
-              height: height,
-              fit: BoxFit.contain,
-              excludeFromSemantics: true,
-              errorBuilder: (_, _, _) => fallback(),
-            ),
-          ),
+          child: ExcludeSemantics(child: svg(path)),
         );
       },
     );

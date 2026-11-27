@@ -402,6 +402,59 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('rail line SVG variants follow the active app brightness', (
+    tester,
+  ) async {
+    final base = controller.trips.first;
+    controller.trips
+      ..clear()
+      ..add({
+        ...base,
+        'city': '苏州 / 上海',
+        'isCrossCity': true,
+        'entryLine': '11号线',
+        'exitLine': '11号线',
+        'entryLineCity': {'system': 'tu', 'code': '3050'},
+        'exitLineCity': {'system': 'tu', 'code': '2900'},
+      });
+    addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+    await mount(tester, railLineCatalog: bundledRailLineCatalog);
+
+    for (final (mode, systemBrightness, suffix) in [
+      (ThemeMode.light, Brightness.dark, ''),
+      (ThemeMode.dark, Brightness.light, '_black'),
+      (ThemeMode.system, Brightness.dark, '_black'),
+      (ThemeMode.system, Brightness.light, ''),
+    ]) {
+      tester.platformDispatcher.platformBrightnessTestValue = systemBrightness;
+      if (controller.themeMode != mode) {
+        controller.update(() => controller.themeMode = mode);
+      }
+      await tester.pumpAndSettle();
+
+      for (final (endpoint, file, aspectRatio) in [
+        ('entry', '3050/3050_Line_11$suffix.svg', 263.58 / 122.03),
+        ('exit', '2900/2900_Line_11.svg', 157.6 / 94.2),
+      ]) {
+        final picture = find.descendant(
+          of: find.byKey(ValueKey('trip-$endpoint-line-badge')),
+          matching: find.byType(SvgPicture),
+        );
+        expect(picture, findsOneWidget);
+        final svg = tester.widget<SvgPicture>(picture);
+        expect(
+          (svg.bytesLoader as SvgAssetLoader).assetName,
+          'assets/Line_Icon/$file',
+        );
+        expect(svg.colorFilter, isNull);
+        final size = tester.getSize(picture);
+        expect(size.height, closeTo(24, .1));
+        expect(size.width, closeTo(24 * aspectRatio, .1));
+      }
+      expect(tester.takeException(), isNull);
+    }
+  });
+
   testWidgets(
     'unknown, multi-city and cross-city rail keep the themed fallback and bus stays unchanged',
     (tester) async {

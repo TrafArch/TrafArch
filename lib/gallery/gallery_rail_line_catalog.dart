@@ -1,13 +1,17 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 class GalleryRailLineCatalog {
-  GalleryRailLineCatalog._(this._local, Map<String, dynamic> palette)
-    : _cities = _jsonObject(palette['cities']),
-      _cuToTu = _jsonObject(palette['cuToTu']),
-      _rmgCities = _jsonObject(palette['rmgCities']) {
+  GalleryRailLineCatalog._(
+    this._local,
+    Map<String, dynamic> palette, [
+    this._darkAssets = const {},
+  ]) : _cities = _jsonObject(palette['cities']),
+       _cuToTu = _jsonObject(palette['cuToTu']),
+       _rmgCities = _jsonObject(palette['rmgCities']) {
     for (final code in {..._cities.keys, ..._local.keys}) {
       final name =
           _jsonObject(_local[code])['name'] ??
@@ -26,20 +30,39 @@ class GalleryRailLineCatalog {
     Map<String, dynamic> palette,
   ) => GalleryRailLineCatalog._(local, palette);
 
+  static const _assetDirectory = 'assets/Line_Icon';
+  static const _darkSuffix = '_black.svg';
+  static final _svgExtension = RegExp(r'\.svg$');
   static final _numberedLine = RegExp(r'^([0-9]{1,3})\s*[号號]\s*[线線]$');
   static final _hexColorPattern = RegExp(r'^#[0-9a-fA-F]{6}$');
   final Map<String, dynamic> _local;
   final Map<String, dynamic> _cities;
   final Map<String, dynamic> _cuToTu;
   final Map<String, dynamic> _rmgCities;
+  final Set<String> _darkAssets;
   final _names = <String, String?>{};
 
   static Future<GalleryRailLineCatalog> load(AssetBundle bundle) async {
-    final [local, palette] = await Future.wait([
-      _read(bundle, 'assets/Line_Icon/icons.json'),
+    final (local, palette, darkAssets) = await (
+      _read(bundle, '$_assetDirectory/icons.json'),
       _read(bundle, 'third_party/railmapgen_palette/tu_colors.json'),
-    ]);
-    return GalleryRailLineCatalog._(local, palette);
+      _readDarkAssets(bundle),
+    ).wait;
+    return GalleryRailLineCatalog._(local, palette, darkAssets);
+  }
+
+  static Future<Set<String>> _readDarkAssets(AssetBundle bundle) async {
+    try {
+      final manifest = await AssetManifest.loadFromAssetBundle(bundle);
+      return manifest.listAssets().where((path) {
+        return path.startsWith('$_assetDirectory/') &&
+            path.endsWith(_darkSuffix);
+      }).toSet();
+    } on FlutterError {
+      return const {};
+    } on FormatException {
+      return const {};
+    }
   }
 
   static Future<Map<String, dynamic>> _read(
@@ -74,12 +97,18 @@ class GalleryRailLineCatalog {
     return alias is String ? alias : text;
   }
 
-  ({String path, double aspectRatio})? icon(String code, String line) {
+  ({String path, String? darkPath, double aspectRatio})? icon(
+    String code,
+    String line,
+  ) {
     final config = _jsonObject(_jsonObject(_local[code])['icons'])[line];
     if (config case [final String file, final num width, final num height]
         when width > 0 && height > 0) {
+      final path = '$_assetDirectory/$code/$file';
+      final darkPath = path.replaceFirst(_svgExtension, _darkSuffix);
       return (
-        path: 'assets/Line_Icon/$code/$file',
+        path: path,
+        darkPath: _darkAssets.contains(darkPath) ? darkPath : null,
         aspectRatio: width / height,
       );
     }
