@@ -79,7 +79,7 @@ void main() {
         .map((path) => path.replaceFirst('assets/Line_Icon/', ''))
         .toSet();
     expect(registered, supplied);
-    expect(registered, hasLength(104));
+    expect(registered, hasLength(122));
     expect(
       registered,
       containsAll([
@@ -102,14 +102,18 @@ void main() {
       contains('fill="#00ADB9"'),
     );
     expect(catalog.tuCode('3050', '苏州市', 'tu'), '3050');
-    for (final number in [1, 2, 3, 4, 5, 6, 7, 8, 11]) {
-      final suffix = number.toString().padLeft(2, '0');
-      final stem = 'assets/Line_Icon/3050/3050_Line_$suffix';
-      final icon = catalog.icon('3050', '$number号线');
-      expect(icon?.path, '$stem.svg');
-      expect(icon?.darkPath, '${stem}_black.svg');
+    for (final (code, lineNumbers) in [
+      ('2900', List<int>.generate(18, (index) => index + 1)),
+      ('3050', [1, 2, 3, 4, 5, 6, 7, 8, 11]),
+    ]) {
+      for (final number in lineNumbers) {
+        final suffix = number.toString().padLeft(2, '0');
+        final stem = 'assets/Line_Icon/$code/${code}_Line_$suffix';
+        final icon = catalog.icon(code, '$number号线');
+        expect(icon?.path, '$stem.svg');
+        expect(icon?.darkPath, '${stem}_black.svg');
+      }
     }
-    expect(catalog.icon('2900', '11号线')?.darkPath, isNull);
   });
 
   test('offline palette keeps verified mappings and its upstream license', () {
@@ -168,13 +172,6 @@ void main() {
       catalog.icon('1000', '18号线')?.path,
       'assets/Line_Icon/1000/1000_Line_12.svg',
     );
-    for (var number = 1; number <= 18; number++) {
-      final suffix = number.toString().padLeft(2, '0');
-      expect(
-        catalog.icon('2900', '$number号线')?.path,
-        'assets/Line_Icon/2900/2900_Line_$suffix.svg',
-      );
-    }
     for (final (name, suffix) in [
       ('浦江线', 'PJ'),
       ('磁浮线', '90'),

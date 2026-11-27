@@ -364,9 +364,10 @@ void main() {
     },
   );
 
-  testWidgets('Shanghai TU and CU endpoints use bundled SVG line badges', (
+  testWidgets('Shanghai TU and CU endpoints use bundled SVGs in dark mode', (
     tester,
   ) async {
+    controller.themeMode = ThemeMode.dark;
     final base = controller.trips.first;
     controller.trips
       ..clear()
@@ -381,7 +382,7 @@ void main() {
     await mount(tester, railLineCatalog: bundledRailLineCatalog);
 
     for (final (endpoint, suffix, aspectRatio) in [
-      ('entry', '01', 157.6 / 94.2),
+      ('entry', '01_black', 157.6 / 94.2),
       ('exit', '51', 43.32 / 18.19),
     ]) {
       final picture = find.descendant(
@@ -434,7 +435,7 @@ void main() {
 
       for (final (endpoint, file, aspectRatio) in [
         ('entry', '3050/3050_Line_11$suffix.svg', 263.58 / 122.03),
-        ('exit', '2900/2900_Line_11.svg', 157.6 / 94.2),
+        ('exit', '2900/2900_Line_11$suffix.svg', 157.6 / 94.2),
       ]) {
         final picture = find.descendant(
           of: find.byKey(ValueKey('trip-$endpoint-line-badge')),
