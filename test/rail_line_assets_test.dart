@@ -1,12 +1,31 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/gallery/gallery_rail_line_catalog.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('Shanghai and Suzhou artwork matches the Fuzhou badge height', () async {
+    final reference = await _paintedHeight('3910/3910_Line_4.svg');
+    expect(reference, closeTo(24, .2));
+    for (final city in ['2900', '3050']) {
+      for (final line in ['01', '11']) {
+        for (final suffix in ['', '_black']) {
+          final asset = '$city/${city}_Line_$line$suffix.svg';
+          expect(
+            await _paintedHeight(asset),
+            closeTo(reference, .4),
+            reason: asset,
+          );
+        }
+      }
+    }
+  });
 
   test('rail SVG manifest covers the supplied city artwork', () async {
     final manifest = jsonDecode(
@@ -201,4 +220,44 @@ void main() {
       contains('https://github.com/railmapgen/rmg-palette'),
     );
   });
+}
+
+Future<double> _paintedHeight(String path) async {
+  final info = await vg.loadPicture(
+    SvgAssetLoader('assets/Line_Icon/$path'),
+    null,
+  );
+  const samplesPerDp = 8.0;
+  const sampleHeight = 192;
+  final scale = sampleHeight / info.size.height;
+  final recorder = ui.PictureRecorder();
+  (ui.Canvas(recorder)..scale(scale)).drawPicture(info.picture);
+  final picture = recorder.endRecording();
+  ui.Image? image;
+  try {
+    image = await picture.toImage(
+      (info.size.width * scale).ceil(),
+      sampleHeight,
+    );
+    final pixels = (await image.toByteData(
+      format: ui.ImageByteFormat.rawRgba,
+    ))!;
+    int? firstRow;
+    var lastRow = -1;
+    for (var y = 0; y < image.height; y++) {
+      for (var x = 0; x < image.width; x++) {
+        final alpha = pixels.getUint8((y * image.width + x) * 4 + 3);
+        if (alpha >= 128) {
+          firstRow ??= y;
+          lastRow = y;
+          break;
+        }
+      }
+    }
+    return firstRow == null ? 0 : (lastRow - firstRow + 1) / samplesPerDp;
+  } finally {
+    image?.dispose();
+    picture.dispose();
+    info.picture.dispose();
+  }
 }

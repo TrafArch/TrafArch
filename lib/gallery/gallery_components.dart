@@ -1307,14 +1307,29 @@ class _GalleryTabbedListState extends State<_GalleryTabbedList> {
   }
 }
 
-String _faceCardNumberText(GalleryCard card) =>
-    card.applicationNumbers.length < 2
-    ? _formatFaceCardNumber(
-        card.applicationNumbers.values.firstOrNull ?? card.pan,
-      )
-    : card.applicationNumbers.entries
-          .map((entry) => '${entry.key} ${_formatFaceCardNumber(entry.value)}')
-          .join('\n');
+String _faceCardNumberText(GalleryCard card) {
+  final numbers = card.applicationNumbers;
+  if (numbers.isEmpty) {
+    final number = _formatFaceCardNumber(card.pan);
+    final lingnanOnly =
+        card.applications.length == 1 && card.applications.single == 'lingnan';
+    if (lingnanOnly && number != '未提供' && number != '未知') {
+      return 'LNP $number';
+    }
+    return number;
+  }
+  return numbers.entries
+      .map((entry) {
+        final number = _formatFaceCardNumber(entry.value);
+        return switch (entry.key) {
+          'TU' => number,
+          final label when label.startsWith('岭南通') => 'LNP $number',
+          final label when numbers.length > 1 => '$label $number',
+          _ => number,
+        };
+      })
+      .join('\n');
+}
 
 String _formatFaceCardNumber(String value) {
   final text = value.trim();

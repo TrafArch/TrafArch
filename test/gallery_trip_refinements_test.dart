@@ -382,7 +382,7 @@ void main() {
     await mount(tester, railLineCatalog: bundledRailLineCatalog);
 
     for (final (endpoint, suffix, aspectRatio) in [
-      ('entry', '01_black', 157.6 / 94.2),
+      ('entry', '01_black', 132.4 / 59.6),
       ('exit', '51', 43.32 / 18.19),
     ]) {
       final picture = find.descendant(
@@ -434,8 +434,8 @@ void main() {
       await tester.pumpAndSettle();
 
       for (final (endpoint, file, aspectRatio) in [
-        ('entry', '3050/3050_Line_11$suffix.svg', 263.58 / 122.03),
-        ('exit', '2900/2900_Line_11$suffix.svg', 157.6 / 94.2),
+        ('entry', '3050/3050_Line_11$suffix.svg', 263.58 / 115),
+        ('exit', '2900/2900_Line_11$suffix.svg', 140.8 / 59.6),
       ]) {
         final picture = find.descendant(
           of: find.byKey(ValueKey('trip-$endpoint-line-badge')),

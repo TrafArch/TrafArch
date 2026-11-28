@@ -742,6 +742,9 @@ void main() {
         find.byKey(const ValueKey('wallet-tunion-lingnan-single')),
         findsNothing,
       );
+      c.openCard(lingnan);
+      await tester.pumpAndSettle();
+      expect(find.text('LNP 3104 8700 0000 0001'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

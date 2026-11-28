@@ -28,6 +28,7 @@ import 'package:transit_card_analyzer/platform/storage/app_logger.dart';
 import 'package:transit_card_analyzer/platform/storage/settings_store.dart';
 import 'package:transit_card_analyzer/protocols/octopus/octopus_balance.dart';
 import 'package:transit_card_analyzer/protocols/transit/card_parser.dart';
+import 'package:transit_card_analyzer/protocols/transit/multiapp/application_evidence.dart';
 import 'package:transit_card_analyzer/protocols/transit/tunion/tunion_models.dart';
 import 'package:transit_card_analyzer/shared/domain/archive_conflict_policy.dart';
 
@@ -584,7 +585,7 @@ void main() {
   });
 
   testWidgets(
-    'dual application numbers are ordered on home, expert, wallet and face previews',
+    'Shanghai card numbers appear on faces and stay out of the wallet row',
     (tester) async {
       final fixture = await _showGallery(
         tester,
@@ -595,12 +596,8 @@ void main() {
       final current = _liveAdapter(tester).controller.current;
       final numbers = current.applicationNumbers;
       expect(numbers.keys.take(2), ['TU', 'CU']);
-      final face = find.byKey(ValueKey('face-card-number-${current.id}'));
-      final displayedNumbers = tester
-          .widget<Text>(find.descendant(of: face, matching: find.byType(Text)))
-          .data!;
-      expect(displayedNumbers, startsWith('TU '));
-      expect(displayedNumbers, contains('\nCU '));
+      const displayedNumbers = '3104 7700 0000 0000 001\nCU 4328 6773 214';
+      expect(find.text(displayedNumbers), findsOneWidget);
       await _navigate(tester, 'expert');
       await tester.tap(find.text('信息获取'));
       await tester.pumpAndSettle();
@@ -619,13 +616,15 @@ void main() {
       final saved = (await tester.runAsync(
         fixture.app.cardRepository.getAllCards,
       ))!.single;
-      final walletNumbers = find.byKey(
-        ValueKey('wallet-card-numbers-${saved.id}'),
+      final walletCard = find.byKey(ValueKey('wallet-card-${saved.id}'));
+      expect(
+        find.descendant(
+          of: walletCard,
+          matching: find.textContaining(RegExp(r'3104 ?7700|4328 ?6773')),
+        ),
+        findsNothing,
       );
-      expect(tester.widget<Text>(walletNumbers).data, displayedNumbers);
-      final row = tester.getRect(
-        find.byKey(ValueKey('wallet-card-${saved.id}')),
-      );
+      final row = tester.getRect(walletCard);
       await tester.dragFrom(
         Offset(row.center.dx, row.top + 24),
         const Offset(-280, 0),
@@ -633,11 +632,12 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(ValueKey('wallet-face-${saved.id}')));
       await tester.pumpAndSettle();
-      expect(find.text(displayedNumbers), findsWidgets);
+      expect(find.text(displayedNumbers), findsOneWidget);
       await tester.tap(find.byTooltip('关闭').last);
       await tester.pumpAndSettle();
       await tester.tap(find.text(saved.displayName));
       await _settleIo(tester);
+      expect(find.text(displayedNumbers), findsOneWidget);
       await tester.tap(find.text('卡片信息'));
       await tester.pumpAndSettle();
       expect(find.text('TU 卡号'), findsOneWidget);
@@ -649,6 +649,39 @@ void main() {
       await _unmount(tester);
     },
   );
+
+  testWidgets('Lingnan Pass uses the LNP prefix next to the TU number', (
+    tester,
+  ) async {
+    final fixture = await _showGallery(tester, _CardKind.tu);
+    fixture.app.recoveredCapture = RecoveryCapture(
+      readAt: _readAt,
+      summary: {
+        'cardType': 'lingnan_tunion',
+        'cardName': '岭南通（交通联合版）',
+        'applications': [
+          ApplicationEvidence.succeeded(
+            'lingnan_appy',
+            '岭南通资料（PAY.APPY）',
+            cardNumber: '1234567890',
+          ).toJson(),
+          ApplicationEvidence.succeeded(
+            'tu',
+            '交通联合',
+            cardNumber: '310487030000000001',
+          ).toJson(),
+        ],
+      },
+      frames: const [],
+    );
+    await fixture.app.setAutoSaveEnabled(false);
+    await _settleIo(tester);
+    expect(
+      find.text('3104 8703 0000 0000 01\nLNP 1234 5678 90'),
+      findsOneWidget,
+    );
+    await _unmount(tester);
+  });
 
   testWidgets(
     'saved card information omits captured frame JSON and raw actions',

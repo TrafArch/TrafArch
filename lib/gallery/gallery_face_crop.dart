@@ -737,17 +737,6 @@ extension _GalleryFaceCropper on _GalleryViewState {
                       ],
                     ],
                   ),
-                  if (card.applicationNumbers.length > 1) ...[
-                    _gap(6),
-                    Text(
-                      _faceCardNumberText(card),
-                      key: ValueKey('$id-card-numbers-${card.id}'),
-                      style: GalleryTypography.field.copyWith(
-                        fontFamily: 'monospace',
-                        color: _walletForeground(card, secondary: true),
-                      ),
-                    ),
-                  ],
                   _cardMetadata(card, id: id),
                 ],
               ),
