@@ -11,7 +11,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test(
-    'Shanghai, Suzhou and Tianjin artwork matches the Fuzhou badge height',
+    'updated rail SVG artwork keeps the original visible line badge heights',
     () async {
       final reference = await _paintedHeight('3910/3910_Line_4.svg');
       expect(reference, closeTo(24, .2));
@@ -39,6 +39,8 @@ void main() {
           reason: asset,
         );
       }
+      expect(await _paintedHeight('3930/3930_Line1.svg'), closeTo(22.875, .25));
+      expect(await _paintedHeight('5810/5810_Line_1.svg'), closeTo(24, .2));
     },
   );
 
@@ -89,18 +91,8 @@ void main() {
           expect(dimensions, hasLength(4), reason: asset);
           expect(dimensions[2], greaterThan(0), reason: asset);
           expect(dimensions[3], greaterThan(0), reason: asset);
-          if (asset == path) {
-            expect(
-              config[1] as num,
-              closeTo(dimensions[2], .001),
-              reason: asset,
-            );
-            expect(
-              config[2] as num,
-              closeTo(dimensions[3], .001),
-              reason: asset,
-            );
-          }
+          expect(config[1] as num, closeTo(dimensions[2], .001), reason: asset);
+          expect(config[2] as num, closeTo(dimensions[3], .001), reason: asset);
           registered.add(asset.replaceFirst('assets/Line_Icon/', ''));
         }
       }
