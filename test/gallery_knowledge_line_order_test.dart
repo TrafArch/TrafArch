@@ -72,9 +72,9 @@ void main() {
     expect(rawLines.map((line) => line['name']), source);
   });
 
-  for (final (system, code, source) in [
-    ('TU', '290000100018', 'M0.i0.a'),
-    ('CU', '2000111018', 'M0.B.b'),
+  for (final (system, code, source, lineKey, lineCode) in [
+    ('TU', '290000100018', 'M0.i0.a', '29000010', '0010'),
+    ('CU', '2000111018', 'M0.B.b', '20001110', '1110'),
   ]) {
     testWidgets(
       '$system published city shows one order when browsing and searching',
@@ -133,6 +133,18 @@ void main() {
             find.byKey(ValueKey('knowledge-line-toggle-$system:$index'));
         Finder labelIn(int index, String label) =>
             find.descendant(of: card(index), matching: find.text(label));
+        void expectLineCodes() {
+          final label = find.descendant(
+            of: card(9),
+            matching: find.textContaining('线路编码 '),
+          );
+          final text = tester.widget<Text>(label).data!;
+          expect(
+            text.substring('线路编码 '.length).split('、'),
+            containsAll([lineKey, lineCode]),
+          );
+        }
+
         for (final (index, label) in [
           (0, '1号线'),
           (1, '2号线'),
@@ -158,6 +170,14 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(lineToggle);
         await tester.pumpAndSettle();
+        expectLineCodes();
+        expect(
+          find.descendant(
+            of: firstStation,
+            matching: find.textContaining(code),
+          ),
+          findsOneWidget,
+        );
         expect(
           find.descendant(of: firstStation, matching: find.text('航中路')),
           findsOneWidget,
@@ -219,6 +239,7 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(labelIn(9, '10号线'), findsOneWidget);
+        expectLineCodes();
         expect(firstStation.hitTestable(), findsOneWidget);
         expect(
           find.descendant(of: firstStation, matching: find.text('航中路')),

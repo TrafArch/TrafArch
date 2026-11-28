@@ -34,22 +34,23 @@ extension _GalleryLiveKnowledge on _GalleryViewState {
             ),
           ]);
         }
+        final cities = {
+          for (final city in index.cities)
+            if (city.system == system) city.code: city,
+        };
         return _knowledgePage(
-          _liveKnowledgeRecord(index, system, active),
-          live: true,
+          _liveKnowledgeRecord(cities.values, system, active),
+          indexedCities: cities,
         );
       },
     );
   }
 
   GalleryRecord _liveKnowledgeRecord(
-    GalleryKnowledgeIndex index,
+    Iterable<GalleryKnowledgeCity> cities,
     String system,
     KnowledgeBase? active,
   ) {
-    final cities = index.cities
-        .where((city) => city.system.toUpperCase() == system)
-        .toList(growable: false);
     // regions 与样例数据同构：首页概况的三项统计（城市数量、线路数量、
     // 站点数量）由页面按这些真实结构推导，站点按同城同名去重；结构缺失的
     // 维度返回 null 并显示「未知」。version/sha256 来自已校验发布包。

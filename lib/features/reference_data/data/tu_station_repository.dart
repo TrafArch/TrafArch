@@ -91,6 +91,11 @@ class TuStationRepository
     return _lookupValues = values;
   }
 
+  /// 发布包 tu_lookup 文档中的原始轨道前缀，含只有线路条目的城市。
+  Iterable<TuLookupValue> get railPrefixes => _lookup.entries
+      .where((entry) => entry.key.startsWith('rail_prefixes|'))
+      .expand((entry) => entry.value);
+
   /// Native rail maps and explicitly admitted city-owned rail sources only.
   /// Local terminals and bus/BRT maps never share this prefix namespace.
   @override

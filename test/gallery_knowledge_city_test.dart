@@ -389,6 +389,24 @@ void main() {
     );
   });
 
+  testWidgets('a line code opens the matching card deep in the city list', (
+    tester,
+  ) async {
+    await openSearch(tester, await index());
+    await tester.tap(find.byKey(const ValueKey('knowledge-search-entry')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('knowledge-search-input')),
+      '4275',
+    );
+    await tester.pump(const Duration(milliseconds: 280));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ListTile, '4275'));
+    await tester.pumpAndSettle();
+    expect(find.text('宝山35').hitTestable(), findsOneWidget);
+    expect(find.text('匹配编码 4275').hitTestable(), findsOneWidget);
+  });
+
   testWidgets('the city page restores its scroll position after search', (
     tester,
   ) async {

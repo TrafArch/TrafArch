@@ -266,7 +266,10 @@ extension _GalleryInspection on _GalleryViewState {
     return _knowledgePage(data);
   }
 
-  Widget _knowledgePage(GalleryRecord data, {bool live = false}) {
+  Widget _knowledgePage(
+    GalleryRecord data, {
+    Map<String, GalleryKnowledgeCity>? indexedCities,
+  }) {
     final name = data['name'] as String? ?? '参考数据';
     final rawRegions = data['regions'];
     final regions = rawRegions is List
@@ -315,7 +318,7 @@ extension _GalleryInspection on _GalleryViewState {
               ),
               _gap(10),
               _text(
-                live
+                indexedCities != null
                     ? '用于识别读卡结果中的城市、线路与站点。\n当前读取使用本机已校验的 TU／CU 发布包，两个体系独立统计。'
                     : '用于识别读卡结果中的城市、线路与站点。\n数据快照 ${c.data.knowledge['captured']}，两个体系独立统计。',
                 role: GalleryTypography.caption,
@@ -355,7 +358,8 @@ extension _GalleryInspection on _GalleryViewState {
             icon: Icons.location_city_outlined,
           )
         else
-          ...cities.indexed.map((item) => _knowledgeCityCard(item.$1, item.$2)),
+          for (final (index, region) in cities.indexed)
+            _knowledgeCityCard(index, region, indexedCities?[region['code']]),
         _gap(4),
       ],
     );
@@ -497,7 +501,11 @@ extension _GalleryInspection on _GalleryViewState {
     );
   }
 
-  Widget _knowledgeCityCard(int index, GalleryRecord region) {
+  Widget _knowledgeCityCard(
+    int index,
+    GalleryRecord region,
+    GalleryKnowledgeCity? indexedCity,
+  ) {
     final system = c.knowledgeTab;
     final name = '${region['name'] ?? '未知城市'}';
     final code = '${region['code'] ?? '未知'}';
@@ -514,7 +522,9 @@ extension _GalleryInspection on _GalleryViewState {
       child: _panel(
         InkWell(
           onTap: () => c.openKnowledgeCity(
-            GalleryKnowledgeCityView.fromRegion(system, region),
+            indexedCity == null
+                ? GalleryKnowledgeCityView.fromRegion(system, region)
+                : GalleryKnowledgeCityView.fromCity(indexedCity),
           ),
           child: Padding(
             padding: const EdgeInsets.all(16),

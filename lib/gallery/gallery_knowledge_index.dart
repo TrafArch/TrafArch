@@ -4,6 +4,8 @@ import 'dart:isolate';
 import 'package:sqlite3/sqlite3.dart';
 
 import '../features/reference_data/data/reference_package.dart';
+import '../features/reference_data/data/tu_station_repository.dart';
+import '../features/reference_data/domain/station_codes.dart';
 
 enum GalleryKnowledgeKind { city, line, station, code }
 
@@ -117,7 +119,7 @@ class GalleryKnowledgeCityView {
     );
   }
 
-  /// 从知识库记录（fixtures 或 live 的同构 regions 项）构造。
+  /// 从样例快照的城市记录构造。
   factory GalleryKnowledgeCityView.fromRegion(
     String system,
     Map<String, dynamic> region,
@@ -335,7 +337,7 @@ class GalleryKnowledgeIndex {
 
   factory GalleryKnowledgeIndex.fromPaths(Map<String, String> paths) {
     final cities = <GalleryKnowledgeCity>[];
-    final codes = <GalleryKnowledgeResult>{};
+    final codes = <GalleryKnowledgeResult>[];
     for (final entry in paths.entries) {
       final tu = entry.key == 'TU';
       final db = sqlite3.open(entry.value, mode: OpenMode.readOnly);
@@ -353,8 +355,15 @@ class GalleryKnowledgeIndex {
               _field(row, 'province'),
             ),
         };
-        cities.addAll(regions.values);
         final byCode = {for (final city in regions.values) city.code: city};
+        GalleryKnowledgeCity? routeCity(String code, String name) {
+          if (name.trim().isEmpty) return byCode[code];
+          return byCode.putIfAbsent(
+            code,
+            () => GalleryKnowledgeCity(entry.key, name, code, ''),
+          );
+        }
+
         if (tu) {
           for (final row in db.select(
             'SELECT region_id, source_region_name FROM region_aliases',
@@ -367,12 +376,14 @@ class GalleryKnowledgeIndex {
         }
 
         final seen = <(GalleryKnowledgeCity, String, String, String, String)>{};
-        void addRecord(GalleryKnowledgeCity? city, Row row) {
+        void addRecord(
+          GalleryKnowledgeCity? city, {
+          required String lineName,
+          required String stationName,
+          required String code,
+          required String source,
+        }) {
           if (city == null) return;
-          final lineName = _field(row, 'line_name');
-          final stationName = _field(row, 'station_name');
-          final code = _field(row, 'source_key');
-          final source = _field(row, 'source_field');
           if (!seen.add((city, lineName, stationName, code, source))) return;
           final line = lineName.trim().isEmpty && stationName.trim().isEmpty
               ? null
@@ -407,30 +418,99 @@ class GalleryKnowledgeIndex {
           );
         }
 
+        void addLineCode(
+          GalleryKnowledgeCity? city,
+          String line,
+          String code,
+          String source,
+        ) {
+          if (city == null ||
+              line.trim().isEmpty ||
+              code.trim().isEmpty ||
+              city._lines[line]?._codes.contains(code) == true) {
+            return;
+          }
+          addRecord(
+            city,
+            lineName: line,
+            stationName: '',
+            code: code,
+            source: source,
+          );
+        }
+
         for (final row in db.select(
           tu
-              ? 'SELECT region_id, line_name, station_name, source_key, '
-                    'source_field FROM all_records ORDER BY station_id'
+              ? 'SELECT * FROM all_records ORDER BY station_id'
               : 'SELECT region_code, line_name, station_name, source_key, '
                     'source_field FROM stations ORDER BY station_id',
         )) {
-          addRecord(
-            tu ? regions[row['region_id']] : byCode[row['region_code']],
-            row,
-          );
-        }
-        if (!tu) {
-          for (final row in db.select(
-            'SELECT region_code, line_name, NULL AS station_name, '
-            'line_key AS source_key, source_field, line_code FROM routes '
-            'ORDER BY region_code, source_entry_index',
-          )) {
-            final city = byCode[row['region_code']];
-            addRecord(city, row);
-            final code = _field(row, 'line_code');
-            if (code.isNotEmpty) {
-              city?._lines[_field(row, 'line_name')]?._codes.add(code);
+          final city = tu
+              ? regions[row['region_id']]
+              : byCode[row['region_code']];
+          final line = _field(row, 'line_name');
+          final station = _field(row, 'station_name');
+          final code = _field(row, 'source_key');
+          final source = _field(row, 'source_field');
+          // TU 的 route_name 行把线路名称存放在 station_name 列。
+          if (tu && row['record_kind'] == 'route_name') {
+            addLineCode(
+              city,
+              line.trim().isEmpty ? station : line,
+              code,
+              source,
+            );
+          } else {
+            addRecord(
+              city,
+              lineName: line,
+              stationName: station,
+              code: code,
+              source: source,
+            );
+            if (tu && city != null && station.isNotEmpty) {
+              final segment = _tuStationLineCode(city.code, row, code, source);
+              if (segment != null) addLineCode(city, line, segment, source);
             }
+          }
+        }
+        if (tu) {
+          final repository = TuStationRepository(db);
+          for (final prefix in repository.railPrefixes) {
+            final key = prefix.sourceKey;
+            if (prefix.rawValue case [_, final String line, '']
+                when line.trim().isNotEmpty && key.length > 4) {
+              final owner = key.substring(0, 4);
+              final city =
+                  byCode[owner] ?? routeCity(owner, _tuCityName(db, owner));
+              addLineCode(city, line, key, prefix.sourceField);
+              addLineCode(city, line, key.substring(4), prefix.sourceField);
+            }
+          }
+          if (repository.queryIssue case final issue?) throw StateError(issue);
+        } else {
+          // 先取线路表的原码。济南等城市只在站点行明确登记线路键。
+          final routes = db.select(
+            'SELECT r.region_code, c.region_name, r.line_name, r.line_key, '
+            'r.line_code, r.source_field FROM routes r '
+            'LEFT JOIN region_codes c ON c.region_code = r.region_code '
+            'ORDER BY r.region_code, r.source_entry_index',
+          );
+          final stationLines = db.select(
+            'SELECT region_code, line_name, line_key, line_code, source_field '
+            'FROM stations WHERE line_name_matches_prefix = 1 '
+            'GROUP BY region_code, line_name, line_key, line_code, source_field '
+            'ORDER BY MIN(station_id)',
+          );
+          for (final row in routes.followedBy(stationLines)) {
+            final city = routeCity(
+              _field(row, 'region_code'),
+              _field(row, 'region_name'),
+            );
+            final line = _field(row, 'line_name');
+            final source = _field(row, 'source_field');
+            addLineCode(city, line, _field(row, 'line_key'), source);
+            addLineCode(city, line, _field(row, 'line_code'), source);
           }
           for (final row in db.select(
             'SELECT station.region_code, station.line_name, station.station_name, '
@@ -439,9 +519,18 @@ class GalleryKnowledgeIndex {
             'ON station.station_id = terminal.station_id '
             'ORDER BY terminal.region_code, terminal.match_key',
           )) {
-            addRecord(byCode[row['region_code']], row);
+            addRecord(
+              byCode[row['region_code']],
+              lineName: _field(row, 'line_name'),
+              stationName: _field(row, 'station_name'),
+              code: _field(row, 'source_key'),
+              source: _field(row, 'source_field'),
+            );
           }
         }
+        cities.addAll(
+          byCode.values.toList()..sort((a, b) => a.code.compareTo(b.code)),
+        );
       } finally {
         db.close();
       }
@@ -450,6 +539,45 @@ class GalleryKnowledgeIndex {
   }
 
   static String _field(Row row, String key) => row[key]?.toString() ?? '';
+
+  static final _hexCode = RegExp(r'^[0-9A-Fa-f]+$');
+
+  /// 城市原表可以同时收录带城市前缀与不带前缀的站点键。
+  static String? _tuStationLineCode(
+    String city,
+    Row row,
+    String code,
+    String source,
+  ) {
+    if (row['record_kind'] != 'station_mapping' ||
+        row['lookup_key_namespace'] != 'TU' ||
+        !const {'metro', 'tram', 'light_rail', 'intercity_rail'}
+            .contains(row['transport_type']) ||
+        !StationCodeTable.isTuRailSourceField(city, source) ||
+        !_hexCode.hasMatch(code)) {
+      return null;
+    }
+    final prefixed = code.startsWith(city);
+    if (!prefixed && row['source_region_code'] != city) return null;
+    final key = prefixed ? code : '$city$code';
+    final (line, _) = tuSourceKeySegments(key);
+    // 取原文片段，保留前导零和字母大小写。
+    return line == null
+        ? null
+        : key.substring(city.length, city.length + line.length);
+  }
+
+  static String _tuCityName(Database db, String code) {
+    final rows = db.select(
+      r'''
+      SELECT city.value ->> '$.name' AS name
+      FROM reference_documents, json_each(reference_documents.json, '$.entries') AS city
+      WHERE reference_documents.name = 'cities' AND city.value ->> '$.code' = ?
+    ''',
+      [code],
+    );
+    return rows.isEmpty ? '' : _field(rows.first, 'name');
+  }
 
   void _add(GalleryKnowledgeResult result, Iterable<String> aliases) {
     final term = _SearchTerm(result, aliases);

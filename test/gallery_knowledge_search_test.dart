@@ -46,6 +46,51 @@ void main() {
     expect(index.search('00100018')[GalleryKnowledgeKind.code], isNull);
   });
 
+  test('line codes resolve to their own line with original spelling', () {
+    for (final (system, city, line, code) in [
+      ('TU', '2900', '10号线', '29000010'),
+      ('TU', '2900', '10号线', '0010'),
+      ('TU', '3910', '1号线', '01'),
+      ('TU', '3030', '6号线', '0006'),
+      ('TU', '1000', '昌平线', '5E'),
+      ('TU', '2900', '朱泾7', '1657'),
+      ('TU', '6110', '1号线', '611000000001'),
+      ('CU', '2000', '10号线', '1110'),
+      ('CU', '2150', '1号线', '03000003'),
+      ('CU', '2500', '4号线', '04'),
+      ('CU', '2500', '4号线', '00000000000004'),
+    ]) {
+      final hits = index.search(code)[GalleryKnowledgeKind.code] ?? [];
+      expect(
+        hits.where(
+          (hit) =>
+              hit.code == code &&
+              hit.city.system == system &&
+              hit.city.code == city &&
+              hit.line?.name == line &&
+              hit.station == null &&
+              hit.line!.codes.contains(code),
+        ),
+        hasLength(1),
+        reason: '$system $city $line $code',
+      );
+    }
+  });
+
+  test('station and terminal keys stay separate from line codes', () {
+    GalleryKnowledgeLine line(String system, String cityCode, String name) =>
+        index.cities
+            .singleWhere(
+              (city) => city.system == system && city.code == cityCode,
+            )
+            .lines
+            .singleWhere((line) => line.name == name);
+    expect(line('TU', '2900', '10号线').codes, isNot(contains('290000100018')));
+    expect(line('TU', '1610', '2').codes, isEmpty);
+    expect(line('CU', '2000', '浦江线').codes, isNot(contains('1108')));
+    expect(line('CU', '2000', '8号线').codes, contains('1108'));
+  });
+
   test('default loader validates the bundled packages and builds the index off-isolate', () async {
     const paths = MethodChannel('plugins.flutter.io/path_provider');
     final messenger =
@@ -316,16 +361,18 @@ void main() {
       final fromCityView = controller.selectedKnowledgeCity!;
       expect(fromCityView.system, 'TU');
       expect(fromCityView.lineCount, 25);
-      // 搜索索引来自发布包全量线路（26 条，含「未标注线路」），与声明值
-      // 不同，恰好说明两个入口都按统一口径取声明值。
-      expect(fromCityView.lines, hasLength(26));
+      // 发布包另有公交线路和只有前缀、尚无站点的线路，样例概况仍取声明值。
+      expect(
+        fromCityView.lines.map((line) => line.name),
+        containsAll(['朱泾7', '19号线']),
+      );
       expect(find.text('25'), findsOneWidget);
       expect(find.text('收录 25 条线路'), findsOneWidget);
 
       final city = index.cities.firstWhere(
         (city) => city.system == 'TU' && city.name == '上海',
       );
-      expect(city.lines, hasLength(26));
+      expect(fromCityView.lines.length, city.lines.length);
       expect(GalleryKnowledgeCityView.fromCity(city).lineCount, 25);
       final root = jsonDecode(
         File('assets/gallery/fixtures.json').readAsStringSync(),
