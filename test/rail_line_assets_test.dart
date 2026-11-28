@@ -106,7 +106,7 @@ void main() {
         .map((path) => path.replaceFirst('assets/Line_Icon/', ''))
         .toSet();
     expect(registered, supplied);
-    expect(registered, hasLength(135));
+    expect(registered, hasLength(141));
     expect(
       registered,
       containsAll([
@@ -157,6 +157,31 @@ void main() {
         expect(icon?.path, '$stem.svg');
         expect(icon?.darkPath, '${stem}_black.svg');
       }
+    }
+  });
+
+  test('Guangdong intercity line names resolve to the supplied SVGs', () async {
+    final catalog = await GalleryRailLineCatalog.load(rootBundle);
+    const files = {
+      '广清城际': '70',
+      '广州东环城际': '71_75_76',
+      '广肇城际': '72',
+      '广惠城际': '73',
+      '琶莲城际': '74',
+      '新白广城际': '77_78',
+      '穗深城际': '77_78',
+    };
+    for (final entry in files.entries) {
+      final line = catalog.lineKey('5810', entry.key);
+      expect(
+        catalog.icon('5810', line)?.path,
+        'assets/Line_Icon/5810/5810_Line_${entry.value}.svg',
+        reason: entry.key,
+      );
+    }
+    for (final suffix in files.values.toSet()) {
+      final asset = '5810/5810_Line_$suffix.svg';
+      expect(await _paintedHeight(asset), closeTo(24, .2), reason: asset);
     }
   });
 

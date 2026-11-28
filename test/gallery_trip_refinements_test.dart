@@ -445,6 +445,44 @@ void main() {
     }
   });
 
+  testWidgets('Guangdong intercity trip badges fit in both themes', (
+    tester,
+  ) async {
+    final base = controller.trips.first;
+    controller.trips
+      ..clear()
+      ..add({
+        ...base,
+        'city': '广州',
+        'entryLine': '广州东环城际',
+        'exitLine': '新白广城际',
+        'entryLineCity': {'system': 'tu', 'code': '5810'},
+        'exitLineCity': {'system': 'tu', 'code': '5810'},
+      });
+    await mount(tester, railLineCatalog: bundledRailLineCatalog);
+
+    for (final theme in [ThemeMode.light, ThemeMode.dark]) {
+      controller.update(() => controller.themeMode = theme);
+      await tester.pumpAndSettle();
+      for (final (endpoint, suffix) in [
+        ('entry', '71_75_76'),
+        ('exit', '77_78'),
+      ]) {
+        final picture = find.descendant(
+          of: find.byKey(ValueKey('trip-$endpoint-line-badge')),
+          matching: find.byType(SvgPicture),
+        );
+        expect(picture, findsOneWidget);
+        final loader =
+            tester.widget<SvgPicture>(picture).bytesLoader as SvgAssetLoader;
+        expect(loader.assetName, 'assets/Line_Icon/5810/5810_Line_$suffix.svg');
+        expect(tester.getSize(picture).width, closeTo(60, .1));
+        expect(tester.getSize(picture).height, closeTo(60 * 64.3 / 180, .1));
+      }
+      expect(tester.takeException(), isNull);
+    }
+  });
+
   testWidgets('rail line SVG variants follow the active app brightness', (
     tester,
   ) async {
