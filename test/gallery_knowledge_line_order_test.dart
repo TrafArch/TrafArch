@@ -1,11 +1,14 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transit_card_analyzer/app/app_dependencies.dart';
 import 'package:transit_card_analyzer/features/reference_data/data/tunion_knowledge_base.dart';
 import 'package:transit_card_analyzer/gallery/gallery_app.dart';
 import 'package:transit_card_analyzer/gallery/gallery_knowledge_index.dart';
+import 'package:transit_card_analyzer/gallery/gallery_rail_line_catalog.dart';
 import 'package:transit_card_analyzer/gallery/gallery_theme.dart';
 import 'package:transit_card_analyzer/platform/nfc/nfc_models.dart';
 import 'package:transit_card_analyzer/platform/nfc/nfc_service.dart';
@@ -15,6 +18,12 @@ import 'support/gallery_scroll.dart';
 import 'support/test_database.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  late GalleryRailLineCatalog railLineCatalog;
+  setUpAll(() async {
+    railLineCatalog = await GalleryRailLineCatalog.load(rootBundle);
+  });
+
   test('city projection only sorts single numbered metro lines, stably', () {
     const source = [
       '11号线',
@@ -97,7 +106,9 @@ void main() {
         tester.view.devicePixelRatio = 1;
         addTearDown(tester.view.reset);
         await tester.runAsync(app.init);
-        await tester.pumpWidget(GalleryApp(liveApp: app));
+        await tester.pumpWidget(
+          GalleryApp(liveApp: app, railLineCatalog: railLineCatalog),
+        );
         await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('设置'));
         await tester.pumpAndSettle();
@@ -131,8 +142,23 @@ void main() {
             find.byKey(ValueKey('knowledge-city-line-$system:$index'));
         Finder toggle(int index) =>
             find.byKey(ValueKey('knowledge-line-toggle-$system:$index'));
-        Finder labelIn(int index, String label) =>
-            find.descendant(of: card(index), matching: find.text(label));
+        void expectLineIcon(int index, int lineNumber) {
+          final icon = find.descendant(
+            of: card(index),
+            matching: find.byType(SvgPicture),
+          );
+          expect(icon, findsOneWidget);
+          final brightness = Theme.of(tester.element(icon)).brightness;
+          final suffix = brightness == Brightness.dark ? '_black' : '';
+          final number = lineNumber.toString().padLeft(2, '0');
+          final loader =
+              tester.widget<SvgPicture>(icon).bytesLoader as SvgAssetLoader;
+          expect(
+            loader.assetName,
+            'assets/Line_Icon/2900/2900_Line_$number$suffix.svg',
+          );
+        }
+
         void expectLineCodes() {
           final label = find.descendant(
             of: card(9),
@@ -145,19 +171,19 @@ void main() {
           );
         }
 
-        for (final (index, label) in [
-          (0, '1号线'),
-          (1, '2号线'),
-          (8, '9号线'),
-          (9, '10号线'),
-          (10, '11号线'),
+        for (final (index, lineNumber) in [
+          (0, 1),
+          (1, 2),
+          (8, 9),
+          (9, 10),
+          (10, 11),
         ]) {
           await tester.scrollUntilVisible(
             card(index),
             240,
             scrollable: galleryVerticalScroll(),
           );
-          expect(labelIn(index, label), findsOneWidget);
+          expectLineIcon(index, lineNumber);
         }
         final firstStation = find.byKey(
           ValueKey('knowledge-city-station-$system:9:0'),
@@ -238,7 +264,7 @@ void main() {
         await tester.tap(visibleResult);
         await tester.pumpAndSettle();
 
-        expect(labelIn(9, '10号线'), findsOneWidget);
+        expectLineIcon(9, 10);
         expectLineCodes();
         expect(firstStation.hitTestable(), findsOneWidget);
         expect(

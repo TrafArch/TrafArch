@@ -271,17 +271,27 @@ void main() {
       await tester.drag(results, const Offset(0, -420));
       await tester.pumpAndSettle();
       final saved = scroll.offset;
+      expect(saved, greaterThan(0));
       final visible = find
           .descendant(of: results, matching: find.byType(ListTile))
           .hitTestable();
       // 线路结果定位到城市详情页，并预先展开目标线路（US-008）。
-      final lineResult = tester.widget<ListTile>(visible.first);
-      final lineTitle = (lineResult.title! as Text).data!;
+      final lineTitle = tester
+          .getSemantics(visible.first)
+          .label
+          .split('\n')
+          .first;
       await tester.tap(visible.first);
       await tester.pumpAndSettle();
       expect(controller.page, GalleryPage.knowledgeCity);
       expect(controller.knowledgeCityLine, lineTitle);
-      expect(find.text(lineTitle), findsWidgets);
+      final city = controller.selectedKnowledgeCity!;
+      expect(
+        controller.knowledgeExpanded,
+        contains(
+          GalleryKnowledgeLineView.idFor(city.system, city.code, lineTitle),
+        ),
+      );
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
       expect(controller.page, GalleryPage.knowledgeSearch);

@@ -2,18 +2,27 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:transit_card_analyzer/gallery/gallery_app.dart';
 import 'package:transit_card_analyzer/gallery/gallery_controller.dart';
 import 'package:transit_card_analyzer/gallery/gallery_data.dart';
 import 'package:transit_card_analyzer/gallery/gallery_knowledge_index.dart';
+import 'package:transit_card_analyzer/gallery/gallery_rail_line_catalog.dart';
 import 'package:transit_card_analyzer/gallery/gallery_theme.dart';
 
 import 'support/gallery_scroll.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  const beijingLineOne = 'assets/Line_Icon/1000/1000_Line_01.svg';
+  late GalleryRailLineCatalog railLineCatalog;
+  setUpAll(() async {
+    railLineCatalog = await GalleryRailLineCatalog.load(rootBundle);
+    await const SvgAssetLoader(beijingLineOne).loadBytes(null);
+  });
 
   GalleryRecord fixture() =>
       jsonDecode(File('assets/gallery/fixtures.json').readAsStringSync())
@@ -64,7 +73,9 @@ void main() {
     final controller = GalleryController(GalleryData(fixture()))
       ..openKnowledgeCity(view);
     addTearDown(controller.dispose);
-    await tester.pumpWidget(GalleryApp(controller: controller));
+    await tester.pumpWidget(
+      GalleryApp(controller: controller, railLineCatalog: railLineCatalog),
+    );
     await tester.pumpAndSettle();
     return controller;
   }
@@ -83,6 +94,49 @@ void main() {
 
   double height(WidgetTester tester, int index) =>
       tester.getSize(card(index)).height;
+
+  Finder lineIcon(String asset) => find.byWidgetPredicate(
+    (widget) =>
+        widget is SvgPicture &&
+        widget.bytesLoader is SvgAssetLoader &&
+        (widget.bytesLoader as SvgAssetLoader).assetName == asset,
+  );
+
+  testWidgets('a line icon replaces the name and keeps the line accessible', (
+    tester,
+  ) async {
+    await openCity(
+      tester,
+      city(
+        name: '北京市',
+        code: '1000',
+        lines: [
+          line('1号线', lineCodes: ['0001'], stations: 1),
+          line('99号线', stations: 1),
+        ],
+      ),
+    );
+
+    final icon = find.descendant(
+      of: card(0),
+      matching: lineIcon(beijingLineOne),
+    );
+    expect(icon, findsOneWidget);
+    expect(find.text('1号线'), findsNothing);
+    expect(find.bySemanticsLabel(RegExp('1号线')), findsAtLeastNWidgets(1));
+    expect(find.text('线路编码 0001'), findsOneWidget);
+    expect(tester.getSize(icon).height, closeTo(24, .1));
+    expect(find.text('99号线'), findsOneWidget);
+    expect(
+      find.descendant(of: card(1), matching: find.byType(SvgPicture)),
+      findsNothing,
+    );
+
+    await tester.tap(icon);
+    await tester.pumpAndSettle();
+    expect(stationRow(0, 0), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'a line card expands into stations with raw codes and collapses',
@@ -274,6 +328,7 @@ void main() {
     await tester.pumpWidget(
       GalleryApp(
         controller: controller,
+        railLineCatalog: railLineCatalog,
         loadKnowledgeIndex: () async => loaded,
       ),
     );
@@ -294,12 +349,22 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 280));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ListTile, '1号线').first);
+    final result = find.ancestor(
+      of: lineIcon(beijingLineOne),
+      matching: find.byType(ListTile),
+    );
+    expect(result, findsOneWidget);
+    expect(
+      find.descendant(of: result, matching: find.text('1号线')),
+      findsNothing,
+    );
+    await tester.tap(result);
     await tester.pumpAndSettle();
 
     expect(controller.page, GalleryPage.knowledgeCity);
     expect(controller.knowledgeCityLine, '1号线');
     final city = controller.selectedKnowledgeCity!;
+    expect(city.code, '1000');
     final lineIndex = city.lines.indexWhere((line) => line.name == '1号线');
     expect(lineIndex, greaterThanOrEqualTo(0));
     // 定位滚动后吸顶头已收合（与首页一致）：城市名淡出，搜索条顶进标题栏

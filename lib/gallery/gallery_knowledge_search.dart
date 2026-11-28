@@ -333,6 +333,15 @@ class _GalleryKnowledgeResultTile extends StatelessWidget {
     const shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.all(Radius.circular(14)),
     );
+    final title = Text(
+      result.title,
+      style: GalleryTypography.body.copyWith(
+        fontWeight: FontWeight.w600,
+        fontFamily: result.kind == GalleryKnowledgeKind.code
+            ? 'monospace'
+            : null,
+      ),
+    );
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Material(
@@ -340,15 +349,19 @@ class _GalleryKnowledgeResultTile extends StatelessWidget {
         shape: shape.copyWith(side: BorderSide(color: colors.line)),
         child: ListTile(
           shape: shape,
-          title: Text(
-            result.title,
-            style: GalleryTypography.body.copyWith(
-              fontWeight: FontWeight.w600,
-              fontFamily: result.kind == GalleryKnowledgeKind.code
-                  ? 'monospace'
-                  : null,
-            ),
-          ),
+          title: result.kind == GalleryKnowledgeKind.line
+              ? Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  heightFactor: 1,
+                  child: _GalleryRailLineBadge(
+                    line: result.title,
+                    cityCode: city.code,
+                    cityName: city.name,
+                    citySystem: city.system,
+                    labelFallback: title,
+                  ),
+                )
+              : title,
           subtitle: Text(
             '${result.kind.label} · ${city.system}\n$note',
             style: GalleryTypography.caption.copyWith(color: colors.muted),
@@ -510,10 +523,16 @@ extension _GalleryKnowledgeDetails on _GalleryViewState {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _text(
-                            line.name,
-                            role: GalleryTypography.body,
-                            weight: FontWeight.w600,
+                          _GalleryRailLineBadge(
+                            line: line.name,
+                            cityCode: city.code,
+                            cityName: city.name,
+                            citySystem: city.system,
+                            labelFallback: _text(
+                              line.name,
+                              role: GalleryTypography.body,
+                              weight: FontWeight.w600,
+                            ),
                           ),
                           _gap(2),
                           _text(

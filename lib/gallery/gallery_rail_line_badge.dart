@@ -24,12 +24,14 @@ class _GalleryRailLineBadge extends StatelessWidget {
     this.cityCode,
     this.cityName,
     this.citySystem,
+    this.labelFallback,
   });
 
   final String line;
   final String? cityCode;
   final String? cityName;
   final String? citySystem;
+  final Widget? labelFallback;
 
   Widget _label(Color background, Color foreground) => DecoratedBox(
     decoration: BoxDecoration(
@@ -57,7 +59,8 @@ class _GalleryRailLineBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final tokens = theme.extension<GalleryTokens>()!;
-    final neutral = _label(tokens.tripBadgeRail, tokens.tripBadgeOnRail);
+    final neutral =
+        labelFallback ?? _label(tokens.tripBadgeRail, tokens.tripBadgeOnRail);
     if (cityCode == null && cityName == null) return neutral;
     final catalog = _GalleryRailLineCatalogScope.of(context);
     if (catalog == null) return neutral;
@@ -65,6 +68,7 @@ class _GalleryRailLineBadge extends StatelessWidget {
     if (code == null) return neutral;
     final label = catalog.lineKey(code, line);
     Widget fallback() {
+      if (labelFallback != null) return neutral;
       final approved = catalog.approvedColor(code, label);
       if (approved != null) return _coloredLabel(approved);
       if (code == '2900' && label == '1号线') {
@@ -94,6 +98,7 @@ class _GalleryRailLineBadge extends StatelessWidget {
           height: height,
           fit: BoxFit.contain,
           excludeFromSemantics: true,
+          placeholderBuilder: labelFallback == null ? null : (_) => neutral,
           errorBuilder: (_, _, _) =>
               assetPath == icon.path ? fallback() : svg(icon.path),
         );

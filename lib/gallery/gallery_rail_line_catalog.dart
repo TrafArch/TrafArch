@@ -81,7 +81,7 @@ class GalleryRailLineCatalog {
   String? tuCode(String? code, String? name, String? system) {
     final byName = name == null ? null : _names[_cityKey(name)];
     if (code == null) return byName;
-    final byCode = system == 'cu' ? _cuToTu[code] : code;
+    final byCode = system?.toLowerCase() == 'cu' ? _cuToTu[code] : code;
     if (byCode is! String ||
         (!_cities.containsKey(byCode) && !_local.containsKey(byCode))) {
       return byName;
