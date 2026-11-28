@@ -403,6 +403,48 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('Tianjin numbered and named line badges render in both themes', (
+    tester,
+  ) async {
+    final base = controller.trips.first;
+    controller.trips
+      ..clear()
+      ..add({
+        ...base,
+        'city': '天津',
+        'entryLine': '7号线',
+        'exitLine': '津静线',
+        'entryLineCity': {'system': 'tu', 'code': '1121'},
+        'exitLineCity': {'system': 'tu', 'code': '1121'},
+      });
+    await mount(tester, railLineCatalog: bundledRailLineCatalog);
+
+    for (final theme in [ThemeMode.light, ThemeMode.dark]) {
+      controller.update(() => controller.themeMode = theme);
+      await tester.pumpAndSettle();
+      for (final (endpoint, suffix, width) in [
+        ('entry', '07', 27.33),
+        ('exit', '21', 41.97),
+      ]) {
+        final picture = find.descendant(
+          of: find.byKey(ValueKey('trip-$endpoint-line-badge')),
+          matching: find.byType(SvgPicture),
+        );
+        expect(picture, findsOneWidget);
+        final svg = tester.widget<SvgPicture>(picture);
+        expect(
+          (svg.bytesLoader as SvgAssetLoader).assetName,
+          'assets/Line_Icon/1121/1121_Line_$suffix.svg',
+        );
+        expect(svg.colorFilter, isNull);
+        final size = tester.getSize(picture);
+        expect(size.height, closeTo(24, .1));
+        expect(size.width, closeTo(24 * width / 27.31, .1));
+      }
+      expect(tester.takeException(), isNull);
+    }
+  });
+
   testWidgets('rail line SVG variants follow the active app brightness', (
     tester,
   ) async {

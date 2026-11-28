@@ -10,22 +10,37 @@ import 'package:transit_card_analyzer/gallery/gallery_rail_line_catalog.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('Shanghai and Suzhou artwork matches the Fuzhou badge height', () async {
-    final reference = await _paintedHeight('3910/3910_Line_4.svg');
-    expect(reference, closeTo(24, .2));
-    for (final city in ['2900', '3050']) {
-      for (final line in ['01', '11']) {
-        for (final suffix in ['', '_black']) {
-          final asset = '$city/${city}_Line_$line$suffix.svg';
-          expect(
-            await _paintedHeight(asset),
-            closeTo(reference, .4),
-            reason: asset,
-          );
+  test(
+    'Shanghai, Suzhou and Tianjin artwork matches the Fuzhou badge height',
+    () async {
+      final reference = await _paintedHeight('3910/3910_Line_4.svg');
+      expect(reference, closeTo(24, .2));
+      for (final city in ['2900', '3050']) {
+        for (final line in ['01', '11']) {
+          for (final suffix in ['', '_black']) {
+            final asset = '$city/${city}_Line_$line$suffix.svg';
+            expect(
+              await _paintedHeight(asset),
+              closeTo(reference, .4),
+              reason: asset,
+            );
+          }
         }
       }
-    }
-  });
+      final tianjinSvgs = Directory('assets/Line_Icon/1121')
+          .listSync()
+          .whereType<File>()
+          .where((file) => file.path.endsWith('.svg'));
+      for (final file in tianjinSvgs) {
+        final asset = '1121/${file.uri.pathSegments.last}';
+        expect(
+          await _paintedHeight(asset),
+          closeTo(reference, .4),
+          reason: asset,
+        );
+      }
+    },
+  );
 
   test('rail SVG manifest covers the supplied city artwork', () async {
     final manifest = jsonDecode(
@@ -33,6 +48,7 @@ void main() {
     ) as Map<String, dynamic>;
     expect(manifest.keys.toSet(), {
       '1000',
+      '1121',
       '2900',
       '3050',
       '3910',
@@ -98,7 +114,7 @@ void main() {
         .map((path) => path.replaceFirst('assets/Line_Icon/', ''))
         .toSet();
     expect(registered, supplied);
-    expect(registered, hasLength(122));
+    expect(registered, hasLength(135));
     expect(
       registered,
       containsAll([
@@ -120,6 +136,23 @@ void main() {
       File('assets/Line_Icon/3910/3910_Line_F1.svg').readAsStringSync(),
       contains('fill="#00ADB9"'),
     );
+    expect(catalog.tuCode('1121', '天津市', 'tu'), '1121');
+    for (final (label, suffix) in [
+      for (var number = 1; number <= 11; number++)
+        ('$number号线', number.toString().padLeft(2, '0')),
+      ('津静线', '21'),
+      ('津靜線', '21'),
+      ('Z4线', 'Z4'),
+      ('z4', 'Z4'),
+      ('Z4線', 'Z4'),
+    ]) {
+      final line = catalog.lineKey('1121', label);
+      expect(
+        catalog.icon('1121', line)?.path,
+        'assets/Line_Icon/1121/1121_Line_$suffix.svg',
+        reason: label,
+      );
+    }
     expect(catalog.tuCode('3050', '苏州市', 'tu'), '3050');
     for (final (code, lineNumbers) in [
       ('2900', List<int>.generate(18, (index) => index + 1)),
