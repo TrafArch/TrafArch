@@ -1,7 +1,7 @@
 ﻿name: transit_card_analyzer
 description: "TrafArch - NFC 交通卡读取与分析"
 publish_to: 'none'
-version: 2.0.0-beta.4+2269
+version: 2.0.0-beta.4+2270
 
 environment:
   sdk: ^3.13.5
@@ -67,3 +67,4 @@ flutter:
     - assets/Line_Icon/3910/
     - assets/Line_Icon/3930/
     - assets/Line_Icon/5810/
+    - assets/Line_Icon/5840/

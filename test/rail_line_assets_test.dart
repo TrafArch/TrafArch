@@ -56,6 +56,7 @@ void main() {
       '3910',
       '3930',
       '5810',
+      '5840',
     });
     final assetManifest = await AssetManifest.loadFromAssetBundle(rootBundle);
     final bundled = assetManifest.listAssets().toSet();
@@ -106,7 +107,7 @@ void main() {
         .map((path) => path.replaceFirst('assets/Line_Icon/', ''))
         .toSet();
     expect(registered, supplied);
-    expect(registered, hasLength(141));
+    expect(registered, hasLength(149));
     expect(
       registered,
       containsAll([
@@ -182,6 +183,27 @@ void main() {
     for (final suffix in files.values.toSet()) {
       final asset = '5810/5810_Line_$suffix.svg';
       expect(await _paintedHeight(asset), closeTo(24, .2), reason: asset);
+    }
+  });
+
+  test('Shenzhen line names resolve to the supplied SVGs', () async {
+    final catalog = await GalleryRailLineCatalog.load(rootBundle);
+    const code = '5840';
+    expect(catalog.tuCode('5180', '深圳市', 'CU'), code);
+    for (final (number, suffix) in [
+      (1, '68'),
+      (2, '60'),
+      (3, '61'),
+      (5, '63'),
+      (7, '65'),
+      (8, '66'),
+      (9, '67'),
+      (11, '41'),
+    ]) {
+      final line = '$number号线';
+      final asset = '$code/${code}_Line_$suffix.svg';
+      expect(catalog.icon(code, line)?.path, 'assets/Line_Icon/$asset');
+      expect(await _paintedHeight(asset), closeTo(24, .25), reason: asset);
     }
   });
 
